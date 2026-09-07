@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "quick commit",
+      "type": "shell",
+      "command": "git add . && git commit -m \"wip\"",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      }
+    },
+    {
+      "label": "squash last wip commits",
+      "type": "shell",
+      "command": "N=$(git log --pretty=format:%s | awk 'BEGIN{c=0} /^wip$/ {c++} !/^wip$/ {exit} END{print c}'); if [ \"$N\" -lt 1 ]; then echo \"No consecutive wip commits\"; exit 0; fi; git reset --soft HEAD~$N",
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "options": {
+        "shell": {
+          "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+          "args": [
+            "-c"
+          ]
+        }
+      }
+    },
+    {
+      "label": "force safepush",
+      "type": "shell",
+      "command": "git push --force-with-lease",
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      }
+    }
+  ]
+}
