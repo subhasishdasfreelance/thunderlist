@@ -229,6 +229,7 @@ function TrackerDetailPage() {
 								}
 								now={Date.now()}
 								target={detail.targetValue}
+								base={detail.startValue}
 								current={detail.currentValue}
 								points={entries.map((entry) => ({
 									id: entry.entryId,

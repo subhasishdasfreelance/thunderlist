@@ -14,6 +14,7 @@
  * Today, and pulling it back onto Today takes it out of the Backlog.
  */
 
+import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
 import {
 	SORT_ORDER_STEP,
@@ -44,7 +45,7 @@ export type TaskLists = Record<TaskListName, Array<TaskRefEntry>>;
  * dropped, so the user can see and clear them. A `checklistTitle` of `null` is
  * an ordinary task that belongs to no checklist, not a fault.
  */
-export async function getTaskLists(): Promise<TaskLists> {
+export async function getTaskLists(userId: string): Promise<TaskLists> {
 	const current = await collections();
 
 	// Newest first: a reference is appended with a higher position than the last,
@@ -52,14 +53,14 @@ export async function getTaskLists(): Promise<TaskLists> {
 	// leaving the hand-made order underneath it intact.
 	const items = await current.taskRefs
 		.find(
-			{},
+			{ userId },
 			{ sort: { sortOrder: -1, itemId: -1 }, projection: DOMAIN_FIELDS },
 		)
 		.toArray();
 
 	if (items.length === 0) return { today: [], backlog: [] };
 
-	const tasks = await readTasksByIds([
+	const tasks = await readTasksByIds(userId, [
 		...new Set(items.map((item) => item.taskId)),
 	]);
 
@@ -73,7 +74,7 @@ export async function getTaskLists(): Promise<TaskLists> {
 
 	const checklists = await current.checklists
 		.find(
-			{ checklistId: { $in: checklistIds } },
+			{ userId, checklistId: { $in: checklistIds } },
 			{ projection: { _id: 0, checklistId: 1, title: 1 } },
 		)
 		.toArray();
@@ -106,29 +107,40 @@ export async function getTaskLists(): Promise<TaskLists> {
 /* Mutations                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export async function addTaskRef(input: {
-	list: TaskListName;
-	itemId: string;
-	taskId: string;
-	sortOrder: number;
-}): Promise<TaskRef> {
+export async function addTaskRef(
+	userId: string,
+	input: {
+		list: TaskListName;
+		itemId: string;
+		taskId: string;
+		sortOrder: number;
+	},
+): Promise<TaskRef> {
 	const current = await collections();
+
+	// The task has to be one of this user's, or a guessed id would put a
+	// stranger's task on your list — and its title on your screen.
+	const tasks = await readTasksByIds(userId, [input.taskId]);
+	if (!tasks.has(input.taskId)) {
+		throw new AppError("not_found", "That task no longer exists.");
+	}
 
 	// Adding the same task twice is a no-op rather than an error.
 	const existing = await current.taskRefs.findOne(
-		{ list: input.list, taskId: input.taskId },
+		{ userId, list: input.list, taskId: input.taskId },
 		{ projection: REF_FIELDS },
 	);
 	if (existing) return existing;
 
 	// A task is planned or parked, never both.
 	await current.taskRefs.deleteMany({
+		userId,
 		list: input.list === "today" ? "backlog" : "today",
 		taskId: input.taskId,
 	});
 
 	const last = await current.taskRefs.findOne(
-		{ list: input.list },
+		{ userId, list: input.list },
 		{ sort: { sortOrder: -1 }, projection: { _id: 0, sortOrder: 1 } },
 	);
 
@@ -142,19 +154,20 @@ export async function addTaskRef(input: {
 		addedAt: new Date().toISOString(),
 	};
 
-	await current.taskRefs.insertOne({ ...item, list: input.list });
+	await current.taskRefs.insertOne({ ...item, userId, list: input.list });
 
 	return item;
 }
 
 export async function removeTaskRef(
+	userId: string,
 	list: TaskListName,
 	itemId: string,
 ): Promise<void> {
 	const current = await collections();
 
 	// Already gone is the outcome this asked for, not a failure.
-	await current.taskRefs.deleteOne({ itemId, list });
+	await current.taskRefs.deleteOne({ itemId, list, userId });
 }
 
 /**
@@ -166,6 +179,7 @@ export async function removeTaskRef(
  * added in the same moment - are nudged apart so the swap still lands.
  */
 export async function moveTaskRef(
+	userId: string,
 	list: TaskListName,
 	itemId: string,
 	direction: "up" | "down",
@@ -174,7 +188,7 @@ export async function moveTaskRef(
 
 	const ordered = await current.taskRefs
 		.find(
-			{ list },
+			{ userId, list },
 			{ sort: { sortOrder: -1, itemId: -1 }, projection: DOMAIN_FIELDS },
 		)
 		.toArray();
@@ -196,13 +210,13 @@ export async function moveTaskRef(
 	await current.taskRefs.bulkWrite([
 		{
 			updateOne: {
-				filter: { itemId: item.itemId },
+				filter: { itemId: item.itemId, userId },
 				update: { $set: { sortOrder: nextOrder } },
 			},
 		},
 		{
 			updateOne: {
-				filter: { itemId: neighbour.itemId },
+				filter: { itemId: neighbour.itemId, userId },
 				update: { $set: { sortOrder: item.sortOrder } },
 			},
 		},
@@ -216,12 +230,14 @@ export async function moveTaskRef(
  * removed here is a pointer, never content: the task itself is untouched.
  */
 export async function removeTaskRefsFor(
+	userId: string,
 	taskIds: ReadonlyArray<string>,
 ): Promise<number> {
 	if (taskIds.length === 0) return 0;
 
 	const current = await collections();
 	const result = await current.taskRefs.deleteMany({
+		userId,
 		taskId: { $in: [...taskIds] },
 	});
 

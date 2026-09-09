@@ -8,6 +8,7 @@ import { Theme } from "@astryxdesign/core/theme";
 import { useRouterState } from "@tanstack/react-router";
 import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import type { SignedInUser } from "#/lib/auth.server";
 import { useColorScheme } from "#/lib/theme";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BottomNav } from "./bottom-nav";
@@ -34,7 +35,14 @@ import { UserMenu } from "./user-menu";
  * puts the page on a tinted ground so the white cards above it have an edge;
  * the bars themselves are made translucent in `styles.css`.
  */
-export function AppFrame({ children }: { children: ReactNode }) {
+export function AppFrame({
+	user,
+	children,
+}: {
+	/** Whoever is signed in. The frame is never rendered without one. */
+	user: SignedInUser;
+	children: ReactNode;
+}) {
 	const scheme = useColorScheme();
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -113,7 +121,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
 										onClick={() => setIsHelpOpen(true)}
 									/>
 									<ThemeToggle />
-									<UserMenu />
+									<UserMenu user={user} />
 								</HStack>
 							}
 						/>
@@ -139,7 +147,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
 					 */}
 					<div
 						key={pathname}
-						className="thunderlist-screen mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-4 pb-28 md:px-6 md:pb-10"
+						className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4 pb-28 md:pb-10"
 					>
 						<SetupNotice />
 						{children}

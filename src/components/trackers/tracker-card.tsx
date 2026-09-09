@@ -33,6 +33,7 @@ export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
 			deadline: tracker.deadline,
 			current: progress.current,
 			target: progress.target,
+			start: tracker.startValue,
 		}),
 		tracker.unit,
 		progress.current >= progress.target && progress.target > 0,

@@ -83,6 +83,15 @@ const trackerSchema = v.object({
 	description: v.string(),
 	unit: v.string(),
 	targetValue: v.number(),
+	/**
+	 * Where the count already stood on day one.
+	 *
+	 * A book picked up at page 40 is not 0% read, and a 5-day plan to reach page
+	 * 80 is 40 pages of work, not 80. Progress, pace and the chart all measure
+	 * from here rather than from zero — which is what this defaults to, so a
+	 * tracker started from nothing behaves exactly as it always did.
+	 */
+	startValue: v.optional(v.number(), 0),
 	/** Denormalised from the latest progress entry; see `deriveCurrentValue`. */
 	currentValue: v.number(),
 	coverUrl: v.nullable(v.string()),
@@ -146,6 +155,7 @@ export const createTrackerInputSchema = v.object({
 	type: trackerTypeSchema,
 	unit: unitSchema,
 	targetValue: targetValueSchema,
+	startValue: v.optional(progressValueSchema, 0),
 	startDate: dateOnlySchema,
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	description: v.optional(descriptionSchema, ""),
@@ -161,6 +171,7 @@ export const updateTrackerInputSchema = v.object({
 			type: v.optional(trackerTypeSchema),
 			unit: v.optional(unitSchema),
 			targetValue: v.optional(targetValueSchema),
+			startValue: v.optional(progressValueSchema),
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			description: v.optional(descriptionSchema),

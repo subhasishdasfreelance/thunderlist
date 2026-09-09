@@ -8,6 +8,11 @@
  * Each operation is idempotent — creating something that already exists returns
  * it, deleting something already gone is a no-op — so a retry after a dropped
  * connection cannot double up.
+ *
+ * The owner comes in as an argument and every branch passes it on. The ids in
+ * a change are the browser's, and therefore anybody's; the owner is the
+ * server's, read from the session, and it is what makes a change naming
+ * someone else's row a no-op rather than an edit.
  */
 
 import { AppError } from "#/lib/errors";
@@ -38,93 +43,101 @@ import {
 	updateTracker,
 } from "./tracker.server";
 
-async function run(change: Change): Promise<void> {
+async function run(userId: string, change: Change): Promise<void> {
 	switch (change.kind) {
 		case "checklist.create":
-			await createChecklist(change);
+			await createChecklist(userId, change);
 			return;
 
 		case "checklist.update":
-			await updateChecklist(change.checklistId, change.patch);
+			await updateChecklist(userId, change.checklistId, change.patch);
 			return;
 
 		case "checklist.delete": {
 			// Clear the references first: if this fails nothing has been destroyed
 			// yet, and the checklist is still there to try again.
-			const taskIds = await readChecklistTaskIds(change.checklistId);
-			await removeTaskRefsFor(taskIds);
-			await deleteChecklist(change.checklistId);
+			const taskIds = await readChecklistTaskIds(userId, change.checklistId);
+			await removeTaskRefsFor(userId, taskIds);
+			await deleteChecklist(userId, change.checklistId);
 			return;
 		}
 
 		case "task.create":
-			await createTask(change);
+			await createTask(userId, change);
 			return;
 
 		case "task.update":
-			await updateTask(change.taskId, change.patch);
+			await updateTask(userId, change.taskId, change.patch);
 			return;
 
 		case "task.delete":
-			await deleteTask(change.taskId);
-			await removeTaskRefsFor([change.taskId]);
+			await deleteTask(userId, change.taskId);
+			await removeTaskRefsFor(userId, [change.taskId]);
 			return;
 
 		case "tracker.create":
-			await createTracker(change);
+			await createTracker(userId, change);
 			return;
 
 		case "tracker.update":
-			await updateTracker(change.trackerId, change.patch);
+			await updateTracker(userId, change.trackerId, change.patch);
 			return;
 
 		case "tracker.delete":
-			await deleteTracker(change.trackerId);
+			await deleteTracker(userId, change.trackerId);
 			return;
 
 		case "entry.create":
-			await createProgressEntry(change);
+			await createProgressEntry(userId, change);
 			return;
 
 		case "entry.update":
-			await updateProgressEntry(change.trackerId, change.entryId, change.patch);
+			await updateProgressEntry(
+				userId,
+				change.trackerId,
+				change.entryId,
+				change.patch,
+			);
 			return;
 
 		case "entry.delete":
-			await deleteProgressEntry(change.trackerId, change.entryId);
+			await deleteProgressEntry(userId, change.trackerId, change.entryId);
 			return;
 
 		case "ref.add":
-			await addTaskRef(change);
+			await addTaskRef(userId, change);
 			return;
 
 		case "ref.remove":
-			await removeTaskRef(change.list, change.itemId);
+			await removeTaskRef(userId, change.list, change.itemId);
 			return;
 
 		case "ref.move":
-			await moveTaskRef(change.list, change.itemId, change.direction);
+			await moveTaskRef(userId, change.list, change.itemId, change.direction);
 			return;
 
 		case "tag.create":
-			await createTag(change);
+			await createTag(userId, change);
 			return;
 
 		case "tag.update":
-			await updateTag(change.tagId, change.patch);
+			await updateTag(userId, change.tagId, change.patch);
 			return;
 
 		case "tag.delete":
-			await removeTagFromTasks(change.tagId);
-			await deleteTag(change.tagId);
+			await removeTagFromTasks(userId, change.tagId);
+			await deleteTag(userId, change.tagId);
 			return;
 	}
 }
 
 /** Log the real cause, hand back something a person can act on. */
-export async function applyChange(change: Change): Promise<void> {
+export async function applyChange(
+	userId: string,
+	change: Change,
+): Promise<void> {
 	try {
-		await run(change);
+		await run(userId, change);
 	} catch (error) {
 		if (error instanceof AppError) {
 			console.error(

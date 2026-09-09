@@ -422,7 +422,7 @@ cp .env.example .env.local
 |---|---|
 | `MONGO_CONN_STR` | The connection string above |
 | `BETTER_AUTH_SECRET` | Any long random string |
-| `BETTER_AUTH_URL` | `http://localhost:3000` in development |
+| `BETTER_AUTH_URL` | `http://localhost:4000` in development |
 
 The database is always `thunderlist`; a database named in the connection string
 is ignored.

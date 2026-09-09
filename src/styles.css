@@ -710,6 +710,51 @@ body {
 	}
 
 	/*
+	 * The column everything is read in.
+	 *
+	 * Fixed widths per viewport rather than a percentage of it: a fluid column
+	 * changes its line length with every window drag, so the same list reads
+	 * differently on two machines and nothing can be designed against a known
+	 * measure. These are the measures.
+	 *
+	 * A phone is the exception and stays fluid — there is no width to choose
+	 * between, only the screen minus its gutters. From `sm` up the column steps
+	 * through fixed sizes and stops: past the last step the window keeps growing
+	 * and the column does not, because a task list a metre wide is not a better
+	 * task list.
+	 */
+	.thunderlist-container {
+		width: 100%;
+		margin-inline: auto;
+		padding-inline: 1rem;
+	}
+
+	@media (min-width: 40rem) {
+		.thunderlist-container {
+			width: 36rem;
+			padding-inline: 0;
+		}
+	}
+
+	@media (min-width: 48rem) {
+		.thunderlist-container {
+			width: 44rem;
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.thunderlist-container {
+			width: 52rem;
+		}
+	}
+
+	@media (min-width: 80rem) {
+		.thunderlist-container {
+			width: 58rem;
+		}
+	}
+
+	/*
 	 * The key beside a line on the chart.
 	 *
 	 * A short rule rather than a square, and dashed when its line is dashed, so

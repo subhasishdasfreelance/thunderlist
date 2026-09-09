@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getTaskLists } from "#/data/task-list.server";
+import { requireUserId } from "#/lib/auth.server";
 import { guard } from "./guard";
 
 /**
@@ -7,5 +8,5 @@ import { guard } from "./guard";
  * fetching them together costs one batched task read instead of two.
  */
 export const getTaskListsFn = createServerFn().handler(() =>
-	guard("getTaskLists", () => getTaskLists()),
+	guard("getTaskLists", async () => getTaskLists(await requireUserId())),
 );

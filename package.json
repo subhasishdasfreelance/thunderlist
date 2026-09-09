@@ -12,12 +12,13 @@
 		"build": "astryx theme build src/theme/thunderlist.theme.ts && vite build",
 		"theme:build": "astryx theme build src/theme/thunderlist.theme.ts",
 		"theme:check": "astryx theme build --check src/theme/thunderlist.theme.ts",
-		"preview": "vite preview",
+		"preview": "vite preview --port 4000",
 		"format": "biome format",
 		"lint": "biome lint",
 		"check": "biome check",
 		"typecheck": "tsc --noEmit",
-		"test": "bun test"
+		"test": "bun test",
+		"claim-data": "bun --env-file=.env.local scripts/claim-data.ts"
 	},
 	"dependencies": {
 		"@astryxdesign/core": "^0.5.4",

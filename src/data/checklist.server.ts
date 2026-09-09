@@ -5,6 +5,10 @@
  * `checklistId`. Nothing is nested: a task is edited, moved between lists and
  * searched for on its own, and a document per task keeps every one of those a
  * single targeted write rather than a rewrite of the whole checklist.
+ *
+ * Every function here takes the owner first and names it in every filter. A
+ * checklist or task id names a row; the owner is what decides whether it is
+ * yours, and a row belonging to someone else is simply not found.
  */
 
 import { AppError } from "#/lib/errors";
@@ -31,10 +35,11 @@ const TASK_FIELDS = { _id: 0, checklistId: 0 } as const;
 
 async function requireChecklist(
 	current: Collections,
+	userId: string,
 	checklistId: string,
 ): Promise<Checklist> {
 	const checklist = await current.checklists.findOne(
-		{ checklistId },
+		{ checklistId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
 
@@ -75,12 +80,16 @@ function summarise(
  * Two reads, whatever the number of checklists: the checklists themselves, and
  * the completed flag of every task grouped by the checklist it belongs to.
  */
-export async function listChecklists(): Promise<Array<ChecklistSummary>> {
+export async function listChecklists(
+	userId: string,
+): Promise<Array<ChecklistSummary>> {
 	const current = await collections();
 
 	const [checklists, tasks] = await Promise.all([
-		current.checklists.find({}, { projection: DOMAIN_FIELDS }).toArray(),
-		current.tasks.find({}, { projection: PROGRESS_FIELDS }).toArray(),
+		current.checklists
+			.find({ userId }, { projection: DOMAIN_FIELDS })
+			.toArray(),
+		current.tasks.find({ userId }, { projection: PROGRESS_FIELDS }).toArray(),
 	]);
 
 	const byChecklist = new Map<string, Array<Pick<Task, "completed">>>();
@@ -109,6 +118,7 @@ export type TaskWithChecklist = { task: Task; checklistId: string | null };
  * all, which have nothing else to be found by.
  */
 export async function readTasksByIds(
+	userId: string,
 	taskIds: ReadonlyArray<string>,
 ): Promise<Map<string, TaskWithChecklist>> {
 	const byId = new Map<string, TaskWithChecklist>();
@@ -116,7 +126,7 @@ export async function readTasksByIds(
 
 	const current = await collections();
 	const rows = await current.tasks
-		.find({ taskId: { $in: [...taskIds] } })
+		.find({ userId, taskId: { $in: [...taskIds] } })
 		.project<TaskDoc>(DOMAIN_FIELDS)
 		.toArray();
 
@@ -128,10 +138,12 @@ export async function readTasksByIds(
 }
 
 /** Every task, with its checklist. Used to build the search index. */
-export async function readAllTasks(): Promise<Array<TaskWithChecklist>> {
+export async function readAllTasks(
+	userId: string,
+): Promise<Array<TaskWithChecklist>> {
 	const current = await collections();
 	const rows = await current.tasks
-		.find({})
+		.find({ userId })
 		.project<TaskDoc>(DOMAIN_FIELDS)
 		.toArray();
 
@@ -139,13 +151,14 @@ export async function readAllTasks(): Promise<Array<TaskWithChecklist>> {
 }
 
 export async function getChecklist(
+	userId: string,
 	checklistId: string,
 ): Promise<ChecklistDetail> {
 	const current = await collections();
-	const checklist = await requireChecklist(current, checklistId);
+	const checklist = await requireChecklist(current, userId, checklistId);
 
 	const tasks = await current.tasks
-		.find({ checklistId }, { projection: TASK_FIELDS })
+		.find({ checklistId, userId }, { projection: TASK_FIELDS })
 		.toArray();
 
 	return { ...summarise(checklist, tasks), tasks };
@@ -155,19 +168,22 @@ export async function getChecklist(
 /* Checklist lifecycle                                                        */
 /* -------------------------------------------------------------------------- */
 
-export async function createChecklist(input: {
-	checklistId: string;
-	title: string;
-	description: string;
-	startDate: string;
-	deadline: string | null;
-}): Promise<Checklist> {
+export async function createChecklist(
+	userId: string,
+	input: {
+		checklistId: string;
+		title: string;
+		description: string;
+		startDate: string;
+		deadline: string | null;
+	},
+): Promise<Checklist> {
 	const current = await collections();
 
 	// Replaying a change that already went in must not create a second copy; see
 	// `applyChanges`, which can retry after a partial failure.
 	const existing = await current.checklists.findOne(
-		{ checklistId: input.checklistId },
+		{ checklistId: input.checklistId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
 	if (existing) return existing;
@@ -185,12 +201,13 @@ export async function createChecklist(input: {
 		updatedAt: now,
 	};
 
-	await current.checklists.insertOne(checklist);
+	await current.checklists.insertOne({ ...checklist, userId });
 
 	return checklist;
 }
 
 export async function updateChecklist(
+	userId: string,
 	checklistId: string,
 	patch: {
 		title?: string;
@@ -202,7 +219,7 @@ export async function updateChecklist(
 	const current = await collections();
 
 	const next = await current.checklists.findOneAndUpdate(
-		{ checklistId },
+		{ checklistId, userId },
 		{ $set: { ...patch, updatedAt: new Date().toISOString() } },
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
@@ -216,11 +233,12 @@ export async function updateChecklist(
 
 /** The ids of the tasks in a checklist, so their references can be cleared. */
 export async function readChecklistTaskIds(
+	userId: string,
 	checklistId: string,
 ): Promise<Array<string>> {
 	const current = await collections();
 	const rows = await current.tasks
-		.find({ checklistId }, { projection: { _id: 0, taskId: 1 } })
+		.find({ checklistId, userId }, { projection: { _id: 0, taskId: 1 } })
 		.toArray();
 
 	return rows.map((row) => row.taskId);
@@ -232,35 +250,42 @@ export async function readChecklistTaskIds(
  * The tasks go first: a checklist left holding tasks is still usable, whereas
  * tasks whose checklist has gone belong to nothing and cannot be reached.
  */
-export async function deleteChecklist(checklistId: string): Promise<void> {
+export async function deleteChecklist(
+	userId: string,
+	checklistId: string,
+): Promise<void> {
 	const current = await collections();
 
-	await current.tasks.deleteMany({ checklistId });
-	await current.checklists.deleteOne({ checklistId });
+	await current.tasks.deleteMany({ checklistId, userId });
+	await current.checklists.deleteOne({ checklistId, userId });
 }
 
 /* -------------------------------------------------------------------------- */
 /* Tasks                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export async function createTask(input: {
-	checklistId: string | null;
-	taskId: string;
-	title: string;
-	addedAt: string;
-	tagIds: Array<string>;
-	urgent: boolean;
-	important: boolean;
-}): Promise<Task> {
+export async function createTask(
+	userId: string,
+	input: {
+		checklistId: string | null;
+		taskId: string;
+		title: string;
+		addedAt: string;
+		tagIds: Array<string>;
+		urgent: boolean;
+		important: boolean;
+	},
+): Promise<Task> {
 	const current = await collections();
 	// A task can belong to no checklist; one that names a checklist must name a
-	// real one.
+	// real one, and one of this user's — which is what stops a task being filed
+	// into a stranger's checklist by guessing its id.
 	if (input.checklistId !== null) {
-		await requireChecklist(current, input.checklistId);
+		await requireChecklist(current, userId, input.checklistId);
 	}
 
 	const existing = await current.tasks.findOne(
-		{ taskId: input.taskId },
+		{ taskId: input.taskId, userId },
 		{ projection: TASK_FIELDS },
 	);
 	if (existing) return existing;
@@ -278,12 +303,17 @@ export async function createTask(input: {
 		important: input.important,
 	};
 
-	await current.tasks.insertOne({ ...task, checklistId: input.checklistId });
+	await current.tasks.insertOne({
+		...task,
+		userId,
+		checklistId: input.checklistId,
+	});
 
 	return task;
 }
 
 export async function updateTask(
+	userId: string,
 	taskId: string,
 	patch: TaskPatch,
 ): Promise<Task> {
@@ -305,7 +335,7 @@ export async function updateTask(
 				};
 
 	const next = await current.tasks.findOneAndUpdate(
-		{ taskId },
+		{ taskId, userId },
 		{ $set: stamped },
 		{ returnDocument: "after", projection: TASK_FIELDS },
 	);
@@ -316,9 +346,12 @@ export async function updateTask(
 }
 
 /** Delete a task. Already gone is the outcome this asked for, not a failure. */
-export async function deleteTask(taskId: string): Promise<void> {
+export async function deleteTask(
+	userId: string,
+	taskId: string,
+): Promise<void> {
 	const current = await collections();
-	await current.tasks.deleteOne({ taskId });
+	await current.tasks.deleteOne({ taskId, userId });
 }
 
 /**
@@ -327,11 +360,14 @@ export async function deleteTask(taskId: string): Promise<void> {
  * Called when a tag is deleted. Tasks reference tags by id, so leaving the id
  * behind would show a task tagged with something that no longer exists.
  */
-export async function removeTagFromTasks(tagId: string): Promise<number> {
+export async function removeTagFromTasks(
+	userId: string,
+	tagId: string,
+): Promise<number> {
 	const current = await collections();
 
 	const result = await current.tasks.updateMany(
-		{ tagIds: tagId },
+		{ userId, tagIds: tagId },
 		{ $pull: { tagIds: tagId } },
 	);
 

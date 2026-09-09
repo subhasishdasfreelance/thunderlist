@@ -35,10 +35,11 @@ const ENTRY_FIELDS = { _id: 0, trackerId: 0 } as const;
 
 async function requireTracker(
 	current: Collections,
+	userId: string,
 	trackerId: string,
 ): Promise<Tracker> {
 	const tracker = await current.trackers.findOne(
-		{ trackerId },
+		{ trackerId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
 
@@ -52,13 +53,16 @@ async function requireTracker(
 /** The full history, oldest first, with each step worked out from the last. */
 async function readEntries(
 	current: Collections,
+	userId: string,
 	trackerId: string,
+	/** Where the count stood before the first reading; the first step is from it. */
+	startValue: number,
 ): Promise<Array<ProgressEntry>> {
 	const readings = await current.entries
-		.find({ trackerId }, { projection: ENTRY_FIELDS })
+		.find({ trackerId, userId }, { projection: ENTRY_FIELDS })
 		.toArray();
 
-	return withDeltas(readings);
+	return withDeltas(readings, startValue);
 }
 
 /**
@@ -67,10 +71,12 @@ async function readEntries(
  */
 async function requireEntry(
 	current: Collections,
+	userId: string,
 	trackerId: string,
+	startValue: number,
 	entryId: string,
 ): Promise<ProgressEntry> {
-	const history = await readEntries(current, trackerId);
+	const history = await readEntries(current, userId, trackerId, startValue);
 	const entry = history.find((candidate) => candidate.entryId === entryId);
 
 	if (!entry) throw new AppError("not_found", "That entry no longer exists.");
@@ -79,7 +85,11 @@ async function requireEntry(
 }
 
 function summarise(tracker: Tracker): TrackerSummary {
-	const progress = trackerProgress(tracker.currentValue, tracker.targetValue);
+	const progress = trackerProgress(
+		tracker.currentValue,
+		tracker.targetValue,
+		tracker.startValue,
+	);
 
 	return {
 		...tracker,
@@ -96,10 +106,12 @@ function summarise(tracker: Tracker): TrackerSummary {
 }
 
 /** One read: no history is touched. */
-export async function listTrackers(): Promise<Array<TrackerSummary>> {
+export async function listTrackers(
+	userId: string,
+): Promise<Array<TrackerSummary>> {
 	const current = await collections();
 	const trackers = await current.trackers
-		.find({}, { projection: DOMAIN_FIELDS })
+		.find({ userId }, { projection: DOMAIN_FIELDS })
 		.toArray();
 
 	return trackers.map(summarise);
@@ -112,9 +124,12 @@ export async function listTrackers(): Promise<Array<TrackerSummary>> {
  * Split from `getTrackerEntries` so the screen can answer "how is this going"
  * from a single small read while the entries are still on their way.
  */
-export async function getTracker(trackerId: string): Promise<TrackerDetail> {
+export async function getTracker(
+	userId: string,
+	trackerId: string,
+): Promise<TrackerDetail> {
 	const current = await collections();
-	const tracker = await requireTracker(current, trackerId);
+	const tracker = await requireTracker(current, userId, trackerId);
 	const summary = summarise(tracker);
 
 	return {
@@ -124,42 +139,48 @@ export async function getTracker(trackerId: string): Promise<TrackerDetail> {
 			deadline: summary.deadline,
 			current: summary.currentValue,
 			target: summary.targetValue,
+			start: summary.startValue,
 		}),
 	};
 }
 
 /** The history on its own, oldest first. */
 export async function getTrackerEntries(
+	userId: string,
 	trackerId: string,
 ): Promise<Array<ProgressEntry>> {
 	const current = await collections();
-	await requireTracker(current, trackerId);
+	const tracker = await requireTracker(current, userId, trackerId);
 
-	return readEntries(current, trackerId);
+	return readEntries(current, userId, trackerId, tracker.startValue);
 }
 
 /* -------------------------------------------------------------------------- */
 /* Tracker lifecycle                                                          */
 /* -------------------------------------------------------------------------- */
 
-export async function createTracker(input: {
-	trackerId: string;
-	title: string;
-	type: TrackerType;
-	unit: string;
-	targetValue: number;
-	startDate: string;
-	deadline: string | null;
-	description: string;
-	coverUrl: string | null;
-	author: string;
-}): Promise<Tracker> {
+export async function createTracker(
+	userId: string,
+	input: {
+		trackerId: string;
+		title: string;
+		type: TrackerType;
+		unit: string;
+		targetValue: number;
+		startValue: number;
+		startDate: string;
+		deadline: string | null;
+		description: string;
+		coverUrl: string | null;
+		author: string;
+	},
+): Promise<Tracker> {
 	const current = await collections();
 
 	// Replaying a change that already went in must not create a second copy; see
 	// `applyChanges`, which can retry after a partial failure.
 	const existing = await current.trackers.findOne(
-		{ trackerId: input.trackerId },
+		{ trackerId: input.trackerId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
 	if (existing) return existing;
@@ -174,7 +195,9 @@ export async function createTracker(input: {
 		description: input.description,
 		unit: input.unit,
 		targetValue: input.targetValue,
-		currentValue: 0,
+		startValue: input.startValue,
+		// Nothing has been recorded yet, so the tracker stands where it started.
+		currentValue: input.startValue,
 		coverUrl: input.coverUrl,
 		author: input.author === "" ? null : input.author,
 		startDate: input.startDate,
@@ -183,18 +206,20 @@ export async function createTracker(input: {
 		updatedAt: now,
 	};
 
-	await current.trackers.insertOne(tracker);
+	await current.trackers.insertOne({ ...tracker, userId });
 
 	return tracker;
 }
 
 export async function updateTracker(
+	userId: string,
 	trackerId: string,
 	patch: {
 		title?: string;
 		type?: TrackerType;
 		unit?: string;
 		targetValue?: number;
+		startValue?: number;
 		startDate?: string;
 		deadline?: string | null;
 		description?: string;
@@ -212,7 +237,7 @@ export async function updateTracker(
 	if (patch.author !== undefined) changes.author = patch.author || null;
 
 	const next = await current.trackers.findOneAndUpdate(
-		{ trackerId },
+		{ trackerId, userId },
 		{ $set: changes },
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
@@ -230,11 +255,14 @@ export async function updateTracker(
  * The readings go first: a tracker left holding its history is still usable,
  * whereas readings whose tracker has gone belong to nothing.
  */
-export async function deleteTracker(trackerId: string): Promise<void> {
+export async function deleteTracker(
+	userId: string,
+	trackerId: string,
+): Promise<void> {
 	const current = await collections();
 
-	await current.entries.deleteMany({ trackerId });
-	await current.trackers.deleteOne({ trackerId });
+	await current.entries.deleteMany({ trackerId, userId });
+	await current.trackers.deleteOne({ trackerId, userId });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -263,38 +291,55 @@ function assertValueAllowed(tracker: Tracker, value: number): void {
  */
 async function refreshCurrentValue(
 	current: Collections,
+	userId: string,
 	trackerId: string,
+	startValue: number,
 ): Promise<void> {
 	const readings = await current.entries
-		.find({ trackerId }, { projection: ENTRY_FIELDS })
+		.find({ trackerId, userId }, { projection: ENTRY_FIELDS })
 		.toArray();
 
 	await current.trackers.updateOne(
-		{ trackerId },
+		{ trackerId, userId },
 		{
 			$set: {
-				currentValue: deriveCurrentValue(readings),
+				currentValue: deriveCurrentValue(readings, startValue),
 				updatedAt: new Date().toISOString(),
 			},
 		},
 	);
 }
 
-export async function createProgressEntry(input: {
-	trackerId: string;
-	entryId: string;
-	value: number;
-	recordedAt: string;
-	note: string;
-}): Promise<ProgressEntry> {
+export async function createProgressEntry(
+	userId: string,
+	input: {
+		trackerId: string;
+		entryId: string;
+		value: number;
+		recordedAt: string;
+		note: string;
+	},
+): Promise<ProgressEntry> {
 	const current = await collections();
-	const tracker = await requireTracker(current, input.trackerId);
+	const tracker = await requireTracker(current, userId, input.trackerId);
 	assertValueAllowed(tracker, input.value);
 
-	const existing = await current.entries.findOne({ entryId: input.entryId });
-	if (existing) return requireEntry(current, input.trackerId, input.entryId);
+	const existing = await current.entries.findOne({
+		entryId: input.entryId,
+		userId,
+	});
+	if (existing) {
+		return requireEntry(
+			current,
+			userId,
+			input.trackerId,
+			tracker.startValue,
+			input.entryId,
+		);
+	}
 
 	const reading: EntryDoc = {
+		userId,
 		trackerId: input.trackerId,
 		entryId: input.entryId,
 		recordedAt: input.recordedAt,
@@ -304,22 +349,34 @@ export async function createProgressEntry(input: {
 	};
 
 	await current.entries.insertOne(reading);
-	await refreshCurrentValue(current, input.trackerId);
+	await refreshCurrentValue(
+		current,
+		userId,
+		input.trackerId,
+		tracker.startValue,
+	);
 
-	return requireEntry(current, input.trackerId, input.entryId);
+	return requireEntry(
+		current,
+		userId,
+		input.trackerId,
+		tracker.startValue,
+		input.entryId,
+	);
 }
 
 export async function updateProgressEntry(
+	userId: string,
 	trackerId: string,
 	entryId: string,
 	patch: { value?: number; recordedAt?: string; note?: string },
 ): Promise<ProgressEntry> {
 	const current = await collections();
-	const tracker = await requireTracker(current, trackerId);
+	const tracker = await requireTracker(current, userId, trackerId);
 	if (patch.value !== undefined) assertValueAllowed(tracker, patch.value);
 
 	const updated = await current.entries.updateOne(
-		{ entryId, trackerId },
+		{ entryId, trackerId, userId },
 		{ $set: { ...patch, updatedAt: new Date().toISOString() } },
 	);
 
@@ -327,19 +384,22 @@ export async function updateProgressEntry(
 		throw new AppError("not_found", "That entry no longer exists.");
 	}
 
-	await refreshCurrentValue(current, trackerId);
+	await refreshCurrentValue(current, userId, trackerId, tracker.startValue);
 
 	// Editing or back-dating a reading changes the step of the one after it too.
-	return requireEntry(current, trackerId, entryId);
+	return requireEntry(current, userId, trackerId, tracker.startValue, entryId);
 }
 
 export async function deleteProgressEntry(
+	userId: string,
 	trackerId: string,
 	entryId: string,
 ): Promise<void> {
 	const current = await collections();
 
+	const tracker = await requireTracker(current, userId, trackerId);
+
 	// Already gone is the outcome this asked for, not a failure.
-	await current.entries.deleteOne({ entryId, trackerId });
-	await refreshCurrentValue(current, trackerId);
+	await current.entries.deleteOne({ entryId, trackerId, userId });
+	await refreshCurrentValue(current, userId, trackerId, tracker.startValue);
 }

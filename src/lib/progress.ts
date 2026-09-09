@@ -60,21 +60,35 @@ export function addDays(date: string, days: number): string | null {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A tracker's headline numbers. `percent` is clamped to 0-100 for display even
- * when a goal has been beaten, so progress bars never overflow.
+ * A tracker's headline numbers.
+ *
+ * Progress is measured across the distance actually to be covered, not from
+ * zero: a book opened at page 40 and finished at page 80 is halfway at page 60,
+ * not three-quarters of the way. `current` and `target` stay the real readings,
+ * because those are the numbers the user typed and expects to see.
+ *
+ * `percent` is clamped to 0-100 for display even when a goal has been beaten or
+ * the reading has slipped below where it started, so a bar never overflows or
+ * runs backwards off its track.
  */
 export function trackerProgress(
 	current: number,
 	target: number,
+	start = 0,
 ): TrackerProgress {
 	const safeCurrent = Number.isFinite(current) ? current : 0;
 	const safeTarget = Number.isFinite(target) ? target : 0;
+	const safeStart = Number.isFinite(start) ? start : 0;
+
+	const distance = safeTarget - safeStart;
 
 	return {
 		current: safeCurrent,
 		target: safeTarget,
 		percent:
-			safeTarget > 0 ? clampPercent((safeCurrent / safeTarget) * 100) : 0,
+			distance > 0
+				? clampPercent(((safeCurrent - safeStart) / distance) * 100)
+				: 0,
 	};
 }
 
@@ -111,8 +125,10 @@ export function sortEntriesOldestFirst<T extends EntryReading>(
  */
 export function withDeltas(
 	entries: ReadonlyArray<EntryReading>,
+	/** Where the count stood before the first reading. */
+	start = 0,
 ): Array<ProgressEntry> {
-	let previous = 0;
+	let previous = start;
 
 	return sortEntriesOldestFirst(entries).map((entry) => {
 		const delta = entry.value - previous;
@@ -124,13 +140,17 @@ export function withDeltas(
 /**
  * Current progress is the most recent reading, not the sum of the steps. The
  * two agree by construction, but the reading is what the user typed.
+ *
+ * With no readings yet the tracker stands where it started, which for a book
+ * opened at page 40 is page 40 rather than page 0.
  */
 export function deriveCurrentValue(
 	entries: ReadonlyArray<EntryReading>,
+	start = 0,
 ): number {
 	const ordered = sortEntriesOldestFirst(entries);
 	const latest = ordered[ordered.length - 1];
-	return latest ? latest.value : 0;
+	return latest ? latest.value : start;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -199,7 +219,7 @@ export function paceStatus(
  * actually achieved rather than dividing by zero and reporting nothing.
  */
 export function computeVelocity(
-	input: PaceInput & { current: number; target: number },
+	input: PaceInput & { current: number; target: number; start?: number },
 ): Velocity {
 	const today = input.today ?? todayDateOnly();
 	const elapsed = daysBetween(input.startDate, today);
@@ -212,15 +232,24 @@ export function computeVelocity(
 			? null
 			: daysBetween(input.startDate, input.deadline);
 
-	const covered = Math.max(0, input.current);
+	/*
+	 * Distances, not readings.
+	 *
+	 * A book opened at page 40 has covered nothing on day one, and reaching page
+	 * 80 is 40 pages of work rather than 80. Measuring from the starting point is
+	 * what keeps "pages per day" the number of pages actually turned.
+	 */
+	const start = input.start ?? 0;
+	const covered = Math.max(0, input.current - start);
 	const outstanding = Math.max(0, input.target - input.current);
+	const distance = Math.max(0, input.target - start);
 
 	const perDay = covered / Math.max(daysElapsed, 1);
 
 	// What the deadline asked for on day one, which is the bar the current pace
 	// is really being measured against.
 	const expectedPerDay =
-		totalDays === null || totalDays <= 0 ? null : input.target / totalDays;
+		totalDays === null || totalDays <= 0 ? null : distance / totalDays;
 
 	// A deadline already past cannot be spread over days that do not exist, so
 	// the requirement collapses onto today rather than dividing by zero.

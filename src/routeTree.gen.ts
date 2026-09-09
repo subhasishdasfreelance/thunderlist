@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BacklogRouteImport } from './routes/backlog'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as PriorityRouteImport } from './routes/priority'
 import { Route as TagsRouteImport } from './routes/tags'
 import { Route as TodayRouteImport } from './routes/today'
@@ -28,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const BacklogRoute = BacklogRouteImport.update({
   id: '/backlog',
   path: '/backlog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PriorityRoute = PriorityRouteImport.update({
@@ -74,6 +80,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/backlog'
+    | '/login'
     | '/priority'
     | '/tags'
     | '/today'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/backlog'
+    | '/login'
     | '/priority'
     | '/tags'
     | '/today'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/backlog'
+    | '/login'
     | '/priority'
     | '/tags'
     | '/today'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BacklogRoute: typeof BacklogRoute
+  LoginRoute: typeof LoginRoute
   PriorityRoute: typeof PriorityRoute
   TagsRoute: typeof TagsRoute
   TodayRoute: typeof TodayRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/backlog'
       fullPath: '/backlog'
       preLoaderRoute: typeof BacklogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/priority': {
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BacklogRoute: BacklogRoute,
+  LoginRoute: LoginRoute,
   PriorityRoute: PriorityRoute,
   TagsRoute: TagsRoute,
   TodayRoute: TodayRoute,

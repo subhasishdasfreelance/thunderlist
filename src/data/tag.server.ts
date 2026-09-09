@@ -5,6 +5,9 @@
  * indirection is the whole point: renaming or recolouring a tag is a single
  * document write, however many tasks carry it, and a task can never end up
  * showing a stale copy of a name.
+ *
+ * Every function here takes the owner first and filters on it. A tag id names
+ * a row; the owner is what decides whether it is yours.
  */
 
 import { AppError } from "#/lib/errors";
@@ -16,10 +19,10 @@ function byName(a: Tag, b: Tag): number {
 	return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
-export async function listTags(): Promise<Array<Tag>> {
+export async function listTags(userId: string): Promise<Array<Tag>> {
 	const current = await collections();
 	const tags = await current.tags
-		.find({}, { projection: DOMAIN_FIELDS })
+		.find({ userId }, { projection: DOMAIN_FIELDS })
 		.toArray();
 
 	return tags.sort(byName);
@@ -28,14 +31,17 @@ export async function listTags(): Promise<Array<Tag>> {
 /**
  * Names are compared case-insensitively so "Urgent" and "urgent" cannot both
  * exist: two tags that look identical in a list are indistinguishable to the
- * person picking one.
+ * person picking one. The clash only has to be checked within one account —
+ * two people may each have an "urgent", and neither ever sees the other's.
  */
 async function assertNameIsFree(
+	userId: string,
 	name: string,
 	exceptTagId?: string,
 ): Promise<void> {
 	const current = await collections();
 	const taken = await current.tags.findOne({
+		userId,
 		name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
 		...(exceptTagId === undefined ? {} : { tagId: { $ne: exceptTagId } }),
 	});
@@ -50,22 +56,25 @@ function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export async function createTag(input: {
-	tagId: string;
-	name: string;
-	color: TagColor;
-}): Promise<Tag> {
+export async function createTag(
+	userId: string,
+	input: {
+		tagId: string;
+		name: string;
+		color: TagColor;
+	},
+): Promise<Tag> {
 	const current = await collections();
 
 	// Queuing the same new tag twice, or applying a batch a second time, should
 	// settle rather than fail.
 	const existing = await current.tags.findOne(
-		{ tagId: input.tagId },
+		{ tagId: input.tagId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
 	if (existing) return existing;
 
-	await assertNameIsFree(input.name);
+	await assertNameIsFree(userId, input.name);
 
 	const now = new Date().toISOString();
 	// Listed field by field rather than spread: the caller passes the whole
@@ -78,20 +87,23 @@ export async function createTag(input: {
 		updatedAt: now,
 	};
 
-	await current.tags.insertOne(tag);
+	await current.tags.insertOne({ ...tag, userId });
 
 	return tag;
 }
 
 export async function updateTag(
+	userId: string,
 	tagId: string,
 	patch: { name?: string; color?: TagColor },
 ): Promise<Tag> {
-	if (patch.name !== undefined) await assertNameIsFree(patch.name, tagId);
+	if (patch.name !== undefined) {
+		await assertNameIsFree(userId, patch.name, tagId);
+	}
 
 	const current = await collections();
 	const next = await current.tags.findOneAndUpdate(
-		{ tagId },
+		{ tagId, userId },
 		{ $set: { ...patch, updatedAt: new Date().toISOString() } },
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
@@ -108,10 +120,10 @@ export async function updateTag(
  * recoverable by re-applying it, whereas tasks left pointing at a tag that no
  * longer exists would render as nothing at all.
  */
-export async function deleteTag(tagId: string): Promise<void> {
+export async function deleteTag(userId: string, tagId: string): Promise<void> {
 	const current = await collections();
 
-	await removeTagFromTasks(tagId);
+	await removeTagFromTasks(userId, tagId);
 	// Already gone is the outcome this asked for, not a failure.
-	await current.tags.deleteOne({ tagId });
+	await current.tags.deleteOne({ tagId, userId });
 }

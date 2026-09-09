@@ -44,6 +44,7 @@ export function TrackerFormDialog({
 	const [title, setTitle] = useState("");
 	const [type, setType] = useState<TrackerType>("book");
 	const [unit, setUnit] = useState("pages");
+	const [startValue, setStartValue] = useState<number | null>(null);
 	const [targetValue, setTargetValue] = useState<number | null>(null);
 	const [startDate, setStartDate] = useState<ISODateString | undefined>(
 		undefined,
@@ -60,6 +61,7 @@ export function TrackerFormDialog({
 		setTitle(tracker?.title ?? "");
 		setType(tracker?.type ?? "book");
 		setUnit(tracker?.unit ?? TRACKER_TYPE_DEFAULT_UNITS.book);
+		setStartValue(tracker?.startValue ?? 0);
 		setTargetValue(tracker?.targetValue ?? null);
 		setStartDate(
 			(tracker?.startDate as ISODateString | undefined) ??
@@ -84,11 +86,18 @@ export function TrackerFormDialog({
 	}
 
 	const trimmedTitle = title.trim();
+	const from = startValue ?? 0;
+
+	/*
+	 * The target has to be past the starting point, or there is no distance to
+	 * cover: "page 40 to page 40" is not a plan, and every pace figure derived
+	 * from it would be a division by zero.
+	 */
 	const isValid =
 		trimmedTitle !== "" &&
 		unit.trim() !== "" &&
 		targetValue !== null &&
-		targetValue > 0 &&
+		targetValue > from &&
 		startDate !== undefined;
 
 	function submit(event: FormEvent) {
@@ -100,6 +109,7 @@ export function TrackerFormDialog({
 			type,
 			unit: unit.trim(),
 			targetValue,
+			startValue: from,
 			startDate,
 			deadline: deadline ?? null,
 			description: description.trim(),
@@ -164,6 +174,16 @@ export function TrackerFormDialog({
 						placeholder="412"
 					/>
 				</FieldRow>
+
+				<NumberInput
+					label="Starting from"
+					isOptional
+					description="Where you already are. Leave at 0 to start from scratch."
+					min={0}
+					value={startValue}
+					onChange={setStartValue}
+					placeholder="0"
+				/>
 
 				{type === "book" ? (
 					<TextInput

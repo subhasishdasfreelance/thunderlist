@@ -46,27 +46,27 @@ export type SearchIndex = {
 	}>;
 };
 
-export async function getSearchIndex(): Promise<SearchIndex> {
+export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 	const current = await collections();
 
 	const [checklists, trackers, tasks, refs] = await Promise.all([
 		current.checklists
 			.find(
-				{},
+				{ userId },
 				{ projection: { _id: 0, checklistId: 1, title: 1, description: 1 } },
 			)
 			.toArray(),
 		current.trackers
 			.find(
-				{},
+				{ userId },
 				{ projection: { _id: 0, trackerId: 1, title: 1, type: 1, author: 1 } },
 			)
 			.toArray(),
-		current.tasks.find({}, { projection: DOMAIN_FIELDS }).toArray(),
+		current.tasks.find({ userId }, { projection: DOMAIN_FIELDS }).toArray(),
 		// Only for the tasks with no checklist below, but reading the refs whole
 		// is one query where a filtered one would need the task ids first.
 		current.taskRefs
-			.find({}, { projection: { _id: 0, taskId: 1, list: 1 } })
+			.find({ userId }, { projection: { _id: 0, taskId: 1, list: 1 } })
 			.toArray(),
 	]);
 

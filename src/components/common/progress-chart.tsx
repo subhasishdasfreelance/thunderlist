@@ -54,6 +54,7 @@ export function ProgressChart({
 	end,
 	now,
 	target,
+	base,
 	current,
 	points,
 	startLabel,
@@ -68,6 +69,14 @@ export function ProgressChart({
 	now: number;
 	/** The finishing line. */
 	target: number;
+	/**
+	 * The floor of the vertical axis: what had already been done on day one.
+	 *
+	 * A book opened at page 40 and finished at page 80 is a chart of 40 pages,
+	 * not 80, and drawing it from zero would squash the whole story into the top
+	 * half of the picture.
+	 */
+	base?: number;
 	/** Where things stand, which may be later than the last reading. */
 	current: number;
 	/** Cumulative readings, oldest first. */
@@ -79,6 +88,8 @@ export function ProgressChart({
 }) {
 	const titleId = useId();
 
+	const floor = base ?? 0;
+
 	const chart = useMemo(() => {
 		// The axis runs from the start to whichever comes last: the deadline, now,
 		// or the final reading. A chart that stopped before "now" would hide the
@@ -86,14 +97,22 @@ export function ProgressChart({
 		const last = Math.max(end ?? start, now, points.at(-1)?.at ?? start);
 		const span = Math.max(1, last - start);
 
-		const ceiling = Math.max(target, current, ...points.map((p) => p.value), 1);
+		const ceiling = Math.max(
+			target,
+			current,
+			...points.map((p) => p.value),
+			floor + 1,
+		);
 
 		const x = (at: number) =>
 			PADDING.left +
 			(Math.min(Math.max(at - start, 0), span) / span) * PLOT_WIDTH;
 
+		const height = ceiling - floor;
 		const y = (value: number) =>
-			PADDING.top + (1 - Math.min(value, ceiling) / ceiling) * PLOT_HEIGHT;
+			PADDING.top +
+			(1 - (Math.min(Math.max(value, floor), ceiling) - floor) / height) *
+				PLOT_HEIGHT;
 
 		const series: Array<Series> = [];
 
@@ -104,7 +123,7 @@ export function ProgressChart({
 				colour: "var(--color-border-emphasized)",
 				dashed: true,
 				points: [
-					[x(start), y(0)],
+					[x(start), y(floor)],
 					[x(end), y(target)],
 				],
 			});
@@ -113,7 +132,7 @@ export function ProgressChart({
 		// The line starts at nothing on the first day, so the first reading reads
 		// as a step up from zero rather than as a mark appearing in mid-air.
 		const followed: Array<[number, number]> = [
-			[x(start), y(0)],
+			[x(start), y(floor)],
 			...points.map((point): [number, number] => [x(point.at), y(point.value)]),
 			[x(now), y(current)],
 		];
@@ -148,7 +167,7 @@ export function ProgressChart({
 				cy: y(point.value),
 			})),
 		};
-	}, [start, end, now, target, current, points]);
+	}, [start, end, now, target, current, points, floor]);
 
 	return (
 		<VStack gap={2}>
@@ -212,7 +231,7 @@ export function ProgressChart({
 					fontSize={11}
 					fill="var(--color-text-secondary)"
 				>
-					0
+					{floor}
 				</text>
 				<text
 					x={PADDING.left}

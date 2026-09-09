@@ -463,3 +463,64 @@ describe("computeVelocity", () => {
 		expect(velocity.daysRemaining).toBeNull();
 	});
 });
+
+describe("trackerProgress with a starting value", () => {
+	// Page 40 of a book being read to page 80: halfway is page 60, not page 60
+	// out of 80. The readings shown stay the real ones.
+	it("measures across the distance still to cover", () => {
+		expect(trackerProgress(60, 80, 40)).toEqual({
+			current: 60,
+			target: 80,
+			percent: 50,
+		});
+	});
+
+	it("is at nothing on the day it starts", () => {
+		expect(trackerProgress(40, 80, 40).percent).toBe(0);
+	});
+
+	it("is finished at the target", () => {
+		expect(trackerProgress(80, 80, 40).percent).toBe(100);
+	});
+
+	it("does not run backwards below where it started", () => {
+		expect(trackerProgress(30, 80, 40).percent).toBe(0);
+	});
+
+	it("still behaves as before without one", () => {
+		expect(trackerProgress(284, 412).percent).toBe(
+			trackerProgress(284, 412, 0).percent,
+		);
+	});
+});
+
+describe("computeVelocity with a starting value", () => {
+	// Page 40 to page 80 in five days is eight pages a day, not sixteen.
+	const plan = {
+		startDate: "2026-01-01",
+		deadline: "2026-01-06",
+		start: 40,
+		target: 80,
+	};
+
+	it("expects the distance, not the reading", () => {
+		const velocity = computeVelocity({
+			...plan,
+			current: 40,
+			today: "2026-01-01",
+		});
+
+		expect(velocity.expectedPerDay).toBe(8);
+	});
+
+	it("counts only the pages actually turned", () => {
+		const velocity = computeVelocity({
+			...plan,
+			current: 49,
+			today: "2026-01-02",
+		});
+
+		// Nine pages in one day, not forty-nine.
+		expect(velocity.perDay).toBe(9);
+	});
+});

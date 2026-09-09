@@ -4,10 +4,12 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
+	redirect,
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { AppFrame } from "#/components/shell/app-frame";
+import { getSessionFn } from "#/functions/session.functions";
 import { THEME_INIT_SCRIPT } from "#/lib/theme";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
@@ -17,6 +19,35 @@ interface MyRouterContext {
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+	/*
+	 * The gate, and the only one.
+	 *
+	 * It runs on the server before any route below it loads, so a signed-out
+	 * request is redirected before a single loader has asked the database for
+	 * anything — there is no window in which someone else's data is fetched and
+	 * then hidden. Signing in is the one thing that can be done from outside, so
+	 * `/login` is the one path allowed through; anyone already signed in is sent
+	 * back out of it, which is what makes the login page unreachable once you
+	 * are in.
+	 *
+	 * This decides what is *shown*. What is *readable* is decided separately, per
+	 * request, in `requireUserId` — a guard in the router protects screens, not
+	 * data, and the two are kept independent on purpose.
+	 */
+	beforeLoad: async ({ location }) => {
+		const user = await getSessionFn();
+		const isLoginPage = location.pathname === "/login";
+
+		if (!user && !isLoginPage) {
+			throw redirect({ to: "/login", search: { task: undefined } });
+		}
+
+		if (user && isLoginPage) {
+			throw redirect({ to: "/today", search: { task: undefined } });
+		}
+
+		return { user };
+	},
 	head: () => ({
 		meta: [
 			{
@@ -52,8 +83,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
+	const { user } = Route.useRouteContext();
+
+	// The login page is the one screen without a session, and so without the
+	// app frame: there is no navigation to offer someone who is not in yet.
+	if (!user) return <Outlet />;
+
 	return (
-		<AppFrame>
+		<AppFrame user={user}>
 			<Outlet />
 		</AppFrame>
 	);
@@ -61,7 +98,18 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="en">
+		/*
+		 * `suppressHydrationWarning` is on the html element because something is
+		 * meant to have changed it before React arrives: the script below writes
+		 * `data-theme` ahead of the first paint, which is the whole point of it.
+		 * React compares the markup it sent with the DOM it finds, sees an
+		 * attribute it did not write, and reports a mismatch it cannot repair.
+		 *
+		 * It suppresses the warning for this element's own attributes only —
+		 * children are still checked — so it silences the one difference that is
+		 * deliberate without hiding any that are not.
+		 */
+		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
 				{/*

@@ -8,6 +8,8 @@
 
 const ERROR_CODES = [
 	"not_configured",
+	/** No session, or one that has expired. The answer is to sign in again. */
+	"unauthorized",
 	"not_found",
 	"invalid_data",
 	"upstream_failed",

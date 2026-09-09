@@ -158,6 +158,8 @@ export type TrackerValues = {
 	type: Tracker["type"];
 	unit: string;
 	targetValue: number;
+	/** Where the count already stood on day one; see `Tracker.startValue`. */
+	startValue: number;
 	startDate: string;
 	deadline: string | null;
 	description: string;
