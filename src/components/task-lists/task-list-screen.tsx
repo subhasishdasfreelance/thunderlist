@@ -215,17 +215,15 @@ export function TaskListScreen({
 	function quickAdd(lines: Array<ParsedTitle>) {
 		const resolveTag = createTagResolver(apply, tags);
 
+		// One change per line: creating the task and putting it on this list is a
+		// single act, and splitting it in two used to let the second half arrive
+		// before the first and be refused.
 		lines.forEach((line, offset) => {
-			const taskId = createTask(apply, {
+			createTask(apply, {
 				checklistId: null,
 				title: line.title,
 				tagIds: line.tagNames.map(resolveTag),
-			});
-
-			addTaskRef(apply, {
-				list,
-				taskId,
-				sortOrder: endOfList(entries.length + offset),
+				onList: { list, sortOrder: endOfList(entries.length + offset) },
 			});
 		});
 	}
@@ -386,7 +384,7 @@ export function TaskListScreen({
 				// The ref is what `useReorderAnimation` measures the rows through.
 				<div ref={listRef}>
 					<Card padding={0}>
-						<VStack gap={0} paddingInline={4} paddingBlock={2}>
+						<VStack gap={0} paddingBlock={2}>
 							{open.map((entry, index) => (
 								<div
 									key={entry.item.itemId}

@@ -113,9 +113,14 @@ export function createTask(
 		checklistId: string | null;
 		title: string;
 		tagIds: Array<string>;
+		/** A tracker this task should follow rather than be ticked. */
+		trackerId?: string | null;
+		/** A list to put it on at the same time, for a task typed into one. */
+		onList?: { list: TaskListName; sortOrder: number };
 	},
 ): string {
 	const taskId = createId(ID_PREFIX.task);
+	const { onList, ...rest } = input;
 
 	apply({
 		kind: "task.create",
@@ -123,7 +128,12 @@ export function createTask(
 		addedAt: new Date().toISOString(),
 		urgent: false,
 		important: false,
-		...input,
+		trackerId: null,
+		place:
+			onList === undefined
+				? null
+				: { ...onList, itemId: createId(ID_PREFIX.listItem) },
+		...rest,
 	});
 
 	return taskId;

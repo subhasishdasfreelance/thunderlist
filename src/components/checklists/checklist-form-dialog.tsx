@@ -3,6 +3,7 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
@@ -73,11 +74,13 @@ export function ChecklistFormDialog({
 				<HStack gap={2} hAlign="end">
 					<Button
 						label="Cancel"
+						icon={<X aria-hidden />}
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
 						label={checklist ? "Save changes" : "Create checklist"}
+						icon={<Check aria-hidden />}
 						variant="primary"
 						type="submit"
 						form={formId}
@@ -97,7 +100,7 @@ export function ChecklistFormDialog({
 				<TextArea
 					label="Description"
 					isOptional
-					rows={2}
+					rows={4}
 					value={description}
 					onChange={setDescription}
 					placeholder="What this checklist covers"

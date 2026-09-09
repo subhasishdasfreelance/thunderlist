@@ -10,11 +10,11 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { TagSegments } from "#/components/tags/tag-segments";
 import {
 	activeTagQuery,
 	applyTagSuggestion,
 	sameTagName,
-	splitTitleTags,
 } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
 
@@ -257,22 +257,7 @@ export function TagTextField({
 				className="thunderlist-mirror"
 				style={mirrorStyle}
 			>
-				{splitTitleTags(value).map((segment) =>
-					segment.kind === "text" ? (
-						<span key={segment.at}>{segment.text}</span>
-					) : (
-						<span
-							key={segment.at}
-							className="thunderlist-tag"
-							data-color={
-								tags.find((tag) => sameTagName(tag.name, segment.name))
-									?.color ?? "none"
-							}
-						>
-							#{segment.name}
-						</span>
-					),
-				)}
+				<TagSegments title={value} tags={tags} />
 				{/* A trailing newline needs a line to sit on, or the last row is lost. */}
 				{"​"}
 			</div>

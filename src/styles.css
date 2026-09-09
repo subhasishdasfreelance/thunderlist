@@ -105,8 +105,16 @@ body {
  * components' own.
  */
 @layer components {
-	/* A row arriving in a list: it should be noticed, not announced. */
+	/*
+	 * A row arriving in a list: it should be noticed, not announced.
+	 *
+	 * It also carries its own inline padding rather than taking it from the
+	 * column it sits in. With the padding on the column, a row was narrower than
+	 * its card, so hovering lit a smaller shape floating inside a larger one —
+	 * the thing pointed at and the thing highlighted were not the same object.
+	 */
 	.thunderlist-row {
+		padding-inline: 1rem;
 		animation: thunderlist-rise var(--duration-medium-min) var(--ease-standard)
 			both;
 	}
@@ -319,6 +327,14 @@ body {
 	 * no border, no padding, no shadow that takes space, because a row that
 	 * changes size on hover makes the whole list twitch as the pointer crosses
 	 * it — and the next row moves out from under the cursor.
+	 */
+	/*
+	 * A row is the full width of the card it sits in.
+	 *
+	 * The padding used to be on the column holding the rows, which meant the
+	 * hover tint stopped short of the card's edges and read as a second, smaller
+	 * card floating inside the first. Moving it onto the row itself makes the
+	 * thing you are pointing at and the thing that lights up the same shape.
 	 */
 	.thunderlist-task-row {
 		border-radius: var(--radius-element, 0.5rem);
@@ -752,6 +768,51 @@ body {
 		.thunderlist-container {
 			width: 58rem;
 		}
+	}
+
+	/*
+	 * The summary strip above a grouped screen.
+	 *
+	 * A grid rather than a row, for the same reason the headline figures are
+	 * one: with a wrapping row the columns land wherever the text ends, and
+	 * twelve tags would read as a ragged paragraph rather than a table.
+	 *
+	 * Each cell is a button, because pointing at a group and reading it are the
+	 * same intent — the summary is also the picker.
+	 */
+	.thunderlist-facets {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.125rem;
+		padding: 0.5rem;
+	}
+
+	@media (min-width: 40rem) {
+		.thunderlist-facets {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.thunderlist-facets {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+	}
+
+	.thunderlist-facet {
+		padding: 0.5rem;
+		border-radius: var(--radius-element, 0.5rem);
+		text-align: start;
+		cursor: pointer;
+		transition: background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-facet:hover {
+		background-color: var(--color-overlay-hover);
+	}
+
+	.thunderlist-facet[data-selected="true"] {
+		background-color: var(--color-accent-muted);
 	}
 
 	/*

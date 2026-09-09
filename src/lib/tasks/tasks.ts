@@ -36,7 +36,7 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 }
 
 /** How a list is ordered. More will follow; these are the two that exist. */
-export const SORT_ORDERS = ["newest", "priority"] as const;
+const SORT_ORDERS = ["newest", "priority"] as const;
 
 export type SortOrder = (typeof SORT_ORDERS)[number];
 

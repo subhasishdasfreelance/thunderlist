@@ -1,5 +1,5 @@
 import { Text } from "@astryxdesign/core/Text";
-import { sameTagName, splitTitleTags } from "#/lib/tags/inline-tags";
+import { TagSegments } from "#/components/tags/tag-segments";
 import type { Tag } from "#/schemas/tag";
 
 /**
@@ -23,26 +23,9 @@ export function TaggedTitle({
 	/** Completed work is settled, not gone; it dims rather than disappears. */
 	isMuted?: boolean;
 }) {
-	const segments = splitTitleTags(title);
-
 	return (
 		<Text color={isMuted ? "secondary" : "primary"}>
-			{segments.map((segment) =>
-				segment.kind === "text" ? (
-					<span key={segment.at}>{segment.text}</span>
-				) : (
-					<span
-						key={segment.at}
-						className="thunderlist-tag"
-						data-color={
-							tags.find((tag) => sameTagName(tag.name, segment.name))?.color ??
-							"none"
-						}
-					>
-						#{segment.name}
-					</span>
-				),
-			)}
+			<TagSegments title={title} tags={tags} />
 		</Text>
 	);
 }

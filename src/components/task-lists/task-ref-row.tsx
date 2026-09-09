@@ -46,6 +46,9 @@ export function TaskRefRow({
 	canReorder: boolean;
 }) {
 	const { task, checklistTitle, list } = entry;
+
+	/** Its state comes from a tracker, so nothing here may set it by hand. */
+	const isTracked = task?.trackerId != null;
 	const [isHovered, setIsHovered] = useState(false);
 
 	const shortcuts = useMemo(
@@ -57,10 +60,19 @@ export function TaskRefRow({
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task?.urgent),
 			[TASK_SHORTCUTS.important]: () =>
 				actions.onSetImportant(!task?.important),
-			[TASK_SHORTCUTS.complete]: () => actions.onToggle(!task?.completed),
+			[TASK_SHORTCUTS.complete]: () => {
+				if (task?.trackerId == null) actions.onToggle(!task?.completed);
+			},
 			[TASK_SHORTCUTS.edit]: actions.onEdit,
 		}),
-		[actions, list, task?.urgent, task?.important, task?.completed],
+		[
+			actions,
+			list,
+			task?.urgent,
+			task?.important,
+			task?.completed,
+			task?.trackerId,
+		],
 	);
 
 	useRowShortcuts(isHovered && task !== null, shortcuts);
@@ -108,10 +120,20 @@ export function TaskRefRow({
 			</div>
 
 			<div className="order-1 flex min-w-0 flex-1 basis-full items-center gap-2 md:order-none md:basis-0">
+				{/*
+				 * A task following a tracker is ticked by the tracker, not by hand.
+				 * The box still shows the state — it is the honest answer to "is
+				 * this done" — but it cannot be the thing that changes it, and the
+				 * tooltip says where to go instead of leaving a dead control.
+				 */}
 				<CheckboxInput
 					label={task.title}
 					isLabelHidden
 					value={task.completed}
+					isDisabled={isTracked}
+					disabledMessage={
+						isTracked ? "Finishes when its tracker does." : undefined
+					}
 					onChange={actions.onToggle}
 				/>
 				<VStack gap={0}>

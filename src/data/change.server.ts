@@ -62,9 +62,19 @@ async function run(userId: string, change: Change): Promise<void> {
 			return;
 		}
 
-		case "task.create":
+		case "task.create": {
 			await createTask(userId, change);
+
+			// Only once the task exists. Both writes happen inside this one
+			// request, so they are ordered — which is exactly what two separate
+			// requests could not guarantee, and why placing a task on a list is
+			// one change rather than two.
+			if (change.place) {
+				await addTaskRef(userId, { ...change.place, taskId: change.taskId });
+			}
+
 			return;
+		}
 
 		case "task.update":
 			await updateTask(userId, change.taskId, change.patch);

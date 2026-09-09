@@ -2,6 +2,7 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { LogOut } from "lucide-react";
 import { useState } from "react";
 import type { SignedInUser } from "#/lib/auth.server";
 import { authClient } from "#/lib/auth-client";
@@ -54,17 +55,36 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 					/>
 				),
 			}}
+			/*
+			 * The account is a heading, not two disabled actions.
+			 *
+			 * Disabled is how a menu says "you cannot do this", and it is drawn that
+			 * way — greyed almost into the background. Which account you are signed
+			 * in as is not a thing you might have done, so as items the name and
+			 * address were both mislabelled and nearly unreadable.
+			 *
+			 * Two sections instead: a title says what the section is about and is
+			 * drawn to be read. Two of them keeps the name and the address on their
+			 * own lines, which also keeps the menu the width of an address rather
+			 * than the width of both at once.
+			 */
+			menuWidth={240}
 			items={[
-				{ label: user.name, isDisabled: true },
-				{ label: user.email, isDisabled: true },
-				{ type: "divider" as const },
+				{ type: "section" as const, title: user.name, items: [] },
 				{
-					label: isSigningOut ? "Signing out…" : "Sign out",
-					variant: "destructive" as const,
-					isDisabled: isSigningOut,
-					onClick: () => {
-						void signOut();
-					},
+					type: "section" as const,
+					title: user.email,
+					items: [
+						{
+							label: isSigningOut ? "Signing out…" : "Sign out",
+							icon: <LogOut aria-hidden />,
+							variant: "destructive" as const,
+							isDisabled: isSigningOut,
+							onClick: () => {
+								void signOut();
+							},
+						},
+					],
 				},
 			]}
 		/>

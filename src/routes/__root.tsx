@@ -85,12 +85,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 function RootComponent() {
 	const { user } = Route.useRouteContext();
 
-	// The login page is the one screen without a session, and so without the
-	// app frame: there is no navigation to offer someone who is not in yet.
-	if (!user) return <Outlet />;
-
+	// The frame is rendered signed out too — it drops everything that needs an
+	// account and keeps the bar, so the login page is recognisably this app
+	// rather than a page from somewhere else.
 	return (
-		<AppFrame user={user}>
+		<AppFrame user={user ?? null}>
 			<Outlet />
 		</AppFrame>
 	);

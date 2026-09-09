@@ -2,13 +2,16 @@ import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { CircleDashed, Star, Zap, ZapOff } from "lucide-react";
+import { useMemo, useState } from "react";
+import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
-import { StatGrid } from "#/components/common/stat-grid";
 import { ErrorNotice } from "#/components/common/states";
 import { TaggedTitle } from "#/components/tags/tagged-title";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -32,6 +35,14 @@ export const Route = createFileRoute("/priority")({
 });
 
 /** What each band means, so the grid is readable without knowing the theory. */
+/** The marks the flags already use, so a band looks like what it holds. */
+const BAND_ICONS: Record<PriorityRank, typeof Zap> = {
+	"urgent-important": Zap,
+	urgent: ZapOff,
+	important: Star,
+	none: CircleDashed,
+};
+
 const BAND_HINTS: Record<PriorityRank, string> = {
 	"urgent-important": "Do these first",
 	urgent: "Pressing, but ask whether they are worth it",
@@ -62,6 +73,8 @@ function PriorityPage() {
 		[index.data],
 	);
 
+	const [selected, setSelected] = useState<PriorityRank>("urgent-important");
+
 	const bands = useMemo(() => {
 		const grouped = new Map<PriorityRank, typeof tasks>();
 		for (const rank of PRIORITY_RANKS) grouped.set(rank, []);
@@ -78,10 +91,22 @@ function PriorityPage() {
 		);
 	}
 
-	const stats = PRIORITY_RANKS.map((rank) => ({
+	/*
+	 * The four corners, each with what it holds.
+	 *
+	 * Completed tasks are already filtered out, so "left" is the whole count and
+	 * "done" is nothing — the summary is a comparison of how much of each kind
+	 * is outstanding, which is the question this screen exists to answer.
+	 */
+	const facets: Array<Facet> = PRIORITY_RANKS.map((rank) => ({
+		value: rank,
 		label: PRIORITY_LABELS[rank],
-		value: `${bands.get(rank)?.length ?? 0}`,
+		mark: <Icon icon={BAND_ICONS[rank]} size="sm" color="secondary" />,
+		total: bands.get(rank)?.length ?? 0,
+		done: 0,
 	}));
+
+	const shown = bands.get(selected) ?? [];
 
 	return (
 		<VStack gap={4}>
@@ -101,31 +126,66 @@ function PriorityPage() {
 				/>
 			) : (
 				<>
-					<StatGrid stats={stats} />
+					<FacetSummary
+						facets={facets}
+						selected={selected}
+						onSelect={(value) => setSelected(value as PriorityRank)}
+					/>
 
-					{PRIORITY_RANKS.map((rank) => {
-						const band = bands.get(rank) ?? [];
-						if (band.length === 0) return null;
+					<VStack gap={2}>
+						<HStack gap={2} hAlign="between" vAlign="center">
+							<Selector
+								label="Priority to show"
+								size="sm"
+								variant="ghost"
+								value={selected}
+								onChange={(value) => setSelected(value as PriorityRank)}
+								options={PRIORITY_RANKS.map((rank) => ({
+									value: rank,
+									label: PRIORITY_LABELS[rank],
+									description: BAND_HINTS[rank],
+								}))}
+							/>
+							<Text type="supporting">{BAND_HINTS[selected]}</Text>
+						</HStack>
 
-						return (
-							<VStack key={rank} gap={2}>
-								<div className="thunderlist-band" data-rank={rank}>
-									<VStack gap={0}>
-										<Text type="label" weight="semibold">
-											{PRIORITY_LABELS[rank]} · {band.length}
-										</Text>
-										<Text type="supporting">{BAND_HINTS[rank]}</Text>
-									</VStack>
-								</div>
-
-								<Card padding={0}>
-									<VStack gap={0} paddingInline={4} paddingBlock={2}>
-										{band.map((task, position) => (
-											<div key={task.taskId} className="thunderlist-row">
-												{position === 0 ? null : <Divider />}
-												{/* A task in no checklist has nowhere to open, so it
-												    is a row rather than a link. */}
-												{task.checklistId === null ? (
+						{shown.length === 0 ? (
+							<EmptyState
+								isCompact
+								title="Nothing here."
+								description="Nothing is sitting in this corner right now."
+							/>
+						) : (
+							<Card padding={0}>
+								<VStack gap={0} paddingBlock={2}>
+									{shown.map((task, position) => (
+										<div key={task.taskId} className="thunderlist-row">
+											{position === 0 ? null : <Divider />}
+											{/* A task in no checklist has nowhere to open, so it
+											    is a row rather than a link. */}
+											{task.checklistId === null ? (
+												<HStack
+													gap={2}
+													hAlign="between"
+													vAlign="center"
+													paddingBlock={1.5}
+												>
+													<TaggedTitle title={task.title} tags={tags} />
+												</HStack>
+											) : (
+												<button
+													type="button"
+													className="thunderlist-task-row w-full cursor-pointer text-left"
+													onClick={() =>
+														void navigate({
+															to: "/checklists/$checklistId",
+															params: {
+																checklistId: task.checklistId as string,
+															},
+															search: { task: task.taskId },
+														})
+													}
+												>
 													<HStack
 														gap={2}
 														hAlign="between"
@@ -133,41 +193,16 @@ function PriorityPage() {
 														paddingBlock={1.5}
 													>
 														<TaggedTitle title={task.title} tags={tags} />
+														<Text type="supporting">{task.checklistTitle}</Text>
 													</HStack>
-												) : (
-													<button
-														type="button"
-														className="thunderlist-task-row w-full cursor-pointer text-left"
-														onClick={() =>
-															void navigate({
-																to: "/checklists/$checklistId",
-																params: {
-																	checklistId: task.checklistId as string,
-																},
-																search: { task: task.taskId },
-															})
-														}
-													>
-														<HStack
-															gap={2}
-															hAlign="between"
-															vAlign="center"
-															paddingBlock={1.5}
-														>
-															<TaggedTitle title={task.title} tags={tags} />
-															<Text type="supporting">
-																{task.checklistTitle}
-															</Text>
-														</HStack>
-													</button>
-												)}
-											</div>
-										))}
-									</VStack>
-								</Card>
-							</VStack>
-						);
-					})}
+												</button>
+											)}
+										</div>
+									))}
+								</VStack>
+							</Card>
+						)}
+					</VStack>
 				</>
 			)}
 		</VStack>

@@ -137,19 +137,6 @@ export async function readTasksByIds(
 	return byId;
 }
 
-/** Every task, with its checklist. Used to build the search index. */
-export async function readAllTasks(
-	userId: string,
-): Promise<Array<TaskWithChecklist>> {
-	const current = await collections();
-	const rows = await current.tasks
-		.find({ userId })
-		.project<TaskDoc>(DOMAIN_FIELDS)
-		.toArray();
-
-	return rows.map(({ checklistId, ...task }) => ({ task, checklistId }));
-}
-
 export async function getChecklist(
 	userId: string,
 	checklistId: string,
@@ -274,6 +261,8 @@ export async function createTask(
 		tagIds: Array<string>;
 		urgent: boolean;
 		important: boolean;
+		/** A tracker this task stands for; see `taskSchema`. */
+		trackerId?: string | null;
 	},
 ): Promise<Task> {
 	const current = await collections();
@@ -301,6 +290,7 @@ export async function createTask(
 		tagIds: input.tagIds,
 		urgent: input.urgent,
 		important: input.important,
+		trackerId: input.trackerId ?? null,
 	};
 
 	await current.tasks.insertOne({
@@ -333,6 +323,29 @@ export async function updateTask(
 					...patch,
 					completedAt: patch.completed ? new Date().toISOString() : null,
 				};
+
+	/*
+	 * A task standing for a tracker is not tickable.
+	 *
+	 * It is done when the tracker says so, and refusing the write here rather
+	 * than only disabling the checkbox is what makes that true — a tick that
+	 * arrived from a stale tab, a replayed request or a crafted one would
+	 * otherwise leave the task claiming to be finished while the tracker says
+	 * otherwise. Everything else about it edits normally.
+	 */
+	if (patch.completed !== undefined) {
+		const existing = await current.tasks.findOne(
+			{ taskId, userId },
+			{ projection: { _id: 0, trackerId: 1 } },
+		);
+
+		if (existing?.trackerId) {
+			throw new AppError(
+				"invalid_data",
+				"This task follows a tracker. Record progress on the tracker instead.",
+			);
+		}
+	}
 
 	const next = await current.tasks.findOneAndUpdate(
 		{ taskId, userId },

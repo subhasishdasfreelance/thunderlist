@@ -10,15 +10,31 @@ import { useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { LoadingState } from "#/components/common/loading-state";
-import { StatGrid } from "#/components/common/stat-grid";
+import { OrderToggle } from "#/components/common/order-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
 	createChecklist,
 	useApplyChange,
 } from "#/lib/changes";
+import { lagFraction } from "#/lib/progress";
 import { checklistsQuery } from "#/queries/checklists";
 import { primeQuery } from "#/queries/prime";
+import type { ChecklistSummary } from "#/schemas/checklist";
+
+/**
+ * How far behind a checklist is, worst first.
+ *
+ * The same measure the pace label on the card is drawn from, so the order
+ * agrees with what each card says about itself.
+ */
+function lag(checklist: ChecklistSummary): number {
+	return lagFraction({
+		startDate: checklist.startDate,
+		deadline: checklist.deadline,
+		fractionComplete: checklist.progress.percent / 100,
+	});
+}
 
 export const Route = createFileRoute("/checklists/")({
 	loader: ({ context }) => primeQuery(context.queryClient, checklistsQuery()),
@@ -28,6 +44,7 @@ export const Route = createFileRoute("/checklists/")({
 function ChecklistsPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isBehindFirst, setIsBehindFirst] = useState(false);
 	const { apply } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
@@ -36,32 +53,17 @@ function ChecklistsPage() {
 
 	const checklists = data ?? [];
 
-	// Across every checklist, so the screen answers "where does all this stand"
-	// before you open any single one.
-	const totals = checklists.reduce(
-		(sum, checklist) => ({
-			tasks: sum.tasks + checklist.progress.total,
-			done: sum.done + checklist.progress.completed,
-			behind: sum.behind + (checklist.status === "behind" ? 1 : 0),
-			withDeadline: sum.withDeadline + (checklist.deadline === null ? 0 : 1),
-		}),
-		{ tasks: 0, done: 0, behind: 0, withDeadline: 0 },
-	);
-
-	const stats = [
-		{ label: "Checklists", value: `${checklists.length}` },
-		{ label: "Tasks", value: `${totals.tasks}` },
-		{ label: "Done", value: `${totals.done}` },
-		{
-			label: "Complete",
-			value:
-				totals.tasks === 0
-					? "—"
-					: `${Math.round((totals.done / totals.tasks) * 100)}%`,
-		},
-		{ label: "With a deadline", value: `${totals.withDeadline}` },
-		{ label: "Behind", value: `${totals.behind}` },
-	];
+	/*
+	 * Behind first, or the order they were made in.
+	 *
+	 * A page of totals answered "how is all of this going" with one number that
+	 * was true of nothing in particular. The useful version of that question is
+	 * "which of these needs me", and that is an ordering of the cards already on
+	 * the screen rather than a row of figures above them.
+	 */
+	const ordered = isBehindFirst
+		? [...checklists].sort((a, b) => lag(b) - lag(a))
+		: checklists;
 
 	function create(values: ChecklistValues) {
 		const checklistId = createChecklist(apply, values);
@@ -86,8 +88,6 @@ function ChecklistsPage() {
 				/>
 			</HStack>
 
-			{checklists.length === 0 || isPending ? null : <StatGrid stats={stats} />}
-
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
@@ -99,10 +99,18 @@ function ChecklistsPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<Text type="label" weight="semibold">
-						Your Checklists
-					</Text>
-					{checklists.map((checklist) => (
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<Text type="label" weight="semibold">
+							Your Checklists
+						</Text>
+						<OrderToggle
+							isSorted={isBehindFirst}
+							sortedLabel="Most behind first"
+							defaultLabel="As added"
+							onChange={setIsBehindFirst}
+						/>
+					</HStack>
+					{ordered.map((checklist) => (
 						<ChecklistCard key={checklist.checklistId} checklist={checklist} />
 					))}
 				</VStack>

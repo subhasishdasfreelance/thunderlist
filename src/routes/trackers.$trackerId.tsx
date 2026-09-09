@@ -8,7 +8,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { CalendarCheck, MoreHorizontal, Plus } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { LoadingState } from "#/components/common/loading-state";
@@ -25,6 +25,7 @@ import { formatProgress } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
 	createEntry,
+	createTask,
 	type EntryValues,
 	type TrackerValues,
 	useApplyChange,
@@ -33,6 +34,7 @@ import { dayStart } from "#/lib/chart-points";
 import { formatDate } from "#/lib/format-date";
 import { elapsedFraction } from "#/lib/progress";
 import { primeQuery } from "#/queries/prime";
+import { taskListsQuery } from "#/queries/task-lists";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
 
@@ -73,6 +75,7 @@ function TrackerDetailPage() {
 		trackerQuery(trackerId),
 	);
 	const history = useQuery(trackerEntriesQuery(trackerId));
+	const lists = useQuery(taskListsQuery());
 	const entries = history.data ?? [];
 
 	const [view, setView] = useState<ProgressView>("list");
@@ -116,6 +119,30 @@ function TrackerDetailPage() {
 					) - 1
 				]?.value ?? 0)
 			: detail.currentValue;
+
+	/*
+	 * Is this tracker already on Today?
+	 *
+	 * The lists are loaded for the badge on a checklist's rows anyway, so this
+	 * costs nothing extra; while they are still arriving the button simply reads
+	 * as available, and adding twice is prevented server-side by the same task
+	 * id never being minted twice.
+	 */
+	const isOnToday = (lists.data?.today ?? []).some(
+		(entry) => entry.task?.trackerId === trackerId,
+	);
+
+	function addToToday() {
+		if (detail === null) return;
+
+		createTask(apply, {
+			checklistId: null,
+			title: detail.title,
+			tagIds: [],
+			trackerId,
+			onList: { list: "today", sortOrder: 0 },
+		});
+	}
 
 	const addLabel =
 		detail.type === "book" ? "Add reading progress" : "Add progress";
@@ -197,11 +224,25 @@ function TrackerDetailPage() {
 				isComplete={progress.target > 0 && progress.current >= progress.target}
 			/>
 
-			<HStack gap={2}>
+			<HStack gap={2} wrap="wrap">
 				<Button
 					label={addLabel}
+					icon={<Plus aria-hidden />}
 					variant="primary"
 					onClick={() => setEntryDialog({ mode: "create" })}
+				/>
+				{/*
+				 * A tracker on Today is a reminder to move it, not a box to tick:
+				 * the task it creates finishes when this tracker does. Adding it
+				 * twice is pointless, so the button says so rather than piling
+				 * duplicates onto the list.
+				 */}
+				<Button
+					label={isOnToday ? "On Today" : "Add to Today"}
+					icon={<CalendarCheck aria-hidden />}
+					variant="secondary"
+					isDisabled={isOnToday}
+					onClick={addToToday}
 				/>
 			</HStack>
 

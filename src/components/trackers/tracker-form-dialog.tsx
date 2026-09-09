@@ -5,6 +5,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -128,11 +129,13 @@ export function TrackerFormDialog({
 				<HStack gap={2} hAlign="end">
 					<Button
 						label="Cancel"
+						icon={<X aria-hidden />}
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
 						label={tracker ? "Save changes" : "Create tracker"}
+						icon={<Check aria-hidden />}
 						variant="primary"
 						type="submit"
 						form={formId}
@@ -213,7 +216,7 @@ export function TrackerFormDialog({
 				<TextArea
 					label="Description"
 					isOptional
-					rows={2}
+					rows={4}
 					value={description}
 					onChange={setDescription}
 				/>

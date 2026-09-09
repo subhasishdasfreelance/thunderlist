@@ -14,11 +14,11 @@
 
 import { useSyncExternalStore } from "react";
 
-export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
+const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
-export const STORAGE_KEY = "thunderlist.theme.v1";
+const STORAGE_KEY = "thunderlist.theme.v1";
 
 function isColorScheme(value: unknown): value is ColorScheme {
 	return (COLOR_SCHEMES as ReadonlyArray<unknown>).includes(value);

@@ -3,16 +3,18 @@ import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { Text } from "@astryxdesign/core/Text";
+import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
-import { type Stat, StatGrid } from "#/components/common/stat-grid";
 import { ErrorNotice } from "#/components/common/states";
-import { TagCard } from "#/components/tags/tag-card";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
 import { createTag, useApplyChange } from "#/lib/changes";
@@ -32,50 +34,13 @@ export const Route = createFileRoute("/tags")({
 	component: TagsPage,
 });
 
-/**
- * The headline figures for the whole screen.
- *
- * Coverage is the one worth watching: tags are only useful if most tasks carry
- * one, and an untagged pile is the thing that quietly makes the screen useless.
- */
-function tagStats(
-	tags: ReadonlyArray<Tag>,
-	tasks: ReadonlyArray<TaggedTask>,
-	tasksByTag: Map<string, Array<TaggedTask>>,
-): Array<Stat> {
-	const untagged = tasks.filter((task) => task.tagIds.length === 0).length;
-	const tagged = tasks.length - untagged;
-
-	const busiest = [...tasksByTag.entries()].reduce<{
-		name: string;
-		count: number;
-	} | null>((best, [tagId, list]) => {
-		if (best !== null && list.length <= best.count) return best;
-		const tag = tags.find((candidate) => candidate.tagId === tagId);
-		return tag ? { name: tag.name, count: list.length } : best;
-	}, null);
-
-	return [
-		{ label: "Tags", value: `${tags.length}` },
-		{ label: "Tagged tasks", value: `${tagged}` },
-		{ label: "Untagged", value: `${untagged}` },
-		{
-			label: "Coverage",
-			value:
-				tasks.length === 0
-					? "—"
-					: `${Math.round((tagged / tasks.length) * 100)}%`,
-		},
-		{
-			label: "Busiest tag",
-			value: busiest === null ? "—" : `${busiest.name} (${busiest.count})`,
-		},
-	];
-}
+/** The tag currently being read, with `UNTAGGED` for the tasks carrying none. */
+const UNTAGGED = "untagged";
 
 function TagsPage() {
 	const { apply } = useApplyChange();
 
+	const [selected, setSelected] = useState<string>(UNTAGGED);
 	const [editing, setEditing] = useState<Tag | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
 	const [deleting, setDeleting] = useState<Tag | null>(null);
@@ -104,7 +69,37 @@ function TagsPage() {
 		[tasks],
 	);
 
-	const stats = tagStats(allTags, tasks, tasksByTag);
+	/*
+	 * Every tag, plus the tasks carrying none.
+	 *
+	 * Untagged is a group like any other here: it is where most tasks start, and
+	 * leaving it out of the summary would hide the number the screen exists to
+	 * shrink.
+	 */
+	const facets: Array<Facet> = [
+		...allTags.map((tag) => {
+			const carried = tasksByTag.get(tag.tagId) ?? [];
+
+			return {
+				value: tag.tagId,
+				label: tag.name,
+				mark: <Token size="sm" color={tag.color} label={tag.name} />,
+				total: carried.length,
+				done: carried.filter((task) => task.completed).length,
+			};
+		}),
+		{
+			value: UNTAGGED,
+			label: "Untagged",
+			mark: <Icon icon={TagIcon} size="sm" color="secondary" />,
+			total: untagged.length,
+			done: untagged.filter((task) => task.completed).length,
+		},
+	];
+
+	const shown =
+		selected === UNTAGGED ? untagged : (tasksByTag.get(selected) ?? []);
+	const shownTag = allTags.find((tag) => tag.tagId === selected) ?? null;
 
 	const isLoading = tagsResult.isPending || index.isPending;
 	const failure = tagsResult.error ?? index.error;
@@ -133,7 +128,11 @@ function TagsPage() {
 				<LoadingState />
 			) : (
 				<>
-					{tasks.length === 0 ? null : <StatGrid stats={stats} />}
+					<FacetSummary
+						facets={facets}
+						selected={selected}
+						onSelect={setSelected}
+					/>
 
 					{allTags.length === 0 ? (
 						<EmptyState
@@ -141,36 +140,67 @@ function TagsPage() {
 							description="Create a tag to group tasks across your checklists."
 						/>
 					) : (
-						<VStack gap={3}>
-							{allTags.map((tag) => (
-								<TagCard
-									key={tag.tagId}
-									tag={tag}
-									tasks={tasksByTag.get(tag.tagId) ?? []}
-									allTags={allTags}
-									onEdit={() => setEditing(tag)}
-									onDelete={() => setDeleting(tag)}
-								/>
-							))}
-						</VStack>
-					)}
-
-					{untagged.length === 0 ? null : (
 						<VStack gap={2}>
-							<Text type="label" weight="semibold">
-								Untagged tasks
-							</Text>
-							<Card padding={0}>
-								<VStack gap={0} paddingInline={4} paddingBlock={2}>
-									{untagged.map((task) => (
-										<TaggedTaskRow
-											key={task.taskId}
-											task={task}
-											tags={allTags}
+							<HStack gap={2} hAlign="between" vAlign="center">
+								<Selector
+									label="Tag to show"
+									size="sm"
+									variant="ghost"
+									hasSearch={facets.length > 8}
+									value={selected}
+									onChange={setSelected}
+									options={facets.map((facet) => ({
+										value: facet.value,
+										label: facet.label,
+										description: `${facet.total - facet.done} left of ${facet.total}`,
+									}))}
+								/>
+
+								{shownTag === null ? null : (
+									<HStack gap={1} vAlign="center">
+										<IconButton
+											label={`Rename or recolour ${shownTag.name}`}
+											tooltip="Rename or recolour"
+											variant="ghost"
+											size="sm"
+											icon={<Pencil aria-hidden />}
+											onClick={() => setEditing(shownTag)}
 										/>
-									))}
-								</VStack>
-							</Card>
+										<IconButton
+											label={`Delete ${shownTag.name}`}
+											tooltip="Delete tag"
+											variant="ghost"
+											size="sm"
+											icon={<Trash2 aria-hidden />}
+											onClick={() => setDeleting(shownTag)}
+										/>
+									</HStack>
+								)}
+							</HStack>
+
+							{shown.length === 0 ? (
+								<EmptyState
+									isCompact
+									title="Nothing here."
+									description={
+										selected === UNTAGGED
+											? "Every task carries a tag."
+											: "Nothing carries this tag yet."
+									}
+								/>
+							) : (
+								<Card padding={0}>
+									<VStack gap={0} paddingBlock={2}>
+										{shown.map((task) => (
+											<TaggedTaskRow
+												key={task.taskId}
+												task={task}
+												tags={allTags}
+											/>
+										))}
+									</VStack>
+								</Card>
+							)}
 						</VStack>
 					)}
 				</>

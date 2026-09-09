@@ -8,7 +8,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { LoadingState } from "#/components/common/loading-state";
-import { StatGrid } from "#/components/common/stat-grid";
+import { OrderToggle } from "#/components/common/order-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
@@ -17,8 +17,24 @@ import {
 	type TrackerValues,
 	useApplyChange,
 } from "#/lib/changes";
+import { lagFraction } from "#/lib/progress";
 import { primeQuery } from "#/queries/prime";
 import { trackersQuery } from "#/queries/trackers";
+import type { TrackerSummary } from "#/schemas/tracker";
+
+/**
+ * How far behind a tracker is, worst first.
+ *
+ * The same measure the pace label on the card is drawn from, so the order
+ * agrees with what each card says about itself.
+ */
+function lag(tracker: TrackerSummary): number {
+	return lagFraction({
+		startDate: tracker.startDate,
+		deadline: tracker.deadline,
+		fractionComplete: tracker.progress.percent / 100,
+	});
+}
 
 export const Route = createFileRoute("/trackers/")({
 	loader: ({ context }) => primeQuery(context.queryClient, trackersQuery()),
@@ -28,6 +44,7 @@ export const Route = createFileRoute("/trackers/")({
 function TrackersPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isBehindFirst, setIsBehindFirst] = useState(false);
 	const { apply } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
@@ -36,34 +53,18 @@ function TrackersPage() {
 
 	const trackers = data ?? [];
 
-	const totals = trackers.reduce(
-		(sum, tracker) => ({
-			percent: sum.percent + tracker.progress.percent,
-			behind: sum.behind + (tracker.status === "behind" ? 1 : 0),
-			done:
-				sum.done +
-				(tracker.progress.target > 0 &&
-				tracker.progress.current >= tracker.progress.target
-					? 1
-					: 0),
-			withDeadline: sum.withDeadline + (tracker.deadline === null ? 0 : 1),
-		}),
-		{ percent: 0, behind: 0, done: 0, withDeadline: 0 },
-	);
-
-	const stats = [
-		{ label: "Trackers", value: `${trackers.length}` },
-		{
-			label: "Average progress",
-			value:
-				trackers.length === 0
-					? "—"
-					: `${Math.round(totals.percent / trackers.length)}%`,
-		},
-		{ label: "Finished", value: `${totals.done}` },
-		{ label: "With a deadline", value: `${totals.withDeadline}` },
-		{ label: "Behind", value: `${totals.behind}` },
-	];
+	/*
+	 * Behind first, or the order they were made in.
+	 *
+	 * A page of totals answered "how is all of this going" with one number that
+	 * was true of nothing in particular — an average across a book and a fitness
+	 * goal means nothing. The useful version of that question is "which of these
+	 * needs me", and that is an ordering of the cards rather than a row of
+	 * figures above them.
+	 */
+	const ordered = isBehindFirst
+		? [...trackers].sort((a, b) => lag(b) - lag(a))
+		: trackers;
 
 	function create(values: TrackerValues) {
 		const trackerId = createTracker(apply, values);
@@ -83,8 +84,6 @@ function TrackersPage() {
 				/>
 			</HStack>
 
-			{trackers.length === 0 || isPending ? null : <StatGrid stats={stats} />}
-
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
@@ -96,10 +95,18 @@ function TrackersPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<Text type="label" weight="semibold">
-						Your Trackers
-					</Text>
-					{trackers.map((tracker) => (
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<Text type="label" weight="semibold">
+							Your Trackers
+						</Text>
+						<OrderToggle
+							isSorted={isBehindFirst}
+							sortedLabel="Most behind first"
+							defaultLabel="As added"
+							onChange={setIsBehindFirst}
+						/>
+					</HStack>
+					{ordered.map((tracker) => (
 						<TrackerCard key={tracker.trackerId} tracker={tracker} />
 					))}
 				</VStack>

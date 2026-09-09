@@ -275,3 +275,29 @@ export function computeVelocity(
 		projectedFinish,
 	};
 }
+
+/**
+ * How far behind a thing is, as a fraction of the whole job.
+ *
+ * The gap between where the calendar says it should be and where it is: 0.4
+ * means forty per cent of the work is owed. Negative means ahead. Something
+ * with no deadline is asking nothing of anyone, so it is neither, and something
+ * finished is done being measured — both come back as zero, which puts them
+ * below anything genuinely lagging without inventing an order among them.
+ *
+ * A degree rather than a band, so a list sorted by it reads worst-first all the
+ * way down instead of grouping everything unfinished together.
+ */
+export function lagFraction(input: {
+	startDate: string;
+	deadline: string | null;
+	/** Progress so far, 0 to 1. */
+	fractionComplete: number;
+}): number {
+	if (input.fractionComplete >= 1) return 0;
+
+	const expected = elapsedFraction(input);
+	if (expected === null) return 0;
+
+	return expected - input.fractionComplete;
+}

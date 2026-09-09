@@ -1,14 +1,20 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Monitor, Moon, SunMedium } from "lucide-react";
 import { type ColorScheme, setColorScheme, useColorScheme } from "#/lib/theme";
 
 const OPTIONS: Array<{
 	scheme: ColorScheme;
 	label: string;
-	icon: typeof Sun;
+	icon: typeof SunMedium;
 }> = [
-	{ scheme: "light", label: "Light", icon: Sun },
+	/*
+	 * `SunMedium`, not `Sun`: the full sun's rays run to the edge of its box, so
+	 * beside a magnifier and a circled question mark — both of which sit well
+	 * inside theirs — it reads a size larger than everything else in the bar
+	 * even though every icon is drawn at 24. The shorter rays match the rest.
+	 */
+	{ scheme: "light", label: "Light", icon: SunMedium },
 	{ scheme: "dark", label: "Dark", icon: Moon },
 	{ scheme: "system", label: "Match system", icon: Monitor },
 ];

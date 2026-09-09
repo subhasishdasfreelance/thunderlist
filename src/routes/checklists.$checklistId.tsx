@@ -288,7 +288,7 @@ function ChecklistDetailPage() {
 				/>
 			) : (
 				<Card padding={0}>
-					<VStack gap={0} paddingInline={4} paddingBlock={2}>
+					<VStack gap={0} paddingBlock={2}>
 						{open.map((task, index) => (
 							<div
 								key={task.taskId}

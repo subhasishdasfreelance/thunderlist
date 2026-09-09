@@ -19,9 +19,14 @@ export function TaggedTaskRow({
 	tags: ReadonlyArray<Tag>;
 }) {
 	return (
-		<HStack gap={2} hAlign="between" vAlign="center" paddingBlock={1.5}>
-			<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
-			<Text type="supporting">{task.checklistTitle}</Text>
-		</HStack>
+		// The wrapper carries the row class, the same way every other list row in
+		// the app does: it is what gives a row its own inline padding, so the row
+		// is the full width of the card rather than inset from it.
+		<div className="thunderlist-row">
+			<HStack gap={2} hAlign="between" vAlign="center" paddingBlock={1.5}>
+				<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
+				<Text type="supporting">{task.checklistTitle}</Text>
+			</HStack>
+		</div>
 	);
 }

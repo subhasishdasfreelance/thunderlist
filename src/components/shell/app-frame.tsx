@@ -39,8 +39,16 @@ export function AppFrame({
 	user,
 	children,
 }: {
-	/** Whoever is signed in. The frame is never rendered without one. */
-	user: SignedInUser;
+	/**
+	 * Whoever is signed in, or `null` on the login page.
+	 *
+	 * Signed out the frame keeps its bar — the mark, and the theme toggle, which
+	 * is a property of the screen rather than of an account and so is the one
+	 * control that still means something. Everything that needs data goes: the
+	 * navigation, search, the account menu and the shortcuts, none of which have
+	 * anything to act on yet.
+	 */
+	user: SignedInUser | null;
 	children: ReactNode;
 }) {
 	const scheme = useColorScheme();
@@ -48,26 +56,38 @@ export function AppFrame({
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
 
 	/*
-	 * `?` opens the shortcuts, from anywhere.
+	 * Two keys that work from anywhere.
 	 *
-	 * Not while typing: `?` is an ordinary character in a task, and a shortcut
-	 * that eats one is worse than no shortcut.
+	 * `?` opens the shortcuts, but not while typing: it is an ordinary character
+	 * in a task, and a shortcut that eats one is worse than no shortcut.
+	 *
+	 * Ctrl+K opens search, and does work while typing — it is a chord, so it
+	 * cannot be typed by accident, and wanting to search from inside a half
+	 * written task is the normal case rather than the exception. Cmd+K too, for
+	 * a Mac.
 	 */
 	useEffect(() => {
-		function handle(event: KeyboardEvent) {
-			if (event.key !== "?" || event.metaKey || event.ctrlKey || event.altKey) {
-				return;
-			}
-
-			const target = event.target;
-			if (
+		function isTyping(target: EventTarget | null): boolean {
+			return (
 				target instanceof HTMLElement &&
 				(target.isContentEditable ||
 					target instanceof HTMLInputElement ||
 					target instanceof HTMLTextAreaElement)
-			) {
+			);
+		}
+
+		function handle(event: KeyboardEvent) {
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+				event.preventDefault();
+				setIsSearchOpen(true);
 				return;
 			}
+
+			if (event.key !== "?" || event.metaKey || event.ctrlKey || event.altKey) {
+				return;
+			}
+
+			if (isTyping(event.target)) return;
 
 			event.preventDefault();
 			setIsHelpOpen(true);
@@ -76,8 +96,22 @@ export function AppFrame({
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
 	}, []);
+	/*
+	 * Two different "where are we".
+	 *
+	 * `location` is where the router is heading and updates the moment a link is
+	 * clicked, which is what makes the nav item light up immediately. It is the
+	 * wrong thing to animate on: while a page is still loading the old content is
+	 * still on screen, so re-keying on it plays the arrival animation over the
+	 * page being left. `resolvedLocation` is what is actually rendered, and that
+	 * is what a screen's arrival should follow.
+	 */
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
+	});
+	const renderedPathname = useRouterState({
+		select: (state) =>
+			state.resolvedLocation?.pathname ?? state.location.pathname,
 	});
 
 	return (
@@ -103,50 +137,57 @@ export function AppFrame({
 								/* One size for every control in the bar. They read as a
 								   set, so a stray default among them looks like a mistake. */
 								<HStack gap={0.5} vAlign="center">
-									<SaveIndicator />
-									<IconButton
-										label="Search"
-										tooltip="Search"
-										variant="ghost"
-										size="sm"
-										icon={<Search aria-hidden />}
-										onClick={() => setIsSearchOpen(true)}
-									/>
-									<IconButton
-										label="Shortcuts and help"
-										tooltip="Shortcuts (?)"
-										variant="ghost"
-										size="sm"
-										icon={<CircleQuestionMark aria-hidden />}
-										onClick={() => setIsHelpOpen(true)}
-									/>
+									{user === null ? null : (
+										<>
+											<SaveIndicator />
+											<IconButton
+												label="Search"
+												tooltip="Search (Ctrl+K)"
+												variant="ghost"
+												size="sm"
+												icon={<Search aria-hidden />}
+												onClick={() => setIsSearchOpen(true)}
+											/>
+											<IconButton
+												label="Shortcuts and help"
+												tooltip="Shortcuts (?)"
+												variant="ghost"
+												size="sm"
+												icon={<CircleQuestionMark aria-hidden />}
+												onClick={() => setIsHelpOpen(true)}
+											/>
+										</>
+									)}
 									<ThemeToggle />
-									<UserMenu user={user} />
+									{user === null ? null : <UserMenu user={user} />}
 								</HStack>
 							}
 						/>
 					}
 					sideNav={
-						<SideNav>
-							{NAV_ITEMS.map((item) => (
-								<SideNavItem
-									key={item.to}
-									label={item.label}
-									href={item.to}
-									icon={item.icon}
-									isSelected={isNavItemActive(pathname, item.to)}
-								/>
-							))}
-						</SideNav>
+						user === null ? undefined : (
+							<SideNav>
+								{NAV_ITEMS.map((item) => (
+									<SideNavItem
+										key={item.to}
+										label={item.label}
+										href={item.to}
+										icon={item.icon}
+										isSelected={isNavItemActive(pathname, item.to)}
+									/>
+								))}
+							</SideNav>
+						)
 					}
 				>
 					{/*
-					 * Bottom padding clears the mobile nav bar. The key is the path,
-					 * so the content is a new element on every screen and plays its
-					 * arrival — and stays put when only the search params change.
+					 * Bottom padding clears the mobile nav bar. The key is the path
+					 * that is on screen, so the content is a new element on every
+					 * screen and plays its arrival once it has actually arrived — and
+					 * stays put when only the search params change.
 					 */}
 					<div
-						key={pathname}
+						key={renderedPathname}
 						className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4 pb-28 md:pb-10"
 					>
 						<SetupNotice />

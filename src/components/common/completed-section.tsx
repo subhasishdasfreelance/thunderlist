@@ -67,7 +67,7 @@ export function CompletedSection({
 				<Card padding={3}>{chart}</Card>
 			) : (
 				<Card padding={0}>
-					<VStack gap={0} paddingInline={4} paddingBlock={2}>
+					<VStack gap={0} paddingBlock={2}>
 						{children}
 					</VStack>
 				</Card>

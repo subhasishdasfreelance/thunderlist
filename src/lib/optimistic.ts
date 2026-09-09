@@ -19,7 +19,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
-import type { ChecklistDetail, ChecklistSummary } from "#/schemas/checklist";
+import type { ChecklistDetail } from "#/schemas/checklist";
 import type { Task } from "#/schemas/task";
 import type { TaskListName, TaskRefEntry } from "#/schemas/task-list";
 
@@ -152,6 +152,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				title: change.title,
 				completed: false,
 				completedAt: null,
+				trackerId: change.trackerId,
 				addedAt: change.addedAt,
 				tagIds: change.tagIds,
 				urgent: change.urgent,
@@ -167,8 +168,32 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				);
 			}
 
-			// A checklist-less task is only ever reached through a list, and the
-			// `ref.add` that puts it there arrives right behind this one.
+			// A task typed straight into a list names that list here, so the row is
+			// drawn where it was typed instead of waiting for a refetch to reveal
+			// it. Newest first, which is how the lists read.
+			if (change.place !== null) {
+				const place = change.place;
+				const entry: TaskRefEntry = {
+					item: {
+						itemId: place.itemId,
+						taskId: task.taskId,
+						sortOrder: place.sortOrder,
+						addedAt: task.addedAt,
+					},
+					list: place.list,
+					checklistId: change.checklistId,
+					// Left to the refetch: a title for a checklist this browser may
+					// not have loaded is not something to guess at.
+					checklistTitle: null,
+					task,
+				};
+
+				eachTaskList(client, (lists) => ({
+					...lists,
+					[place.list]: [entry, ...lists[place.list]],
+				}));
+			}
+
 			return;
 		}
 
@@ -199,6 +224,3 @@ export function restore(
 ): void {
 	for (const [key, data] of entries) client.setQueryData(key, data);
 }
-
-/** Progress percentages the checklist list shows, recomputed in place. */
-export type { ChecklistSummary };

@@ -3,6 +3,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
+import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
@@ -64,11 +65,13 @@ export function TagFormDialog({
 				<HStack gap={2} hAlign="end">
 					<Button
 						label="Cancel"
+						icon={<X aria-hidden />}
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
 						label={tag ? "Save changes" : "Create tag"}
+						icon={<Check aria-hidden />}
 						variant="primary"
 						isDisabled={!isValid}
 						onClick={save}

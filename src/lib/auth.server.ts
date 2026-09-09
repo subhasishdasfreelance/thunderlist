@@ -46,7 +46,7 @@ export async function currentUser(): Promise<SignedInUser | null> {
  * the id it returns down into `src/data`. A request without a valid session
  * never reaches a query at all.
  */
-export async function requireUser(): Promise<SignedInUser> {
+async function requireUser(): Promise<SignedInUser> {
 	const user = await currentUser();
 
 	if (!user) {

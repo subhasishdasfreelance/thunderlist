@@ -5,6 +5,7 @@ import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
+import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import type { EntryValues } from "#/lib/changes";
@@ -92,11 +93,13 @@ export function EntryFormDialog({
 				<HStack gap={2} hAlign="end">
 					<Button
 						label="Cancel"
+						icon={<X aria-hidden />}
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
 						label="Save"
+						icon={<Check aria-hidden />}
 						variant="primary"
 						type="submit"
 						form={formId}
@@ -138,7 +141,7 @@ export function EntryFormDialog({
 				<TextArea
 					label="Note"
 					isOptional
-					rows={2}
+					rows={4}
 					value={note}
 					onChange={setNote}
 					placeholder="Finished chapter 7"

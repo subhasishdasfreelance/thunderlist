@@ -5,6 +5,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { createFileRoute } from "@tanstack/react-router";
+import { LogIn } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "#/lib/auth-client";
 
@@ -57,6 +58,7 @@ function LoginPage() {
 								isStarting ? "Taking you to Google…" : "Continue with Google"
 							}
 							variant="primary"
+							icon={<LogIn aria-hidden />}
 							isDisabled={isStarting}
 							onClick={() => {
 								void signIn();

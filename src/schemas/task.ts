@@ -1,5 +1,6 @@
 import * as v from "valibot";
-import { idSchema, titleSchema } from "./common";
+import { idSchema, sortOrderSchema, titleSchema } from "./common";
+import { TASK_LIST_NAMES } from "./task-list";
 
 /** Tag ids carried by a task. Order is the order the user applied them in. */
 const tagIdsSchema = v.pipe(
@@ -31,6 +32,16 @@ const taskSchema = v.object({
 	completedAt: v.optional(v.nullable(v.string()), null),
 	/** Ids into the tags collection. Names live there so renaming is one write. */
 	tagIds: v.array(idSchema),
+	/**
+	 * The tracker this task stands for, or `null` for an ordinary task.
+	 *
+	 * "Read 30 more pages" is not a thing you tick — it is a thing that becomes
+	 * true when the tracker reaches its target. So a task like this cannot be
+	 * completed by hand: `completed` is worked out from the tracker every time
+	 * the list is read, and the server refuses to set it directly. Otherwise the
+	 * tick and the tracker could disagree, and then neither would mean anything.
+	 */
+	trackerId: v.optional(v.nullable(idSchema), null),
 	/**
 	 * Needs doing soon, whether or not it matters much.
 	 *
@@ -91,8 +102,30 @@ export const createTaskInputSchema = v.object({
 	title: titleSchema,
 	addedAt: v.string(),
 	tagIds: v.optional(tagIdsSchema, []),
+	/** A tracker this task stands for; see `taskSchema`. */
+	trackerId: v.optional(v.nullable(idSchema), null),
 	urgent: v.optional(v.boolean(), false),
 	important: v.optional(v.boolean(), false),
+	/**
+	 * Put it straight on a list, in the same breath as creating it.
+	 *
+	 * A task typed into Today is one act, and it used to be two changes — create,
+	 * then reference — fired together without waiting. They raced: the reference
+	 * could arrive first, find no such task, and be refused, so the task existed
+	 * but never appeared on the list. Ordering two independent requests is not
+	 * something a caller can be relied on to remember, so the dependency is
+	 * expressed here instead and settled in one write on the server.
+	 */
+	place: v.optional(
+		v.nullable(
+			v.object({
+				list: v.picklist(TASK_LIST_NAMES),
+				itemId: idSchema,
+				sortOrder: sortOrderSchema,
+			}),
+		),
+		null,
+	),
 });
 
 /**

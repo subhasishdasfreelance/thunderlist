@@ -17,8 +17,7 @@
 		"lint": "biome lint",
 		"check": "biome check",
 		"typecheck": "tsc --noEmit",
-		"test": "bun test",
-		"claim-data": "bun --env-file=.env.local scripts/claim-data.ts"
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@astryxdesign/core": "^0.5.4",

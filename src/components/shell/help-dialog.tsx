@@ -38,7 +38,41 @@ const GROUPS: Array<Group> = [
 	},
 	{
 		title: "Anywhere",
-		rows: [{ keys: ["?"], what: "This" }],
+		rows: [
+			{ keys: ["Ctrl", "K"], what: "Search everything" },
+			{ keys: ["?"], what: "This" },
+		],
+	},
+];
+
+/**
+ * How the pieces fit together, in five lines.
+ *
+ * The shortcuts say what each key does; none of them say what the app is for.
+ * Someone opening this on their first day needs the shape of the thing more
+ * than they need a key list, and the shape is small enough to fit here — if it
+ * needed a page, it would be a sign the app itself was too complicated.
+ */
+const WORKFLOW: Array<{ step: string; what: string }> = [
+	{
+		step: "Park it",
+		what: "Anything you might do goes in the Backlog. Out of your head, off today.",
+	},
+	{
+		step: "Group it",
+		what: "Work with an end goes in a Checklist, with a start date and a deadline.",
+	},
+	{
+		step: "Measure it",
+		what: "A goal counted in pages, sessions or kilometres is a Tracker, not a list.",
+	},
+	{
+		step: "Pick today",
+		what: "Each morning pull a few things onto Today. It is a plan, not a store.",
+	},
+	{
+		step: "Let it tell you",
+		what: "The pace figures say what a day owes. Sort by most behind when time is short.",
 	},
 ];
 
@@ -63,7 +97,7 @@ export function HelpDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			title="Shortcuts"
+			title="Shortcuts and how to work this"
 			subtitle="Point at a task and press a key."
 			width={460}
 		>
@@ -96,6 +130,20 @@ export function HelpDialog({
 						</VStack>
 					</VStack>
 				))}
+
+				<Divider />
+
+				<VStack gap={1}>
+					<Text type="label" weight="semibold" color="secondary">
+						How to work this
+					</Text>
+					{WORKFLOW.map((row) => (
+						<HStack key={row.step} gap={2} vAlign="start">
+							<Text weight="semibold">{row.step}</Text>
+							<Text type="supporting">{row.what}</Text>
+						</HStack>
+					))}
+				</VStack>
 
 				<Text type="supporting">
 					No keyboard? Every one of these is a button on the row.

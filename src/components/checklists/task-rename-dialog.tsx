@@ -1,6 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TagTextField } from "#/components/tags/tag-text-field";
@@ -53,11 +54,13 @@ export function TaskRenameDialog({
 				<HStack gap={2} hAlign="end">
 					<Button
 						label="Cancel"
+						icon={<X aria-hidden />}
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
 						label="Save"
+						icon={<Check aria-hidden />}
 						variant="primary"
 						isDisabled={parsed.title === ""}
 						onClick={save}

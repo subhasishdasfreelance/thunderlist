@@ -1,5 +1,6 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { RotateCw } from "lucide-react";
 import { errorMessage } from "#/lib/errors";
 
 /**
@@ -23,7 +24,12 @@ export function ErrorNotice({
 			collapsible={false}
 			endContent={
 				onRetry ? (
-					<Button label="Try again" size="sm" onClick={onRetry} />
+					<Button
+						label="Try again"
+						icon={<RotateCw aria-hidden />}
+						size="sm"
+						onClick={onRetry}
+					/>
 				) : undefined
 			}
 		/>
