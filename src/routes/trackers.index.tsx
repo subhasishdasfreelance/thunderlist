@@ -6,14 +6,17 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { LoadingState } from "#/components/common/loading-state";
 import { StatGrid } from "#/components/common/stat-grid";
-import { CardListSkeleton, ErrorNotice } from "#/components/common/states";
+import { ErrorNotice } from "#/components/common/states";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
-import { queueCreateTracker, type TrackerValues } from "#/lib/pending/actions";
-import { overlayTrackers } from "#/lib/pending/overlay-trackers";
-import { usePendingChanges } from "#/lib/pending/store";
+import {
+	createTracker,
+	type TrackerValues,
+	useApplyChange,
+} from "#/lib/changes";
 import { primeQuery } from "#/queries/prime";
 import { trackersQuery } from "#/queries/trackers";
 
@@ -25,16 +28,13 @@ export const Route = createFileRoute("/trackers/")({
 function TrackersPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
-	const queued = usePendingChanges();
+	const { apply } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackersQuery(),
 	);
 
-	const trackers = useMemo(
-		() => overlayTrackers(data ?? [], queued),
-		[data, queued],
-	);
+	const trackers = data ?? [];
 
 	const totals = trackers.reduce(
 		(sum, tracker) => ({
@@ -66,7 +66,7 @@ function TrackersPage() {
 	];
 
 	function create(values: TrackerValues) {
-		const trackerId = queueCreateTracker(values);
+		const trackerId = createTracker(apply, values);
 		setIsFormOpen(false);
 		void navigate({ to: "/trackers/$trackerId", params: { trackerId } });
 	}
@@ -88,7 +88,7 @@ function TrackersPage() {
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
-				<CardListSkeleton />
+				<LoadingState />
 			) : trackers.length === 0 ? (
 				<EmptyState
 					title="No trackers yet."

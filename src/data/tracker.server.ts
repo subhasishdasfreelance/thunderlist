@@ -106,15 +106,19 @@ export async function listTrackers(): Promise<Array<TrackerSummary>> {
 }
 
 /** Full history is only read when a tracker is opened. */
+/**
+ * The figures at the top of a tracker: one document, no history.
+ *
+ * Split from `getTrackerEntries` so the screen can answer "how is this going"
+ * from a single small read while the entries are still on their way.
+ */
 export async function getTracker(trackerId: string): Promise<TrackerDetail> {
 	const current = await collections();
 	const tracker = await requireTracker(current, trackerId);
-	const entries = await readEntries(current, trackerId);
 	const summary = summarise(tracker);
 
 	return {
 		...summary,
-		entries,
 		velocity: computeVelocity({
 			startDate: summary.startDate,
 			deadline: summary.deadline,
@@ -122,6 +126,16 @@ export async function getTracker(trackerId: string): Promise<TrackerDetail> {
 			target: summary.targetValue,
 		}),
 	};
+}
+
+/** The history on its own, oldest first. */
+export async function getTrackerEntries(
+	trackerId: string,
+): Promise<Array<ProgressEntry>> {
+	const current = await collections();
+	await requireTracker(current, trackerId);
+
+	return readEntries(current, trackerId);
 }
 
 /* -------------------------------------------------------------------------- */

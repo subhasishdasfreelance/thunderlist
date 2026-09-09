@@ -9,29 +9,26 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { LoadingState } from "#/components/common/loading-state";
 import { type Stat, StatGrid } from "#/components/common/stat-grid";
-import { CardListSkeleton, ErrorNotice } from "#/components/common/states";
+import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
-import {
-	queueCreateTag,
-	queueDeleteTag,
-	queueUpdateTag,
-} from "#/lib/pending/actions";
-import {
-	overlayTaggedTasks,
-	overlayTags,
-	type TaggedTask,
-} from "#/lib/pending/overlay-tags";
-import { usePendingChanges } from "#/lib/pending/store";
-import { primeQuery } from "#/queries/prime";
+import { createTag, useApplyChange } from "#/lib/changes";
+import { deferQuery, primeQuery } from "#/queries/prime";
+import type { TaggedTask } from "#/queries/system";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
 import type { Tag } from "#/schemas/tag";
 
 export const Route = createFileRoute("/tags")({
-	loader: ({ context }) => primeQuery(context.queryClient, tagsQuery()),
+	loader: ({ context }) => {
+		// The tasks under each tag; the tags themselves are what the screen is.
+		deferQuery(context.queryClient, searchIndexQuery());
+
+		return primeQuery(context.queryClient, tagsQuery());
+	},
 	component: TagsPage,
 });
 
@@ -77,7 +74,7 @@ function tagStats(
 }
 
 function TagsPage() {
-	const queued = usePendingChanges();
+	const { apply } = useApplyChange();
 
 	const [editing, setEditing] = useState<Tag | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
@@ -86,15 +83,9 @@ function TagsPage() {
 	const tagsResult = useQuery(tagsQuery());
 	const index = useQuery(searchIndexQuery());
 
-	const allTags = useMemo(
-		() => overlayTags(tagsResult.data ?? [], queued),
-		[tagsResult.data, queued],
-	);
+	const allTags = tagsResult.data ?? [];
 
-	const tasks = useMemo(
-		() => overlayTaggedTasks(index.data?.tasks ?? [], queued),
-		[index.data, queued],
-	);
+	const tasks = index.data?.tasks ?? [];
 
 	const tasksByTag = useMemo(() => {
 		const grouped = new Map<string, Array<TaggedTask>>();
@@ -139,7 +130,7 @@ function TagsPage() {
 					}}
 				/>
 			) : isLoading ? (
-				<CardListSkeleton />
+				<LoadingState />
 			) : (
 				<>
 					{tasks.length === 0 ? null : <StatGrid stats={stats} />}
@@ -190,7 +181,7 @@ function TagsPage() {
 				onOpenChange={setIsCreating}
 				existingNames={allTags.map((tag) => tag.name)}
 				onSubmit={(values) => {
-					queueCreateTag(values);
+					createTag(apply, values);
 					setIsCreating(false);
 				}}
 			/>
@@ -203,7 +194,9 @@ function TagsPage() {
 				tag={editing ?? undefined}
 				existingNames={allTags.map((tag) => tag.name)}
 				onSubmit={(values) => {
-					if (editing) queueUpdateTag(editing, values);
+					if (editing) {
+						apply({ kind: "tag.update", tagId: editing.tagId, patch: values });
+					}
 					setEditing(null);
 				}}
 			/>
@@ -216,10 +209,10 @@ function TagsPage() {
 				title={`Delete the ${deleting?.name ?? ""} tag?`}
 				description={`It will be taken off ${
 					deleting ? (tasksByTag.get(deleting.tagId)?.length ?? 0) : 0
-				} task(s) when you save your changes. The tasks themselves are not deleted.`}
+				} task(s). The tasks themselves are not deleted.`}
 				actionLabel="Delete"
 				onAction={() => {
-					if (deleting) queueDeleteTag(deleting);
+					if (deleting) apply({ kind: "tag.delete", tagId: deleting.tagId });
 					setDeleting(null);
 				}}
 			/>

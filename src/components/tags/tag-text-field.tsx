@@ -257,14 +257,12 @@ export function TagTextField({
 				className="thunderlist-mirror"
 				style={mirrorStyle}
 			>
-				{splitTitleTags(value).map((segment, position) =>
+				{splitTitleTags(value).map((segment) =>
 					segment.kind === "text" ? (
-						// biome-ignore lint/suspicious/noArrayIndexKey: segments are positional.
-						<span key={position}>{segment.text}</span>
+						<span key={segment.at}>{segment.text}</span>
 					) : (
 						<span
-							// biome-ignore lint/suspicious/noArrayIndexKey: as above.
-							key={position}
+							key={segment.at}
 							className="thunderlist-tag"
 							data-color={
 								tags.find((tag) => sameTagName(tag.name, segment.name))

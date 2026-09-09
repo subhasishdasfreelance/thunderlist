@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BacklogRouteImport } from './routes/backlog'
 import { Route as PriorityRouteImport } from './routes/priority'
-import { Route as ShortcutsRouteImport } from './routes/shortcuts'
 import { Route as TagsRouteImport } from './routes/tags'
 import { Route as TodayRouteImport } from './routes/today'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
@@ -34,11 +33,6 @@ const BacklogRoute = BacklogRouteImport.update({
 const PriorityRoute = PriorityRouteImport.update({
   id: '/priority',
   path: '/priority',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShortcutsRoute = ShortcutsRouteImport.update({
-  id: '/shortcuts',
-  path: '/shortcuts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TagsRoute = TagsRouteImport.update({
@@ -81,7 +75,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
   '/priority': typeof PriorityRoute
-  '/shortcuts': typeof ShortcutsRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
@@ -94,7 +87,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
   '/priority': typeof PriorityRoute
-  '/shortcuts': typeof ShortcutsRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
@@ -108,7 +100,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
   '/priority': typeof PriorityRoute
-  '/shortcuts': typeof ShortcutsRoute
   '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
@@ -123,7 +114,6 @@ export interface FileRouteTypes {
     | '/'
     | '/backlog'
     | '/priority'
-    | '/shortcuts'
     | '/tags'
     | '/today'
     | '/checklists/$checklistId'
@@ -136,7 +126,6 @@ export interface FileRouteTypes {
     | '/'
     | '/backlog'
     | '/priority'
-    | '/shortcuts'
     | '/tags'
     | '/today'
     | '/checklists/$checklistId'
@@ -149,7 +138,6 @@ export interface FileRouteTypes {
     | '/'
     | '/backlog'
     | '/priority'
-    | '/shortcuts'
     | '/tags'
     | '/today'
     | '/checklists/$checklistId'
@@ -163,7 +151,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BacklogRoute: typeof BacklogRoute
   PriorityRoute: typeof PriorityRoute
-  ShortcutsRoute: typeof ShortcutsRoute
   TagsRoute: typeof TagsRoute
   TodayRoute: typeof TodayRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
@@ -194,13 +181,6 @@ declare module '@tanstack/react-router' {
       path: '/priority'
       fullPath: '/priority'
       preLoaderRoute: typeof PriorityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shortcuts': {
-      id: '/shortcuts'
-      path: '/shortcuts'
-      fullPath: '/shortcuts'
-      preLoaderRoute: typeof ShortcutsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tags': {
@@ -259,7 +239,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BacklogRoute: BacklogRoute,
   PriorityRoute: PriorityRoute,
-  ShortcutsRoute: ShortcutsRoute,
   TagsRoute: TagsRoute,
   TodayRoute: TodayRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,

@@ -1,3 +1,4 @@
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
@@ -7,35 +8,33 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ListPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Eraser, ListPlus } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
+import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { CompletedSection } from "#/components/common/completed-section";
+import { LoadingState } from "#/components/common/loading-state";
+import { ProgressChart } from "#/components/common/progress-chart";
 import { SortToggle } from "#/components/common/sort-toggle";
 import { StatGrid } from "#/components/common/stat-grid";
-import { ErrorNotice, RowListSkeleton } from "#/components/common/states";
+import { ErrorNotice } from "#/components/common/states";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import {
+	addTaskRef,
+	createTag,
 	createTagResolver,
-	queueAddRef,
-	queueCreateChecklist,
-	queueCreateTag,
-	queueCreateTask,
-	queueMoveRef,
-	queueRemoveRef,
-	queueUpdateTask,
-} from "#/lib/pending/actions";
-import { overlayChecklists } from "#/lib/pending/overlay-checklists";
-import { overlayTaskLists } from "#/lib/pending/overlay-lists";
-import { overlayTags } from "#/lib/pending/overlay-tags";
-import { usePendingChanges } from "#/lib/pending/store";
+	createTask,
+	updateTask,
+	useApplyChange,
+} from "#/lib/changes";
+import { completionPoints, DAY_MS, startOfDay } from "#/lib/chart-points";
 import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { type SortOrder, sortTasksBy } from "#/lib/tasks/tasks";
-import { checklistsQuery } from "#/queries/checklists";
+import { useFocusTask } from "#/lib/use-focus-task";
+import { useReorderAnimation } from "#/lib/use-reorder-animation";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
-import { INBOX_CHECKLIST_TITLE } from "#/schemas/checklist";
-import { todayDateOnly } from "#/schemas/common";
+import type { Task } from "#/schemas/task";
 import {
 	SORT_ORDER_STEP,
 	TASK_LIST_LABELS,
@@ -63,47 +62,67 @@ function endOfList(count: number): number {
  * actually do: type something new that has just come up, and pull in a task
  * that already lives in a checklist.
  */
+/**
+ * What clearing a list is about to do, in one sentence per outcome.
+ *
+ * Two different things happen and only one of them is destructive, so both are
+ * named before the user commits. A count of zero is left out entirely: "0 tasks
+ * are deleted" is a sentence the reader has to parse to learn nothing.
+ */
+function clearWarning(withChecklist: number, loose: number): string {
+	const lines: Array<string> = [];
+
+	if (withChecklist > 0) {
+		lines.push(
+			withChecklist === 1
+				? "1 task stays in its checklist and is only taken off the list."
+				: `${withChecklist} tasks stay in their checklists and are only taken off the list.`,
+		);
+	}
+
+	if (loose > 0) {
+		lines.push(
+			loose === 1
+				? "1 task belongs to no checklist and is deleted."
+				: `${loose} tasks belong to no checklist and are deleted.`,
+		);
+	}
+
+	return lines.join(" ");
+}
+
 export function TaskListScreen({
 	list,
 	subtitle,
 	emptyTitle,
 	emptyDescription,
+	focusTaskId,
 }: {
 	list: TaskListName;
 	subtitle: string;
 	emptyTitle: string;
 	emptyDescription: string;
+	/** `?task=`: a task to scroll to and ring, arrived at from search. */
+	focusTaskId?: string;
 }) {
 	const navigate = useNavigate();
+	const listRef = useRef<HTMLDivElement>(null);
+	useFocusTask(focusTaskId);
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [isCreatingTag, setIsCreatingTag] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
-	const queued = usePendingChanges();
+	const [editing, setEditing] = useState<Task | null>(null);
+	const [isClearingAll, setIsClearingAll] = useState(false);
+	const { apply } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		taskListsQuery(),
 	);
 	const tagsResult = useQuery(tagsQuery());
-	const checklists = useQuery(checklistsQuery());
 
-	const lists = useMemo(
-		() => (data ? overlayTaskLists(data, queued) : { today: [], backlog: [] }),
-		[data, queued],
-	);
+	const lists = data ?? { today: [], backlog: [] };
 
-	const tags = useMemo(
-		() => overlayTags(tagsResult.data ?? [], queued),
-		[tagsResult.data, queued],
-	);
-
-	/** The checklist loose tasks go into, if it exists yet. */
-	const inbox = useMemo(
-		() =>
-			overlayChecklists(checklists.data ?? [], queued).find(
-				(checklist) => checklist.title === INBOX_CHECKLIST_TITLE,
-			) ?? null,
-		[checklists.data, queued],
-	);
+	const tags = tagsResult.data ?? [];
 
 	const entries = lists[list];
 
@@ -127,13 +146,40 @@ export function TaskListScreen({
 		() => 0,
 	).map((row) => row.entry);
 
+	// Moving a row is the one change where where it went is the point, so the
+	// rows slide rather than re-painting in their new order.
+	useReorderAnimation(listRef, open.map((entry) => entry.item.taskId).join());
+
+	/*
+	 * Today's burn-up, against the clock rather than a calendar.
+	 *
+	 * Only Today has a finish line: the backlog is a place things wait, so there
+	 * is no plan for it to be measured against and nothing honest to plot.
+	 */
+	const dayStartsAt = startOfDay();
+	const dayChart =
+		list === "today" && entries.length > 0 ? (
+			<ProgressChart
+				start={dayStartsAt}
+				end={dayStartsAt + DAY_MS}
+				now={Date.now()}
+				target={entries.length}
+				current={completed.length}
+				points={completionPoints(
+					entries.flatMap((entry) => (entry.task ? [entry.task] : [])),
+					dayStartsAt,
+				)}
+				startLabel="12:00 AM"
+				endLabel="Midnight"
+				summary={`${completed.length} of ${entries.length} tasks done today`}
+			/>
+		) : undefined;
+
 	// A task belongs to at most one list, so both are off limits when adding.
 	const alreadyListed = useMemo(
 		() =>
 			new Set(
-				[...lists.today, ...lists.backlog].map(
-					(entry) => `${entry.item.checklistId}:${entry.item.taskId}`,
-				),
+				[...lists.today, ...lists.backlog].map((entry) => entry.item.taskId),
 			),
 		[lists],
 	);
@@ -159,49 +205,26 @@ export function TaskListScreen({
 	/**
 	 * Type new tasks straight onto this list, one per line, tags and all.
 	 *
-	 * The tasks still have to live in a checklist, so the first loose task
-	 * creates the Inbox and the rest join it. Every change queues in order, and
-	 * the batch replays them in that order, so the checklist exists by the time
-	 * the tasks land in it.
+	 * A task written here belongs to no checklist. It is a thing to do, not part
+	 * of a body of work, and inventing a checklist to hold it would only put a
+	 * checklist nobody asked for on the Checklists screen.
 	 *
-	 * The Inbox is resolved once for the whole paste rather than per line: doing
-	 * it per line would queue a second Inbox for the second task, because the
-	 * first one is still only a queued change and not yet a checklist to find.
+	 * One tag resolver for the whole paste, so a tag written on three lines is
+	 * created once rather than three times.
 	 */
 	function quickAdd(lines: Array<ParsedTitle>) {
-		const checklistId =
-			inbox?.checklistId ??
-			queueCreateChecklist({
-				title: INBOX_CHECKLIST_TITLE,
-				description: "Tasks added straight to a list.",
-				startDate: todayDateOnly(),
-				deadline: null,
-			});
-
-		// One resolver for the whole paste, so a tag written on three lines is
-		// created once: the first two exist only in the queue.
-		const resolveTag = createTagResolver(tags);
+		const resolveTag = createTagResolver(apply, tags);
 
 		lines.forEach((line, offset) => {
-			const tagIds = line.tagNames.map(resolveTag);
-			const taskId = queueCreateTask({
-				checklistId,
+			const taskId = createTask(apply, {
+				checklistId: null,
 				title: line.title,
-				tagIds,
+				tagIds: line.tagNames.map(resolveTag),
 			});
 
-			queueAddRef({
+			addTaskRef(apply, {
 				list,
-				checklistId,
-				checklistTitle: INBOX_CHECKLIST_TITLE,
-				task: {
-					taskId,
-					title: line.title,
-					completed: false,
-					tagIds,
-					urgent: false,
-					important: false,
-				},
+				taskId,
 				sortOrder: endOfList(entries.length + offset),
 			});
 		});
@@ -213,10 +236,8 @@ export function TaskListScreen({
 			entry={entry}
 			tags={tags}
 			actions={{
-				onToggle: (completed) => {
-					if (!entry.task) return;
-					queueUpdateTask(entry.item.checklistId, entry.task, { completed });
-				},
+				onToggle: (completed) =>
+					updateTask(apply, entry.item.taskId, { completed }),
 				/**
 				 * Moving a reference between the lists, or off both.
 				 *
@@ -224,61 +245,76 @@ export function TaskListScreen({
 				 * is already on is the way to take it off entirely.
 				 */
 				onSetList: (next) => {
-					if (!entry.task) return;
-
 					if (next === null || next === list) {
-						queueRemoveRef({
-							list,
-							itemId: entry.item.itemId,
-							title: entry.task.title,
-						});
+						apply({ kind: "ref.remove", list, itemId: entry.item.itemId });
 						return;
 					}
 
-					queueAddRef({
+					addTaskRef(apply, {
 						list: next,
-						checklistId: entry.item.checklistId,
-						checklistTitle: entry.checklistTitle ?? "",
-						task: entry.task,
+						taskId: entry.item.taskId,
 						sortOrder: endOfList(lists[next].length),
 					});
 				},
-				onSetUrgent: (urgent) => {
-					if (!entry.task) return;
-					queueUpdateTask(entry.item.checklistId, entry.task, { urgent });
-				},
-				onSetImportant: (important) => {
-					if (!entry.task) return;
-					queueUpdateTask(entry.item.checklistId, entry.task, { important });
-				},
+				onSetUrgent: (urgent) =>
+					updateTask(apply, entry.item.taskId, { urgent }),
+				onSetImportant: (important) =>
+					updateTask(apply, entry.item.taskId, { important }),
 				onRemove: () =>
-					queueRemoveRef({
-						list,
-						itemId: entry.item.itemId,
-						title: entry.task?.title ?? "this item",
-					}),
+					apply({ kind: "ref.remove", list, itemId: entry.item.itemId }),
 				onMove: (direction) =>
-					queueMoveRef({
+					apply({
+						kind: "ref.move",
 						list,
 						itemId: entry.item.itemId,
-						title: entry.task?.title ?? "this item",
 						direction,
 					}),
-				onOpenChecklist: () =>
-					void navigate({
-						to: "/checklists/$checklistId",
-						params: { checklistId: entry.item.checklistId },
-					}),
+				onEdit: () => {
+					if (entry.task) setEditing(entry.task);
+				},
+				// Straight to the task, not just the checklist it lives in.
+				onOpenChecklist: entry.checklistId
+					? () => {
+							void navigate({
+								to: "/checklists/$checklistId",
+								params: { checklistId: entry.checklistId as string },
+								search: { task: entry.item.taskId },
+							});
+						}
+					: null,
 			}}
+			canReorder={sort === "newest"}
 		/>
 	);
 
+	const withChecklist = entries.filter(
+		(entry) => entry.checklistId !== null,
+	).length;
+	const loose = entries.length - withChecklist;
+
+	/**
+	 * Empty the list.
+	 *
+	 * What that means depends on where the task came from. One that lives in a
+	 * checklist is only taken off this list — the checklist is its home and this
+	 * was a plan for the day. One that belongs to no checklist has no home to go
+	 * back to, so clearing it is deleting it; there would be nowhere left to find
+	 * it and it would simply become unreachable.
+	 */
+	function clearAll() {
+		for (const entry of entries) {
+			if (entry.checklistId === null) {
+				apply({ kind: "task.delete", taskId: entry.item.taskId });
+			} else {
+				apply({ kind: "ref.remove", list, itemId: entry.item.itemId });
+			}
+		}
+	}
+
 	function addExisting(picked: PickedTask) {
-		queueAddRef({
+		addTaskRef(apply, {
 			list,
-			checklistId: picked.checklistId,
-			checklistTitle: picked.checklistTitle,
-			task: picked.task,
+			taskId: picked.taskId,
 			sortOrder: endOfList(entries.length),
 		});
 		setIsAddOpen(false);
@@ -286,7 +322,12 @@ export function TaskListScreen({
 
 	return (
 		<VStack gap={4}>
-			<HStack gap={2} hAlign="between" vAlign="center">
+			{/*
+			 * The actions sit beside the heading on a desktop and drop below it on
+			 * a phone. Kept on one line they squeeze the date into a column of
+			 * three short lines, which is a worse trade than a second row.
+			 */}
+			<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 				<VStack gap={0.5}>
 					<Heading level={1}>{TASK_LIST_LABELS[list]}</Heading>
 					{/* Formatted in the viewer's locale, so server and client can differ. */}
@@ -294,13 +335,23 @@ export function TaskListScreen({
 						<Text color="secondary">{subtitle}</Text>
 					</span>
 				</VStack>
-				<Button
-					label="From a checklist"
-					variant="secondary"
-					icon={<ListPlus aria-hidden />}
-					onClick={() => setIsAddOpen(true)}
-				/>
-			</HStack>
+				<HStack gap={1} vAlign="center">
+					{entries.length === 0 ? null : (
+						<Button
+							label={`Clear ${TASK_LIST_LABELS[list]}`}
+							variant="ghost"
+							icon={<Eraser aria-hidden />}
+							onClick={() => setIsClearingAll(true)}
+						/>
+					)}
+					<Button
+						label="From a checklist"
+						variant="secondary"
+						icon={<ListPlus aria-hidden />}
+						onClick={() => setIsAddOpen(true)}
+					/>
+				</HStack>
+			</div>
 
 			{isPending || entries.length === 0 ? null : <StatGrid stats={stats} />}
 
@@ -323,9 +374,7 @@ export function TaskListScreen({
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
-				<Card padding={4}>
-					<RowListSkeleton />
-				</Card>
+				<LoadingState />
 			) : entries.length === 0 ? (
 				<EmptyState title={emptyTitle} description={emptyDescription} />
 			) : open.length === 0 ? (
@@ -334,19 +383,24 @@ export function TaskListScreen({
 					description="Everything on this list is complete."
 				/>
 			) : (
-				<Card padding={0}>
-					<VStack gap={0} paddingInline={4} paddingBlock={2}>
-						{open.map((entry, index) => (
-							<div
-								key={entry.item.itemId}
-								className="thunderlist-row thunderlist-task-row"
-							>
-								{index === 0 ? null : <Divider />}
-								{refRow(entry)}
-							</div>
-						))}
-					</VStack>
-				</Card>
+				// The ref is what `useReorderAnimation` measures the rows through.
+				<div ref={listRef}>
+					<Card padding={0}>
+						<VStack gap={0} paddingInline={4} paddingBlock={2}>
+							{open.map((entry, index) => (
+								<div
+									key={entry.item.itemId}
+									className="thunderlist-row thunderlist-task-row"
+									data-task-id={entry.item.taskId}
+									data-focused={entry.item.taskId === focusTaskId}
+								>
+									{index === 0 ? null : <Divider />}
+									{refRow(entry)}
+								</div>
+							))}
+						</VStack>
+					</Card>
+				</div>
 			)}
 
 			<CompletedSection
@@ -354,18 +408,17 @@ export function TaskListScreen({
 				clearLabel={`Clear from ${TASK_LIST_LABELS[list]}`}
 				onClear={() => {
 					for (const entry of completed) {
-						queueRemoveRef({
-							list,
-							itemId: entry.item.itemId,
-							title: entry.task?.title ?? "this item",
-						});
+						apply({ kind: "ref.remove", list, itemId: entry.item.itemId });
 					}
 				}}
+				chart={dayChart}
 			>
 				{completed.map((entry, index) => (
 					<div
 						key={entry.item.itemId}
 						className="thunderlist-row thunderlist-task-row"
+						data-task-id={entry.item.taskId}
+						data-focused={entry.item.taskId === focusTaskId}
 					>
 						{index === 0 ? null : <Divider />}
 						{refRow(entry)}
@@ -381,12 +434,43 @@ export function TaskListScreen({
 				onPick={addExisting}
 			/>
 
+			<AlertDialog
+				isOpen={isClearingAll}
+				onOpenChange={setIsClearingAll}
+				title={`Clear ${TASK_LIST_LABELS[list]}?`}
+				description={clearWarning(withChecklist, loose)}
+				actionLabel="Clear"
+				onAction={() => {
+					clearAll();
+					setIsClearingAll(false);
+				}}
+			/>
+
+			<TaskRenameDialog
+				isOpen={editing !== null}
+				onOpenChange={(open) => {
+					if (!open) setEditing(null);
+				}}
+				task={editing}
+				tags={tags}
+				onSubmit={(parsed) => {
+					if (editing) {
+						const resolveTag = createTagResolver(apply, tags);
+						updateTask(apply, editing.taskId, {
+							title: parsed.title,
+							tagIds: parsed.tagNames.map(resolveTag),
+						});
+					}
+					setEditing(null);
+				}}
+			/>
+
 			<TagFormDialog
 				isOpen={isCreatingTag}
 				onOpenChange={setIsCreatingTag}
 				existingNames={tags.map((tag) => tag.name)}
 				onSubmit={(values) => {
-					queueCreateTag(values);
+					createTag(apply, values);
 					setIsCreatingTag(false);
 				}}
 			/>

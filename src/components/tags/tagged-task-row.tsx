@@ -1,6 +1,6 @@
 import { HStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import type { TaggedTask } from "#/lib/pending/overlay-tags";
+import type { TaggedTask } from "#/queries/system";
 import type { Tag } from "#/schemas/tag";
 import { TaggedTitle } from "./tagged-title";
 

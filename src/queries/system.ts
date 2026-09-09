@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { SearchIndex } from "#/data/search.server";
 import {
 	getSearchIndexFn,
 	getSetupStatusFn,
@@ -16,3 +17,6 @@ export const searchIndexQuery = () =>
 		queryKey: queryKeys.searchIndex,
 		queryFn: () => getSearchIndexFn(),
 	});
+
+/** One task as the search index carries it: what it is and where it lives. */
+export type TaggedTask = SearchIndex["tasks"][number];

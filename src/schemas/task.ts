@@ -20,6 +20,15 @@ const taskSchema = v.object({
 	completed: v.boolean(),
 	/** ISO timestamp the task was added. The only thing tasks are ordered by. */
 	addedAt: v.string(),
+	/**
+	 * ISO timestamp the task was ticked, or `null` while it is still open.
+	 *
+	 * Written by the server rather than the browser, so a chart drawn from these
+	 * is not at the mercy of one machine's clock. Tasks completed before this
+	 * existed have `null` and are counted as done from the start of their list —
+	 * there is no honest way to invent a day for them.
+	 */
+	completedAt: v.optional(v.nullable(v.string()), null),
 	/** Ids into the tags collection. Names live there so renaming is one write. */
 	tagIds: v.array(idSchema),
 	/**
@@ -70,7 +79,14 @@ export function priorityRank(
  * has to appear in the right place before it ever reaches the database.
  */
 export const createTaskInputSchema = v.object({
-	checklistId: idSchema,
+	/**
+	 * The checklist it belongs to, or `null` for a task that belongs to none.
+	 *
+	 * A task jotted straight onto Today is not part of any list of work — it is
+	 * just a thing to do — and inventing a checklist to hold it only puts a
+	 * checklist nobody asked for on the Checklists screen.
+	 */
+	checklistId: v.nullable(idSchema),
 	taskId: idSchema,
 	title: titleSchema,
 	addedAt: v.string(),
@@ -97,12 +113,8 @@ const taskPatchSchema = v.pipe(
 export type TaskPatch = v.InferOutput<typeof taskPatchSchema>;
 
 export const updateTaskInputSchema = v.object({
-	checklistId: idSchema,
 	taskId: idSchema,
 	patch: taskPatchSchema,
 });
 
-export const deleteTaskInputSchema = v.object({
-	checklistId: idSchema,
-	taskId: idSchema,
-});
+export const deleteTaskInputSchema = v.object({ taskId: idSchema });

@@ -15,6 +15,11 @@ type Result = {
 	label: string;
 	context: string;
 	to: string;
+	/**
+	 * The task to bring into view once the page opens, if this result is one.
+	 * The page it lands on scrolls to it and rings it; see `useFocusTask`.
+	 */
+	taskId?: string;
 };
 
 const MAX_PER_GROUP = 6;
@@ -67,24 +72,49 @@ export function SearchDialog({
 				to: `/trackers/${item.trackerId}`,
 			}));
 
-		// A task result opens the checklist it belongs to.
+		/*
+		 * A task result opens the page the task is actually on and scrolls to it:
+		 * its checklist, or — for one that belongs to no checklist — whichever
+		 * list is holding it. A task on neither has nowhere to be shown, so it is
+		 * not offered rather than opening a page it is not on.
+		 */
 		const tasks = data.tasks
 			.filter((item) => matches(item.title, needle))
 			.slice(0, MAX_PER_GROUP)
-			.map((item) => ({
-				key: `tsk-${item.taskId}`,
-				label: item.title,
-				context: `Task in ${item.checklistTitle}`,
-				to: `/checklists/${item.checklistId}`,
-			}));
+			.flatMap((item) => {
+				const to =
+					item.checklistId !== null
+						? `/checklists/${item.checklistId}`
+						: item.list !== null
+							? `/${item.list}`
+							: null;
+
+				if (to === null) return [];
+
+				return [
+					{
+						key: `tsk-${item.taskId}`,
+						label: item.title,
+						context:
+							item.checklistTitle === null
+								? "Task"
+								: `Task in ${item.checklistTitle}`,
+						to,
+						taskId: item.taskId,
+					},
+				];
+			});
 
 		return [...checklists, ...tasks, ...trackers];
 	}, [data, query]);
 
-	function open(to: string) {
+	function open(result: Result) {
 		onOpenChange(false);
 		setQuery("");
-		void navigate({ to });
+		void navigate({
+			to: result.to,
+			search: { task: result.taskId },
+		});
 	}
 
 	return (
@@ -123,7 +153,7 @@ export function SearchDialog({
 								key={result.key}
 								label={result.label}
 								description={result.context}
-								onClick={() => open(result.to)}
+								onClick={() => open(result)}
 							/>
 						))}
 					</List>

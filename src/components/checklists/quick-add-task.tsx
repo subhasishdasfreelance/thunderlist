@@ -9,6 +9,16 @@ import type { Tag } from "#/schemas/tag";
 /** Enough rows to see a pasted list without the field taking over the screen. */
 const MAX_ROWS = 8;
 
+/**
+ * Two, not one.
+ *
+ * A single row is shorter than the hint written in it, so on a narrow screen
+ * the placeholder was cut off mid-sentence with no way to read the rest. Two
+ * rows fit it, and they also say without saying it that more than one line is
+ * expected here.
+ */
+const MIN_ROWS = 2;
+
 /** One task per non-blank line, each split into its title and its tags. */
 function parseLines(value: string): Array<ParsedTitle> {
 	return value
@@ -16,6 +26,11 @@ function parseLines(value: string): Array<ParsedTitle> {
 		.map((line) => parseInlineTags(line))
 		.filter((parsed) => parsed.title !== "" || parsed.tagNames.length > 0)
 		.filter((parsed) => parsed.title !== "");
+}
+
+/** How many lines are in the field, so it grows with a pasted list. */
+function countLines(value: string): number {
+	return value.split("\n").length;
 }
 
 /**
@@ -35,7 +50,7 @@ function parseLines(value: string): Array<ParsedTitle> {
  * they are typed.
  */
 export function QuickAddTask({
-	placeholder = "Add a task and press Enter — use #tags, or paste a list",
+	placeholder = "Add a task — #tag it, or paste a list",
 	tags,
 	onAdd,
 }: {
@@ -65,7 +80,7 @@ export function QuickAddTask({
 				onSubmit={add}
 				tags={tags}
 				multiline
-				rows={Math.min(Math.max(value.split("\n").length, 1), MAX_ROWS)}
+				rows={Math.min(Math.max(countLines(value), MIN_ROWS), MAX_ROWS)}
 			/>
 			<IconButton
 				label={label}

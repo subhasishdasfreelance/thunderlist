@@ -27,14 +27,12 @@ export function TaggedTitle({
 
 	return (
 		<Text color={isMuted ? "secondary" : "primary"}>
-			{segments.map((segment, index) =>
+			{segments.map((segment) =>
 				segment.kind === "text" ? (
-					// biome-ignore lint/suspicious/noArrayIndexKey: segments are positional; there is no id to key on.
-					<span key={index}>{segment.text}</span>
+					<span key={segment.at}>{segment.text}</span>
 				) : (
 					<span
-						// biome-ignore lint/suspicious/noArrayIndexKey: as above.
-						key={index}
+						key={segment.at}
 						className="thunderlist-tag"
 						data-color={
 							tags.find((tag) => sameTagName(tag.name, segment.name))?.color ??

@@ -21,7 +21,9 @@ export type TaskRefRowActions = TaskQuickActions & {
 	onToggle: (completed: boolean) => void;
 	onRemove: () => void;
 	onMove: (direction: "up" | "down") => void;
-	onOpenChecklist: () => void;
+	onEdit: () => void;
+	/** `null` for a task that belongs to no checklist. */
+	onOpenChecklist: (() => void) | null;
 };
 
 /**
@@ -35,10 +37,13 @@ export function TaskRefRow({
 	entry,
 	tags,
 	actions,
+	canReorder,
 }: {
 	entry: TaskRefEntry;
 	tags: ReadonlyArray<Tag>;
 	actions: TaskRefRowActions;
+	/** False while the list is sorted, when a hand-made position means nothing. */
+	canReorder: boolean;
 }) {
 	const { task, checklistTitle, list } = entry;
 	const [isHovered, setIsHovered] = useState(false);
@@ -53,6 +58,7 @@ export function TaskRefRow({
 			[TASK_SHORTCUTS.important]: () =>
 				actions.onSetImportant(!task?.important),
 			[TASK_SHORTCUTS.complete]: () => actions.onToggle(!task?.completed),
+			[TASK_SHORTCUTS.edit]: actions.onEdit,
 		}),
 		[actions, list, task?.urgent, task?.important, task?.completed],
 	);
@@ -90,14 +96,18 @@ export function TaskRefRow({
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
-			<div className="flex min-w-0 flex-1 basis-full items-center gap-2 md:basis-0">
+			{/* Second on a phone, first on a desktop: the flags sit with the other
+			    buttons on the line below rather than in front of the title. */}
+			<div className="order-2 flex shrink-0 items-center gap-0.5 md:order-none">
 				<TaskFlagButtons
 					title={task.title}
 					urgent={task.urgent}
 					important={task.important}
 					actions={actions}
 				/>
+			</div>
 
+			<div className="order-1 flex min-w-0 flex-1 basis-full items-center gap-2 md:order-none md:basis-0">
 				<CheckboxInput
 					label={task.title}
 					isLabelHidden
@@ -110,13 +120,31 @@ export function TaskRefRow({
 						tags={tags}
 						isMuted={task.completed}
 					/>
-					{checklistTitle === null ? null : (
-						<Text type="supporting">{checklistTitle}</Text>
-					)}
+					{/*
+					 * The checklist name is the way into it, with this task in view.
+					 * A row that names where something lives should take you there;
+					 * a separate "open checklist" in the menu was the same trip with
+					 * an extra stop.
+					 */}
+					{checklistTitle === null ? null : actions.onOpenChecklist ? (
+						/*
+						 * Small and quiet: it names where the task lives and takes you
+						 * there, but it is a footnote to the title above it, not an
+						 * action competing with the buttons on the row.
+						 */
+						<button
+							type="button"
+							className="thunderlist-crumb"
+							title={`Open ${checklistTitle}`}
+							onClick={actions.onOpenChecklist}
+						>
+							{checklistTitle}
+						</button>
+					) : null}
 				</VStack>
 			</div>
 
-			<div className="ml-auto flex shrink-0 items-center gap-0.5 md:ml-0">
+			<div className="order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
 				{/* The lit button for this list is also how a task leaves it, so there
 				    is no separate remove: it would do the very same thing. */}
 				<TodayButton title={task.title} listState={list} actions={actions} />
@@ -133,12 +161,24 @@ export function TaskRefRow({
 						icon: <MoreHorizontal aria-hidden />,
 					}}
 					items={[
+						{
+							label: `Edit (${TASK_SHORTCUTS.edit})`,
+							onClick: actions.onEdit,
+						},
 						backlogMenuItem(list, actions),
-						{ type: "divider" as const },
-						{ label: "Move up", onClick: () => actions.onMove("up") },
-						{ label: "Move down", onClick: () => actions.onMove("down") },
-						{ type: "divider" as const },
-						{ label: "Open checklist", onClick: actions.onOpenChecklist },
+						// Moving a row by hand only means something while the list is in
+						// the order you put it in. Sorted, the position is derived and
+						// the buttons would promise something they cannot do.
+						...(canReorder
+							? [
+									{ type: "divider" as const },
+									{ label: "Move up", onClick: () => actions.onMove("up") },
+									{
+										label: "Move down",
+										onClick: () => actions.onMove("down"),
+									},
+								]
+							: []),
 					]}
 				/>
 			</div>

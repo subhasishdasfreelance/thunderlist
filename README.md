@@ -338,20 +338,29 @@ zero.
 
 ## Look and feel
 
-Astryx's own palette, with no theme package: its accent is a strong blue and the
-neutral set is designed around it, so the colours are coherent and
-contrast-checked without a single hex value being invented here.
+One Astryx theme, defined in `src/theme/thunderlist.theme.ts`. Astryx generates
+the whole palette — every surface, border, text and icon token, light and dark,
+contrast-checked against each other — from a couple of seeds; only the accent
+family is written out by hand, because the generator resolves any blue seed to a
+pale periwinkle for the dark scheme and that is not this app. The four accent
+tokens are chosen as a set and the file states the ratios they were chosen for.
+
+That file is the source, not what the app loads. `bun run theme:build` compiles
+it to `thunderlist.css` and `thunderlist.js` beside it, and those ship: a
+stylesheet the server can send with the page, rather than a `<style>` the
+browser injects at hydration, which is a flash of the wrong colours on every
+first paint. `bun run build` recompiles it first, so the two cannot drift;
+`bun run theme:check` fails if they have.
 
 The page sits on the body wash rather than on white, so the cards and rows above
 it have an edge to be seen by. The top bar and the phone's bottom bar are
 translucent and blurred, so a page reads as one surface continuing underneath
 them.
 
-Translucency costs contrast, and those bars carry the navigation, so the glass is
-82% opaque and backed by two fallbacks: browsers without `backdrop-filter` get
-the opaque surface, because a flat wash of translucent white over arbitrary
-content is exactly the unreadable case, and so does anyone who has asked their
-OS for `prefers-reduced-transparency`.
+Translucency costs contrast, and those bars carry the navigation, so the blur
+does most of the separating and the wash is 72% opaque over it. Browsers without
+`backdrop-filter` get the opaque surface instead, because a flat wash of
+translucent white over arbitrary content is exactly the unreadable case.
 
 Dates are written one way everywhere — `8th Oct, 2026` — including inside the
 date pickers, which take the same formatter. They are stored as `YYYY-MM-DD`,

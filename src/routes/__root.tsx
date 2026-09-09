@@ -40,6 +40,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				rel: "stylesheet",
 				href: appCss,
 			},
+			// The bolt, as the tab icon. SVG first for the sharp one, PNG for the
+			// browsers and platforms that still want a raster.
+			{ rel: "icon", type: "image/svg+xml", href: "/logo.svg" },
+			{ rel: "icon", type: "image/png", sizes: "640x640", href: "/logo.png" },
+			{ rel: "apple-touch-icon", href: "/logo.png" },
 		],
 	}),
 	component: RootComponent,

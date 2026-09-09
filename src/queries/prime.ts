@@ -28,3 +28,27 @@ export async function primeQuery<
 		// Deliberately swallowed; the component reads the error from the cache.
 	}
 }
+
+/**
+ * Start a read the screen does not have to wait for.
+ *
+ * A route should block on the one thing the page is *about* and nothing else.
+ * Everything secondary — the tag list behind an autocomplete, a history below
+ * the fold — is started here and left to arrive on its own, so the part the
+ * reader came for paints as soon as it can and the rest fills in behind it with
+ * its own small spinner.
+ *
+ * Failures are swallowed for the same reason as `primeQuery`: the component
+ * reads the error out of the cache and decides what to say about it.
+ */
+export function deferQuery<
+	TQueryFnData,
+	TError,
+	TData,
+	TQueryKey extends QueryKey,
+>(
+	queryClient: QueryClient,
+	options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+): void {
+	void queryClient.ensureQueryData(options).catch(() => {});
+}

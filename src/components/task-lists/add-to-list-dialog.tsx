@@ -6,24 +6,15 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
-import { ErrorNotice, RowListSkeleton } from "#/components/common/states";
-import { overlayTaggedTasks } from "#/lib/pending/overlay-tags";
-import { usePendingChanges } from "#/lib/pending/store";
+import { LoadingState } from "#/components/common/loading-state";
+import { ErrorNotice } from "#/components/common/states";
 import { searchIndexQuery } from "#/queries/system";
-import type { Task } from "#/schemas/task";
 import { TASK_LIST_LABELS, type TaskListName } from "#/schemas/task-list";
 
 const MAX_RESULTS = 25;
 
-/** What `queueAddRef` needs to draw the row before the batch is applied. */
-export type PickedTask = {
-	checklistId: string;
-	checklistTitle: string;
-	task: Pick<
-		Task,
-		"taskId" | "title" | "completed" | "tagIds" | "urgent" | "important"
-	>;
-};
+/** A reference names a task and nothing else, so that is all a pick carries. */
+export type PickedTask = { taskId: string };
 
 /**
  * Pick an existing checklist task to put on Today or in the Backlog.
@@ -41,12 +32,11 @@ export function AddToListDialog({
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	list: TaskListName;
-	/** `checklistId:taskId` pairs already on either list, so they can be skipped. */
+	/** Task ids already on either list, so they can be skipped. */
 	alreadyListed: ReadonlySet<string>;
 	onPick: (picked: PickedTask) => void;
 }) {
 	const [query, setQuery] = useState("");
-	const queued = usePendingChanges();
 
 	const { data, isPending, isError, error, refetch } = useQuery({
 		...searchIndexQuery(),
@@ -57,18 +47,16 @@ export function AddToListDialog({
 		if (!data) return [];
 		const needle = query.trim().toLowerCase();
 
-		return overlayTaggedTasks(data.tasks, queued)
-			.filter(
-				(task) => !alreadyListed.has(`${task.checklistId}:${task.taskId}`),
-			)
+		return data.tasks
+			.filter((task) => !alreadyListed.has(task.taskId))
 			.filter(
 				(task) =>
 					needle === "" ||
 					task.title.toLowerCase().includes(needle) ||
-					task.checklistTitle.toLowerCase().includes(needle),
+					(task.checklistTitle ?? "").toLowerCase().includes(needle),
 			)
 			.slice(0, MAX_RESULTS);
-	}, [data, query, alreadyListed, queued]);
+	}, [data, query, alreadyListed]);
 
 	return (
 		<FormDialog
@@ -88,7 +76,7 @@ export function AddToListDialog({
 				{isError ? (
 					<ErrorNotice error={error} onRetry={() => void refetch()} />
 				) : isPending ? (
-					<RowListSkeleton count={4} />
+					<LoadingState />
 				) : candidates.length === 0 ? (
 					<EmptyState
 						isCompact
@@ -103,9 +91,9 @@ export function AddToListDialog({
 					<List hasDividers density="compact">
 						{candidates.map((task) => (
 							<ListItem
-								key={`${task.checklistId}:${task.taskId}`}
+								key={task.taskId}
 								label={task.title}
-								description={task.checklistTitle}
+								description={task.checklistTitle ?? undefined}
 								endContent={
 									task.completed ? (
 										<Text type="supporting" color="secondary">
@@ -113,20 +101,7 @@ export function AddToListDialog({
 										</Text>
 									) : undefined
 								}
-								onClick={() =>
-									onPick({
-										checklistId: task.checklistId,
-										checklistTitle: task.checklistTitle,
-										task: {
-											taskId: task.taskId,
-											title: task.title,
-											completed: task.completed,
-											tagIds: task.tagIds,
-											urgent: task.urgent,
-											important: task.important,
-										},
-									})
-								}
+								onClick={() => onPick({ taskId: task.taskId })}
 							/>
 						))}
 					</List>

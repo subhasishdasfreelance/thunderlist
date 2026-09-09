@@ -3,44 +3,52 @@ import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Heading } from "@astryxdesign/core/Heading";
-import { Link } from "@astryxdesign/core/Link";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import { useState } from "react";
+import { BackButton } from "#/components/common/back-button";
+import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
+import { ProgressChart } from "#/components/common/progress-chart";
 import { ProgressMeter } from "#/components/common/progress-meter";
-import { ErrorNotice, RowListSkeleton } from "#/components/common/states";
+import { SectionSpinner } from "#/components/common/section-spinner";
+import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
+import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { EntryFormDialog } from "#/components/trackers/entry-form-dialog";
 import { ProgressHistory } from "#/components/trackers/progress-history";
 import { formatProgress } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
-import { formatDate } from "#/lib/format-date";
 import {
+	createEntry,
 	type EntryValues,
-	queueCreateEntry,
-	queueDeleteEntry,
-	queueDeleteTracker,
-	queueUpdateEntry,
-	queueUpdateTracker,
 	type TrackerValues,
-} from "#/lib/pending/actions";
-import {
-	overlayTrackerDetail,
-	pendingTrackerDetail,
-} from "#/lib/pending/overlay-trackers";
-import { usePendingChanges } from "#/lib/pending/store";
+	useApplyChange,
+} from "#/lib/changes";
+import { dayStart } from "#/lib/chart-points";
+import { formatDate } from "#/lib/format-date";
 import { elapsedFraction } from "#/lib/progress";
 import { primeQuery } from "#/queries/prime";
-import { trackerQuery } from "#/queries/trackers";
+import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
 
 export const Route = createFileRoute("/trackers/$trackerId")({
-	loader: ({ context, params }) =>
-		primeQuery(context.queryClient, trackerQuery(params.trackerId)),
+	/*
+	 * Only the figures are waited for. The history is the long half of the read
+	 * and nobody is blocked on it, so it is started here and not awaited — by the
+	 * time the top of the screen has painted it is usually already in.
+	 */
+	loader: ({ context, params }) => {
+		void context.queryClient.prefetchQuery(
+			trackerEntriesQuery(params.trackerId),
+		);
+
+		return primeQuery(context.queryClient, trackerQuery(params.trackerId));
+	},
 	component: TrackerDetailPage,
 });
 
@@ -52,7 +60,7 @@ type EntryDialogState =
 function TrackerDetailPage() {
 	const { trackerId } = Route.useParams();
 	const navigate = useNavigate();
-	const queued = usePendingChanges();
+	const { apply } = useApplyChange();
 
 	const [entryDialog, setEntryDialog] = useState<EntryDialogState>({
 		mode: "closed",
@@ -64,21 +72,17 @@ function TrackerDetailPage() {
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackerQuery(trackerId),
 	);
+	const history = useQuery(trackerEntriesQuery(trackerId));
+	const entries = history.data ?? [];
 
-	// A tracker created a moment ago exists only in the queue, so there is
-	// nothing to fetch: it is built from the queue instead.
-	const detail = useMemo(
-		() =>
-			data
-				? overlayTrackerDetail(data, queued)
-				: pendingTrackerDetail(trackerId, queued),
-		[data, queued, trackerId],
-	);
+	const [view, setView] = useState<ProgressView>("list");
+
+	const detail = data ?? null;
 
 	if (isError && detail === null) {
 		return (
 			<VStack gap={4}>
-				<Link href="/trackers">Back to trackers</Link>
+				<BackButton to="/trackers" label="Trackers" />
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			</VStack>
 		);
@@ -87,10 +91,8 @@ function TrackerDetailPage() {
 	if (isPending || !detail) {
 		return (
 			<VStack gap={4}>
-				<Link href="/trackers">Back to trackers</Link>
-				<Card padding={4}>
-					<RowListSkeleton count={5} />
-				</Card>
+				<BackButton to="/trackers" label="Trackers" />
+				<LoadingState />
 			</VStack>
 		);
 	}
@@ -108,8 +110,8 @@ function TrackerDetailPage() {
 	 */
 	const previousValue =
 		entryDialog.mode === "edit"
-			? (detail.entries[
-					detail.entries.findIndex(
+			? (entries[
+					entries.findIndex(
 						(entry) => entry.entryId === entryDialog.entry.entryId,
 					) - 1
 				]?.value ?? 0)
@@ -120,7 +122,7 @@ function TrackerDetailPage() {
 
 	return (
 		<VStack gap={4}>
-			<Link href="/trackers">Back to trackers</Link>
+			<BackButton to="/trackers" label="Trackers" />
 
 			<HStack gap={3} hAlign="between" vAlign="start">
 				<HStack gap={3} vAlign="center">
@@ -146,7 +148,13 @@ function TrackerDetailPage() {
 					hasChevron={false}
 					placement="below"
 					alignment="end"
-					button={{ label: "Tracker actions", variant: "ghost" }}
+					button={{
+						label: "Tracker actions",
+						tooltip: "Tracker actions",
+						variant: "ghost",
+						isIconOnly: true,
+						icon: <MoreHorizontal aria-hidden />,
+					}}
 					items={[
 						{ label: "Edit tracker", onClick: () => setIsEditOpen(true) },
 						{
@@ -183,6 +191,7 @@ function TrackerDetailPage() {
 			</Card>
 
 			<VelocityStats
+				startDate={detail.startDate}
 				velocity={detail.velocity}
 				unit={detail.unit}
 				isComplete={progress.target > 0 && progress.current >= progress.target}
@@ -196,12 +205,56 @@ function TrackerDetailPage() {
 				/>
 			</HStack>
 
-			<ProgressHistory
-				entries={detail.entries}
-				unit={detail.unit}
-				onEdit={(entry) => setEntryDialog({ mode: "edit", entry })}
-				onDelete={setPendingEntry}
-			/>
+			<VStack gap={2}>
+				<HStack gap={2} hAlign="between" vAlign="center">
+					<Text type="label" weight="semibold">
+						Progress History
+					</Text>
+					<ViewToggle
+						view={view}
+						onChange={setView}
+						label="Show progress as a list or a graph"
+					/>
+				</HStack>
+
+				{view === "chart" ? (
+					<Card padding={3}>
+						{history.isPending ? (
+							<SectionSpinner label="Loading history…" />
+						) : (
+							<ProgressChart
+								start={dayStart(detail.startDate)}
+								end={
+									detail.deadline === null ? null : dayStart(detail.deadline)
+								}
+								now={Date.now()}
+								target={detail.targetValue}
+								current={detail.currentValue}
+								points={entries.map((entry) => ({
+									id: entry.entryId,
+									at: dayStart(entry.recordedAt),
+									value: entry.value,
+								}))}
+								startLabel={formatDate(detail.startDate)}
+								endLabel={
+									detail.deadline === null
+										? "No deadline"
+										: formatDate(detail.deadline)
+								}
+								summary={`${detail.currentValue} of ${detail.targetValue} ${detail.unit} since ${formatDate(detail.startDate)}`}
+							/>
+						)}
+					</Card>
+				) : (
+					<ProgressHistory
+						entries={entries}
+						unit={detail.unit}
+						isPending={history.isPending}
+						onEdit={(entry) => setEntryDialog({ mode: "edit", entry })}
+						onDelete={setPendingEntry}
+					/>
+				)}
+			</VStack>
 
 			<EntryFormDialog
 				isOpen={entryDialog.mode !== "closed"}
@@ -213,9 +266,14 @@ function TrackerDetailPage() {
 				previousValue={previousValue}
 				onSubmit={(values: EntryValues) => {
 					if (entryDialog.mode === "edit") {
-						queueUpdateEntry(detail, entryDialog.entry, values);
+						apply({
+							kind: "entry.update",
+							trackerId,
+							entryId: entryDialog.entry.entryId,
+							patch: values,
+						});
 					} else {
-						queueCreateEntry(detail, values);
+						createEntry(apply, trackerId, values);
 					}
 					setEntryDialog({ mode: "closed" });
 				}}
@@ -226,7 +284,7 @@ function TrackerDetailPage() {
 				onOpenChange={setIsEditOpen}
 				tracker={detail}
 				onSubmit={(values: TrackerValues) => {
-					queueUpdateTracker(detail, values);
+					apply({ kind: "tracker.update", trackerId, patch: values });
 					setIsEditOpen(false);
 				}}
 			/>
@@ -242,7 +300,13 @@ function TrackerDetailPage() {
 				)} will be deleted when you save your changes.`}
 				actionLabel="Delete"
 				onAction={() => {
-					if (pendingEntry) queueDeleteEntry(detail, pendingEntry);
+					if (pendingEntry) {
+						apply({
+							kind: "entry.delete",
+							trackerId,
+							entryId: pendingEntry.entryId,
+						});
+					}
 					setPendingEntry(null);
 				}}
 			/>
@@ -254,7 +318,7 @@ function TrackerDetailPage() {
 				description="The tracker and its whole progress history will be deleted when you save your changes."
 				actionLabel="Delete"
 				onAction={() => {
-					queueDeleteTracker(detail);
+					apply({ kind: "tracker.delete", trackerId });
 					setIsDeletingTracker(false);
 					void navigate({ to: "/trackers" });
 				}}

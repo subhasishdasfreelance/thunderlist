@@ -7,12 +7,11 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { LoadingState } from "#/components/common/loading-state";
 import { StatGrid } from "#/components/common/stat-grid";
-import { ErrorNotice, RowListSkeleton } from "#/components/common/states";
+import { ErrorNotice } from "#/components/common/states";
 import { TaggedTitle } from "#/components/tags/tagged-title";
-import { overlayTaggedTasks, overlayTags } from "#/lib/pending/overlay-tags";
-import { usePendingChanges } from "#/lib/pending/store";
-import { primeQuery } from "#/queries/prime";
+import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
 import {
@@ -23,11 +22,12 @@ import {
 } from "#/schemas/task";
 
 export const Route = createFileRoute("/priority")({
-	loader: ({ context }) =>
-		Promise.all([
-			primeQuery(context.queryClient, searchIndexQuery()),
-			primeQuery(context.queryClient, tagsQuery()),
-		]),
+	loader: ({ context }) => {
+		// Tags only colour the rows; the rows themselves are the screen.
+		deferQuery(context.queryClient, tagsQuery());
+
+		return primeQuery(context.queryClient, searchIndexQuery());
+	},
 	component: PriorityPage,
 });
 
@@ -51,22 +51,15 @@ const BAND_HINTS: Record<PriorityRank, string> = {
  */
 function PriorityPage() {
 	const navigate = useNavigate();
-	const queued = usePendingChanges();
 
 	const index = useQuery(searchIndexQuery());
 	const tagsResult = useQuery(tagsQuery());
 
-	const tags = useMemo(
-		() => overlayTags(tagsResult.data ?? [], queued),
-		[tagsResult.data, queued],
-	);
+	const tags = tagsResult.data ?? [];
 
 	const tasks = useMemo(
-		() =>
-			overlayTaggedTasks(index.data?.tasks ?? [], queued).filter(
-				(task) => !task.completed,
-			),
-		[index.data, queued],
+		() => (index.data?.tasks ?? []).filter((task) => !task.completed),
+		[index.data],
 	);
 
 	const bands = useMemo(() => {
@@ -100,9 +93,7 @@ function PriorityPage() {
 			</VStack>
 
 			{index.isPending && tasks.length === 0 ? (
-				<Card padding={4}>
-					<RowListSkeleton count={6} />
-				</Card>
+				<LoadingState />
 			) : tasks.length === 0 ? (
 				<EmptyState
 					title="Nothing to prioritise."
@@ -118,28 +109,23 @@ function PriorityPage() {
 
 						return (
 							<VStack key={rank} gap={2}>
-								<VStack gap={0}>
-									<Text type="label" weight="semibold">
-										{PRIORITY_LABELS[rank]} · {band.length}
-									</Text>
-									<Text type="supporting">{BAND_HINTS[rank]}</Text>
-								</VStack>
+								<div className="thunderlist-band" data-rank={rank}>
+									<VStack gap={0}>
+										<Text type="label" weight="semibold">
+											{PRIORITY_LABELS[rank]} · {band.length}
+										</Text>
+										<Text type="supporting">{BAND_HINTS[rank]}</Text>
+									</VStack>
+								</div>
 
 								<Card padding={0}>
 									<VStack gap={0} paddingInline={4} paddingBlock={2}>
 										{band.map((task, position) => (
 											<div key={task.taskId} className="thunderlist-row">
 												{position === 0 ? null : <Divider />}
-												<button
-													type="button"
-													className="w-full cursor-pointer text-left"
-													onClick={() =>
-														void navigate({
-															to: "/checklists/$checklistId",
-															params: { checklistId: task.checklistId },
-														})
-													}
-												>
+												{/* A task in no checklist has nowhere to open, so it
+												    is a row rather than a link. */}
+												{task.checklistId === null ? (
 													<HStack
 														gap={2}
 														hAlign="between"
@@ -147,9 +133,34 @@ function PriorityPage() {
 														paddingBlock={1.5}
 													>
 														<TaggedTitle title={task.title} tags={tags} />
-														<Text type="supporting">{task.checklistTitle}</Text>
 													</HStack>
-												</button>
+												) : (
+													<button
+														type="button"
+														className="thunderlist-task-row w-full cursor-pointer text-left"
+														onClick={() =>
+															void navigate({
+																to: "/checklists/$checklistId",
+																params: {
+																	checklistId: task.checklistId as string,
+																},
+																search: { task: task.taskId },
+															})
+														}
+													>
+														<HStack
+															gap={2}
+															hAlign="between"
+															vAlign="center"
+															paddingBlock={1.5}
+														>
+															<TaggedTitle title={task.title} tags={tags} />
+															<Text type="supporting">
+																{task.checklistTitle}
+															</Text>
+														</HStack>
+													</button>
+												)}
 											</div>
 										))}
 									</VStack>

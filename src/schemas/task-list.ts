@@ -32,7 +32,6 @@ export const SORT_ORDER_STEP = 10;
 /** One entry on the Today or Backlog list. */
 const taskRefSchema = v.object({
 	itemId: idSchema,
-	checklistId: idSchema,
 	taskId: idSchema,
 	sortOrder: sortOrderSchema,
 	addedAt: v.string(),
@@ -48,6 +47,8 @@ export type TaskRef = v.InferOutput<typeof taskRefSchema>;
 export type TaskRefEntry = {
 	item: TaskRef;
 	list: TaskListName;
+	/** Both `null` for a task that belongs to no checklist. */
+	checklistId: string | null;
 	checklistTitle: string | null;
 	task: Task | null;
 };
@@ -55,7 +56,6 @@ export type TaskRefEntry = {
 export const addTaskRefInputSchema = v.object({
 	list: taskListNameSchema,
 	itemId: idSchema,
-	checklistId: idSchema,
 	taskId: idSchema,
 	sortOrder: sortOrderSchema,
 });

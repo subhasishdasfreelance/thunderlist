@@ -129,8 +129,14 @@ const progressEntrySchema = v.object({
 
 export type ProgressEntry = v.InferOutput<typeof progressEntrySchema>;
 
+/**
+ * Everything the top of a tracker screen needs, and nothing else.
+ *
+ * The history is deliberately not here. It is the long part of the read and the
+ * part nobody is waiting for — the figures answer "how is this going", and they
+ * can be on screen while the entries are still coming.
+ */
 export type TrackerDetail = TrackerSummary & {
-	entries: Array<ProgressEntry>;
 	velocity: Velocity;
 };
 

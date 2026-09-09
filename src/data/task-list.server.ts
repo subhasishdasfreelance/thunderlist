@@ -5,6 +5,10 @@
  * has a completion field of its own: checking something off Today writes to the
  * task itself, so completion has exactly one home.
  *
+ * A reference names a task and nothing else. That is what lets a task written
+ * straight onto Today belong to no checklist at all: there is nothing else for
+ * the reference to point at, and so nothing to invent to hold it.
+ *
  * The two lists are one collection told apart by `list`, because they are one
  * thing: a task belongs to at most one of them. Parking a task takes it off
  * Today, and pulling it back onto Today takes it out of the Backlog.
@@ -17,7 +21,7 @@ import {
 	type TaskRef,
 	type TaskRefEntry,
 } from "#/schemas/task-list";
-import { readTasksByChecklist } from "./checklist.server";
+import { readTasksByIds } from "./checklist.server";
 
 /** A reference document holds the list it is on; a `TaskRef` does not. */
 const REF_FIELDS = { _id: 0, list: 0 } as const;
@@ -32,12 +36,13 @@ export type TaskLists = Record<TaskListName, Array<TaskRefEntry>>;
 /**
  * Resolve every reference in both lists against its canonical task.
  *
- * Today and Backlog are read together because they draw on the same
- * checklists: resolving them in one pass means one task read rather than two,
- * and the checklist screen needs both to know which badge to show.
+ * Today and Backlog are read together because they draw on the same tasks:
+ * resolving them in one pass means one task read rather than two, and the
+ * checklist screen needs both to know which badge to show.
  *
- * References whose task or checklist has gone come back with `task: null`
- * rather than being dropped, so the user can see and clear them.
+ * References whose task has gone come back with `task: null` rather than being
+ * dropped, so the user can see and clear them. A `checklistTitle` of `null` is
+ * an ordinary task that belongs to no checklist, not a fault.
  */
 export async function getTaskLists(): Promise<TaskLists> {
 	const current = await collections();
@@ -54,17 +59,24 @@ export async function getTaskLists(): Promise<TaskLists> {
 
 	if (items.length === 0) return { today: [], backlog: [] };
 
-	const checklistIds = [...new Set(items.map((item) => item.checklistId))];
-
-	const [checklists, tasksByChecklist] = await Promise.all([
-		current.checklists
-			.find(
-				{ checklistId: { $in: checklistIds } },
-				{ projection: { _id: 0, checklistId: 1, title: 1 } },
-			)
-			.toArray(),
-		readTasksByChecklist(checklistIds),
+	const tasks = await readTasksByIds([
+		...new Set(items.map((item) => item.taskId)),
 	]);
+
+	const checklistIds = [
+		...new Set(
+			[...tasks.values()].flatMap((found) =>
+				found.checklistId === null ? [] : [found.checklistId],
+			),
+		),
+	];
+
+	const checklists = await current.checklists
+		.find(
+			{ checklistId: { $in: checklistIds } },
+			{ projection: { _id: 0, checklistId: 1, title: 1 } },
+		)
+		.toArray();
 
 	const titles = new Map(
 		checklists.map((checklist) => [checklist.checklistId, checklist.title]),
@@ -73,15 +85,19 @@ export async function getTaskLists(): Promise<TaskLists> {
 	const resolve = (list: TaskListName): Array<TaskRefEntry> =>
 		items
 			.filter((item) => item.list === list)
-			.map(({ list: _list, ...item }) => ({
-				item,
-				list,
-				checklistTitle: titles.get(item.checklistId) ?? null,
-				task:
-					tasksByChecklist
-						.get(item.checklistId)
-						?.find((candidate) => candidate.taskId === item.taskId) ?? null,
-			}));
+			.map(({ list: _list, ...item }) => {
+				const found = tasks.get(item.taskId);
+				const checklistId = found?.checklistId ?? null;
+
+				return {
+					item,
+					list,
+					checklistId,
+					checklistTitle:
+						checklistId === null ? null : (titles.get(checklistId) ?? null),
+					task: found?.task ?? null,
+				};
+			});
 
 	return { today: resolve("today"), backlog: resolve("backlog") };
 }
@@ -93,7 +109,6 @@ export async function getTaskLists(): Promise<TaskLists> {
 export async function addTaskRef(input: {
 	list: TaskListName;
 	itemId: string;
-	checklistId: string;
 	taskId: string;
 	sortOrder: number;
 }): Promise<TaskRef> {
@@ -101,11 +116,7 @@ export async function addTaskRef(input: {
 
 	// Adding the same task twice is a no-op rather than an error.
 	const existing = await current.taskRefs.findOne(
-		{
-			list: input.list,
-			checklistId: input.checklistId,
-			taskId: input.taskId,
-		},
+		{ list: input.list, taskId: input.taskId },
 		{ projection: REF_FIELDS },
 	);
 	if (existing) return existing;
@@ -113,7 +124,6 @@ export async function addTaskRef(input: {
 	// A task is planned or parked, never both.
 	await current.taskRefs.deleteMany({
 		list: input.list === "today" ? "backlog" : "today",
-		checklistId: input.checklistId,
 		taskId: input.taskId,
 	});
 
@@ -124,7 +134,6 @@ export async function addTaskRef(input: {
 
 	const item: TaskRef = {
 		itemId: input.itemId,
-		checklistId: input.checklistId,
 		taskId: input.taskId,
 		sortOrder:
 			input.sortOrder > 0
@@ -163,7 +172,6 @@ export async function moveTaskRef(
 ): Promise<void> {
 	const current = await collections();
 
-	// Same order the list is drawn in, so "up" means up the screen.
 	const ordered = await current.taskRefs
 		.find(
 			{ list },
@@ -172,7 +180,7 @@ export async function moveTaskRef(
 		.toArray();
 
 	const index = ordered.findIndex((item) => item.itemId === itemId);
-	// The item was removed since the move was queued; there is nothing to move.
+	// The item was removed since the move was asked for; there is nothing to move.
 	if (index === -1) return;
 
 	const neighbour = ordered[direction === "up" ? index - 1 : index + 1];
@@ -202,22 +210,19 @@ export async function moveTaskRef(
 }
 
 /**
- * Drop references to tasks that no longer exist, from both lists.
+ * Drop every reference to the given tasks, from both lists.
  *
- * Called after a checklist or task is deleted. Passing no `taskIds` clears
- * every reference to the checklist.
- *
- * What is removed here is a pointer, never content: the task itself is untouched.
+ * Called after a task, or a whole checklist of them, is deleted. What is
+ * removed here is a pointer, never content: the task itself is untouched.
  */
 export async function removeTaskRefsFor(
-	checklistId: string,
-	taskIds?: ReadonlyArray<string>,
+	taskIds: ReadonlyArray<string>,
 ): Promise<number> {
-	const current = await collections();
+	if (taskIds.length === 0) return 0;
 
+	const current = await collections();
 	const result = await current.taskRefs.deleteMany({
-		checklistId,
-		...(taskIds === undefined ? {} : { taskId: { $in: [...taskIds] } }),
+		taskId: { $in: [...taskIds] },
 	});
 
 	return result.deletedCount;

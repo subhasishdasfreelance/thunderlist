@@ -48,7 +48,13 @@ export function FormDialog({
 		<Dialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			purpose="form"
+			/*
+			 * Clicking away closes it, the same as Escape. `form` would hold the
+			 * dialog open once anything had been typed, to protect the draft — but
+			 * a dialog that ignores the click is read as a stuck one, and every
+			 * form here is short enough to retype.
+			 */
+			purpose="info"
 			width={width}
 		>
 			<Layout
@@ -71,7 +77,13 @@ export function FormDialog({
 					</LayoutContent>
 				}
 				footer={
-					actions ? <LayoutFooter>{actions(formId)}</LayoutFooter> : undefined
+					actions ? (
+						<LayoutFooter>
+							<div className="thunderlist-dialog-actions">
+								{actions(formId)}
+							</div>
+						</LayoutFooter>
+					) : undefined
 				}
 			/>
 		</Dialog>

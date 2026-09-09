@@ -33,10 +33,17 @@ export type ParsedTitle = {
 	tagNames: Array<string>;
 };
 
-/** One run of a title: either plain text or a tag written in it. */
-export type TitleSegment =
+/**
+ * One run of a title: either plain text or a tag written in it.
+ *
+ * `at` is where the run starts in the title. Two runs can never start at the
+ * same offset, so it is the key React needs — and unlike an array index it
+ * still names the same run when the text before it is edited.
+ */
+export type TitleSegment = { at: number } & (
 	| { kind: "text"; text: string }
-	| { kind: "tag"; name: string };
+	| { kind: "tag"; name: string }
+);
 
 /** Tag names are matched case-insensitively; the first spelling seen wins. */
 export function sameTagName(a: string, b: string): boolean {
@@ -75,15 +82,19 @@ export function splitTitleTags(title: string): Array<TitleSegment> {
 		const start = (match.index ?? 0) + match[1].length;
 
 		if (start > cursor) {
-			segments.push({ kind: "text", text: title.slice(cursor, start) });
+			segments.push({
+				kind: "text",
+				at: cursor,
+				text: title.slice(cursor, start),
+			});
 		}
 
-		segments.push({ kind: "tag", name: match[2] });
+		segments.push({ kind: "tag", at: start, name: match[2] });
 		cursor = start + 1 + match[2].length;
 	}
 
 	if (cursor < title.length) {
-		segments.push({ kind: "text", text: title.slice(cursor) });
+		segments.push({ kind: "text", at: cursor, text: title.slice(cursor) });
 	}
 
 	return segments;

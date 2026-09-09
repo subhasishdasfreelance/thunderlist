@@ -11,6 +11,7 @@ function task(partial: Partial<Task> & { taskId: string }): Task {
 	return {
 		title: partial.taskId,
 		completed: false,
+		completedAt: null,
 		addedAt: "2026-01-01T00:00:00.000Z",
 		tagIds: [],
 		urgent: false,

@@ -82,15 +82,18 @@ export function TaskRow({
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}
 		>
-			<div className="flex min-w-0 flex-1 basis-full items-center gap-2 md:basis-0">
-				{/* Set most often, so they come first. */}
+			{/* Second on a phone, first on a desktop: the flags join the other
+			    buttons on the line below rather than crowding the title. */}
+			<div className="order-2 flex shrink-0 items-center gap-0.5 md:order-none">
 				<TaskFlagButtons
 					title={task.title}
 					urgent={task.urgent}
 					important={task.important}
 					actions={actions}
 				/>
+			</div>
 
+			<div className="order-1 flex min-w-0 flex-1 basis-full items-center gap-2 md:order-none md:basis-0">
 				{/* The label is hidden but still the accessible name; the visible
 				    title is drawn beside it so its tags keep their place. */}
 				<CheckboxInput
@@ -102,7 +105,7 @@ export function TaskRow({
 				<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
 			</div>
 
-			<div className="ml-auto flex shrink-0 items-center gap-0.5 md:ml-0">
+			<div className="order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
 				<TodayButton
 					title={task.title}
 					listState={listState}
@@ -121,11 +124,12 @@ export function TaskRow({
 						icon: <MoreHorizontal aria-hidden />,
 					}}
 					items={[
-						backlogMenuItem(listState, actions),
+						// Editing first: it is the reason this menu gets opened.
 						{
 							label: `Edit (${TASK_SHORTCUTS.edit})`,
 							onClick: actions.onRename,
 						},
+						backlogMenuItem(listState, actions),
 						{
 							label: "Delete task",
 							variant: "destructive" as const,

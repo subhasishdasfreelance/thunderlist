@@ -4,6 +4,8 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { MoreHorizontal } from "lucide-react";
+import { SectionSpinner } from "#/components/common/section-spinner";
 import { formatDate } from "#/lib/format-date";
 import type { ProgressEntry } from "#/schemas/tracker";
 
@@ -11,19 +13,25 @@ import type { ProgressEntry } from "#/schemas/tracker";
  * A tracker's readings, newest first — the most recent one is what people come
  * here to look for.
  *
- * Each row shows the reading and the step it represents. The step is what a
- * progress chart is drawn from, and showing it here is what makes "enter where
- * you are, not how far you got" legible: you can see what the app worked out.
+ * Each row shows the reading and the step it represents. The step is what the
+ * chart is drawn from, and showing it here is what makes "enter where you are,
+ * not how far you got" legible: you can see what the app worked out.
+ *
+ * The history is loaded after the figures at the top of the screen, so this
+ * carries its own waiting state rather than holding the whole page back.
  */
 export function ProgressHistory({
 	entries,
 	unit,
+	isPending,
 	onEdit,
 	onDelete,
 }: {
 	/** Oldest first, as stored; this reverses them for display. */
 	entries: ReadonlyArray<ProgressEntry>;
 	unit: string;
+	/** The entries are still on their way. */
+	isPending: boolean;
 	onEdit: (entry: ProgressEntry) => void;
 	onDelete: (entry: ProgressEntry) => void;
 }) {
@@ -31,11 +39,9 @@ export function ProgressHistory({
 
 	return (
 		<VStack gap={2}>
-			<Text type="label" weight="semibold">
-				Progress History
-			</Text>
-
-			{history.length === 0 ? (
+			{isPending ? (
+				<SectionSpinner label="Loading history…" />
+			) : history.length === 0 ? (
 				<EmptyState
 					isCompact
 					title="No progress yet."
@@ -66,6 +72,8 @@ export function ProgressHistory({
 												label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
 												variant: "ghost",
 												size: "sm",
+												isIconOnly: true,
+												icon: <MoreHorizontal aria-hidden />,
 											}}
 											items={[
 												{ label: "Edit entry", onClick: () => onEdit(entry) },

@@ -6,17 +6,17 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
+import { LoadingState } from "#/components/common/loading-state";
 import { StatGrid } from "#/components/common/stat-grid";
-import { CardListSkeleton, ErrorNotice } from "#/components/common/states";
+import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
-	queueCreateChecklist,
-} from "#/lib/pending/actions";
-import { overlayChecklists } from "#/lib/pending/overlay-checklists";
-import { usePendingChanges } from "#/lib/pending/store";
+	createChecklist,
+	useApplyChange,
+} from "#/lib/changes";
 import { checklistsQuery } from "#/queries/checklists";
 import { primeQuery } from "#/queries/prime";
 
@@ -28,16 +28,13 @@ export const Route = createFileRoute("/checklists/")({
 function ChecklistsPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
-	const queued = usePendingChanges();
+	const { apply } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
 	);
 
-	const checklists = useMemo(
-		() => overlayChecklists(data ?? [], queued),
-		[data, queued],
-	);
+	const checklists = data ?? [];
 
 	// Across every checklist, so the screen answers "where does all this stand"
 	// before you open any single one.
@@ -67,12 +64,13 @@ function ChecklistsPage() {
 	];
 
 	function create(values: ChecklistValues) {
-		const checklistId = queueCreateChecklist(values);
+		const checklistId = createChecklist(apply, values);
 		setIsFormOpen(false);
 		// Drop straight into the new checklist so tasks can be added.
 		void navigate({
 			to: "/checklists/$checklistId",
 			params: { checklistId },
+			search: { task: undefined },
 		});
 	}
 
@@ -93,7 +91,7 @@ function ChecklistsPage() {
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
-				<CardListSkeleton />
+				<LoadingState />
 			) : checklists.length === 0 ? (
 				<EmptyState
 					title="No checklists yet."

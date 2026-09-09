@@ -1,5 +1,5 @@
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { ArrowDownWideNarrow, Clock } from "lucide-react";
+import { ArrowDownWideNarrow } from "lucide-react";
 import { SORT_ORDER_LABELS, type SortOrder } from "#/lib/tasks/tasks";
 
 /**
@@ -29,8 +29,15 @@ export function SortToggle({
 			tooltip={SORT_ORDER_LABELS[order]}
 			variant={isPriority ? "secondary" : "ghost"}
 			size="sm"
+			/*
+			 * The same icon either way, struck through when it is off. Two
+			 * different icons would say "these are two things"; one struck says
+			 * "this thing, not applied", which is what the button actually means.
+			 */
 			icon={
-				isPriority ? <ArrowDownWideNarrow aria-hidden /> : <Clock aria-hidden />
+				<span className="thunderlist-sort-icon" data-off={!isPriority}>
+					<ArrowDownWideNarrow aria-hidden />
+				</span>
 			}
 			onClick={() => onChange(next)}
 		/>

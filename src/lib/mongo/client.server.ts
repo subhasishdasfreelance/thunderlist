@@ -39,7 +39,8 @@ export type ChecklistDoc = Checklist;
 export type TrackerDoc = Tracker;
 export type TagDoc = Tag;
 
-export type TaskDoc = Task & { checklistId: string };
+/** `checklistId` is null for a task that belongs to no checklist. */
+export type TaskDoc = Task & { checklistId: string | null };
 
 /**
  * `delta` is not stored: it is the step from the reading before it, which
@@ -109,6 +110,7 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.entries.createIndex({ entryId: 1 }, { unique: true }),
 		current.entries.createIndex({ trackerId: 1, recordedAt: 1 }),
 		current.taskRefs.createIndex({ itemId: 1 }, { unique: true }),
+		current.taskRefs.createIndex({ taskId: 1 }),
 		current.taskRefs.createIndex({ list: 1, sortOrder: 1 }),
 	]);
 }

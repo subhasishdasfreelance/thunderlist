@@ -7,8 +7,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import type { EntryValues } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
-import type { EntryValues } from "#/lib/pending/actions";
 import { todayDateOnly } from "#/schemas/common";
 import type { ProgressEntry, Tracker } from "#/schemas/tracker";
 
@@ -59,9 +59,23 @@ export function EntryFormDialog({
 	const isValid = value !== null && value >= 0 && recordedAt !== undefined;
 	const delta = value === null ? null : value - previousValue;
 
+	/*
+	 * A reading identical to the one before it records nothing, so there is
+	 * nothing to save and the button says so by being off.
+	 *
+	 * Editing is the exception. An entry already stored at that value is a fact
+	 * about the past, and its note or its date can still be wrong — so a change
+	 * to either is worth saving even when the reading has not moved.
+	 */
+	const isCorrection =
+		entry !== undefined &&
+		(note.trim() !== entry.note || recordedAt !== entry.recordedAt);
+	const hasSomethingToSave = delta !== 0 || isCorrection;
+
 	function submit(event: FormEvent) {
 		event.preventDefault();
-		if (!isValid || value === null || recordedAt === undefined) return;
+		if (!isValid || !hasSomethingToSave) return;
+		if (value === null || recordedAt === undefined) return;
 
 		onSubmit({ value, recordedAt, note: note.trim() });
 	}
@@ -86,7 +100,7 @@ export function EntryFormDialog({
 						variant="primary"
 						type="submit"
 						form={formId}
-						isDisabled={!isValid}
+						isDisabled={!isValid || !hasSomethingToSave}
 					/>
 				</HStack>
 			)}
@@ -104,7 +118,9 @@ export function EntryFormDialog({
 				{delta === null ? null : (
 					<Text type="supporting">
 						{delta === 0
-							? "No change since the last reading."
+							? hasSomethingToSave
+								? "No change since the last reading."
+								: "No change since the last reading — nothing to save."
 							: delta > 0
 								? `That records +${delta} ${tracker.unit}.`
 								: `That records ${delta} ${tracker.unit}, going backwards.`}

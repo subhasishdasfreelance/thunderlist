@@ -5,7 +5,8 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import type { TaggedTask } from "#/lib/pending/overlay-tags";
+import { MoreHorizontal } from "lucide-react";
+import type { TaggedTask } from "#/queries/system";
 import type { Tag } from "#/schemas/tag";
 import { TaggedTaskRow } from "./tagged-task-row";
 
@@ -52,6 +53,8 @@ export function TagCard({
 							label: `Actions for tag ${tag.name}`,
 							variant: "ghost",
 							size: "sm",
+							isIconOnly: true,
+							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
 							{ label: "Rename or recolour", onClick: onEdit },

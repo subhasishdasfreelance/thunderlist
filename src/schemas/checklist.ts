@@ -21,15 +21,6 @@ export const PACE_STATUS_LABELS: Record<PaceStatus, string> = {
 	behind: "Behind",
 };
 
-/**
- * Where a task typed straight into Today or the Backlog goes.
- *
- * Those lists hold references, never tasks of their own, so a loose task still
- * needs a checklist to live in. It is an ordinary checklist found by title, so
- * it can be renamed, tidied or deleted like any other.
- */
-export const INBOX_CHECKLIST_TITLE = "Inbox";
-
 const checklistSchema = v.object({
 	checklistId: idSchema,
 	title: titleSchema,

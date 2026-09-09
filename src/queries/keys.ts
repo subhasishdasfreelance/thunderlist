@@ -8,5 +8,8 @@ export const queryKeys = {
 	checklist: (checklistId: string) => ["checklists", checklistId] as const,
 	trackers: ["trackers"] as const,
 	tracker: (trackerId: string) => ["trackers", trackerId] as const,
+	/** The history, read after the figures rather than with them. */
+	trackerEntries: (trackerId: string) =>
+		["trackers", trackerId, "entries"] as const,
 	tags: ["tags"] as const,
 };

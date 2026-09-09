@@ -34,7 +34,10 @@ function rate(value: number): string {
 }
 
 function stats(pace: ReturnType<typeof dayPace>, isDone: boolean): Array<Stat> {
+	// The same six figures, in the same order, as every checklist and tracker —
+	// measured in hours because a day measured in days never moves.
 	return [
+		{ label: "Started", value: formatTimeOfDay(startOfToday(pace)) },
 		{
 			label: "Current speed",
 			value: pace.perHour === null ? "—" : rate(pace.perHour),
@@ -58,10 +61,16 @@ function stats(pace: ReturnType<typeof dayPace>, isDone: boolean): Array<Stat> {
 				: pace.projectedFinish === null
 					? "Not moving yet"
 					: formatTimeOfDay(pace.projectedFinish),
+			hint:
+				pace.projectedFinish === null || isDone ? undefined : "at this speed",
 		},
-		{ label: "Day ends", value: formatTimeOfDay(pace.endsAt) },
 		{ label: "Time left", value: formatHoursLeft(pace.hoursRemaining) },
 	];
+}
+
+/** Midnight at the start of today, which is what the day is measured from. */
+function startOfToday(pace: ReturnType<typeof dayPace>): Date {
+	return new Date(pace.endsAt.getTime() - 24 * 3_600_000);
 }
 
 /**

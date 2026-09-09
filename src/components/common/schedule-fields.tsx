@@ -1,6 +1,6 @@
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
-import { HStack } from "@astryxdesign/core/Stack";
+import { FieldRow } from "#/components/common/field-row";
 import { formatDate } from "#/lib/format-date";
 
 /**
@@ -23,7 +23,7 @@ export function ScheduleFields({
 	onDeadlineChange: (value: ISODateString | undefined) => void;
 }) {
 	return (
-		<HStack gap={3}>
+		<FieldRow>
 			<DateInput
 				label="Start date"
 				isRequired
@@ -40,6 +40,6 @@ export function ScheduleFields({
 				value={deadline}
 				onChange={onDeadlineChange}
 			/>
-		</HStack>
+		</FieldRow>
 	);
 }

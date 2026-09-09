@@ -29,19 +29,18 @@ import {
 } from "./tracker";
 
 /**
- * One queued edit.
+ * One change to the data, as the browser asks for it.
  *
- * Edits are collected in the browser and sent as a reviewed batch rather than
- * written one keystroke at a time, so nothing is saved until it has been looked
- * at. Each variant carries exactly the payload its server function already
- * takes, which is why the entries are spread from those schemas rather than
- * restated: the queue cannot drift from what the server accepts.
+ * Every mutation in the app is one of these and goes straight to the database.
+ * Each variant carries exactly the payload its repository already takes, which
+ * is why the entries are spread from those schemas rather than restated: the
+ * command cannot drift from what the server accepts.
  *
- * Every id is chosen by the client. A change has to be shown in the right place
- * before it reaches the database, and a later change in the same batch has to
- * be able to refer to something an earlier one created.
+ * Ids are still minted in the browser. That keeps a change replayable — asking
+ * twice for the same task is the same task, not two — which is what makes a
+ * retry after a dropped connection safe.
  */
-const pendingChangeSchema = v.variant("kind", [
+const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("checklist.create"),
 		...createChecklistInputSchema.entries,
@@ -106,57 +105,6 @@ const pendingChangeSchema = v.variant("kind", [
 	v.object({ kind: v.literal("tag.delete"), ...deleteTagInputSchema.entries }),
 ]);
 
-export type PendingChange = v.InferOutput<typeof pendingChangeSchema>;
+export type Change = v.InferOutput<typeof changeSchema>;
 
-/**
- * A queued change as the browser holds it.
- *
- * `label` and `preview` are written when the change is queued, while the
- * surrounding screen still knows the titles involved. Keeping them here means
- * the review dialog can describe "Add Book flights to Today" without going back
- * to the database, and Today can draw a row for a task it has not fetched.
- *
- * Neither is ever sent to the server; only `change` is.
- */
-export type QueuedChange = {
-	id: string;
-	queuedAt: string;
-	label: string;
-	/** Set on `ref.add`, whose task is not yet in the list being rendered. */
-	preview?: {
-		title: string;
-		completed: boolean;
-		checklistTitle: string;
-		tagIds: Array<string>;
-		urgent: boolean;
-		important: boolean;
-	};
-	change: PendingChange;
-};
-
-/** How many changes one save writes. Anything beyond it saves on the next pass. */
-export const MAX_BATCH_SIZE = 200;
-
-export const applyChangesInputSchema = v.object({
-	changes: v.pipe(
-		v.array(pendingChangeSchema),
-		v.maxLength(
-			MAX_BATCH_SIZE,
-			`Apply at most ${MAX_BATCH_SIZE} changes at a time.`,
-		),
-	),
-});
-
-/**
- * How far a batch got.
- *
- * The changes are replayed in order and stop at the first failure, so
- * `appliedCount` is always a prefix: the browser drops exactly what was written
- * and keeps the rest queued, instead of guessing and either losing edits or
- * applying them twice.
- */
-export type ApplyResult = {
-	appliedCount: number;
-	/** Present when the batch stopped early. */
-	failure: { index: number; message: string } | null;
-};
+export const applyChangeInputSchema = v.object({ change: changeSchema });

@@ -1,12 +1,14 @@
 /**
  * Light, dark, or whatever the machine is set to.
  *
- * Every Astryx colour is declared with CSS `light-dark()`, so the whole palette
- * follows the `color-scheme` of the root element and there is nothing to
- * recolour by hand: setting one property switches the app, and the values on
- * either side are the ones Astryx has already contrast-checked.
+ * The choice is handed to Astryx's `Theme`, which owns the colour scheme: it
+ * writes `data-theme` on the root, and the design system's reset maps that to
+ * `color-scheme` so `light-dark()` values, scrollbars and native controls all
+ * follow together. Setting `color-scheme` here as well would fight it — the
+ * theme's own wrapper sits inside the root, so its value wins for everything
+ * drawn within, and the toggle would appear to do nothing.
  *
- * The choice is per browser rather than per account — it is a property of the
+ * The choice is per browser rather than per account: it is a property of the
  * screen you are looking at, not of the data.
  */
 
@@ -17,11 +19,6 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 export const STORAGE_KEY = "thunderlist.theme.v1";
-
-/** What `color-scheme` has to say for each choice. */
-function cssValue(scheme: ColorScheme): string {
-	return scheme === "system" ? "light dark" : scheme;
-}
 
 function isColorScheme(value: unknown): value is ColorScheme {
 	return (COLOR_SCHEMES as ReadonlyArray<unknown>).includes(value);
@@ -36,7 +33,7 @@ function isColorScheme(value: unknown): value is ColorScheme {
  */
 export const THEME_INIT_SCRIPT = `try{var s=localStorage.getItem(${JSON.stringify(
 	STORAGE_KEY,
-)});document.documentElement.style.colorScheme=s==="light"||s==="dark"?s:"light dark"}catch(e){}`;
+)});if(s==="light"||s==="dark")document.documentElement.setAttribute("data-theme",s)}catch(e){}`;
 
 let current: ColorScheme = "system";
 let isHydrated = false;
@@ -56,20 +53,39 @@ function read(): ColorScheme {
 	}
 }
 
-function apply(scheme: ColorScheme): void {
-	document.documentElement.style.colorScheme = cssValue(scheme);
-}
-
 function hydrate(): void {
 	if (isHydrated) return;
 	isHydrated = true;
 	current = read();
-	apply(current);
+}
+
+/** How long the whole page is allowed to cross-fade between schemes. */
+const CHANGE_MS = 420;
+
+let changeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Mark the document as changing scheme for the length of the change.
+ *
+ * `styles.css` hangs one blanket colour transition off this attribute. It is
+ * put on for a moment rather than left there because a page that eases every
+ * colour all the time is a page where hovering a row lags behind the pointer.
+ */
+function easeTheChange(): void {
+	const root = document.documentElement;
+	root.setAttribute("data-theme-changing", "");
+
+	clearTimeout(changeTimer);
+	changeTimer = setTimeout(() => {
+		root.removeAttribute("data-theme-changing");
+	}, CHANGE_MS);
 }
 
 export function setColorScheme(scheme: ColorScheme): void {
+	if (scheme === current) return;
+
 	current = scheme;
-	apply(scheme);
+	easeTheChange();
 
 	try {
 		localStorage.setItem(STORAGE_KEY, scheme);

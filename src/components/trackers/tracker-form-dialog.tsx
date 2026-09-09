@@ -6,9 +6,10 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { type FormEvent, useEffect, useState } from "react";
+import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
-import type { TrackerValues } from "#/lib/pending/actions";
+import type { TrackerValues } from "#/lib/changes";
 import { todayDateOnly } from "#/schemas/common";
 import {
 	TRACKER_TYPE_DEFAULT_UNITS,
@@ -146,7 +147,7 @@ export function TrackerFormDialog({
 					onChange={changeType}
 				/>
 
-				<HStack gap={3}>
+				<FieldRow>
 					<TextInput
 						label="Unit"
 						isRequired
@@ -162,7 +163,7 @@ export function TrackerFormDialog({
 						onChange={setTargetValue}
 						placeholder="412"
 					/>
-				</HStack>
+				</FieldRow>
 
 				{type === "book" ? (
 					<TextInput

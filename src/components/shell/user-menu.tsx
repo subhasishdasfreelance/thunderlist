@@ -1,7 +1,6 @@
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { authClient } from "#/lib/auth-client";
 
@@ -13,7 +12,6 @@ import { authClient } from "#/lib/auth-client";
  */
 export function UserMenu() {
 	const queryClient = useQueryClient();
-	const navigate = useNavigate();
 	const { data: session } = authClient.useSession();
 	const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -35,12 +33,6 @@ export function UserMenu() {
 				void refresh();
 			},
 			isDisabled: isRefreshing,
-		},
-		{
-			label: "Keyboard shortcuts",
-			onClick: () => {
-				void navigate({ to: "/shortcuts" });
-			},
 		},
 		...(session?.user
 			? [
@@ -64,6 +56,7 @@ export function UserMenu() {
 			button={{
 				label: name ? `Account: ${name}` : "Account",
 				variant: "ghost",
+				size: "sm",
 				isIconOnly: true,
 				icon: <Avatar size="sm" name={name ?? undefined} tooltip={false} />,
 			}}

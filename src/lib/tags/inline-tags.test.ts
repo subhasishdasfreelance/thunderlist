@@ -55,10 +55,18 @@ describe("splitTitleTags", () => {
 		// The space before a tag belongs to the text run, which is what makes
 		// re-joining the segments give back the title character for character.
 		expect(splitTitleTags("Hello #me hi")).toEqual([
-			{ kind: "text", text: "Hello " },
-			{ kind: "tag", name: "me" },
-			{ kind: "text", text: " hi" },
+			{ kind: "text", at: 0, text: "Hello " },
+			{ kind: "tag", at: 6, name: "me" },
+			{ kind: "text", at: 9, text: " hi" },
 		]);
+	});
+
+	it("gives every run a start offset of its own, for React to key on", () => {
+		const offsets = splitTitleTags("a #one b #two c").map(
+			(segment) => segment.at,
+		);
+
+		expect(new Set(offsets).size).toBe(offsets.length);
 	});
 
 	it("re-joins to exactly the original title", () => {
@@ -78,7 +86,9 @@ describe("splitTitleTags", () => {
 	});
 
 	it("handles a title that is only a tag", () => {
-		expect(splitTitleTags("#chore")).toEqual([{ kind: "tag", name: "chore" }]);
+		expect(splitTitleTags("#chore")).toEqual([
+			{ kind: "tag", at: 0, name: "chore" },
+		]);
 	});
 });
 

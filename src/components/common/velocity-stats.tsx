@@ -38,6 +38,7 @@ function velocityStats(
 	velocity: Velocity,
 	unit: string,
 	isComplete: boolean,
+	startDate: string,
 ): Array<Stat> {
 	const {
 		perDay,
@@ -46,13 +47,15 @@ function velocityStats(
 		projectedFinish,
 		daysElapsed,
 		daysRemaining,
-		totalDays,
 	} = velocity;
 
 	const perDayIn = (value: number) => rate(value, unit);
 	const noDeadline = "No deadline";
 
 	return [
+		// When the clock started. Every other figure is measured from it, so it
+		// comes first: without it the speeds are numbers with no window.
+		{ label: "Started", value: formatDate(startDate) },
 		figure("Current speed", perDay, perDayIn, "—", `over ${days(daysElapsed)}`),
 		figure("Expected speed", expectedPerDay, perDayIn, noDeadline),
 		isComplete
@@ -68,7 +71,6 @@ function velocityStats(
 							: formatDate(projectedFinish),
 					hint: projectedFinish === null ? undefined : "at this speed",
 				},
-		figure("Total time", totalDays, days, "Open ended"),
 		figure(
 			"Time left",
 			daysRemaining,
@@ -100,10 +102,15 @@ export function VelocityStats({
 	velocity,
 	unit,
 	isComplete,
+	startDate,
 }: {
 	velocity: Velocity;
 	unit: string;
 	isComplete: boolean;
+	/** The day the work began; every other figure is measured from it. */
+	startDate: string;
 }) {
-	return <StatGrid stats={velocityStats(velocity, unit, isComplete)} />;
+	return (
+		<StatGrid stats={velocityStats(velocity, unit, isComplete, startDate)} />
+	);
 }

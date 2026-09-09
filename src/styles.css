@@ -15,22 +15,21 @@
 @import "@astryxdesign/core/astryx.css";
 /* Maps bg-surface, text-primary, border-border, rounded-lg... to Astryx tokens. */
 @import "@astryxdesign/core/tailwind-theme.css";
+/*
+ * The compiled Thunderlist theme, after Astryx's defaults so it overrides them.
+ * Generated from `src/theme/thunderlist.theme.ts` by `bun run theme:build` —
+ * shipping it as a stylesheet rather than letting `Theme` inject one at
+ * hydration is what keeps the colours right in the server's first paint.
+ */
+@import "./theme/thunderlist.css";
 @import "tailwindcss/utilities.css" layer(utilities);
 
 /*
- * Thunderlist uses Astryx's own palette rather than a theme package: its accent
- * is a strong blue with a neutral set designed around it, so the colours are
- * coherent and contrast-checked without inventing any values here.
- *
  * Astryx colours are declared with `light-dark()`, which needs a `color-scheme`
- * to resolve against. Following the machine is the default; the toggle in the
- * top bar overrides it by setting `color-scheme` on this element directly, and
- * an inline script in the document head applies the stored choice before the
- * first paint.
+ * to resolve against. Astryx's own reset supplies it, from the `data-theme`
+ * attribute its `Theme` writes on this element — so nothing is declared here,
+ * which would only overrule the toggle.
  */
-:root {
-	color-scheme: light dark;
-}
 
 html,
 body,
@@ -56,18 +55,18 @@ body {
  * sitting behind a solid block, so a page reads as one surface that continues
  * underneath them.
  *
- * The alpha is deliberately high. Translucency costs contrast, and these bars
- * carry the app's navigation: at 82% the text and icons keep their contrast
- * against whatever scrolls beneath, while the blur does the rest of the work.
- * `color-mix` keeps the colour tied to the surface token instead of hardcoding
- * one, so it still tracks the palette.
+ * The alpha is a balance: translucency costs contrast, and these bars carry the
+ * app's navigation, so the blur is asked to do most of the separating and the
+ * wash only has to be thin enough to see through. `color-mix` keeps the colour
+ * tied to the surface token instead of hardcoding one, so it still tracks the
+ * palette.
  */
 @layer components {
 	.astryx-app-shell-header,
 	.thunderlist-glass {
 		background-color: color-mix(
 			in srgb,
-			var(--color-background-surface) 82%,
+			var(--color-background-surface) 72%,
 			transparent
 		);
 		-webkit-backdrop-filter: saturate(180%) blur(16px);
@@ -83,19 +82,6 @@ body {
 		.astryx-app-shell-header,
 		.thunderlist-glass {
 			background-color: var(--color-background-surface);
-		}
-	}
-
-	/*
-	 * Some people turn transparency off at the OS level precisely because these
-	 * effects make text harder to read. That preference wins.
-	 */
-	@media (prefers-reduced-transparency: reduce) {
-		.astryx-app-shell-header,
-		.thunderlist-glass {
-			background-color: var(--color-background-surface);
-			-webkit-backdrop-filter: none;
-			backdrop-filter: none;
 		}
 	}
 
@@ -348,6 +334,177 @@ body {
 		background-color: var(--color-overlay-hover);
 	}
 
+	/*
+	 * The priority bands.
+	 *
+	 * Each band gets the tint that already means that thing elsewhere in the app
+	 * — warm for urgent, the highlight for important — so the Priority screen
+	 * reads the same way as the flags on a row rather than teaching a second
+	 * colour language. The stripe is on the leading edge only: a filled card per
+	 * band would drown the tasks in it.
+	 */
+	.thunderlist-band {
+		border-inline-start: 3px solid var(--color-border-gray);
+		padding-inline-start: 0.75rem;
+	}
+	.thunderlist-band[data-rank="urgent-important"] {
+		border-inline-start-color: var(--color-border-red);
+	}
+	.thunderlist-band[data-rank="urgent"] {
+		border-inline-start-color: var(--color-border-orange);
+	}
+	.thunderlist-band[data-rank="important"] {
+		border-inline-start-color: var(--color-border-purple);
+	}
+
+	/*
+	 * The navigation progress bar.
+	 *
+	 * Fixed above everything and two pixels tall, so it costs no layout: nothing
+	 * below it moves when a page starts or finishes loading. The sweep is
+	 * indeterminate on purpose — the router knows work is happening, not how much
+	 * is left.
+	 */
+	.thunderlist-route-progress {
+		position: fixed;
+		inset-block-start: 0;
+		inset-inline: 0;
+		z-index: 100;
+		height: 2px;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			var(--color-accent),
+			transparent
+		);
+		background-size: 40% 100%;
+		background-repeat: no-repeat;
+		animation: thunderlist-sweep var(--duration-slow) var(--ease-standard)
+			infinite;
+	}
+
+	/*
+	 * Saving, in the bar.
+	 *
+	 * A fixed slot so the controls beside it stay put whether or not anything is
+	 * in flight; only the spinner inside fades in and out.
+	 */
+	.thunderlist-save-indicator {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		opacity: 0;
+		transition: opacity var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-save-indicator[data-busy="true"] {
+		opacity: 1;
+	}
+
+	/* The bolt, breathing while it waits. */
+	.thunderlist-loading-mark {
+		display: inline-flex;
+		color: var(--color-icon-accent);
+		animation: thunderlist-breathe var(--duration-slow-max) var(--ease-standard)
+			infinite;
+	}
+
+	/*
+	 * Sorting, off.
+	 *
+	 * A diagonal stroke across the sort icon, drawn as a rotated line rather than
+	 * a second glyph so it lands on the icon whatever size it is rendered at.
+	 */
+	.thunderlist-sort-icon {
+		position: relative;
+		display: inline-flex;
+	}
+
+	.thunderlist-sort-icon[data-off="true"]::after {
+		content: "";
+		position: absolute;
+		inset-block: -1px;
+		inset-inline-start: 50%;
+		width: 1.5px;
+		background-color: currentColor;
+		transform: rotate(45deg);
+		transform-origin: center;
+		border-radius: 1px;
+	}
+
+	/*
+	 * The task you arrived to see.
+	 *
+	 * A ring and a wash of the accent, held long enough to be found by an eye
+	 * that is still travelling from the link it clicked, then faded out on its
+	 * own: it is an answer to "which one", not a state the task is in. Two quick
+	 * pulses were not enough — they were over before the page had settled.
+	 */
+	.thunderlist-task-row[data-focused="true"] {
+		/*
+		 * No fill mode: with one, the last frame stays applied for good and its
+		 * transparent background outranks `:hover`, so the row the user was just
+		 * sent to is the one row that stops responding to the pointer.
+		 */
+		animation: thunderlist-focus calc(var(--duration-slow-max) * 2)
+			var(--ease-standard);
+	}
+
+	/*
+	 * The wordmark: a bolt and a name, and nothing drawn around them.
+	 *
+	 * No patch, no edge, no hover — a panel behind it reads as a button, and the
+	 * one thing in the bar that is not pressable should not be the thing that
+	 * looks most pressable. What makes it a mark instead of a label is the type:
+	 * heavier and tighter than anything else on the screen, with the bolt set
+	 * slightly large beside it.
+	 */
+	.thunderlist-brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.thunderlist-brand img {
+		/* A touch of lift, so the bolt has an edge against the bar. */
+		filter: drop-shadow(0 1px 1px var(--color-shadow));
+	}
+
+	.thunderlist-brand-name {
+		font-size: 1.0625rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		color: var(--color-text-primary);
+		white-space: nowrap;
+	}
+
+	/*
+	 * The checklist a task came from, which is also the way into it.
+	 *
+	 * Sized like the supporting text it replaces so the row does not grow to
+	 * carry it: a button that reads as a caption until you reach for it.
+	 */
+	.thunderlist-crumb {
+		align-self: flex-start;
+		margin-inline-start: -0.25rem;
+		padding-inline: 0.25rem;
+		border-radius: var(--radius-inner, 0.25rem);
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm, 0.8125rem);
+		line-height: 1.4;
+		cursor: pointer;
+		transition:
+			color var(--duration-fast) var(--ease-standard),
+			background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-crumb:hover {
+		background-color: var(--color-overlay-hover);
+		color: var(--color-text-accent);
+	}
+
 	/* The tag suggestions, which appear under the caret as you type. */
 	.thunderlist-suggestions {
 		animation: thunderlist-rise var(--duration-fast) var(--ease-standard) both;
@@ -361,6 +518,251 @@ body {
 	.thunderlist-row[data-state="saved"] {
 		opacity: 0.72;
 		transition: opacity var(--duration-fast) var(--ease-standard);
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Overlays                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Dialogs and menus arrive and leave rather than blinking in and out.
+ *
+ * Both live in the top layer and both are `display: none` when closed, so the
+ * exit half only exists because `display` and `overlay` are transitioned with
+ * `allow-discrete` — without those two the element is gone before a fade could
+ * start. `@starting-style` supplies the other half: the values to come *from*
+ * on an element that was not being rendered a frame ago.
+ *
+ * The movement is small on purpose. A dialog that flies in from the edge is a
+ * transition the reader has to wait through; one that settles a few pixels is
+ * one they would only notice the absence of.
+ */
+@layer components {
+	.astryx-dialog {
+		transition:
+			opacity var(--duration-medium) var(--ease-standard),
+			transform var(--duration-medium) var(--ease-standard),
+			overlay var(--duration-medium) allow-discrete,
+			display var(--duration-medium) allow-discrete;
+	}
+
+	.astryx-dialog:not([open]) {
+		transform: translateY(0.75rem) scale(0.96);
+	}
+
+	@starting-style {
+		.astryx-dialog[open] {
+			opacity: 0;
+			transform: translateY(0.75rem) scale(0.96);
+		}
+	}
+
+	/* The scrim fades with it, so the page dims rather than being switched off. */
+	.astryx-dialog::backdrop {
+		transition:
+			opacity var(--duration-medium) var(--ease-standard),
+			overlay var(--duration-medium) allow-discrete,
+			display var(--duration-medium) allow-discrete;
+	}
+
+	.astryx-dialog:not([open])::backdrop {
+		opacity: 0;
+	}
+
+	@starting-style {
+		.astryx-dialog[open]::backdrop {
+			opacity: 0;
+		}
+	}
+
+	/*
+	 * Menus and tooltips, which are native popovers underneath.
+	 *
+	 * Quicker than a dialog, and moving the other way: a menu belongs to the
+	 * button that opened it, so it grows down out of it rather than rising.
+	 */
+	[popover] {
+		transition:
+			opacity var(--duration-fast) var(--ease-standard),
+			transform var(--duration-fast) var(--ease-standard),
+			overlay var(--duration-fast) allow-discrete,
+			display var(--duration-fast) allow-discrete;
+	}
+
+	[popover]:not(:popover-open) {
+		opacity: 0;
+		transform: translateY(-0.25rem) scale(0.97);
+	}
+
+	@starting-style {
+		[popover]:popover-open {
+			opacity: 0;
+			transform: translateY(-0.25rem) scale(0.97);
+		}
+	}
+
+	/*
+	 * A dialog is a column, never a plane you drag sideways.
+	 *
+	 * Its width is capped by the viewport, so anything inside that insists on
+	 * being wider — a row of fields, an unbroken word — turns the body into
+	 * something you have to scroll horizontally to read. Wrapping is handled
+	 * where the fields are laid out; this is the guarantee nothing gets through.
+	 */
+	.astryx-dialog .astryx-layout-content {
+		overflow-x: hidden;
+		overflow-wrap: anywhere;
+	}
+
+	/* Footer buttons wrap rather than pushing the dialog wider than the phone. */
+	.thunderlist-dialog-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Changes of state                                                           */
+/* -------------------------------------------------------------------------- */
+
+@layer components {
+	/*
+	 * A screen, arriving.
+	 *
+	 * Keyed on the path, so it plays when you move between pages and not when
+	 * something on a page changes. Opacity and a few pixels: a screen that slides
+	 * is a screen you wait for.
+	 */
+	.thunderlist-screen {
+		/*
+		 * `backwards`, not `both`: `both` keeps the last frame applied for good,
+		 * and an identity `transform` left on the page still makes this element
+		 * the containing block for anything fixed inside it.
+		 */
+		animation: thunderlist-screen var(--duration-medium) var(--ease-standard)
+			backwards;
+	}
+
+	/*
+	 * Light to dark, eased.
+	 *
+	 * The attribute is set for the length of the change and then taken off, so
+	 * this costs nothing the rest of the time. `!important` is what makes it
+	 * reach components that declare transitions of their own: this is the one
+	 * moment the whole page is meant to move together, and a card that jumps
+	 * while its neighbour fades is worse than either on its own.
+	 */
+	[data-theme-changing] *,
+	[data-theme-changing] *::before,
+	[data-theme-changing] *::after {
+		transition:
+			background-color var(--duration-medium) var(--ease-standard),
+			border-color var(--duration-medium) var(--ease-standard),
+			color var(--duration-medium) var(--ease-standard),
+			fill var(--duration-medium) var(--ease-standard) !important;
+	}
+
+	/*
+	 * Ticking a box.
+	 *
+	 * The animation hangs off the checked state, so it plays each time a box
+	 * becomes checked and never while it sits there checked.
+	 */
+	.astryx-checkbox-indicator {
+		transition:
+			background-color var(--duration-fast) var(--ease-standard),
+			border-color var(--duration-fast) var(--ease-standard);
+	}
+
+	input[type="checkbox"]:checked + span .astryx-checkbox-indicator {
+		animation: thunderlist-check var(--duration-fast-max) var(--ease-standard);
+	}
+
+	/*
+	 * A row that has just moved to a new place in its list.
+	 *
+	 * The distance it travelled is measured and handed here as a custom property,
+	 * so the row slides from where it was instead of appearing where it ended up.
+	 * See `useReorderAnimation`.
+	 */
+	.thunderlist-row[data-moved] {
+		animation: thunderlist-settle var(--duration-medium) var(--ease-standard);
+	}
+
+	/*
+	 * Placeholders read as a prompt, not as content.
+	 *
+	 * At the secondary text colour they are as dark as a real value and get read
+	 * as one, so an empty field looks filled in. Mixing that colour towards the
+	 * field's own background lightens it without dropping it to the disabled
+	 * level, where it would stop being legible at a glance.
+	 */
+	::placeholder {
+		color: color-mix(
+			in srgb,
+			var(--color-text-secondary) 62%,
+			var(--color-background-surface)
+		);
+		opacity: 1;
+	}
+
+	/*
+	 * The key beside a line on the chart.
+	 *
+	 * A short rule rather than a square, and dashed when its line is dashed, so
+	 * the legend can be matched to the chart without relying on colour alone.
+	 * The colour arrives as `currentColor` from the series it belongs to.
+	 */
+	.thunderlist-legend-key {
+		display: inline-block;
+		width: 1rem;
+		height: 0;
+		border-block-start: 2px solid currentColor;
+	}
+
+	.thunderlist-legend-key[data-dashed="true"] {
+		border-block-start-style: dashed;
+	}
+
+	/*
+	 * A row of headline figures, aligned as a table rather than as six stacks.
+	 *
+	 * A label that wrapped to two lines pushed its own figure down while its
+	 * neighbours stayed put, so a row of numbers read as a ragged line. `subgrid`
+	 * hands every cell the same three rows — label, figure, hint — so they line
+	 * up whatever the text does. That makes the parent's row gap the gap *inside*
+	 * a cell, so the space between rows of cells is padding on the cells instead,
+	 * pulled back off the last row by the negative margin.
+	 */
+	.thunderlist-stats {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		column-gap: 1rem;
+		row-gap: 0.125rem;
+		margin-block-end: -0.625rem;
+	}
+
+	.thunderlist-stat {
+		display: grid;
+		grid-row: span 3;
+		grid-template-rows: subgrid;
+		align-content: start;
+		padding-block-end: 0.625rem;
+	}
+
+	@media (min-width: 40rem) {
+		.thunderlist-stats {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.thunderlist-stats {
+			grid-template-columns: repeat(6, minmax(0, 1fr));
+		}
 	}
 }
 
@@ -389,6 +791,43 @@ body {
 	}
 }
 
+@keyframes thunderlist-focus {
+	from {
+		box-shadow: inset 0 0 0 0 transparent;
+		background-color: transparent;
+	}
+	6%,
+	65% {
+		box-shadow: inset 0 0 0 2px var(--color-accent);
+		background-color: var(--color-accent-muted);
+	}
+	to {
+		box-shadow: inset 0 0 0 0 transparent;
+		background-color: transparent;
+	}
+}
+
+@keyframes thunderlist-sweep {
+	from {
+		background-position: -40% 0;
+	}
+	to {
+		background-position: 140% 0;
+	}
+}
+
+@keyframes thunderlist-breathe {
+	0%,
+	100% {
+		opacity: 0.45;
+		transform: scale(0.94);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
 @keyframes thunderlist-fade {
 	from {
 		opacity: 0;
@@ -402,13 +841,35 @@ body {
  * Motion sensitivity is real, and what reads as polish to one person causes
  * discomfort for another. The OS setting wins over everything above.
  */
-@media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-		scroll-behavior: auto !important;
+
+@keyframes thunderlist-screen {
+	from {
+		opacity: 0;
+		transform: translateY(0.5rem);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes thunderlist-check {
+	from {
+		transform: scale(1);
+	}
+	45% {
+		transform: scale(1.18);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+
+@keyframes thunderlist-settle {
+	from {
+		transform: translateY(var(--thunderlist-moved-by, 0));
+	}
+	to {
+		transform: none;
 	}
 }

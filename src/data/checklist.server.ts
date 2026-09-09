@@ -85,6 +85,9 @@ export async function listChecklists(): Promise<Array<ChecklistSummary>> {
 
 	const byChecklist = new Map<string, Array<Pick<Task, "completed">>>();
 	for (const task of tasks) {
+		// A task that belongs to no checklist counts towards none of them.
+		if (task.checklistId === null) continue;
+
 		const existing = byChecklist.get(task.checklistId);
 		if (existing) existing.push(task);
 		else byChecklist.set(task.checklistId, [task]);
@@ -95,26 +98,44 @@ export async function listChecklists(): Promise<Array<ChecklistSummary>> {
 	);
 }
 
-/** Tasks for several checklists in one read, used by Today and search. */
-export async function readTasksByChecklist(
-	checklistIds: ReadonlyArray<string>,
-): Promise<Map<string, Array<Task>>> {
-	const byChecklist = new Map<string, Array<Task>>();
-	if (checklistIds.length === 0) return byChecklist;
+/** A task with the checklist it belongs to, if any. */
+export type TaskWithChecklist = { task: Task; checklistId: string | null };
+
+/**
+ * Tasks by id, in one read.
+ *
+ * Today and the Backlog reference tasks by id and nothing else, so this asks
+ * for exactly what they name — including tasks that belong to no checklist at
+ * all, which have nothing else to be found by.
+ */
+export async function readTasksByIds(
+	taskIds: ReadonlyArray<string>,
+): Promise<Map<string, TaskWithChecklist>> {
+	const byId = new Map<string, TaskWithChecklist>();
+	if (taskIds.length === 0) return byId;
 
 	const current = await collections();
-	const tasks = await current.tasks
-		.find({ checklistId: { $in: [...checklistIds] } })
+	const rows = await current.tasks
+		.find({ taskId: { $in: [...taskIds] } })
 		.project<TaskDoc>(DOMAIN_FIELDS)
 		.toArray();
 
-	for (const { checklistId, ...task } of tasks) {
-		const existing = byChecklist.get(checklistId);
-		if (existing) existing.push(task);
-		else byChecklist.set(checklistId, [task]);
+	for (const { checklistId, ...task } of rows) {
+		byId.set(task.taskId, { task, checklistId });
 	}
 
-	return byChecklist;
+	return byId;
+}
+
+/** Every task, with its checklist. Used to build the search index. */
+export async function readAllTasks(): Promise<Array<TaskWithChecklist>> {
+	const current = await collections();
+	const rows = await current.tasks
+		.find({})
+		.project<TaskDoc>(DOMAIN_FIELDS)
+		.toArray();
+
+	return rows.map(({ checklistId, ...task }) => ({ task, checklistId }));
 }
 
 export async function getChecklist(
@@ -193,6 +214,18 @@ export async function updateChecklist(
 	return next;
 }
 
+/** The ids of the tasks in a checklist, so their references can be cleared. */
+export async function readChecklistTaskIds(
+	checklistId: string,
+): Promise<Array<string>> {
+	const current = await collections();
+	const rows = await current.tasks
+		.find({ checklistId }, { projection: { _id: 0, taskId: 1 } })
+		.toArray();
+
+	return rows.map((row) => row.taskId);
+}
+
 /**
  * Remove a checklist and the tasks in it.
  *
@@ -211,7 +244,7 @@ export async function deleteChecklist(checklistId: string): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 export async function createTask(input: {
-	checklistId: string;
+	checklistId: string | null;
 	taskId: string;
 	title: string;
 	addedAt: string;
@@ -220,7 +253,11 @@ export async function createTask(input: {
 	important: boolean;
 }): Promise<Task> {
 	const current = await collections();
-	await requireChecklist(current, input.checklistId);
+	// A task can belong to no checklist; one that names a checklist must name a
+	// real one.
+	if (input.checklistId !== null) {
+		await requireChecklist(current, input.checklistId);
+	}
 
 	const existing = await current.tasks.findOne(
 		{ taskId: input.taskId },
@@ -232,6 +269,7 @@ export async function createTask(input: {
 		taskId: input.taskId,
 		title: input.title,
 		completed: false,
+		completedAt: null,
 		// The client stamped this when the task was queued, which is the moment
 		// the user actually added it and the order they saw it in.
 		addedAt: input.addedAt || new Date().toISOString(),
@@ -246,15 +284,29 @@ export async function createTask(input: {
 }
 
 export async function updateTask(
-	checklistId: string,
 	taskId: string,
 	patch: TaskPatch,
 ): Promise<Task> {
 	const current = await collections();
 
+	/*
+	 * Ticking a task stamps the moment; un-ticking clears it.
+	 *
+	 * Set here rather than sent by the browser so the timestamps a chart is
+	 * drawn from all come off one clock. It is only touched when `completed` is
+	 * part of the change, so editing a title never rewrites history.
+	 */
+	const stamped =
+		patch.completed === undefined
+			? patch
+			: {
+					...patch,
+					completedAt: patch.completed ? new Date().toISOString() : null,
+				};
+
 	const next = await current.tasks.findOneAndUpdate(
-		{ taskId, checklistId },
-		{ $set: patch },
+		{ taskId },
+		{ $set: stamped },
 		{ returnDocument: "after", projection: TASK_FIELDS },
 	);
 
@@ -263,22 +315,10 @@ export async function updateTask(
 	return next;
 }
 
-/**
- * Delete a task.
- *
- * Returns the id that was removed so callers can clear any Today or Backlog
- * reference pointing at it.
- */
-export async function deleteTask(
-	checklistId: string,
-	taskId: string,
-): Promise<Array<string>> {
+/** Delete a task. Already gone is the outcome this asked for, not a failure. */
+export async function deleteTask(taskId: string): Promise<void> {
 	const current = await collections();
-
-	// Already gone is the outcome this asked for, not a failure.
-	await current.tasks.deleteOne({ taskId, checklistId });
-
-	return [taskId];
+	await current.tasks.deleteOne({ taskId });
 }
 
 /**

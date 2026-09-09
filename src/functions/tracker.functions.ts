@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getTracker, listTrackers } from "#/data/tracker.server";
+import {
+	getTracker,
+	getTrackerEntries,
+	listTrackers,
+} from "#/data/tracker.server";
 import { trackerIdInputSchema } from "#/schemas/tracker";
 import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
@@ -11,3 +15,9 @@ export const listTrackersFn = createServerFn().handler(() =>
 export const getTrackerFn = createServerFn()
 	.validator(validator(trackerIdInputSchema))
 	.handler(({ data }) => guard("getTracker", () => getTracker(data.trackerId)));
+
+export const getTrackerEntriesFn = createServerFn()
+	.validator(validator(trackerIdInputSchema))
+	.handler(({ data }) =>
+		guard("getTrackerEntries", () => getTrackerEntries(data.trackerId)),
+	);

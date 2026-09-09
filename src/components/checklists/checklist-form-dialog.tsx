@@ -6,7 +6,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
-import type { ChecklistValues } from "#/lib/pending/actions";
+import type { ChecklistValues } from "#/lib/changes";
 import type { Checklist } from "#/schemas/checklist";
 import { todayDateOnly } from "#/schemas/common";
 
