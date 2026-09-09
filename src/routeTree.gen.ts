@@ -10,11 +10,65 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BacklogRouteImport } from './routes/backlog'
+import { Route as PriorityRouteImport } from './routes/priority'
+import { Route as ShortcutsRouteImport } from './routes/shortcuts'
+import { Route as TagsRouteImport } from './routes/tags'
+import { Route as TodayRouteImport } from './routes/today'
+import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
+import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
+import { Route as TrackersIndexRouteImport } from './routes/trackers.index'
+import { Route as TrackersTrackerIdRouteImport } from './routes/trackers.$trackerId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BacklogRoute = BacklogRouteImport.update({
+  id: '/backlog',
+  path: '/backlog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PriorityRoute = PriorityRouteImport.update({
+  id: '/priority',
+  path: '/priority',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShortcutsRoute = ShortcutsRouteImport.update({
+  id: '/shortcuts',
+  path: '/shortcuts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TagsRoute = TagsRouteImport.update({
+  id: '/tags',
+  path: '/tags',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodayRoute = TodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChecklistsIndexRoute = ChecklistsIndexRouteImport.update({
+  id: '/checklists/',
+  path: '/checklists/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChecklistsChecklistIdRoute = ChecklistsChecklistIdRouteImport.update({
+  id: '/checklists/$checklistId',
+  path: '/checklists/$checklistId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackersIndexRoute = TrackersIndexRouteImport.update({
+  id: '/trackers/',
+  path: '/trackers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackersTrackerIdRoute = TrackersTrackerIdRouteImport.update({
+  id: '/trackers/$trackerId',
+  path: '/trackers/$trackerId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -25,27 +79,97 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/backlog': typeof BacklogRoute
+  '/priority': typeof PriorityRoute
+  '/shortcuts': typeof ShortcutsRoute
+  '/tags': typeof TagsRoute
+  '/today': typeof TodayRoute
+  '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/trackers/$trackerId': typeof TrackersTrackerIdRoute
+  '/checklists/': typeof ChecklistsIndexRoute
+  '/trackers/': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/backlog': typeof BacklogRoute
+  '/priority': typeof PriorityRoute
+  '/shortcuts': typeof ShortcutsRoute
+  '/tags': typeof TagsRoute
+  '/today': typeof TodayRoute
+  '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/trackers/$trackerId': typeof TrackersTrackerIdRoute
+  '/checklists': typeof ChecklistsIndexRoute
+  '/trackers': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/backlog': typeof BacklogRoute
+  '/priority': typeof PriorityRoute
+  '/shortcuts': typeof ShortcutsRoute
+  '/tags': typeof TagsRoute
+  '/today': typeof TodayRoute
+  '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/trackers/$trackerId': typeof TrackersTrackerIdRoute
+  '/checklists/': typeof ChecklistsIndexRoute
+  '/trackers/': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/backlog'
+    | '/priority'
+    | '/shortcuts'
+    | '/tags'
+    | '/today'
+    | '/checklists/$checklistId'
+    | '/trackers/$trackerId'
+    | '/checklists/'
+    | '/trackers/'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/auth/$'
-  id: '__root__' | '/' | '/api/auth/$'
+  to:
+    | '/'
+    | '/backlog'
+    | '/priority'
+    | '/shortcuts'
+    | '/tags'
+    | '/today'
+    | '/checklists/$checklistId'
+    | '/trackers/$trackerId'
+    | '/checklists'
+    | '/trackers'
+    | '/api/auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/backlog'
+    | '/priority'
+    | '/shortcuts'
+    | '/tags'
+    | '/today'
+    | '/checklists/$checklistId'
+    | '/trackers/$trackerId'
+    | '/checklists/'
+    | '/trackers/'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BacklogRoute: typeof BacklogRoute
+  PriorityRoute: typeof PriorityRoute
+  ShortcutsRoute: typeof ShortcutsRoute
+  TagsRoute: typeof TagsRoute
+  TodayRoute: typeof TodayRoute
+  ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
+  TrackersTrackerIdRoute: typeof TrackersTrackerIdRoute
+  ChecklistsIndexRoute: typeof ChecklistsIndexRoute
+  TrackersIndexRoute: typeof TrackersIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -56,6 +180,69 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/backlog': {
+      id: '/backlog'
+      path: '/backlog'
+      fullPath: '/backlog'
+      preLoaderRoute: typeof BacklogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/priority': {
+      id: '/priority'
+      path: '/priority'
+      fullPath: '/priority'
+      preLoaderRoute: typeof PriorityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shortcuts': {
+      id: '/shortcuts'
+      path: '/shortcuts'
+      fullPath: '/shortcuts'
+      preLoaderRoute: typeof ShortcutsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tags': {
+      id: '/tags'
+      path: '/tags'
+      fullPath: '/tags'
+      preLoaderRoute: typeof TagsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/today': {
+      id: '/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof TodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checklists/': {
+      id: '/checklists/'
+      path: '/checklists'
+      fullPath: '/checklists/'
+      preLoaderRoute: typeof ChecklistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checklists/$checklistId': {
+      id: '/checklists/$checklistId'
+      path: '/checklists/$checklistId'
+      fullPath: '/checklists/$checklistId'
+      preLoaderRoute: typeof ChecklistsChecklistIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trackers/': {
+      id: '/trackers/'
+      path: '/trackers'
+      fullPath: '/trackers/'
+      preLoaderRoute: typeof TrackersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trackers/$trackerId': {
+      id: '/trackers/$trackerId'
+      path: '/trackers/$trackerId'
+      fullPath: '/trackers/$trackerId'
+      preLoaderRoute: typeof TrackersTrackerIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -70,6 +257,15 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BacklogRoute: BacklogRoute,
+  PriorityRoute: PriorityRoute,
+  ShortcutsRoute: ShortcutsRoute,
+  TagsRoute: TagsRoute,
+  TodayRoute: TodayRoute,
+  ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
+  TrackersTrackerIdRoute: TrackersTrackerIdRoute,
+  ChecklistsIndexRoute: ChecklistsIndexRoute,
+  TrackersIndexRoute: TrackersIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

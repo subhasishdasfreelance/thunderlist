@@ -1,17 +1,414 @@
+/*
+ * Astryx owns the design tokens; Tailwind provides utilities on top of them.
+ *
+ * The layer order below is what keeps the two from fighting: Astryx component
+ * styles sit in the middle and Tailwind utilities come last, so a utility class
+ * on `className` can intentionally override a component default.
+ *
+ * Declare every layer before any import.
+ */
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
 
-@import "tailwindcss";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+/* Maps bg-surface, text-primary, border-border, rounded-lg... to Astryx tokens. */
+@import "@astryxdesign/core/tailwind-theme.css";
+@import "tailwindcss/utilities.css" layer(utilities);
 
-* {
-  box-sizing: border-box;
+/*
+ * Thunderlist uses Astryx's own palette rather than a theme package: its accent
+ * is a strong blue with a neutral set designed around it, so the colours are
+ * coherent and contrast-checked without inventing any values here.
+ *
+ * Astryx colours are declared with `light-dark()`, which needs a `color-scheme`
+ * to resolve against. Following the machine is the default; the toggle in the
+ * top bar overrides it by setting `color-scheme` on this element directly, and
+ * an inline script in the document head applies the stored choice before the
+ * first paint.
+ */
+:root {
+	color-scheme: light dark;
 }
 
 html,
 body,
 #app {
-  min-height: 100%;
+	min-height: 100%;
 }
 
+/*
+ * The page sits on the body wash rather than on white, so the cards, rows and
+ * navigation above it read as raised. Every surface in the app is white, and
+ * against a white page none of them had an edge to be seen by.
+ */
 body {
-  margin: 0;
+	background-color: var(--color-background-body);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Glass navigation                                                           */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The top bar and the phone's bottom bar float over the content rather than
+ * sitting behind a solid block, so a page reads as one surface that continues
+ * underneath them.
+ *
+ * The alpha is deliberately high. Translucency costs contrast, and these bars
+ * carry the app's navigation: at 82% the text and icons keep their contrast
+ * against whatever scrolls beneath, while the blur does the rest of the work.
+ * `color-mix` keeps the colour tied to the surface token instead of hardcoding
+ * one, so it still tracks the palette.
+ */
+@layer components {
+	.astryx-app-shell-header,
+	.thunderlist-glass {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-surface) 82%,
+			transparent
+		);
+		-webkit-backdrop-filter: saturate(180%) blur(16px);
+		backdrop-filter: saturate(180%) blur(16px);
+	}
+
+	/*
+	 * Without backdrop-filter there is no blur to separate the bar from what is
+	 * behind it, and a flat wash of translucent white over arbitrary content is
+	 * exactly the unreadable case. Those browsers get the opaque surface.
+	 */
+	@supports not (backdrop-filter: blur(1px)) {
+		.astryx-app-shell-header,
+		.thunderlist-glass {
+			background-color: var(--color-background-surface);
+		}
+	}
+
+	/*
+	 * Some people turn transparency off at the OS level precisely because these
+	 * effects make text harder to read. That preference wins.
+	 */
+	@media (prefers-reduced-transparency: reduce) {
+		.astryx-app-shell-header,
+		.thunderlist-glass {
+			background-color: var(--color-background-surface);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
+	}
+
+	/* The nav sits on the glass, so it must not paint its own background over it. */
+	.astryx-app-shell-header .astryx-top-nav {
+		background-color: transparent;
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Motion                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Animation is used where it explains something: a row arriving, a save
+ * progressing, a state settling. It is deliberately absent from the things
+ * done dozens of times a minute — hovering a row, moving down a list — where a
+ * perceptible duration only makes the interface feel like it is catching up.
+ *
+ * Every value comes from Astryx's motion tokens, so the timing matches the
+ * components' own.
+ */
+@layer components {
+	/* A row arriving in a list: it should be noticed, not announced. */
+	.thunderlist-row {
+		animation: thunderlist-rise var(--duration-medium-min) var(--ease-standard)
+			both;
+	}
+
+	/* A mark confirming something landed. */
+	.thunderlist-pop {
+		display: inline-flex;
+		animation: thunderlist-pop var(--duration-fast-max) var(--ease-standard)
+			both;
+	}
+
+	/* Swapping one icon for another, e.g. the theme control. */
+	.thunderlist-swap {
+		display: inline-flex;
+		animation: thunderlist-fade var(--duration-fast) var(--ease-standard) both;
+	}
+
+	/*
+	 * A tag written inside a title, highlighted in place.
+	 *
+	 * Each colour is the same pair Astryx gives its tokens, so a tag reads the
+	 * same here as it does anywhere else and both schemes are contrast-checked.
+	 * A tag with no colour yet — queued, or deleted — falls back to the neutral
+	 * pair rather than vanishing into the text.
+	 */
+	.thunderlist-tag {
+		border-radius: var(--radius-inner, 0.25rem);
+		background-color: var(--color-background-gray);
+		color: var(--color-text-gray);
+	}
+
+	/*
+	 * Inside a field the highlight must not change the text metrics by a single
+	 * pixel, or the caret — which the real control positions from the real text
+	 * — drifts away from the words after the first tag. So the tint is painted
+	 * outside the box with a shadow rather than by padding it.
+	 */
+	.thunderlist-mirror .thunderlist-tag {
+		box-shadow: 0 0 0 2px var(--color-background-gray);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="blue"] {
+		box-shadow: 0 0 0 2px var(--color-background-blue);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="purple"] {
+		box-shadow: 0 0 0 2px var(--color-background-purple);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="pink"] {
+		box-shadow: 0 0 0 2px var(--color-background-pink);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="red"] {
+		box-shadow: 0 0 0 2px var(--color-background-red);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="orange"] {
+		box-shadow: 0 0 0 2px var(--color-background-orange);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="yellow"] {
+		box-shadow: 0 0 0 2px var(--color-background-yellow);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="green"] {
+		box-shadow: 0 0 0 2px var(--color-background-green);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="teal"] {
+		box-shadow: 0 0 0 2px var(--color-background-teal);
+	}
+	.thunderlist-mirror .thunderlist-tag[data-color="cyan"] {
+		box-shadow: 0 0 0 2px var(--color-background-cyan);
+	}
+
+	/* Outside a field nothing depends on the metrics, so it can breathe. */
+	:not(.thunderlist-mirror) > .thunderlist-tag {
+		padding-inline: 0.25rem;
+	}
+
+	.thunderlist-tag[data-color="blue"] {
+		background-color: var(--color-background-blue);
+		color: var(--color-text-blue);
+	}
+	.thunderlist-tag[data-color="purple"] {
+		background-color: var(--color-background-purple);
+		color: var(--color-text-purple);
+	}
+	.thunderlist-tag[data-color="pink"] {
+		background-color: var(--color-background-pink);
+		color: var(--color-text-pink);
+	}
+	.thunderlist-tag[data-color="red"] {
+		background-color: var(--color-background-red);
+		color: var(--color-text-red);
+	}
+	.thunderlist-tag[data-color="orange"] {
+		background-color: var(--color-background-orange);
+		color: var(--color-text-orange);
+	}
+	.thunderlist-tag[data-color="yellow"] {
+		background-color: var(--color-background-yellow);
+		color: var(--color-text-yellow);
+	}
+	.thunderlist-tag[data-color="green"] {
+		background-color: var(--color-background-green);
+		color: var(--color-text-green);
+	}
+	.thunderlist-tag[data-color="teal"] {
+		background-color: var(--color-background-teal);
+		color: var(--color-text-teal);
+	}
+	.thunderlist-tag[data-color="cyan"] {
+		background-color: var(--color-background-cyan);
+		color: var(--color-text-cyan);
+	}
+
+	/*
+	 * The highlight layer behind a tag field.
+	 *
+	 * It has to wrap and break exactly as the field does, or the colour drifts
+	 * away from the words. `white-space: pre-wrap` and `overflow-wrap` match a
+	 * textarea's own behaviour; the geometry and font are copied from the live
+	 * element in `TagTextField`.
+	 */
+	.thunderlist-mirror {
+		position: absolute;
+		/*
+		 * Above the field, not behind it: the field paints its background on a
+		 * wrapper of its own, which would otherwise cover the layer completely.
+		 * Nothing here is interactive and the background stays transparent, so
+		 * the caret, the selection and the focus ring all still show through.
+		 */
+		z-index: 2;
+		margin: 0;
+		overflow: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: break-word;
+		pointer-events: none;
+		color: var(--color-text-primary);
+	}
+
+	/*
+	 * The field paints its own text transparently and sits above the layer, so
+	 * what is read is the highlighted copy while the caret, selection and every
+	 * native editing behaviour stay with the real control.
+	 */
+	.thunderlist-field :is(textarea, input) {
+		position: relative;
+		z-index: 1;
+		color: transparent;
+		caret-color: var(--color-text-primary);
+	}
+
+	/* The placeholder is the field's own, so it must stay visible. */
+	.thunderlist-field :is(textarea, input)::placeholder {
+		color: var(--color-text-secondary);
+	}
+
+	.thunderlist-field :is(textarea, input)::selection {
+		background-color: var(--color-accent-muted);
+	}
+
+	/*
+	 * The urgent and important flags.
+	 *
+	 * A flag that is off is a plain ghost button; one that is on is tinted, warm
+	 * for urgent — time running out — and a highlight for important, which is
+	 * not about time at all. Both pairs are Astryx's own status tints, so they
+	 * carry the meaning they carry everywhere else and stay contrast-checked in
+	 * both schemes.
+	 */
+	.thunderlist-flag[data-on="true"] button {
+		background-color: var(--color-background-orange);
+		color: var(--color-text-orange);
+	}
+	.thunderlist-flag[data-on="true"] svg {
+		color: var(--color-icon-orange);
+	}
+
+	.thunderlist-flag[data-flag="important"][data-on="true"] button {
+		background-color: var(--color-background-purple);
+		color: var(--color-text-purple);
+	}
+	.thunderlist-flag[data-flag="important"][data-on="true"] svg {
+		color: var(--color-icon-purple);
+	}
+
+	/*
+	 * A key, drawn as a key.
+	 *
+	 * Enough of a cap to read as something you press rather than something you
+	 * click, without becoming a picture of a keyboard.
+	 */
+	.thunderlist-key {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.75rem;
+		padding-block: 0.125rem;
+		padding-inline: 0.5rem;
+		border: 1px solid var(--color-border-emphasized);
+		border-bottom-width: 2px;
+		border-radius: var(--radius-inner, 0.25rem);
+		background-color: var(--color-background-surface);
+		color: var(--color-text-primary);
+		font-family: var(--font-family-code, monospace);
+		font-size: var(--text-supporting-size, 0.8125rem);
+		line-height: 1.4;
+	}
+
+	/*
+	 * The row under the pointer.
+	 *
+	 * A task row answers to the keyboard while the pointer rests on it, so it has
+	 * to be obvious which row that is. The feedback is a tint and nothing else:
+	 * no border, no padding, no shadow that takes space, because a row that
+	 * changes size on hover makes the whole list twitch as the pointer crosses
+	 * it — and the next row moves out from under the cursor.
+	 */
+	.thunderlist-task-row {
+		border-radius: var(--radius-element, 0.5rem);
+		transition: background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-task-row:hover {
+		background-color: var(--color-overlay-hover);
+	}
+
+	/* Keyboard users get the same cue when focus lands inside the row. */
+	.thunderlist-task-row:focus-within {
+		background-color: var(--color-overlay-hover);
+	}
+
+	/* The tag suggestions, which appear under the caret as you type. */
+	.thunderlist-suggestions {
+		animation: thunderlist-rise var(--duration-fast) var(--ease-standard) both;
+		transform-origin: top center;
+	}
+
+	/*
+	 * A completed row reads as settled rather than gone: the text loses weight
+	 * and colour, and the change is eased so ticking one is not a flicker.
+	 */
+	.thunderlist-row[data-state="saved"] {
+		opacity: 0.72;
+		transition: opacity var(--duration-fast) var(--ease-standard);
+	}
+}
+
+@keyframes thunderlist-rise {
+	from {
+		opacity: 0;
+		transform: translateY(-0.25rem);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes thunderlist-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	60% {
+		transform: scale(1.12);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes thunderlist-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/*
+ * Motion sensitivity is real, and what reads as polish to one person causes
+ * discomfort for another. The OS setting wins over everything above.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
