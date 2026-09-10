@@ -45,16 +45,24 @@ export function TaskRefRow({
 	/** False while the list is sorted, when a hand-made position means nothing. */
 	canReorder: boolean;
 }) {
-	const { task, checklistTitle, list } = entry;
+	const { task, checklistId, checklistTitle, list } = entry;
 
 	/** Its state comes from a tracker, so nothing here may set it by hand. */
 	const isTracked = task?.trackerId != null;
+	/**
+	 * On Today and in no checklist, taking it off Today deletes it: there is
+	 * nowhere else for it to live. So it has no Today toggle — that would be a
+	 * delete button that looks like something milder.
+	 */
+	const isLooseOnToday = list === "today" && checklistId === null;
 	const [isHovered, setIsHovered] = useState(false);
 
 	const shortcuts = useMemo(
 		() => ({
-			[TASK_SHORTCUTS.today]: () =>
-				actions.onSetList(list === "today" ? null : "today"),
+			[TASK_SHORTCUTS.today]: () => {
+				if (isLooseOnToday) return;
+				actions.onSetList(list === "today" ? null : "today");
+			},
 			[TASK_SHORTCUTS.backlog]: () =>
 				actions.onSetList(list === "backlog" ? null : "backlog"),
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task?.urgent),
@@ -68,6 +76,7 @@ export function TaskRefRow({
 		[
 			actions,
 			list,
+			isLooseOnToday,
 			task?.urgent,
 			task?.important,
 			task?.completed,
@@ -169,7 +178,9 @@ export function TaskRefRow({
 			<div className="order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
 				{/* The lit button for this list is also how a task leaves it, so there
 				    is no separate remove: it would do the very same thing. */}
-				<TodayButton title={task.title} listState={list} actions={actions} />
+				{isLooseOnToday ? null : (
+					<TodayButton title={task.title} listState={list} actions={actions} />
+				)}
 
 				<DropdownMenu
 					hasChevron={false}
