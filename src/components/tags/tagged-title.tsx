@@ -25,7 +25,10 @@ export function TaggedTitle({
 }) {
 	return (
 		<Text color={isMuted ? "secondary" : "primary"}>
-			<TagSegments title={title} tags={tags} />
+			{/* What `useTaskCopy` copies when several tasks are selected. */}
+			<span data-task-title>
+				<TagSegments title={title} tags={tags} />
+			</span>
 		</Text>
 	);
 }

@@ -20,6 +20,15 @@ export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 const STORAGE_KEY = "thunderlist.theme.v1";
 
+/**
+ * The phone's status bar, painted the colour of the page under the top bar.
+ *
+ * There are two `theme-color` tags, one per system scheme. A scheme chosen in
+ * the app overrides both, or a phone set to light would keep a white bar over
+ * an app set to dark.
+ */
+export const STATUS_BAR_COLORS = { light: "#F1F0F9", dark: "#0F1018" } as const;
+
 function isColorScheme(value: unknown): value is ColorScheme {
 	return (COLOR_SCHEMES as ReadonlyArray<unknown>).includes(value);
 }
@@ -33,7 +42,19 @@ function isColorScheme(value: unknown): value is ColorScheme {
  */
 export const THEME_INIT_SCRIPT = `try{var s=localStorage.getItem(${JSON.stringify(
 	STORAGE_KEY,
-)});if(s==="light"||s==="dark")document.documentElement.setAttribute("data-theme",s)}catch(e){}`;
+)});if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-theme",s);var c=${JSON.stringify(
+	STATUS_BAR_COLORS,
+)}[s];document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute("content",c)})}}catch(e){}`;
+
+/** Point both `theme-color` tags at the chosen scheme, or back at their own. */
+function paintStatusBar(scheme: ColorScheme): void {
+	for (const meta of document.querySelectorAll<HTMLMetaElement>(
+		'meta[name="theme-color"]',
+	)) {
+		const own = meta.media.includes("dark") ? "dark" : "light";
+		meta.content = STATUS_BAR_COLORS[scheme === "system" ? own : scheme];
+	}
+}
 
 let current: ColorScheme = "system";
 let isHydrated = false;
@@ -86,6 +107,7 @@ export function setColorScheme(scheme: ColorScheme): void {
 
 	current = scheme;
 	easeTheChange();
+	paintStatusBar(scheme);
 
 	try {
 		localStorage.setItem(STORAGE_KEY, scheme);

@@ -10,7 +10,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
-import { THEME_INIT_SCRIPT } from "#/lib/theme";
+import { STATUS_BAR_COLORS, THEME_INIT_SCRIPT } from "#/lib/theme";
 import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
@@ -108,6 +108,12 @@ function RootComponent() {
 		if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
 		// Not registering only costs the cache; the app works the same without it.
 		navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+		// Today can open from a copy saved before the latest deploy, which may
+		// then ask for a chunk the server no longer has. Loading afresh fixes it.
+		const reload = () => window.location.reload();
+		window.addEventListener("vite:preloadError", reload);
+		return () => window.removeEventListener("vite:preloadError", reload);
 	}, []);
 
 	// The frame is rendered signed out too — it drops everything that needs an
@@ -139,17 +145,21 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				{/*
 				 * The phone's status bar, matched to the page under the top bar in
 				 * each scheme. Written here rather than in `head()`, which keeps
-				 * only one meta tag per name and would drop the second.
+				 * only one meta tag per name and would drop the second. The script
+				 * below repaints both for a scheme chosen in the app, which is why
+				 * a different `content` is expected at hydration.
 				 */}
 				<meta
 					name="theme-color"
 					media="(prefers-color-scheme: light)"
-					content="#F1F0F9"
+					content={STATUS_BAR_COLORS.light}
+					suppressHydrationWarning
 				/>
 				<meta
 					name="theme-color"
 					media="(prefers-color-scheme: dark)"
-					content="#0F1018"
+					content={STATUS_BAR_COLORS.dark}
+					suppressHydrationWarning
 				/>
 				{/*
 				 * Sets the colour scheme before the first paint. Anything later —

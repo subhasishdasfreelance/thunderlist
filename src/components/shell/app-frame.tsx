@@ -10,6 +10,7 @@ import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SignedInUser } from "#/lib/auth.server";
 import { useColorScheme } from "#/lib/theme";
+import { useTaskCopy } from "#/lib/use-task-copy";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
@@ -55,6 +56,7 @@ export function AppFrame({
 	const scheme = useColorScheme();
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
+	useTaskCopy();
 
 	/*
 	 * Two keys that work from anywhere.

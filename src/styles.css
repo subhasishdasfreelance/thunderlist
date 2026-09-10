@@ -923,6 +923,11 @@ body {
 		.thunderlist-stats {
 			grid-template-columns: repeat(6, minmax(0, 1fr));
 		}
+
+		/* Eight figures read as two rows of four, not a row of six and a stray two. */
+		.thunderlist-stats:has(> :nth-child(7)) {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
 	}
 }
 

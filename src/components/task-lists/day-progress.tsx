@@ -37,10 +37,13 @@ function rate(value: number): string {
 }
 
 function stats(pace: ReturnType<typeof dayPace>, isDone: boolean): Array<Stat> {
-	// The same six figures, in the same order, as every checklist and tracker —
+	// The same figures, in the same order, as every checklist and tracker —
 	// measured in hours because a day measured in days never moves.
 	return [
 		{ label: "Started", value: formatTimeOfDay(startOfToday(pace)) },
+		{ label: "Planned time", value: "24h" },
+		{ label: "Time passed", value: formatHoursLeft(pace.hoursElapsed) },
+		{ label: "Time left", value: formatHoursLeft(pace.hoursRemaining) },
 		{
 			label: "Current speed",
 			value: pace.perHour === null ? "—" : rate(pace.perHour),
@@ -67,7 +70,6 @@ function stats(pace: ReturnType<typeof dayPace>, isDone: boolean): Array<Stat> {
 			hint:
 				pace.projectedFinish === null || isDone ? undefined : "at this speed",
 		},
-		{ label: "Time left", value: formatHoursLeft(pace.hoursRemaining) },
 	];
 }
 

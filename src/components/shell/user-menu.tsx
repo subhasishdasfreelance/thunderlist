@@ -30,6 +30,9 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 			await authClient.signOut();
 		} finally {
 			queryClient.clear();
+			// The installed app keeps a copy of Today to open on, and that copy is
+			// this account's; see `public/sw.js`.
+			if ("caches" in window) void caches.delete("thunderlist-pages-v1");
 			// A router invalidation re-runs the root guard, which sees no session
 			// and sends this browser to the login page.
 			await router.invalidate();

@@ -47,6 +47,7 @@ function velocityStats(
 		projectedFinish,
 		daysElapsed,
 		daysRemaining,
+		totalDays,
 	} = velocity;
 
 	const perDayIn = (value: number) => rate(value, unit);
@@ -56,6 +57,15 @@ function velocityStats(
 		// When the clock started. Every other figure is measured from it, so it
 		// comes first: without it the speeds are numbers with no window.
 		{ label: "Started", value: formatDate(startDate) },
+		// The time, then the speeds: on a wide screen that is a row of each.
+		figure("Planned time", totalDays, days, noDeadline),
+		{ label: "Time passed", value: days(daysElapsed) },
+		figure(
+			"Time left",
+			daysRemaining,
+			(value) => (value < 0 ? `${days(-value)} over` : days(value)),
+			noDeadline,
+		),
 		figure("Current speed", perDay, perDayIn, "—", `over ${days(daysElapsed)}`),
 		figure("Expected speed", expectedPerDay, perDayIn, noDeadline),
 		isComplete
@@ -71,12 +81,6 @@ function velocityStats(
 							: formatDate(projectedFinish),
 					hint: projectedFinish === null ? undefined : "at this speed",
 				},
-		figure(
-			"Time left",
-			daysRemaining,
-			(value) => (value < 0 ? `${days(-value)} over` : days(value)),
-			noDeadline,
-		),
 	];
 }
 
