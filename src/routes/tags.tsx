@@ -14,10 +14,12 @@ import { Pencil, Plus, Tag as TagIcon, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
+import { ShowMore } from "#/components/common/show-more";
 import { ErrorNotice } from "#/components/common/states";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
 import { createTag, useApplyChange } from "#/lib/changes";
+import { useShowMore } from "#/lib/use-show-more";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import type { TaggedTask } from "#/queries/system";
 import { searchIndexQuery } from "#/queries/system";
@@ -100,6 +102,13 @@ function TagsPage() {
 	const shown =
 		selected === UNTAGGED ? untagged : (tasksByTag.get(selected) ?? []);
 	const shownTag = allTags.find((tag) => tag.tagId === selected) ?? null;
+	const paging = useShowMore(shown);
+
+	/** A different group is a different list, so it starts from its first page. */
+	function select(value: string) {
+		setSelected(value);
+		paging.reset();
+	}
 
 	const isLoading = tagsResult.isPending || index.isPending;
 	const failure = tagsResult.error ?? index.error;
@@ -128,11 +137,7 @@ function TagsPage() {
 				<LoadingState />
 			) : (
 				<>
-					<FacetSummary
-						facets={facets}
-						selected={selected}
-						onSelect={setSelected}
-					/>
+					<FacetSummary facets={facets} selected={selected} onSelect={select} />
 
 					{allTags.length === 0 ? (
 						<EmptyState
@@ -148,7 +153,7 @@ function TagsPage() {
 									variant="ghost"
 									hasSearch={facets.length > 8}
 									value={selected}
-									onChange={setSelected}
+									onChange={select}
 									options={facets.map((facet) => ({
 										value: facet.value,
 										label: facet.label,
@@ -191,13 +196,17 @@ function TagsPage() {
 							) : (
 								<Card padding={0}>
 									<VStack gap={0} paddingBlock={2}>
-										{shown.map((task) => (
+										{paging.shown.map((task) => (
 											<TaggedTaskRow
 												key={task.taskId}
 												task={task}
 												tags={allTags}
 											/>
 										))}
+										<ShowMore
+											hidden={paging.hidden}
+											onShowMore={paging.showMore}
+										/>
 									</VStack>
 								</Card>
 							)}

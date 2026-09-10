@@ -6,7 +6,9 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal } from "lucide-react";
 import { SectionSpinner } from "#/components/common/section-spinner";
+import { ShowMore } from "#/components/common/show-more";
 import { formatDate } from "#/lib/format-date";
+import { useShowMore } from "#/lib/use-show-more";
 import type { ProgressEntry } from "#/schemas/tracker";
 
 /**
@@ -36,6 +38,7 @@ export function ProgressHistory({
 	onDelete: (entry: ProgressEntry) => void;
 }) {
 	const history = [...entries].reverse();
+	const paging = useShowMore(history);
 
 	return (
 		<VStack gap={2}>
@@ -50,7 +53,7 @@ export function ProgressHistory({
 			) : (
 				<Card padding={0}>
 					<List hasDividers>
-						{history.map((entry) => (
+						{paging.shown.map((entry) => (
 							<ListItem
 								key={entry.entryId}
 								label={`${entry.value} ${unit}`}
@@ -89,6 +92,7 @@ export function ProgressHistory({
 							/>
 						))}
 					</List>
+					<ShowMore hidden={paging.hidden} onShowMore={paging.showMore} />
 				</Card>
 			)}
 		</VStack>

@@ -3,7 +3,6 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
@@ -12,8 +11,10 @@ import { CircleDashed, Star, Zap, ZapOff } from "lucide-react";
 import { useMemo, useState } from "react";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
+import { ShowMore } from "#/components/common/show-more";
 import { ErrorNotice } from "#/components/common/states";
 import { TaggedTitle } from "#/components/tags/tagged-title";
+import { useShowMore } from "#/lib/use-show-more";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
@@ -82,6 +83,9 @@ function PriorityPage() {
 		return grouped;
 	}, [tasks]);
 
+	const shown = bands.get(selected) ?? [];
+	const paging = useShowMore(shown);
+
 	if (index.isError) {
 		return (
 			<VStack gap={4}>
@@ -106,8 +110,6 @@ function PriorityPage() {
 		done: 0,
 	}));
 
-	const shown = bands.get(selected) ?? [];
-
 	return (
 		<VStack gap={4}>
 			<VStack gap={0.5}>
@@ -129,25 +131,14 @@ function PriorityPage() {
 					<FacetSummary
 						facets={facets}
 						selected={selected}
-						onSelect={(value) => setSelected(value as PriorityRank)}
+						onSelect={(value) => {
+							setSelected(value as PriorityRank);
+							paging.reset();
+						}}
 					/>
 
 					<VStack gap={2}>
-						<HStack gap={2} hAlign="between" vAlign="center">
-							<Selector
-								label="Priority to show"
-								size="sm"
-								variant="ghost"
-								value={selected}
-								onChange={(value) => setSelected(value as PriorityRank)}
-								options={PRIORITY_RANKS.map((rank) => ({
-									value: rank,
-									label: PRIORITY_LABELS[rank],
-									description: BAND_HINTS[rank],
-								}))}
-							/>
-							<Text type="supporting">{BAND_HINTS[selected]}</Text>
-						</HStack>
+						<Text type="supporting">{BAND_HINTS[selected]}</Text>
 
 						{shown.length === 0 ? (
 							<EmptyState
@@ -158,7 +149,7 @@ function PriorityPage() {
 						) : (
 							<Card padding={0}>
 								<VStack gap={0} paddingBlock={2}>
-									{shown.map((task, position) => (
+									{paging.shown.map((task, position) => (
 										<div key={task.taskId} className="thunderlist-row">
 											{position === 0 ? null : <Divider />}
 											{/* A task in no checklist has nowhere to open, so it
@@ -199,6 +190,10 @@ function PriorityPage() {
 											)}
 										</div>
 									))}
+									<ShowMore
+										hidden={paging.hidden}
+										onShowMore={paging.showMore}
+									/>
 								</VStack>
 							</Card>
 						)}

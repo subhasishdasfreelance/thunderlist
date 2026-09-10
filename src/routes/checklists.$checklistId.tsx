@@ -20,6 +20,7 @@ import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
 import { ProgressMeter } from "#/components/common/progress-meter";
+import { ShowMore } from "#/components/common/show-more";
 import { SortToggle } from "#/components/common/sort-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
@@ -40,6 +41,7 @@ import { computeVelocity, elapsedFraction } from "#/lib/progress";
 import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { orderTasks, type SortOrder } from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
+import { useShowMore } from "#/lib/use-show-more";
 import { checklistQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
@@ -105,6 +107,16 @@ function ChecklistDetailPage() {
 	const completed = useMemo(
 		() => rows.filter((task) => task.completed),
 		[rows],
+	);
+
+	// Twenty rows at a time, but never hiding the row a `?task=` link was sent to.
+	const openPaging = useShowMore(
+		open,
+		open.findIndex((task) => task.taskId === focusTaskId),
+	);
+	const completedPaging = useShowMore(
+		completed,
+		completed.findIndex((task) => task.taskId === focusTaskId),
 	);
 
 	const tags = tagsResult.data ?? [];
@@ -299,7 +311,7 @@ function ChecklistDetailPage() {
 			) : (
 				<Card padding={0}>
 					<VStack gap={0} paddingBlock={2}>
-						{open.map((task, index) => (
+						{openPaging.shown.map((task, index) => (
 							<div
 								key={task.taskId}
 								className="thunderlist-row thunderlist-task-row"
@@ -310,6 +322,10 @@ function ChecklistDetailPage() {
 								{taskRow(task)}
 							</div>
 						))}
+						<ShowMore
+							hidden={openPaging.hidden}
+							onShowMore={openPaging.showMore}
+						/>
 					</VStack>
 				</Card>
 			)}
@@ -336,7 +352,7 @@ function ChecklistDetailPage() {
 					/>
 				}
 			>
-				{completed.map((task, index) => (
+				{completedPaging.shown.map((task, index) => (
 					<div
 						key={task.taskId}
 						className="thunderlist-row thunderlist-task-row"
@@ -347,6 +363,10 @@ function ChecklistDetailPage() {
 						{taskRow(task)}
 					</div>
 				))}
+				<ShowMore
+					hidden={completedPaging.hidden}
+					onShowMore={completedPaging.showMore}
+				/>
 			</CompletedSection>
 
 			<TaskRenameDialog

@@ -15,6 +15,7 @@ import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { CompletedSection } from "#/components/common/completed-section";
 import { LoadingState } from "#/components/common/loading-state";
 import { ProgressChart } from "#/components/common/progress-chart";
+import { ShowMore } from "#/components/common/show-more";
 import { SortToggle } from "#/components/common/sort-toggle";
 import { StatGrid } from "#/components/common/stat-grid";
 import { ErrorNotice } from "#/components/common/states";
@@ -33,6 +34,7 @@ import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { type SortOrder, sortTasksBy } from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
 import { useReorderAnimation } from "#/lib/use-reorder-animation";
+import { useShowMore } from "#/lib/use-show-more";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
 import { trackersQuery } from "#/queries/trackers";
@@ -150,9 +152,22 @@ export function TaskListScreen({
 		() => 0,
 	).map((row) => row.entry);
 
+	// Twenty rows at a time, but never hiding the row a `?task=` link was sent to.
+	const openPaging = useShowMore(
+		open,
+		open.findIndex((entry) => entry.item.taskId === focusTaskId),
+	);
+	const completedPaging = useShowMore(
+		completed,
+		completed.findIndex((entry) => entry.item.taskId === focusTaskId),
+	);
+
 	// Moving a row is the one change where where it went is the point, so the
 	// rows slide rather than re-painting in their new order.
-	useReorderAnimation(listRef, open.map((entry) => entry.item.taskId).join());
+	useReorderAnimation(
+		listRef,
+		openPaging.shown.map((entry) => entry.item.taskId).join(),
+	);
 
 	/*
 	 * Today's burn-up, against the clock rather than a calendar.
@@ -395,7 +410,7 @@ export function TaskListScreen({
 				<div ref={listRef}>
 					<Card padding={0}>
 						<VStack gap={0} paddingBlock={2}>
-							{open.map((entry, index) => (
+							{openPaging.shown.map((entry, index) => (
 								<div
 									key={entry.item.itemId}
 									className="thunderlist-row thunderlist-task-row"
@@ -406,6 +421,10 @@ export function TaskListScreen({
 									{refRow(entry)}
 								</div>
 							))}
+							<ShowMore
+								hidden={openPaging.hidden}
+								onShowMore={openPaging.showMore}
+							/>
 						</VStack>
 					</Card>
 				</div>
@@ -421,7 +440,7 @@ export function TaskListScreen({
 				}}
 				chart={dayChart}
 			>
-				{completed.map((entry, index) => (
+				{completedPaging.shown.map((entry, index) => (
 					<div
 						key={entry.item.itemId}
 						className="thunderlist-row thunderlist-task-row"
@@ -432,6 +451,10 @@ export function TaskListScreen({
 						{refRow(entry)}
 					</div>
 				))}
+				<ShowMore
+					hidden={completedPaging.hidden}
+					onShowMore={completedPaging.showMore}
+				/>
 			</CompletedSection>
 
 			<AddToListDialog
