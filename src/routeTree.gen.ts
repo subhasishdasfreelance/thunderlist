@@ -18,6 +18,7 @@ import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagIdRouteImport } from './routes/tags.$tagId'
+import { Route as TagsUntaggedRouteImport } from './routes/tags.untagged'
 import { Route as TrackersIndexRouteImport } from './routes/trackers.index'
 import { Route as TrackersTrackerIdRouteImport } from './routes/trackers.$trackerId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -67,6 +68,11 @@ const TagsTagIdRoute = TagsTagIdRouteImport.update({
   path: '/tags/$tagId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TagsUntaggedRoute = TagsUntaggedRouteImport.update({
+  id: '/tags/untagged',
+  path: '/tags/untagged',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackersIndexRoute = TrackersIndexRouteImport.update({
   id: '/trackers/',
   path: '/trackers/',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
+  '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
   '/tags/': typeof TagsIndexRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
+  '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists': typeof ChecklistsIndexRoute
   '/tags': typeof TagsIndexRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
+  '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
   '/tags/': typeof TagsIndexRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
+    | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists/'
     | '/tags/'
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
+    | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists'
     | '/tags'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
+    | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists/'
     | '/tags/'
@@ -179,6 +191,7 @@ export interface RootRouteChildren {
   TodayRoute: typeof TodayRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   TagsTagIdRoute: typeof TagsTagIdRoute
+  TagsUntaggedRoute: typeof TagsUntaggedRoute
   TrackersTrackerIdRoute: typeof TrackersTrackerIdRoute
   ChecklistsIndexRoute: typeof ChecklistsIndexRoute
   TagsIndexRoute: typeof TagsIndexRoute
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tags/untagged': {
+      id: '/tags/untagged'
+      path: '/tags/untagged'
+      fullPath: '/tags/untagged'
+      preLoaderRoute: typeof TagsUntaggedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/trackers/': {
       id: '/trackers/'
       path: '/trackers'
@@ -283,6 +303,7 @@ const rootRouteChildren: RootRouteChildren = {
   TodayRoute: TodayRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   TagsTagIdRoute: TagsTagIdRoute,
+  TagsUntaggedRoute: TagsUntaggedRoute,
   TrackersTrackerIdRoute: TrackersTrackerIdRoute,
   ChecklistsIndexRoute: ChecklistsIndexRoute,
   TagsIndexRoute: TagsIndexRoute,

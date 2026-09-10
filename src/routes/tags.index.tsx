@@ -1,5 +1,4 @@
 import { Button } from "@astryxdesign/core/Button";
-import { Card } from "@astryxdesign/core/Card";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
@@ -11,14 +10,12 @@ import { useMemo, useState } from "react";
 import { LoadingState } from "#/components/common/loading-state";
 import { OrderToggle } from "#/components/common/order-toggle";
 import { SectionSpinner } from "#/components/common/section-spinner";
-import { ShowMore } from "#/components/common/show-more";
 import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
-import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
+import { UntaggedCard } from "#/components/tags/untagged-card";
 import { createTag, useApplyChange } from "#/lib/changes";
 import { lagFraction } from "#/lib/progress";
-import { useShowMore } from "#/lib/use-show-more";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
 import { tagSummariesQuery } from "#/queries/tags";
@@ -38,7 +35,7 @@ function lag(tag: TagSummary): number {
 
 export const Route = createFileRoute("/tags/")({
 	loader: ({ context }) => {
-		// The untagged tasks below the cards; the tags are what the screen is.
+		// The untagged card after the tags; the tags are what the screen is.
 		deferQuery(context.queryClient, searchIndexQuery());
 
 		return primeQuery(context.queryClient, tagSummariesQuery());
@@ -65,14 +62,15 @@ function TagsPage() {
 	/*
 	 * The tasks carrying no tag.
 	 *
-	 * They belong to no card, but they are where most tasks start, and leaving
-	 * them off would hide the number this screen exists to shrink.
+	 * They belong to no tag, but they are where most tasks start, and leaving
+	 * them off would hide the number this screen exists to shrink. So they get
+	 * a card of their own, after the tags in either order: with no dates there
+	 * is no pace to sort them by.
 	 */
 	const untagged = useMemo(
 		() => (index.data?.tasks ?? []).filter((task) => task.tagIds.length === 0),
 		[index.data],
 	);
-	const paging = useShowMore(untagged);
 
 	const ordered = isBehindFirst
 		? [...tags].sort((a, b) => lag(b) - lag(a))
@@ -95,14 +93,14 @@ function TagsPage() {
 			) : isPending ? (
 				<LoadingState />
 			) : (
-				<>
+				<VStack gap={3}>
 					{tags.length === 0 ? (
 						<EmptyState
 							title="No tags yet."
 							description="Create one here, or write #name in any task."
 						/>
 					) : (
-						<VStack gap={3}>
+						<>
 							<HStack gap={2} hAlign="between" vAlign="center">
 								<Text type="label" weight="semibold">
 									Your Tags
@@ -117,7 +115,7 @@ function TagsPage() {
 							{ordered.map((tag) => (
 								<TagCard key={tag.tagId} tag={tag} />
 							))}
-						</VStack>
+						</>
 					)}
 
 					{index.isError ? (
@@ -128,29 +126,9 @@ function TagsPage() {
 					) : index.isPending ? (
 						<SectionSpinner label="Loading untagged tasks…" />
 					) : untagged.length === 0 ? null : (
-						<VStack gap={2}>
-							<Text type="label" weight="semibold" color="secondary">
-								Untagged · {untagged.length}
-							</Text>
-							<Card padding={0}>
-								<VStack gap={0} paddingBlock={2}>
-									{paging.shown.map((task, position) => (
-										<TaggedTaskRow
-											key={task.taskId}
-											task={task}
-											tags={tags}
-											hasDivider={position > 0}
-										/>
-									))}
-									<ShowMore
-										hidden={paging.hidden}
-										onShowMore={paging.showMore}
-									/>
-								</VStack>
-							</Card>
-						</VStack>
+						<UntaggedCard tasks={untagged} />
 					)}
-				</>
+				</VStack>
 			)}
 
 			<TagFormDialog
