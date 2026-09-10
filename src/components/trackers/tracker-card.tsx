@@ -19,6 +19,23 @@ export function formatProgress(
 	return `${current} / ${target} ${unit}`.trim();
 }
 
+/**
+ * Where the reading should be by now, in the tracker's own unit: "13 videos".
+ *
+ * Measured across the same distance as the percentage, so a book opened at page
+ * 40 and due to reach page 80 should be on page 60 halfway through the window.
+ * One decimal place, as with speeds: "2.5 km" matters, "2.4871 km" does not.
+ */
+export function formatExpectedReading(
+	elapsed: number,
+	start: number,
+	target: number,
+	unit: string,
+): string {
+	const reading = start + elapsed * (target - start);
+	return `${Math.round(reading * 10) / 10} ${unit}`.trim();
+}
+
 export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
 	const { progress } = tracker;
 
@@ -70,6 +87,16 @@ export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
 						label={`${tracker.title} progress`}
 						percent={progress.percent}
 						expectedPercent={elapsed === null ? null : elapsed * 100}
+						expectedReading={
+							elapsed === null
+								? undefined
+								: formatExpectedReading(
+										elapsed,
+										tracker.startValue,
+										progress.target,
+										tracker.unit,
+									)
+						}
 						footnote={formatProgress(
 							progress.current,
 							progress.target,

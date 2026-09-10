@@ -19,6 +19,7 @@ export function ProgressMeter({
 	label,
 	percent,
 	expectedPercent,
+	expectedReading,
 	footnote,
 }: {
 	/** Accessible name for the bar; never shown. */
@@ -26,10 +27,16 @@ export function ProgressMeter({
 	percent: number;
 	/** Where the work should be by now, 0-100, or `null` with no deadline. */
 	expectedPercent: number | null;
+	/**
+	 * The same point in the work's own unit — "13 videos" — shown beside the
+	 * percentage, so the target says what to reach and not only how far along.
+	 */
+	expectedReading?: string;
 	footnote: string;
 }) {
 	const expected =
 		expectedPercent === null ? null : clampPercent(expectedPercent);
+	const reading = expectedReading === undefined ? "" : ` (${expectedReading})`;
 
 	return (
 		<VStack gap={1.5}>
@@ -40,7 +47,12 @@ export function ProgressMeter({
 				marks={
 					expected === null
 						? undefined
-						: [{ value: expected, label: `${expected}% expected by now` }]
+						: [
+								{
+									value: expected,
+									label: `${expected}%${reading} expected by now`,
+								},
+							]
 				}
 			/>
 
@@ -50,7 +62,9 @@ export function ProgressMeter({
 				{expected === null ? null : (
 					<HStack gap={1} vAlign="center">
 						<Icon icon={Flag} size="sm" color="secondary" />
-						<Text type="supporting">{expected}% expected by now</Text>
+						<Text type="supporting">
+							{expected}%{reading} expected by now
+						</Text>
 					</HStack>
 				)}
 			</HStack>

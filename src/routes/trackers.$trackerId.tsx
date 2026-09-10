@@ -21,7 +21,10 @@ import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { EntryFormDialog } from "#/components/trackers/entry-form-dialog";
 import { ProgressHistory } from "#/components/trackers/progress-history";
-import { formatProgress } from "#/components/trackers/tracker-card";
+import {
+	formatExpectedReading,
+	formatProgress,
+} from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
 	createEntry,
@@ -206,6 +209,16 @@ function TrackerDetailPage() {
 						label={`${detail.title} progress`}
 						percent={progress.percent}
 						expectedPercent={elapsed === null ? null : elapsed * 100}
+						expectedReading={
+							elapsed === null
+								? undefined
+								: formatExpectedReading(
+										elapsed,
+										detail.startValue,
+										progress.target,
+										detail.unit,
+									)
+						}
 						footnote={`${progress.percent}% complete${
 							detail.deadline ? ` · due ${formatDate(detail.deadline)}` : ""
 						}`}
