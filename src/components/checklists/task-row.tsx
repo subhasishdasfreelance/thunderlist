@@ -51,6 +51,9 @@ export function TaskRow({
 }) {
 	const [isHovered, setIsHovered] = useState(false);
 
+	/** Its state comes from a tracker, so nothing here may set it by hand. */
+	const isTracked = task.trackerId !== null;
+
 	const shortcuts = useMemo(
 		() => ({
 			[TASK_SHORTCUTS.today]: () =>
@@ -59,10 +62,19 @@ export function TaskRow({
 				actions.onSetList(listState === "backlog" ? null : "backlog"),
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task.urgent),
 			[TASK_SHORTCUTS.important]: () => actions.onSetImportant(!task.important),
-			[TASK_SHORTCUTS.complete]: () => actions.onToggle(!task.completed),
+			[TASK_SHORTCUTS.complete]: () => {
+				if (task.trackerId === null) actions.onToggle(!task.completed);
+			},
 			[TASK_SHORTCUTS.edit]: actions.onRename,
 		}),
-		[actions, listState, task.urgent, task.important, task.completed],
+		[
+			actions,
+			listState,
+			task.urgent,
+			task.important,
+			task.completed,
+			task.trackerId,
+		],
 	);
 
 	useRowShortcuts(isHovered, shortcuts);
@@ -96,10 +108,19 @@ export function TaskRow({
 			<div className="order-1 flex min-w-0 flex-1 basis-full items-center gap-2 md:order-none md:basis-0">
 				{/* The label is hidden but still the accessible name; the visible
 				    title is drawn beside it so its tags keep their place. */}
+				{/*
+				 * A task following a tracker is ticked by the tracker, not by hand.
+				 * The box still shows the state — it is the honest answer to "is
+				 * this done" — but it cannot be the thing that changes it.
+				 */}
 				<CheckboxInput
 					label={task.title}
 					isLabelHidden
 					value={task.completed}
+					isDisabled={isTracked}
+					disabledMessage={
+						isTracked ? "Finishes when its tracker does." : undefined
+					}
 					onChange={actions.onToggle}
 				/>
 				<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />

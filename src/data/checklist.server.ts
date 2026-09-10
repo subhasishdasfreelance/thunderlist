@@ -18,7 +18,7 @@ import {
 	DOMAIN_FIELDS,
 	type TaskDoc,
 } from "#/lib/mongo/client.server";
-import { paceStatus } from "#/lib/progress";
+import { paceStatus, trackerProgress } from "#/lib/progress";
 import { calculateChecklistProgress } from "#/lib/tasks/tasks";
 import type {
 	Checklist,
@@ -137,6 +137,63 @@ export async function readTasksByIds(
 	return byId;
 }
 
+/**
+ * Fill in the completion of any task that stands for a tracker.
+ *
+ * Worked out on every read rather than written to the task, because the thing
+ * it depends on moves on its own: recording progress would otherwise have to
+ * remember to go and tick a task somewhere else, and the day it forgot, the
+ * list would be lying. Ordinary tasks are handed back untouched, and a set with
+ * none costs no query at all.
+ */
+export async function withTrackedCompletion(
+	current: Collections,
+	userId: string,
+	tasks: ReadonlyArray<Task>,
+): Promise<Array<Task>> {
+	const trackerIds = [
+		...new Set(
+			tasks.flatMap((task) =>
+				task.trackerId === null ? [] : [task.trackerId],
+			),
+		),
+	];
+
+	if (trackerIds.length === 0) return [...tasks];
+
+	const trackers = await current.trackers
+		.find(
+			{ userId, trackerId: { $in: trackerIds } },
+			{
+				projection: {
+					_id: 0,
+					trackerId: 1,
+					currentValue: 1,
+					targetValue: 1,
+					startValue: 1,
+				},
+			},
+		)
+		.toArray();
+
+	const reached = new Map(
+		trackers.map((tracker) => [
+			tracker.trackerId,
+			trackerProgress(
+				tracker.currentValue,
+				tracker.targetValue,
+				tracker.startValue,
+			).percent >= 100,
+		]),
+	);
+
+	return tasks.map((task) =>
+		task.trackerId === null
+			? task
+			: { ...task, completed: reached.get(task.trackerId) ?? false },
+	);
+}
+
 export async function getChecklist(
 	userId: string,
 	checklistId: string,
@@ -144,9 +201,11 @@ export async function getChecklist(
 	const current = await collections();
 	const checklist = await requireChecklist(current, userId, checklistId);
 
-	const tasks = await current.tasks
+	const stored = await current.tasks
 		.find({ checklistId, userId }, { projection: TASK_FIELDS })
 		.toArray();
+
+	const tasks = await withTrackedCompletion(current, userId, stored);
 
 	return { ...summarise(checklist, tasks), tasks };
 }

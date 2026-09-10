@@ -16,14 +16,13 @@
 
 import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import { trackerProgress } from "#/lib/progress";
 import {
 	SORT_ORDER_STEP,
 	type TaskListName,
 	type TaskRef,
 	type TaskRefEntry,
 } from "#/schemas/task-list";
-import { readTasksByIds } from "./checklist.server";
+import { readTasksByIds, withTrackedCompletion } from "./checklist.server";
 
 /** A reference document holds the list it is on; a `TaskRef` does not. */
 const REF_FIELDS = { _id: 0, list: 0 } as const;
@@ -84,49 +83,16 @@ export async function getTaskLists(userId: string): Promise<TaskLists> {
 		checklists.map((checklist) => [checklist.checklistId, checklist.title]),
 	);
 
-	/*
-	 * Tasks that stand for a tracker are finished when the tracker is.
-	 *
-	 * Worked out on every read rather than written to the task, because the
-	 * thing it depends on moves on its own: recording progress would otherwise
-	 * have to remember to go and tick a task somewhere else, and the day it
-	 * forgot, the list would be lying.
-	 */
-	const trackerIds = [
-		...new Set(
-			[...tasks.values()].flatMap((found) =>
-				found.task.trackerId === null ? [] : [found.task.trackerId],
-			),
-		),
-	];
-
-	const trackers =
-		trackerIds.length === 0
-			? []
-			: await current.trackers
-					.find(
-						{ userId, trackerId: { $in: trackerIds } },
-						{
-							projection: {
-								_id: 0,
-								trackerId: 1,
-								currentValue: 1,
-								targetValue: 1,
-								startValue: 1,
-							},
-						},
-					)
-					.toArray();
-
-	const reached = new Map(
-		trackers.map((tracker) => [
-			tracker.trackerId,
-			trackerProgress(
-				tracker.currentValue,
-				tracker.targetValue,
-				tracker.startValue,
-			).percent >= 100,
-		]),
+	// Tasks standing for a tracker are finished when their tracker is; see
+	// `withTrackedCompletion`, which both this and a checklist read through.
+	const resolved = new Map(
+		(
+			await withTrackedCompletion(
+				current,
+				userId,
+				[...tasks.values()].map((found) => found.task),
+			)
+		).map((task) => [task.taskId, task]),
 	);
 
 	const resolve = (list: TaskListName): Array<TaskRefEntry> =>
@@ -136,19 +102,13 @@ export async function getTaskLists(userId: string): Promise<TaskLists> {
 				const found = tasks.get(item.taskId);
 				const checklistId = found?.checklistId ?? null;
 
-				const task = found?.task ?? null;
-				const trackerId = task?.trackerId ?? null;
-
 				return {
 					item,
 					list,
 					checklistId,
 					checklistTitle:
 						checklistId === null ? null : (titles.get(checklistId) ?? null),
-					task:
-						task === null || trackerId === null
-							? task
-							: { ...task, completed: reached.get(trackerId) ?? false },
+					task: resolved.get(item.taskId) ?? null,
 				};
 			});
 

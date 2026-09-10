@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
 	activeTagQuery,
+	activeTrackerQuery,
 	applyTagSuggestion,
+	applyTrackerSuggestion,
 	parseInlineTags,
 	splitTitleTags,
 } from "./inline-tags";
@@ -11,6 +13,7 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("Hello #me hi")).toEqual({
 			title: "Hello #me hi",
 			tagNames: ["me"],
+			trackerName: null,
 		});
 	});
 
@@ -20,6 +23,7 @@ describe("parseInlineTags", () => {
 		).toEqual({
 			title: "bring coffee from market #shopping and pour it #chore",
 			tagNames: ["shopping", "chore"],
+			trackerName: null,
 		});
 	});
 
@@ -27,6 +31,7 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("just a task")).toEqual({
 			title: "just a task",
 			tagNames: [],
+			trackerName: null,
 		});
 	});
 
@@ -35,6 +40,7 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("learn C# properly")).toEqual({
 			title: "learn C# properly",
 			tagNames: [],
+			trackerName: null,
 		});
 		expect(parseInlineTags("read docs#section").tagNames).toEqual([]);
 	});
@@ -138,5 +144,58 @@ describe("applyTagSuggestion", () => {
 		expect(applyTagSuggestion(text, active, "milk").text).toBe(
 			"buy #milk  later",
 		);
+	});
+});
+
+describe("tracker lines", () => {
+	it("reads a whole line as one tracker, spaces and all", () => {
+		expect(parseInlineTags("&Dune Part Two")).toEqual({
+			title: "&Dune Part Two",
+			tagNames: [],
+			trackerName: "Dune Part Two",
+		});
+	});
+
+	it("only counts an ampersand at the start", () => {
+		expect(parseInlineTags("Tom & Jerry").trackerName).toBeNull();
+	});
+
+	it("takes no tags off a tracker line: its title is the tracker's", () => {
+		expect(parseInlineTags("&Dune #reading").tagNames).toEqual([]);
+	});
+
+	it("draws the whole line as one tracker run", () => {
+		expect(splitTitleTags("&Dune Part Two")).toEqual([
+			{ kind: "tracker", at: 0, name: "Dune Part Two" },
+		]);
+	});
+
+	it("suggests from the moment the ampersand is typed", () => {
+		expect(activeTrackerQuery("&", 1)).toEqual({ query: "", start: 0 });
+		expect(activeTrackerQuery("&Du", 3)).toEqual({ query: "Du", start: 0 });
+	});
+
+	it("suggests on any line of a pasted list, not just the first", () => {
+		const text = "buy milk\n&Du";
+		expect(activeTrackerQuery(text, text.length)).toEqual({
+			query: "Du",
+			start: 9,
+		});
+	});
+
+	it("suggests nothing on a line that does not start with one", () => {
+		expect(activeTrackerQuery("buy milk", 8)).toBeNull();
+		expect(activeTrackerQuery("Tom & Je", 8)).toBeNull();
+	});
+
+	it("replaces the line it is on and leaves the others alone", () => {
+		const text = "buy milk\n&Du\nwalk";
+		const active = activeTrackerQuery(text, 12);
+		if (active === null) throw new Error("expected a query");
+
+		expect(applyTrackerSuggestion(text, active, "Dune")).toEqual({
+			text: "buy milk\n&Dune\nwalk",
+			caret: 14,
+		});
 	});
 });

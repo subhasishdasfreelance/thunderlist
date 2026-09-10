@@ -1,7 +1,9 @@
+import { Icon } from "@astryxdesign/core/Icon";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
+import { TrendingUp } from "lucide-react";
 import {
 	type CSSProperties,
 	type KeyboardEvent,
@@ -13,18 +15,31 @@ import {
 import { TagSegments } from "#/components/tags/tag-segments";
 import {
 	activeTagQuery,
+	activeTrackerQuery,
 	applyTagSuggestion,
+	applyTrackerSuggestion,
 	sameTagName,
+	sameTrackerName,
 } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
+import type { TrackerSummary } from "#/schemas/tracker";
 
 /** Enough to choose from without the list covering the rows underneath. */
 const MAX_SUGGESTIONS = 6;
 
-/** `color: null` marks a name that is not a tag yet. */
-type Suggestion = { name: string; color: Tag["color"] | null };
+/**
+ * One offer in the list.
+ *
+ * `kind` says which mark it completes, because the two are picked and drawn
+ * differently: a tag can be invented as it is typed and shows as a coloured
+ * token, a tracker has to already exist and shows as its own title.
+ * `color: null` marks a name that is not a tag yet.
+ */
+type Suggestion =
+	| { kind: "tag"; name: string; color: Tag["color"] | null }
+	| { kind: "tracker"; name: string };
 
-function suggestionsFor(
+function tagSuggestions(
 	query: string,
 	tags: ReadonlyArray<Tag>,
 ): Array<Suggestion> {
@@ -40,7 +55,13 @@ function suggestionsFor(
 			return a.name.localeCompare(b.name);
 		})
 		.slice(0, MAX_SUGGESTIONS)
-		.map((tag) => ({ name: tag.name, color: tag.color }));
+		.map(
+			(tag): Suggestion => ({
+				kind: "tag",
+				name: tag.name,
+				color: tag.color,
+			}),
+		);
 
 	// Offering the name back means typing a tag that does not exist yet is never
 	// a dead end; picking it creates the tag along with the task.
@@ -48,19 +69,49 @@ function suggestionsFor(
 		return matches;
 	}
 
-	return [...matches, { name: query, color: null }];
+	return [...matches, { kind: "tag", name: query, color: null }];
 }
 
 /**
- * A text field that completes `#tags` as they are typed.
+ * The trackers whose titles contain what has been typed.
+ *
+ * No "create it" offer at the end, unlike tags: a tracker has a target, a unit
+ * and a deadline, none of which fit on this line. An unmatched name stays
+ * ordinary text and the task is an ordinary task.
+ */
+function trackerSuggestions(
+	query: string,
+	trackers: ReadonlyArray<TrackerSummary>,
+): Array<Suggestion> {
+	const lower = query.trim().toLowerCase();
+
+	return trackers
+		.filter((tracker) => tracker.title.toLowerCase().includes(lower))
+		.sort((a, b) => {
+			const aStarts = a.title.toLowerCase().startsWith(lower);
+			const bStarts = b.title.toLowerCase().startsWith(lower);
+			if (aStarts !== bStarts) return aStarts ? -1 : 1;
+			return a.title.localeCompare(b.title);
+		})
+		.slice(0, MAX_SUGGESTIONS)
+		.map((tracker): Suggestion => ({ kind: "tracker", name: tracker.title }));
+}
+
+/**
+ * A text field that completes `#tags` and `&trackers` as they are typed.
  *
  * Tagging only happens if it is faster than not bothering, so a tag is written
  * in the same keystrokes as the task itself — "buy milk #shopping" — and the
  * tags that already exist are offered as soon as the `#` is typed. Anything not
  * on the list can still be typed straight through.
  *
+ * A line beginning `&` names a tracker instead, and completes the same way. It
+ * claims the whole line, because a tracker's title is its real title and has
+ * spaces in it — so the two marks never compete for the same keystrokes and
+ * only one list can be open at a time.
+ *
  * The suggestion list owns Enter only while it is open, so Enter still submits
- * the moment no tag is being written.
+ * the moment nothing is being written.
  */
 export function TagTextField({
 	label,
@@ -69,6 +120,7 @@ export function TagTextField({
 	onChange,
 	onSubmit,
 	tags,
+	trackers = [],
 	multiline = false,
 	rows,
 	hasAutoFocus = false,
@@ -80,6 +132,8 @@ export function TagTextField({
 	/** Enter, when no suggestion is being chosen. */
 	onSubmit: () => void;
 	tags: ReadonlyArray<Tag>;
+	/** Every tracker, for completing a line that begins `&`. */
+	trackers?: ReadonlyArray<TrackerSummary>;
 	multiline?: boolean;
 	rows?: number;
 	hasAutoFocus?: boolean;
@@ -97,10 +151,24 @@ export function TagTextField({
 	/** Escape closes the list until the next keystroke. */
 	const [isDismissed, setIsDismissed] = useState(false);
 
-	const query = isDismissed
-		? null
-		: activeTagQuery(value, Math.min(caret ?? value.length, value.length));
-	const suggestions = query === null ? [] : suggestionsFor(query.query, tags);
+	const at = Math.min(caret ?? value.length, value.length);
+
+	/*
+	 * A tracker line is checked first and wins outright. `&` claims its whole
+	 * line, so anything typed on it — a `#` included — is part of a tracker's
+	 * title rather than a tag, and offering both lists at once would be a lie
+	 * about what Enter is going to do.
+	 */
+	const trackerQuery = isDismissed ? null : activeTrackerQuery(value, at);
+	const tagQuery =
+		isDismissed || trackerQuery !== null ? null : activeTagQuery(value, at);
+
+	const suggestions =
+		trackerQuery !== null
+			? trackerSuggestions(trackerQuery.query, trackers)
+			: tagQuery !== null
+				? tagSuggestions(tagQuery.query, tags)
+				: [];
 	const isOpen = suggestions.length > 0;
 	const index = Math.min(active, Math.max(suggestions.length - 1, 0));
 
@@ -118,9 +186,22 @@ export function TagTextField({
 	}
 
 	function pick(suggestion: Suggestion) {
-		if (query === null) return;
+		const next =
+			suggestion.kind === "tracker"
+				? trackerQuery === null
+					? null
+					: applyTrackerSuggestion(value, trackerQuery, suggestion.name)
+				: tagQuery === null
+					? null
+					: applyTagSuggestion(value, tagQuery, suggestion.name);
 
-		const next = applyTagSuggestion(value, query, suggestion.name);
+		if (next === null) return;
+
+		// A tracker is the whole line, so picking one finishes it and the list has
+		// nothing left to offer. A tag can be followed by another, so that list
+		// stays up. Typing again reopens either.
+		if (suggestion.kind === "tracker") setIsDismissed(true);
+
 		onChange(next.text);
 		setCaret(next.caret);
 		setActive(0);
@@ -161,13 +242,21 @@ export function TagTextField({
 			event.preventDefault();
 
 			/*
-			 * Enter completes the tag only when there is something left to
-			 * complete. Having typed "#shopping" in full, the user means "add this
-			 * task" — making them press Enter twice to say so, once to accept a
-			 * word they have already finished, is the wart this avoids.
+			 * Enter completes only when there is something left to complete.
+			 * Having typed "#shopping" or "&Dune" in full, the user means "add
+			 * this task" — making them press Enter twice to say so, once to
+			 * accept a word they have already finished, is the wart this avoids.
 			 */
-			if (isOpen && !sameTagName(suggestions[index].name, query?.query ?? "")) {
-				pick(suggestions[index]);
+			const typed = (trackerQuery ?? tagQuery)?.query ?? "";
+			const highlighted = suggestions[index];
+			const isFinished =
+				highlighted !== undefined &&
+				(highlighted.kind === "tracker"
+					? sameTrackerName(highlighted.name, typed)
+					: sameTagName(highlighted.name, typed));
+
+			if (isOpen && !isFinished) {
+				pick(highlighted);
 				return;
 			}
 
@@ -284,14 +373,23 @@ export function TagTextField({
 								onMouseEnter={() => setActive(position)}
 								onClick={() => pick(suggestion)}
 							>
-								<Token
-									size="sm"
-									color={suggestion.color ?? "gray"}
-									label={suggestion.name}
-								/>
-								{suggestion.color === null ? (
-									<Text type="supporting">New tag</Text>
-								) : null}
+								{suggestion.kind === "tracker" ? (
+									<>
+										<Icon icon={TrendingUp} size="sm" color="secondary" />
+										<Text>{suggestion.name}</Text>
+									</>
+								) : (
+									<>
+										<Token
+											size="sm"
+											color={suggestion.color ?? "gray"}
+											label={suggestion.name}
+										/>
+										{suggestion.color === null ? (
+											<Text type="supporting">New tag</Text>
+										) : null}
+									</>
+								)}
 							</button>
 						</li>
 					))}

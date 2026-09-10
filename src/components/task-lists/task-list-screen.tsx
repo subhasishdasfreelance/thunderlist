@@ -24,6 +24,7 @@ import {
 	createTag,
 	createTagResolver,
 	createTask,
+	resolveTrackerName,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -34,6 +35,7 @@ import { useFocusTask } from "#/lib/use-focus-task";
 import { useReorderAnimation } from "#/lib/use-reorder-animation";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
+import { trackersQuery } from "#/queries/trackers";
 import type { Task } from "#/schemas/task";
 import {
 	SORT_ORDER_STEP,
@@ -119,10 +121,12 @@ export function TaskListScreen({
 		taskListsQuery(),
 	);
 	const tagsResult = useQuery(tagsQuery());
+	const trackersResult = useQuery(trackersQuery());
 
 	const lists = data ?? { today: [], backlog: [] };
 
 	const tags = tagsResult.data ?? [];
+	const trackers = trackersResult.data ?? [];
 
 	const entries = lists[list];
 
@@ -219,10 +223,16 @@ export function TaskListScreen({
 		// single act, and splitting it in two used to let the second half arrive
 		// before the first and be refused.
 		lines.forEach((line, offset) => {
+			// A line naming a tracker becomes a task that follows it, titled with
+			// the tracker's own title — the `&` was how it was written, not what it
+			// is called. A name matching nothing stays ordinary text.
+			const tracker = resolveTrackerName(trackers, line.trackerName);
+
 			createTask(apply, {
 				checklistId: null,
-				title: line.title,
-				tagIds: line.tagNames.map(resolveTag),
+				title: tracker?.title ?? line.title,
+				tagIds: tracker ? [] : line.tagNames.map(resolveTag),
+				trackerId: tracker?.trackerId ?? null,
 				onList: { list, sortOrder: endOfList(entries.length + offset) },
 			});
 		});
@@ -358,7 +368,7 @@ export function TaskListScreen({
 				<DayProgress total={entries.length} completed={done} />
 			) : null}
 
-			<QuickAddTask tags={tags} onAdd={quickAdd} />
+			<QuickAddTask tags={tags} trackers={trackers} onAdd={quickAdd} />
 
 			{open.length === 0 ? null : (
 				<HStack gap={2} hAlign="between" vAlign="center">

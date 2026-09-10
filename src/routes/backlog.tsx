@@ -3,6 +3,7 @@ import { TaskListScreen } from "#/components/task-lists/task-list-screen";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
+import { trackersQuery } from "#/queries/trackers";
 
 export const Route = createFileRoute("/backlog")({
 	/** `?task=` names a task to scroll to and ring; see `useFocusTask`. */
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/backlog")({
 	loader: ({ context }) => {
 		// See the note in `today.tsx`: quick-add needs the tags, but not yet.
 		deferQuery(context.queryClient, tagsQuery());
+		deferQuery(context.queryClient, trackersQuery());
 
 		return primeQuery(context.queryClient, taskListsQuery());
 	},

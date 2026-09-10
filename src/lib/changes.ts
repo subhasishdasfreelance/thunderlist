@@ -16,12 +16,12 @@ import { applyChangeFn } from "#/functions/change.functions";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
-import { sameTagName } from "#/lib/tags/inline-tags";
+import { sameTagName, sameTrackerName } from "#/lib/tags/inline-tags";
 import type { Change } from "#/schemas/change";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 import type { TaskPatch } from "#/schemas/task";
 import type { TaskListName } from "#/schemas/task-list";
-import type { Tracker } from "#/schemas/tracker";
+import type { Tracker, TrackerSummary } from "#/schemas/tracker";
 
 /**
  * Apply a change: on screen at once, on the server behind it.
@@ -230,4 +230,23 @@ export function createTagResolver(
 		minted.set(key, tagId);
 		return tagId;
 	};
+}
+
+/**
+ * Turn the tracker name written on a line into the tracker it names.
+ *
+ * Nothing is created here, unlike the tag resolver: a tracker needs a target, a
+ * unit and a deadline, none of which fit on the line. A name matching nothing
+ * comes back `null` and the line stays an ordinary task, which is the same
+ * outcome as never having typed the `&`.
+ */
+export function resolveTrackerName(
+	trackers: ReadonlyArray<TrackerSummary>,
+	name: string | null,
+): TrackerSummary | null {
+	if (name === null) return null;
+
+	return (
+		trackers.find((tracker) => sameTrackerName(tracker.title, name)) ?? null
+	);
 }

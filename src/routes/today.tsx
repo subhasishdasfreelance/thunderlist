@@ -4,6 +4,7 @@ import { formatDateWithWeekday } from "#/lib/format-date";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
+import { trackersQuery } from "#/queries/trackers";
 import { todayDateOnly } from "#/schemas/common";
 
 export const Route = createFileRoute("/today")({
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/today")({
 		// Quick-add matches `#tags` against this list, but nobody is typing on the
 		// first frame — it is started here and arrives while the list is read.
 		deferQuery(context.queryClient, tagsQuery());
+		deferQuery(context.queryClient, trackersQuery());
 
 		return primeQuery(context.queryClient, taskListsQuery());
 	},

@@ -30,6 +30,7 @@ import {
 	createTag,
 	createTagResolver,
 	createTask,
+	resolveTrackerName,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -43,6 +44,7 @@ import { checklistQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
 import { taskListsQuery } from "#/queries/task-lists";
+import { trackersQuery } from "#/queries/trackers";
 import type { Task } from "#/schemas/task";
 import { SORT_ORDER_STEP, type TaskListName } from "#/schemas/task-list";
 
@@ -62,6 +64,7 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 		// See the note in `today.tsx`: quick-add needs the tags, but not yet. The
 		// lists say which tasks are on Today, which is a badge on a row.
 		deferQuery(context.queryClient, tagsQuery());
+		deferQuery(context.queryClient, trackersQuery());
 		deferQuery(context.queryClient, taskListsQuery());
 
 		return primeQuery(context.queryClient, checklistQuery(params.checklistId));
@@ -88,6 +91,7 @@ function ChecklistDetailPage() {
 	);
 	const lists = useQuery(taskListsQuery());
 	const tagsResult = useQuery(tagsQuery());
+	const trackersResult = useQuery(trackersQuery());
 
 	const detail = data ?? null;
 
@@ -104,6 +108,7 @@ function ChecklistDetailPage() {
 	);
 
 	const tags = tagsResult.data ?? [];
+	const trackers = trackersResult.data ?? [];
 
 	const taskLists = lists.data ?? { today: [], backlog: [] };
 
@@ -161,10 +166,15 @@ function ChecklistDetailPage() {
 		const resolveTag = createTagResolver(apply, tags);
 
 		for (const line of lines) {
+			// A line naming a tracker becomes a task that follows it, titled with
+			// the tracker's own title. A name matching nothing stays ordinary text.
+			const tracker = resolveTrackerName(trackers, line.trackerName);
+
 			createTask(apply, {
 				checklistId,
-				title: line.title,
-				tagIds: line.tagNames.map(resolveTag),
+				title: tracker?.title ?? line.title,
+				tagIds: tracker ? [] : line.tagNames.map(resolveTag),
+				trackerId: tracker?.trackerId ?? null,
 			});
 		}
 	}
@@ -265,7 +275,7 @@ function ChecklistDetailPage() {
 				isComplete={progress.total > 0 && progress.completed >= progress.total}
 			/>
 
-			<QuickAddTask tags={tags} onAdd={addTasks} />
+			<QuickAddTask tags={tags} trackers={trackers} onAdd={addTasks} />
 
 			{open.length === 0 ? null : (
 				<HStack gap={2} hAlign="between" vAlign="center">

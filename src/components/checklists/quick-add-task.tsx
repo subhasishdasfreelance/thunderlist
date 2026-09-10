@@ -5,6 +5,7 @@ import { useState } from "react";
 import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
+import type { TrackerSummary } from "#/schemas/tracker";
 
 /** Enough rows to see a pasted list without the field taking over the screen. */
 const MAX_ROWS = 8;
@@ -47,16 +48,20 @@ function countLines(value: string): number {
  * ever sees them. Enter still adds; Shift+Enter starts another line by hand.
  *
  * Tags are written in the same breath — "buy milk #shopping" — and completed as
- * they are typed.
+ * they are typed. A line beginning `&` names a tracker instead: the task it
+ * makes is finished when that tracker is, and cannot be ticked by hand.
  */
 export function QuickAddTask({
-	placeholder = "Add a task — #tag it, or paste a list",
+	placeholder = "Add a task — #tag it, &track it, or paste a list",
 	tags,
+	trackers = [],
 	onAdd,
 }: {
 	placeholder?: string;
 	/** Every tag that exists, for completing what is typed after a `#`. */
 	tags: ReadonlyArray<Tag>;
+	/** Every tracker, for completing a line that begins `&`. */
+	trackers?: ReadonlyArray<TrackerSummary>;
 	onAdd: (lines: Array<ParsedTitle>) => void;
 }) {
 	const [value, setValue] = useState("");
@@ -79,6 +84,7 @@ export function QuickAddTask({
 				onChange={setValue}
 				onSubmit={add}
 				tags={tags}
+				trackers={trackers}
 				multiline
 				rows={Math.min(Math.max(countLines(value), MIN_ROWS), MAX_ROWS)}
 			/>
