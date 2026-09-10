@@ -7,9 +7,11 @@
  * and the request goes out behind it.
  *
  * Only the changes made *while reading a list* are patched here: ticking,
- * flagging, adding, removing, moving between lists. The rest — creating a
- * checklist, editing a tracker — happen in a dialog that closes anyway, where a
- * moment's wait costs nothing and a second copy of the write logic would.
+ * flagging, adding, removing, moving between lists. The rest — editing a
+ * checklist, creating a tracker — happen in a dialog that closes anyway, where
+ * a moment's wait costs nothing and a second copy of the write logic would.
+ * Creating a checklist is the exception, because the app goes straight into
+ * the new one; see below.
  *
  * Every patch is a guess. It is replaced by the server's answer on the next
  * refetch, and thrown away if the request fails, so a wrong guess is visible
@@ -20,7 +22,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { calculateChecklistProgress } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
-import type { ChecklistDetail } from "#/schemas/checklist";
+import type { ChecklistDetail, ChecklistSummary } from "#/schemas/checklist";
 import type { TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskListName, TaskRefEntry } from "#/schemas/task-list";
@@ -234,6 +236,40 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				}));
 			}
 
+			return;
+		}
+
+		case "checklist.create": {
+			/*
+			 * The app goes straight into a checklist the moment it is made, and
+			 * that screen asks the server for it — often before the server has
+			 * written it, which answered "That checklist no longer exists." for
+			 * one that was only just beginning to. Drawn here first, the screen
+			 * finds it in the cache instead, and the refetch after the write swaps
+			 * in the server's copy.
+			 */
+			const createdAt = new Date().toISOString();
+			const summary: ChecklistSummary = {
+				checklistId: change.checklistId,
+				title: change.title,
+				description: change.description,
+				startDate: change.startDate,
+				deadline: change.deadline,
+				createdAt,
+				updatedAt: createdAt,
+				progress: { total: 0, completed: 0, percent: 0 },
+				// No tasks, so no pace: the same answer the server gives.
+				status: null,
+			};
+
+			client.setQueryData<ChecklistDetail>(
+				queryKeys.checklist(change.checklistId),
+				{ ...summary, tasks: [] },
+			);
+			client.setQueryData<Array<ChecklistSummary>>(
+				queryKeys.checklists,
+				(list) => (list ? [...list, summary] : list),
+			);
 			return;
 		}
 

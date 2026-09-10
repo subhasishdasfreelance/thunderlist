@@ -8,6 +8,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
 import { THEME_INIT_SCRIPT } from "#/lib/theme";
 import { sessionQuery } from "#/queries/session";
@@ -85,7 +86,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			// browsers and platforms that still want a raster.
 			{ rel: "icon", type: "image/svg+xml", href: "/logo.svg" },
 			{ rel: "icon", type: "image/png", sizes: "640x640", href: "/logo.png" },
-			{ rel: "apple-touch-icon", href: "/logo.png" },
+			// Installing to a home screen. iOS fills a transparent icon with black,
+			// so its icon has the brand blue behind the bolt.
+			{ rel: "manifest", href: "/manifest.webmanifest" },
+			{ rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
 		],
 	}),
 	component: RootComponent,
@@ -94,6 +98,17 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
 	const { user } = Route.useRouteContext();
+
+	/*
+	 * The service worker, which keeps the hashed bundle cached so the installed
+	 * app starts quickly; see `public/sw.js`. Production only: in development
+	 * Vite serves modules straight from source and there is nothing to keep.
+	 */
+	useEffect(() => {
+		if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+		// Not registering only costs the cache; the app works the same without it.
+		navigator.serviceWorker.register("/sw.js").catch(() => {});
+	}, []);
 
 	// The frame is rendered signed out too — it drops everything that needs an
 	// account and keeps the bar, so the login page is recognisably this app
@@ -121,6 +136,21 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
+				{/*
+				 * The phone's status bar, matched to the page under the top bar in
+				 * each scheme. Written here rather than in `head()`, which keeps
+				 * only one meta tag per name and would drop the second.
+				 */}
+				<meta
+					name="theme-color"
+					media="(prefers-color-scheme: light)"
+					content="#F1F0F9"
+				/>
+				<meta
+					name="theme-color"
+					media="(prefers-color-scheme: dark)"
+					content="#0F1018"
+				/>
 				{/*
 				 * Sets the colour scheme before the first paint. Anything later —
 				 * an effect, a hydration pass — renders the default scheme first,

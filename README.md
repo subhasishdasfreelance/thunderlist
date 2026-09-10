@@ -307,10 +307,12 @@ editable, so something begun last month is paced from when it really began) and
 an optional **deadline**.
 
 **Pace** (`Ahead` / `On track` / `Behind`) compares how much is done against how
-much of the time between those two dates has passed, with a 10-point tolerance.
-With no deadline there is no status — the app never invents one. The same figure
-draws the target mark on each progress bar and the "62% expected by now" line
-underneath it, so the bar and the words always agree.
+much of the time between those two dates has passed, with a 5-point tolerance.
+That time is counted in whole hours from midnight UTC on the start date, so the
+mark moves through the day instead of jumping at midnight; the stats below are
+still counted in days. With no deadline there is no status — the app never
+invents one. The same figure draws the target mark on each progress bar and the
+"62% expected by now" line underneath it, so the bar and the words always agree.
 
 ### Stats
 
@@ -473,6 +475,17 @@ The project targets Vercel (`vercel.json` sets the framework to
 
 Only variables prefixed `VITE_` reach the browser bundle. Keep every secret
 unprefixed.
+
+### Installing on a phone
+
+Thunderlist is a PWA. Open it in the phone's browser and choose **Add to Home
+Screen** (Safari) or **Install app** (Chrome); the manifest and icons are in
+`public/`.
+
+`public/sw.js` answers the hashed files under `/assets/` from the browser's
+cache, so a relaunch only waits for the page itself. Pages are never cached:
+each one carries data that has to be current. The worker is registered in
+production builds only.
 
 ---
 

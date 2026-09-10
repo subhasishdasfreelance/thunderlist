@@ -12,11 +12,11 @@ export const idSchema = v.pipe(
 	v.regex(/^[A-Za-z0-9_-]+$/, "Id contains unsupported characters"),
 );
 
+/** No upper limit: a title is as long as whoever writes it needs it to be. */
 export const titleSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.minLength(1, "Title is required"),
-	v.maxLength(120, "Title must be 120 characters or fewer"),
 );
 
 export const descriptionSchema = v.pipe(

@@ -17,11 +17,62 @@ import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
 import { sameTagName, sameTrackerName } from "#/lib/tags/inline-tags";
+import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 import type { TaskPatch } from "#/schemas/task";
 import type { TaskListName } from "#/schemas/task-list";
 import type { Tracker, TrackerSummary } from "#/schemas/tracker";
+
+/**
+ * Checklists this tab has asked for and the server has not yet confirmed.
+ *
+ * The app goes straight into a new checklist, drawn before it is written, so a
+ * task can be typed into it while its own write is still on the way — and two
+ * requests are not guaranteed to arrive in the order they were sent. Anything
+ * naming a checklist waits for that checklist to exist first, rather than
+ * being refused for naming one that does not.
+ */
+const creatingChecklists = new Map<string, Promise<unknown>>();
+
+/** The checklist a change needs to find already written, if any. */
+function checklistNeeded(change: Change): string | null {
+	switch (change.kind) {
+		case "checklist.update":
+		case "checklist.delete":
+		case "task.create":
+			return change.checklistId;
+		default:
+			return null;
+	}
+}
+
+/** Send one change, once any checklist it depends on has been written. */
+async function send(change: Change): Promise<void> {
+	const needed = checklistNeeded(change);
+	if (needed !== null) await creatingChecklists.get(needed);
+
+	const request = applyChangeFn({ data: { change } });
+
+	if (change.kind === "checklist.create") {
+		const { checklistId } = change;
+		// A failed creation reports itself; anything waiting on it then goes
+		// ahead and fails on its own terms, which is the honest answer.
+		creatingChecklists.set(
+			checklistId,
+			request.catch(() => {}),
+		);
+
+		try {
+			await request;
+		} finally {
+			creatingChecklists.delete(checklistId);
+		}
+		return;
+	}
+
+	await request;
+}
 
 /**
  * Apply a change: on screen at once, on the server behind it.
@@ -36,7 +87,7 @@ export function useApplyChange() {
 	const toast = useToast();
 
 	const mutation = useMutation({
-		mutationFn: (change: Change) => applyChangeFn({ data: { change } }),
+		mutationFn: send,
 
 		/*
 		 * Draw it first, ask afterwards.
@@ -54,14 +105,34 @@ export function useApplyChange() {
 
 		// The guess was wrong. Put back exactly what was there rather than trying
 		// to reverse each patch, which is where this kind of code usually breaks.
-		onError: (error, _change, context) => {
+		onError: (error, change, context) => {
 			if (context?.previous) restore(queryClient, context.previous);
+
+			// A checklist that was only ever drawn has no earlier state to put
+			// back, so it is emptied instead: the screen showing it asks again and
+			// hears that it does not exist, rather than showing it as if saved.
+			if (change.kind === "checklist.create") {
+				void queryClient.resetQueries({
+					queryKey: queryKeys.checklist(change.checklistId),
+					exact: true,
+				});
+			}
+
 			toast({ body: errorMessage(error), type: "error", uniqueID: "change" });
 		},
 
-		// Settled, not success: a failure has just rolled the screen back to a
-		// state that may itself be stale, so both paths want the server's answer.
-		onSettled: () => queryClient.invalidateQueries(),
+		/*
+		 * Settled, not success: a failure has just rolled the screen back to a
+		 * state that may itself be stale, so both paths want the server's answer.
+		 *
+		 * Only once nothing else is still saving, though. A refetch sent while
+		 * another change is on its way comes back without it, and whatever was
+		 * just added blinks out until that change lands too. This change still
+		 * counts as saving while it settles, hence one.
+		 */
+		onSettled: async () => {
+			if (queryClient.isMutating() === 1) await queryClient.invalidateQueries();
+		},
 	});
 
 	const apply = useCallback(

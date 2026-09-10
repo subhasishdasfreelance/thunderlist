@@ -8,6 +8,7 @@ import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
+import { taskFieldRows } from "./quick-add-task";
 
 /**
  * Edit a task.
@@ -15,6 +16,11 @@ import type { Task } from "#/schemas/task";
  * Title and tags are one field, because they are one thing the user typed. The
  * tags are already in the text, so changing them is editing the sentence rather
  * than hunting for a separate control.
+ *
+ * It is the same text area the task was written in, sized the same way, so a
+ * long title can be read and edited whole rather than scrolled along one line.
+ * When adding, a line break starts the next task; here there is only the one
+ * task, so a break is folded back into a space.
  */
 export function TaskRenameDialog({
 	isOpen,
@@ -37,7 +43,7 @@ export function TaskRenameDialog({
 		setValue(task.title);
 	}, [isOpen, task]);
 
-	const parsed = parseInlineTags(value);
+	const parsed = parseInlineTags(value.replace(/\s*\n\s*/g, " "));
 
 	function save() {
 		if (parsed.title === "") return;
@@ -75,6 +81,8 @@ export function TaskRenameDialog({
 					onChange={setValue}
 					onSubmit={save}
 					tags={tags}
+					multiline
+					rows={taskFieldRows(value)}
 					hasAutoFocus
 				/>
 				<Text type="supporting">

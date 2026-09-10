@@ -124,6 +124,23 @@ body {
 	}
 }
 
+/*
+ * No side nav on a phone, from the first paint.
+ *
+ * AppShell chooses between its side nav and the phone layout with a media
+ * query run in JavaScript, and the server has no screen to ask, so it sends the
+ * desktop layout. A phone drew the side nav and then dropped it once the page
+ * had hydrated. The same breakpoint in CSS keeps it from being drawn at all.
+ * 768px is AppShell's own cut-off, not Tailwind's `md`.
+ */
+@layer components {
+	@media (max-width: 768px) {
+		.astryx-app-shell-sidenav {
+			display: none;
+		}
+	}
+}
+
 /* -------------------------------------------------------------------------- */
 /* Motion                                                                     */
 /* -------------------------------------------------------------------------- */

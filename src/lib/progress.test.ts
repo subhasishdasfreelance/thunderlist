@@ -215,9 +215,30 @@ describe("elapsedFraction", () => {
 			elapsedFraction({
 				startDate: "2026-09-01",
 				deadline: "2026-09-11",
-				today: "2026-09-06",
+				now: Date.parse("2026-09-06T00:00:00Z"),
 			}),
 		).toBe(0.5);
+	});
+
+	it("moves through the day rather than once at midnight", () => {
+		// Five and a half days of ten.
+		expect(
+			elapsedFraction({
+				startDate: "2026-09-01",
+				deadline: "2026-09-11",
+				now: Date.parse("2026-09-06T12:00:00Z"),
+			}),
+		).toBe(0.55);
+	});
+
+	it("counts whole hours", () => {
+		expect(
+			elapsedFraction({
+				startDate: "2026-09-01",
+				deadline: "2026-09-11",
+				now: Date.parse("2026-09-06T12:59:59Z"),
+			}),
+		).toBe(0.55);
 	});
 
 	it("clamps once the deadline has passed", () => {
@@ -225,7 +246,7 @@ describe("elapsedFraction", () => {
 			elapsedFraction({
 				startDate: "2026-09-01",
 				deadline: "2026-09-11",
-				today: "2026-10-01",
+				now: Date.parse("2026-10-01T00:00:00Z"),
 			}),
 		).toBe(1);
 	});
@@ -235,7 +256,7 @@ describe("elapsedFraction", () => {
 			elapsedFraction({
 				startDate: "2026-09-01",
 				deadline: null,
-				today: "2026-09-06",
+				now: Date.parse("2026-09-06T00:00:00Z"),
 			}),
 		).toBeNull();
 	});
@@ -244,7 +265,7 @@ describe("elapsedFraction", () => {
 describe("paceStatus", () => {
 	const startDate = "2026-09-01";
 	const deadline = "2026-09-11"; // a ten day window
-	const halfway = "2026-09-06";
+	const halfway = Date.parse("2026-09-06T00:00:00Z");
 
 	it("is on track when progress matches elapsed time", () => {
 		expect(
@@ -252,7 +273,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("on_track");
 	});
@@ -263,7 +284,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.9,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("ahead");
 	});
@@ -274,20 +295,41 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.1,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("behind");
 	});
 
-	it("tolerates small drift rather than flickering", () => {
+	it("tolerates a small drift", () => {
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.53,
+				now: halfway,
+			}),
+		).toBe("on_track");
+	});
+
+	it("stops calling it on track past five points either way", () => {
+		// Six points out, which at the old ten-point tolerance read as on track.
 		expect(
 			paceStatus({
 				startDate,
 				deadline,
 				fractionComplete: 0.56,
-				today: halfway,
+				now: halfway,
 			}),
-		).toBe("on_track");
+		).toBe("ahead");
+
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.44,
+				now: halfway,
+			}),
+		).toBe("behind");
 	});
 
 	it("paces from a back-dated start rather than from today", () => {
@@ -297,7 +339,7 @@ describe("paceStatus", () => {
 				startDate: "2026-08-01",
 				deadline: "2026-10-01",
 				fractionComplete: 0.5,
-				today: "2026-09-01",
+				now: Date.parse("2026-09-01T00:00:00Z"),
 			}),
 		).toBe("on_track");
 	});
@@ -308,7 +350,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: null,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 	});
@@ -319,7 +361,7 @@ describe("paceStatus", () => {
 				startDate: "",
 				deadline,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 
@@ -328,7 +370,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: "2026-08-01",
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 
@@ -337,14 +379,14 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: "not-a-date",
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 	});
 
 	it("counts finished work as ahead when the deadline has not arrived", () => {
 		expect(
-			paceStatus({ startDate, deadline, fractionComplete: 1, today: halfway }),
+			paceStatus({ startDate, deadline, fractionComplete: 1, now: halfway }),
 		).toBe("ahead");
 	});
 
@@ -354,7 +396,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.4,
-				today: "2026-10-01",
+				now: Date.parse("2026-10-01T00:00:00Z"),
 			}),
 		).toBe("behind");
 	});

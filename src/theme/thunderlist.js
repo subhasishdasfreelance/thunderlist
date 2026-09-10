@@ -50,7 +50,16 @@ export const thunderlistTheme = {
     "--radius-container": "18px",
     "--radius-page": "42px",
     "--radius-chat": "42px",
-    "--radius-full": "9999px"
+    "--radius-full": "9999px",
+    "--duration-fast-min": "75ms",
+    "--duration-fast": "100ms",
+    "--duration-fast-max": "135ms",
+    "--duration-medium-min": "150ms",
+    "--duration-medium": "200ms",
+    "--duration-medium-max": "265ms",
+    "--duration-slow-min": "450ms",
+    "--duration-slow": "600ms",
+    "--duration-slow-max": "800ms"
   },
   components: {
     "progressbar-track": {

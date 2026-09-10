@@ -35,6 +35,14 @@ function countLines(value: string): number {
 }
 
 /**
+ * How many rows the task field shows. Shared with the edit dialog, so a task is
+ * edited in the same field it was written in.
+ */
+export function taskFieldRows(value: string): number {
+	return Math.min(Math.max(countLines(value), MIN_ROWS), MAX_ROWS);
+}
+
+/**
  * Add tasks without opening anything.
  *
  * Tasks have no due date and no notes, so a dialog would ask for one field and
@@ -86,7 +94,7 @@ export function QuickAddTask({
 				tags={tags}
 				trackers={trackers}
 				multiline
-				rows={Math.min(Math.max(countLines(value), MIN_ROWS), MAX_ROWS)}
+				rows={taskFieldRows(value)}
 			/>
 			<IconButton
 				label={label}

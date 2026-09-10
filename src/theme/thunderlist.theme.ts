@@ -61,6 +61,15 @@ export const thunderlistTheme = defineTheme({
 	// rows and cards more than a form-heavy one.
 	radius: { base: 6, multiplier: 1 },
 
+	/*
+	 * Quicker than Astryx's default of 175 / 410 / 975ms. Nearly everything
+	 * that moves here is the answer to something the user just did — a dialog
+	 * opening, a row arriving, a screen changing — so it should land at once.
+	 * The easing is left as it is: already fast out of the gate with a soft
+	 * settle, which is what reads as snappy rather than abrupt.
+	 */
+	motion: { fast: 100, medium: 200, slow: 600, ratio: 0.75 },
+
 	tokens: {
 		"--color-accent": ACCENT_FILL,
 		"--color-on-accent": ACCENT_ON_FILL,

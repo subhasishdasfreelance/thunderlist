@@ -12,10 +12,16 @@ import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
 
 /**
  * How far actual progress may drift from elapsed time before it stops counting
- * as "on track". Ten percentage points keeps the label from flickering.
+ * as "on track": five percentage points either way.
+ *
+ * Narrow on purpose. At ten, a ten-day checklist could be a whole day adrift,
+ * or a thirty-task one three tasks short, and still call itself on track. Today
+ * reads its pace against the same figure, so "Behind" means the same thing on
+ * every screen.
  */
-const PACE_TOLERANCE = 0.1;
+export const PACE_TOLERANCE = 0.05;
 
+const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -162,26 +168,50 @@ export type PaceInput = {
 	startDate: string;
 	/** `YYYY-MM-DD` it should be finished by, or `null` when none was set. */
 	deadline: string | null;
-	/** Today, as `YYYY-MM-DD`. Injectable so the maths stays testable. */
+	/**
+	 * Today, as `YYYY-MM-DD`, for the speeds, which are counted in days.
+	 * Injectable so the maths stays testable.
+	 */
 	today?: string;
+	/**
+	 * This moment, as a timestamp, for how much of the time has gone, which is
+	 * counted in hours. Injectable for the same reason.
+	 */
+	now?: number;
 };
 
 /**
  * How much of the available time has gone, 0-1.
+ *
+ * Counted in whole hours, not whole days. In days the mark stood still from
+ * midnight to midnight and then jumped — a seventh of the bar at once on a
+ * week-long checklist — so "expected by now" was out for most of every day.
+ * The speeds are still counted in days; this is only where the mark sits.
+ *
+ * The window runs from midnight UTC on the start date to midnight UTC on the
+ * deadline, the same calendar arithmetic as `daysBetween`. UTC because this is
+ * worked out twice — on the server for the pace label, in the browser for the
+ * bar — and a local midnight would put the two hours apart for anyone outside
+ * the server's timezone. Whole hours because the page is drawn on the server
+ * and taken over by the browser a moment later, and a figure that moved in
+ * between would no longer match the markup it arrived in.
  *
  * `null` when there is not enough information: no deadline, an unparseable
  * start, or a window with no length. Also drives the target mark drawn on
  * progress bars, so the bar and the label always agree.
  */
 export function elapsedFraction(input: PaceInput): number | null {
-	const today = input.today ?? todayDateOnly();
-	const window = daysBetween(input.startDate, input.deadline ?? "");
-	const gone = daysBetween(input.startDate, today);
+	const start = parseDateOnly(input.startDate);
+	const end = parseDateOnly(input.deadline);
 
 	// The deadline must be after the start for "elapsed" to mean anything.
-	if (window === null || gone === null || window <= 0) return null;
+	if (start === null || end === null || end <= start) return null;
 
-	return Math.min(1, Math.max(0, gone / window));
+	const now = input.now ?? Date.now();
+	const hoursGone = Math.floor((now - start) / MS_PER_HOUR);
+	const hoursInWindow = (end - start) / MS_PER_HOUR;
+
+	return Math.min(1, Math.max(0, hoursGone / hoursInWindow));
 }
 
 /**

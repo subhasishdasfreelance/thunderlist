@@ -13,13 +13,11 @@
  * Pure, apart from taking the current time as an argument.
  */
 
+import { PACE_TOLERANCE } from "#/lib/progress";
 import type { PaceStatus } from "#/schemas/checklist";
 
 const MS_PER_HOUR = 3_600_000;
 const HOURS_PER_DAY = 24;
-
-/** Matches `paceStatus`, so "Behind" means the same thing on every screen. */
-const PACE_TOLERANCE = 0.1;
 
 export type DayPace = {
 	/** Midnight at the end of today: what the day is being measured against. */
