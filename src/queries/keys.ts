@@ -1,6 +1,8 @@
 /** Query keys, in one place so a confirmed batch can invalidate precisely. */
 export const queryKeys = {
 	setupStatus: ["setup-status"] as const,
+	/** Who is signed in; see `sessionQuery`. */
+	session: ["session"] as const,
 	searchIndex: ["search-index"] as const,
 	/** Today and Backlog are fetched together, so they share one key. */
 	taskLists: ["task-lists"] as const,

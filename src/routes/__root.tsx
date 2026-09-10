@@ -9,8 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { AppFrame } from "#/components/shell/app-frame";
-import { getSessionFn } from "#/functions/session.functions";
 import { THEME_INIT_SCRIPT } from "#/lib/theme";
+import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
 
@@ -33,9 +33,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	 * This decides what is *shown*. What is *readable* is decided separately, per
 	 * request, in `requireUserId` — a guard in the router protects screens, not
 	 * data, and the two are kept independent on purpose.
+	 *
+	 * That independence is what lets the answer be remembered rather than asked
+	 * for on every click, which put a round trip in front of every navigation.
+	 * The server's answer travels down with the first page, sign-out clears it
+	 * along with every other query, and once it is a minute old it is re-checked
+	 * in the background — so a session that ended elsewhere is still caught on
+	 * the next click, without that click waiting for it.
 	 */
-	beforeLoad: async ({ location }) => {
-		const user = await getSessionFn();
+	beforeLoad: async ({ context, location }) => {
+		const user = await context.queryClient.ensureQueryData({
+			...sessionQuery(),
+			revalidateIfStale: true,
+		});
 		const isLoginPage = location.pathname === "/login";
 
 		if (!user && !isLoginPage) {
