@@ -34,7 +34,11 @@ const config = defineConfig({
         '/logo.svg': PUBLIC_FILE_CACHE,
         '/logo.png': PUBLIC_FILE_CACHE,
         '/icons/**': PUBLIC_FILE_CACHE,
-        '/manifest.webmanifest': PUBLIC_FILE_CACHE,
+        // Checked on every visit, never kept. The installed app takes its splash
+        // and status bar colours from this file and updates them by itself, but
+        // only if it sees the new copy — a day-old cached one kept the old
+        // colours even through a reinstall.
+        '/manifest.webmanifest': { headers: { 'cache-control': 'no-cache' } },
       },
     }),
     tailwindcss(),
