@@ -143,22 +143,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<head>
 				<HeadContent />
 				{/*
-				 * The phone's status bar, matched to the page under the top bar in
-				 * each scheme. Written here rather than in `head()`, which keeps
-				 * only one meta tag per name and would drop the second. The script
-				 * below repaints both for a scheme chosen in the app, which is why
-				 * a different `content` is expected at hydration.
+				 * The phone's status bar. The script below sets it to the scheme in
+				 * force before the first paint, which is why a different `content`
+				 * is expected at hydration; see `STATUS_BAR_COLORS`.
 				 */}
 				<meta
 					name="theme-color"
-					media="(prefers-color-scheme: light)"
 					content={STATUS_BAR_COLORS.light}
-					suppressHydrationWarning
-				/>
-				<meta
-					name="theme-color"
-					media="(prefers-color-scheme: dark)"
-					content={STATUS_BAR_COLORS.dark}
 					suppressHydrationWarning
 				/>
 				{/*
