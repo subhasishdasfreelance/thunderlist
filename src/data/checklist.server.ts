@@ -27,8 +27,16 @@ import type {
 } from "#/schemas/checklist";
 import type { Task, TaskPatch } from "#/schemas/task";
 
-/** Just enough of a task to count progress with. */
-const PROGRESS_FIELDS = { _id: 0, checklistId: 1, completed: 1 } as const;
+/**
+ * Just enough of a task to count progress with. `trackerId` is part of that: a
+ * task following a tracker is done when the tracker is, not when it is ticked.
+ */
+const PROGRESS_FIELDS = {
+	_id: 0,
+	checklistId: 1,
+	completed: 1,
+	trackerId: 1,
+} as const;
 
 /** A task document holds the link to its checklist; a `Task` does not. */
 const TASK_FIELDS = { _id: 0, checklistId: 0 } as const;
@@ -78,19 +86,24 @@ function summarise(
  * Every checklist with its progress.
  *
  * Two reads, whatever the number of checklists: the checklists themselves, and
- * the completed flag of every task grouped by the checklist it belongs to.
+ * the completed flag of every task grouped by the checklist it belongs to. A
+ * third reads the trackers those tasks follow, when any do.
  */
 export async function listChecklists(
 	userId: string,
 ): Promise<Array<ChecklistSummary>> {
 	const current = await collections();
 
-	const [checklists, tasks] = await Promise.all([
+	const [checklists, stored] = await Promise.all([
 		current.checklists
 			.find({ userId }, { projection: DOMAIN_FIELDS })
 			.toArray(),
 		current.tasks.find({ userId }, { projection: PROGRESS_FIELDS }).toArray(),
 	]);
+
+	// Counted the same way the checklist itself counts them, or a task finished
+	// by its tracker shows as done inside the checklist and not on its card.
+	const tasks = await withTrackedCompletion(current, userId, stored);
 
 	const byChecklist = new Map<string, Array<Pick<Task, "completed">>>();
 	for (const task of tasks) {
@@ -146,16 +159,18 @@ export async function readTasksByIds(
  * list would be lying. Ordinary tasks are handed back untouched, and a set with
  * none costs no query at all.
  */
-export async function withTrackedCompletion(
+export async function withTrackedCompletion<
+	T extends Pick<Task, "trackerId" | "completed">,
+>(
 	current: Collections,
 	userId: string,
-	tasks: ReadonlyArray<Task>,
-): Promise<Array<Task>> {
+	tasks: ReadonlyArray<T>,
+): Promise<Array<T>> {
+	// `== null` rather than `=== null`: a task stored before trackers existed has
+	// no `trackerId` at all, and is as ordinary as one that says `null`.
 	const trackerIds = [
 		...new Set(
-			tasks.flatMap((task) =>
-				task.trackerId === null ? [] : [task.trackerId],
-			),
+			tasks.flatMap((task) => (task.trackerId == null ? [] : [task.trackerId])),
 		),
 	];
 
@@ -188,7 +203,7 @@ export async function withTrackedCompletion(
 	);
 
 	return tasks.map((task) =>
-		task.trackerId === null
+		task.trackerId == null
 			? task
 			: { ...task, completed: reached.get(task.trackerId) ?? false },
 	);
