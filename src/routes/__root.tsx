@@ -109,14 +109,29 @@ function RootComponent() {
 	 */
 	useEffect(() => {
 		if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+		const { serviceWorker } = navigator;
 		// Not registering only costs the cache; the app works the same without it.
-		navigator.serviceWorker.register("/sw.js").catch(() => {});
+		serviceWorker.register("/sw.js").catch(() => {});
 
-		// Today can open from a copy saved before the latest deploy, which may
-		// then ask for a chunk the server no longer has. Loading afresh fixes it.
 		const reload = () => window.location.reload();
+
+		// A page left open across a deploy can ask for a chunk the server no
+		// longer has. Loading afresh picks up the new version instead.
 		window.addEventListener("vite:preloadError", reload);
-		return () => window.removeEventListener("vite:preloadError", reload);
+
+		// A new worker taking over during a visit is a new version of the app,
+		// so it is loaded there and then rather than on the next open. Not on a
+		// first visit, where there was no worker before this one.
+		const hadWorker = serviceWorker.controller !== null;
+		const onNewWorker = () => {
+			if (hadWorker) reload();
+		};
+		serviceWorker.addEventListener("controllerchange", onNewWorker);
+
+		return () => {
+			window.removeEventListener("vite:preloadError", reload);
+			serviceWorker.removeEventListener("controllerchange", onNewWorker);
+		};
 	}, []);
 
 	// The frame is rendered signed out too — it drops everything that needs an

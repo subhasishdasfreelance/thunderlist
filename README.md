@@ -483,11 +483,15 @@ Screen** (Safari) or **Install app** (Chrome); the manifest and icons are in
 `public/`.
 
 `public/sw.js` answers the hashed files under `/assets/` from the browser's
-cache, and opens Today — the page the installed app starts on — from the copy
-saved on the last visit, fetching a fresh one behind it. The page asks for its
-data again as soon as it starts, so the old copy is on screen only until the
-latest arrives. Every other page comes from the network. The worker is
-registered in production builds only.
+cache. Pages always come from the network, so every open gets the latest
+version; the last copy of Today is kept only so the app can open offline. A new
+worker reloads the page when it takes over, so a change to it lands on the same
+open. The worker is registered in production builds only.
+
+The splash and status bar colours, icon and name come from the manifest, which
+Chrome builds into the installed app. The manifest is never cached, and Chrome
+checks it when the app is opened and updates the installed app on its own —
+usually within a day, with no reinstall.
 
 ---
 

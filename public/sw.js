@@ -2,22 +2,17 @@
  * Thunderlist's service worker. Registered from `src/routes/__root.tsx`, in
  * production builds only.
  *
- * Three jobs, all about speed:
- *
  * 1. The bundle. Everything under `/assets/` is named after a hash of its
  *    content, so a file of a given name never changes. Those are answered from
  *    the cache without touching the network.
  *
- * 2. The page the installed app opens on. Today is answered at once from the
- *    copy saved on the last visit, and fetched again behind it for next time.
- *    The phone's splash screen lasts until the first paint, and this puts that
- *    paint on the phone rather than behind a server and a database. The copy is
- *    as old as the last visit, which is fine: the page asks for its data again
- *    the moment it starts and fills in the latest.
+ * 2. Pages. Always from the network, so every open gets the latest version of
+ *    the app and of its data. Navigation preload starts the request while this
+ *    worker is still waking up, rather than making the page wait for it.
  *
- * 3. Every other page. Those come from the network. Navigation preload starts
- *    the request while this worker is still waking up, rather than making the
- *    page wait for it.
+ * 3. Offline. The latest copy of Today — the page the installed app opens on —
+ *    is kept, with everything it loads, and used only when the network cannot
+ *    be reached, so the app still opens without a connection.
  *
  * Nothing else is touched. Server functions, sign-in and anything from another
  * origin go to the network exactly as if this file did not exist.
@@ -28,8 +23,8 @@ const ASSETS = "thunderlist-assets-v1";
 /** Also cleared on sign-out, by name, in `src/components/shell/user-menu.tsx`. */
 const PAGES = "thunderlist-pages-v1";
 
-/** Pages answered from their saved copy: the one the installed app opens on. */
-const INSTANT_PAGES = new Set(["/today"]);
+/** Pages kept for opening offline: the one the installed app opens on. */
+const OFFLINE_PAGES = new Set(["/today"]);
 
 /*
  * Every deploy brings a new set of hashed files and leaves the old ones behind,
@@ -70,8 +65,8 @@ self.addEventListener("fetch", (event) => {
 
 	if (request.mode === "navigate") {
 		event.respondWith(
-			INSTANT_PAGES.has(url.pathname) && url.search === ""
-				? fromSavedPage(event)
+			OFFLINE_PAGES.has(url.pathname) && url.search === ""
+				? fromNetworkKeepingCopy(event)
 				: fromNetwork(event),
 		);
 		return;
@@ -91,23 +86,17 @@ async function fromNetwork(event) {
 	return preloaded ?? fetch(event.request);
 }
 
-/**
- * The saved copy if there is one, with a fresh copy fetched behind it for next
- * time; the network if there is no copy yet.
- */
-async function fromSavedPage(event) {
-	const pages = await caches.open(PAGES);
-	const saved = await pages.match(event.request.url);
-
-	const fresh = fromNetwork(event).then((response) => {
+/** A page from the network, keeping a copy for when there is no network. */
+async function fromNetworkKeepingCopy(event) {
+	try {
+		const response = await fromNetwork(event);
 		event.waitUntil(savePage(event.request.url, response.clone()));
 		return response;
-	});
-
-	if (!saved) return fresh;
-
-	event.waitUntil(fresh.catch(() => {}));
-	return saved;
+	} catch (error) {
+		const saved = await (await caches.open(PAGES)).match(event.request.url);
+		if (saved) return saved;
+		throw error;
+	}
 }
 
 /**
@@ -119,7 +108,8 @@ async function savePage(url, response) {
 	const pages = await caches.open(PAGES);
 
 	// A redirect is the server saying no, most likely because the session has
-	// ended. Nothing is kept, so the next launch asks the server.
+	// ended. Nothing is kept, so an offline open does not show a signed-out
+	// visitor the last account's list.
 	if (!response.ok || response.type !== "basic") {
 		await pages.delete(url);
 		return;
