@@ -7,6 +7,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -139,13 +140,14 @@ function TagsPage() {
 				<>
 					<FacetSummary facets={facets} selected={selected} onSelect={select} />
 
-					{allTags.length === 0 ? (
-						<EmptyState
-							title="No tags yet."
-							description="Create a tag to group tasks across your checklists."
-						/>
-					) : (
-						<VStack gap={2}>
+					<VStack gap={2}>
+						{/* With no tags there is only Untagged, which is still a list worth
+						    reading — so the hint replaces the picker, not the tasks. */}
+						{allTags.length === 0 ? (
+							<Text type="supporting">
+								No tags yet. Create one to group tasks across your checklists.
+							</Text>
+						) : (
 							<HStack gap={2} hAlign="between" vAlign="center">
 								<Selector
 									label="Tag to show"
@@ -182,36 +184,37 @@ function TagsPage() {
 									</HStack>
 								)}
 							</HStack>
+						)}
 
-							{shown.length === 0 ? (
-								<EmptyState
-									isCompact
-									title="Nothing here."
-									description={
-										selected === UNTAGGED
-											? "Every task carries a tag."
-											: "Nothing carries this tag yet."
-									}
-								/>
-							) : (
-								<Card padding={0}>
-									<VStack gap={0} paddingBlock={2}>
-										{paging.shown.map((task) => (
-											<TaggedTaskRow
-												key={task.taskId}
-												task={task}
-												tags={allTags}
-											/>
-										))}
-										<ShowMore
-											hidden={paging.hidden}
-											onShowMore={paging.showMore}
+						{shown.length === 0 ? (
+							<EmptyState
+								isCompact
+								title="Nothing here."
+								description={
+									selected === UNTAGGED
+										? "Every task carries a tag."
+										: "Nothing carries this tag yet."
+								}
+							/>
+						) : (
+							<Card padding={0}>
+								<VStack gap={0} paddingBlock={2}>
+									{paging.shown.map((task, position) => (
+										<TaggedTaskRow
+											key={task.taskId}
+											task={task}
+											tags={allTags}
+											hasDivider={position > 0}
 										/>
-									</VStack>
-								</Card>
-							)}
-						</VStack>
-					)}
+									))}
+									<ShowMore
+										hidden={paging.hidden}
+										onShowMore={paging.showMore}
+									/>
+								</VStack>
+							</Card>
+						)}
+					</VStack>
 				</>
 			)}
 

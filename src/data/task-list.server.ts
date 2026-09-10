@@ -171,6 +171,17 @@ export async function addTaskRef(
 	return item;
 }
 
+/**
+ * Take a task off a list.
+ *
+ * A task in no checklist exists only on the lists. Taken off the last one it
+ * would have no home left, yet still turn up in search, Tags and Priority — so
+ * it is deleted along with its reference. A task in a checklist is untouched:
+ * the checklist is where it lives.
+ *
+ * The task goes before the reference, so a retry after a failure in between
+ * still finds the reference and finishes the job.
+ */
 export async function removeTaskRef(
 	userId: string,
 	list: TaskListName,
@@ -178,7 +189,26 @@ export async function removeTaskRef(
 ): Promise<void> {
 	const current = await collections();
 
+	const ref = await current.taskRefs.findOne(
+		{ itemId, list, userId },
+		{ projection: { _id: 0, taskId: 1 } },
+	);
 	// Already gone is the outcome this asked for, not a failure.
+	if (!ref) return;
+
+	const onAnotherList = await current.taskRefs.findOne(
+		{ userId, taskId: ref.taskId, itemId: { $ne: itemId } },
+		{ projection: { _id: 1 } },
+	);
+
+	if (!onAnotherList) {
+		await current.tasks.deleteOne({
+			userId,
+			taskId: ref.taskId,
+			checklistId: null,
+		});
+	}
+
 	await current.taskRefs.deleteOne({ itemId, list, userId });
 }
 

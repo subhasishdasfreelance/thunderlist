@@ -1,19 +1,18 @@
 import { Card } from "@astryxdesign/core/Card";
-import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
-import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CircleDashed, Star, Zap, ZapOff } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { CircleDashed, Flame, Star, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
 import { ShowMore } from "#/components/common/show-more";
 import { ErrorNotice } from "#/components/common/states";
-import { TaggedTitle } from "#/components/tags/tagged-title";
+import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
 import { useShowMore } from "#/lib/use-show-more";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
@@ -36,10 +35,14 @@ export const Route = createFileRoute("/priority")({
 });
 
 /** What each band means, so the grid is readable without knowing the theory. */
-/** The marks the flags already use, so a band looks like what it holds. */
+/**
+ * The marks the flags already use, so a band looks like what it holds. Both
+ * flags at once is the corner to do first, so it gets a mark of its own rather
+ * than borrowing one of the two.
+ */
 const BAND_ICONS: Record<PriorityRank, typeof Zap> = {
-	"urgent-important": Zap,
-	urgent: ZapOff,
+	"urgent-important": Flame,
+	urgent: Zap,
 	important: Star,
 	none: CircleDashed,
 };
@@ -62,8 +65,6 @@ const BAND_HINTS: Record<PriorityRank, string> = {
  * Completed work is left out: this is for deciding what to do next.
  */
 function PriorityPage() {
-	const navigate = useNavigate();
-
 	const index = useQuery(searchIndexQuery());
 	const tagsResult = useQuery(tagsQuery());
 
@@ -150,45 +151,12 @@ function PriorityPage() {
 							<Card padding={0}>
 								<VStack gap={0} paddingBlock={2}>
 									{paging.shown.map((task, position) => (
-										<div key={task.taskId} className="thunderlist-row">
-											{position === 0 ? null : <Divider />}
-											{/* A task in no checklist has nowhere to open, so it
-											    is a row rather than a link. */}
-											{task.checklistId === null ? (
-												<HStack
-													gap={2}
-													hAlign="between"
-													vAlign="center"
-													paddingBlock={1.5}
-												>
-													<TaggedTitle title={task.title} tags={tags} />
-												</HStack>
-											) : (
-												<button
-													type="button"
-													className="thunderlist-task-row w-full cursor-pointer text-left"
-													onClick={() =>
-														void navigate({
-															to: "/checklists/$checklistId",
-															params: {
-																checklistId: task.checklistId as string,
-															},
-															search: { task: task.taskId },
-														})
-													}
-												>
-													<HStack
-														gap={2}
-														hAlign="between"
-														vAlign="center"
-														paddingBlock={1.5}
-													>
-														<TaggedTitle title={task.title} tags={tags} />
-														<Text type="supporting">{task.checklistTitle}</Text>
-													</HStack>
-												</button>
-											)}
-										</div>
+										<TaggedTaskRow
+											key={task.taskId}
+											task={task}
+											tags={tags}
+											hasDivider={position > 0}
+										/>
 									))}
 									<ShowMore
 										hidden={paging.hidden}
