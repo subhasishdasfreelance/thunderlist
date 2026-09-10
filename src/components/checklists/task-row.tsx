@@ -1,5 +1,6 @@
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { VStack } from "@astryxdesign/core/Stack";
 import { MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { TaggedTitle } from "#/components/tags/tagged-title";
@@ -22,7 +23,7 @@ export type TaskRowActions = TaskQuickActions & {
 };
 
 /**
- * One task in a checklist.
+ * One task in a checklist, or on a tag's page among tasks from several.
  *
  * The four things done most often — planning a task for today, parking it, and
  * saying whether it is urgent or important — are buttons on the row itself
@@ -42,22 +43,36 @@ export function TaskRow({
 	listState,
 	tags,
 	actions,
+	checklist,
 }: {
 	task: Task;
 	/** Which reference list this task is on, if any. */
 	listState: TaskListName | null;
 	tags: ReadonlyArray<Tag>;
 	actions: TaskRowActions;
+	/**
+	 * The checklist the task lives in, on a screen that gathers tasks from many
+	 * — a tag's. Left out on a checklist's own page, where the page is the
+	 * answer. `null` is a task that belongs to no checklist.
+	 */
+	checklist?: { title: string | null; onOpen: () => void } | null;
 }) {
 	const [isHovered, setIsHovered] = useState(false);
 
 	/** Its state comes from a tracker, so nothing here may set it by hand. */
 	const isTracked = task.trackerId !== null;
+	/**
+	 * On Today and in no checklist, taking it off Today deletes it, so it has no
+	 * Today toggle here either; see `TaskRefRow`.
+	 */
+	const isLooseOnToday = checklist === null && listState === "today";
 
 	const shortcuts = useMemo(
 		() => ({
-			[TASK_SHORTCUTS.today]: () =>
-				actions.onSetList(listState === "today" ? null : "today"),
+			[TASK_SHORTCUTS.today]: () => {
+				if (isLooseOnToday) return;
+				actions.onSetList(listState === "today" ? null : "today");
+			},
 			[TASK_SHORTCUTS.backlog]: () =>
 				actions.onSetList(listState === "backlog" ? null : "backlog"),
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task.urgent),
@@ -70,6 +85,7 @@ export function TaskRow({
 		[
 			actions,
 			listState,
+			isLooseOnToday,
 			task.urgent,
 			task.important,
 			task.completed,
@@ -78,6 +94,10 @@ export function TaskRow({
 	);
 
 	useRowShortcuts(isHovered, shortcuts);
+
+	const title = (
+		<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
+	);
 
 	return (
 		/*
@@ -123,15 +143,32 @@ export function TaskRow({
 					}
 					onChange={actions.onToggle}
 				/>
-				<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
+				{/* The checklist name is the way into it, as it is on Today. */}
+				{checklist?.title == null ? (
+					title
+				) : (
+					<VStack gap={0}>
+						{title}
+						<button
+							type="button"
+							className="thunderlist-crumb"
+							title={`Open ${checklist.title}`}
+							onClick={checklist.onOpen}
+						>
+							{checklist.title}
+						</button>
+					</VStack>
+				)}
 			</div>
 
 			<div className="order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
-				<TodayButton
-					title={task.title}
-					listState={listState}
-					actions={actions}
-				/>
+				{isLooseOnToday ? null : (
+					<TodayButton
+						title={task.title}
+						listState={listState}
+						actions={actions}
+					/>
+				)}
 
 				<DropdownMenu
 					hasChevron={false}

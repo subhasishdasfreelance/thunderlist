@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "#/queries/keys";
 import type { ChecklistDetail, ChecklistSummary } from "#/schemas/checklist";
+import type { Tag, TagDetail } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskRefEntry } from "#/schemas/task-list";
 import { applyOptimistically } from "./optimistic";
@@ -31,6 +32,19 @@ function summary(checklistId: string): ChecklistSummary {
 		updatedAt: "2026-01-01T00:00:00.000Z",
 		progress: { total: 1, completed: 0, percent: 0 },
 		status: null,
+	};
+}
+
+function tag(tagId: string): Tag {
+	return {
+		tagId,
+		name: tagId,
+		color: "blue",
+		description: "",
+		startDate: null,
+		deadline: null,
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
 	};
 }
 
@@ -110,6 +124,43 @@ describe("applyOptimistically", () => {
 			queryKeys.taskLists,
 		);
 		expect(lists?.today[0]?.task?.completed).toBe(true);
+	});
+
+	/*
+	 * `["tags"]` is the tag list's key and the first segment of every tag page's,
+	 * the same trap as the checklists above: the list must be left alone while
+	 * the page holding the task is patched.
+	 */
+	it("ticks the task on a tag's page and leaves the tag list alone", () => {
+		const queryClient = client();
+
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [tag("tag_1")]);
+		queryClient.setQueryData<TagDetail>(queryKeys.tag("tag_1"), {
+			...tag("tag_1"),
+			progress: { total: 1, completed: 0, percent: 0 },
+			status: null,
+			tasks: [
+				{
+					task: task({ taskId: "tsk_1" }),
+					checklistId: "chk_1",
+					checklistTitle: "chk_1",
+				},
+			],
+		});
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { completed: true },
+		});
+
+		expect(queryClient.getQueryData<Array<Tag>>(queryKeys.tags)).toEqual([
+			tag("tag_1"),
+		]);
+
+		const detail = queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"));
+		expect(detail?.tasks[0]?.task.completed).toBe(true);
+		expect(detail?.progress).toEqual({ total: 1, completed: 1, percent: 100 });
 	});
 
 	it("takes a deleted task out of both", () => {

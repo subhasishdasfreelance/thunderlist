@@ -13,10 +13,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as BacklogRouteImport } from './routes/backlog'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PriorityRouteImport } from './routes/priority'
-import { Route as TagsRouteImport } from './routes/tags'
 import { Route as TodayRouteImport } from './routes/today'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
+import { Route as TagsIndexRouteImport } from './routes/tags.index'
+import { Route as TagsTagIdRouteImport } from './routes/tags.$tagId'
 import { Route as TrackersIndexRouteImport } from './routes/trackers.index'
 import { Route as TrackersTrackerIdRouteImport } from './routes/trackers.$trackerId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -41,11 +42,6 @@ const PriorityRoute = PriorityRouteImport.update({
   path: '/priority',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TagsRoute = TagsRouteImport.update({
-  id: '/tags',
-  path: '/tags',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TodayRoute = TodayRouteImport.update({
   id: '/today',
   path: '/today',
@@ -59,6 +55,16 @@ const ChecklistsIndexRoute = ChecklistsIndexRouteImport.update({
 const ChecklistsChecklistIdRoute = ChecklistsChecklistIdRouteImport.update({
   id: '/checklists/$checklistId',
   path: '/checklists/$checklistId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TagsIndexRoute = TagsIndexRouteImport.update({
+  id: '/tags/',
+  path: '/tags/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TagsTagIdRoute = TagsTagIdRouteImport.update({
+  id: '/tags/$tagId',
+  path: '/tags/$tagId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrackersIndexRoute = TrackersIndexRouteImport.update({
@@ -82,11 +88,12 @@ export interface FileRoutesByFullPath {
   '/backlog': typeof BacklogRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
-  '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/tags/$tagId': typeof TagsTagIdRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
+  '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -95,11 +102,12 @@ export interface FileRoutesByTo {
   '/backlog': typeof BacklogRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
-  '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/tags/$tagId': typeof TagsTagIdRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists': typeof ChecklistsIndexRoute
+  '/tags': typeof TagsIndexRoute
   '/trackers': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -109,11 +117,12 @@ export interface FileRoutesById {
   '/backlog': typeof BacklogRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
-  '/tags': typeof TagsRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/tags/$tagId': typeof TagsTagIdRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
+  '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -124,11 +133,12 @@ export interface FileRouteTypes {
     | '/backlog'
     | '/login'
     | '/priority'
-    | '/tags'
     | '/today'
     | '/checklists/$checklistId'
+    | '/tags/$tagId'
     | '/trackers/$trackerId'
     | '/checklists/'
+    | '/tags/'
     | '/trackers/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -137,11 +147,12 @@ export interface FileRouteTypes {
     | '/backlog'
     | '/login'
     | '/priority'
-    | '/tags'
     | '/today'
     | '/checklists/$checklistId'
+    | '/tags/$tagId'
     | '/trackers/$trackerId'
     | '/checklists'
+    | '/tags'
     | '/trackers'
     | '/api/auth/$'
   id:
@@ -150,11 +161,12 @@ export interface FileRouteTypes {
     | '/backlog'
     | '/login'
     | '/priority'
-    | '/tags'
     | '/today'
     | '/checklists/$checklistId'
+    | '/tags/$tagId'
     | '/trackers/$trackerId'
     | '/checklists/'
+    | '/tags/'
     | '/trackers/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -164,11 +176,12 @@ export interface RootRouteChildren {
   BacklogRoute: typeof BacklogRoute
   LoginRoute: typeof LoginRoute
   PriorityRoute: typeof PriorityRoute
-  TagsRoute: typeof TagsRoute
   TodayRoute: typeof TodayRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
+  TagsTagIdRoute: typeof TagsTagIdRoute
   TrackersTrackerIdRoute: typeof TrackersTrackerIdRoute
   ChecklistsIndexRoute: typeof ChecklistsIndexRoute
+  TagsIndexRoute: typeof TagsIndexRoute
   TrackersIndexRoute: typeof TrackersIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -203,13 +216,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PriorityRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tags': {
-      id: '/tags'
-      path: '/tags'
-      fullPath: '/tags'
-      preLoaderRoute: typeof TagsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/today': {
       id: '/today'
       path: '/today'
@@ -229,6 +235,20 @@ declare module '@tanstack/react-router' {
       path: '/checklists/$checklistId'
       fullPath: '/checklists/$checklistId'
       preLoaderRoute: typeof ChecklistsChecklistIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tags/': {
+      id: '/tags/'
+      path: '/tags'
+      fullPath: '/tags/'
+      preLoaderRoute: typeof TagsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tags/$tagId': {
+      id: '/tags/$tagId'
+      path: '/tags/$tagId'
+      fullPath: '/tags/$tagId'
+      preLoaderRoute: typeof TagsTagIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/trackers/': {
@@ -260,11 +280,12 @@ const rootRouteChildren: RootRouteChildren = {
   BacklogRoute: BacklogRoute,
   LoginRoute: LoginRoute,
   PriorityRoute: PriorityRoute,
-  TagsRoute: TagsRoute,
   TodayRoute: TodayRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
+  TagsTagIdRoute: TagsTagIdRoute,
   TrackersTrackerIdRoute: TrackersTrackerIdRoute,
   ChecklistsIndexRoute: ChecklistsIndexRoute,
+  TagsIndexRoute: TagsIndexRoute,
   TrackersIndexRoute: TrackersIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

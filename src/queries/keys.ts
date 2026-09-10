@@ -14,4 +14,7 @@ export const queryKeys = {
 	trackerEntries: (trackerId: string) =>
 		["trackers", trackerId, "entries"] as const,
 	tags: ["tags"] as const,
+	tag: (tagId: string) => ["tags", tagId] as const,
+	/** The tags with their progress, which only the Tags screen reads. */
+	tagSummaries: ["tag-summaries"] as const,
 };

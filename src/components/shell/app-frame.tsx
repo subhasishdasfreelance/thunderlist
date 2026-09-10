@@ -33,7 +33,8 @@ import { UserMenu } from "./user-menu";
  * There is no `Theme` wrapper: the app uses Astryx's own palette, whose accent
  * is a strong blue with a neutral set designed around it. The `wash` variant
  * puts the page on a tinted ground so the white cards above it have an edge;
- * the bars themselves are made translucent in `styles.css`.
+ * the bars themselves are made translucent in `styles.css` — the top one only
+ * once the page has scrolled.
  */
 export function AppFrame({
 	user,
@@ -96,6 +97,25 @@ export function AppFrame({
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
 	}, []);
+
+	/*
+	 * Whether the page has moved off the top.
+	 *
+	 * The top bar is clear at the top of the page and turns to glass once there
+	 * is content passing under it; see "Glass navigation" in `styles.css`. Read
+	 * once on mount too, because a reload can land part-way down the page.
+	 */
+	const [isScrolled, setIsScrolled] = useState(false);
+
+	useEffect(() => {
+		function update() {
+			setIsScrolled(window.scrollY > 0);
+		}
+
+		update();
+		window.addEventListener("scroll", update, { passive: true });
+		return () => window.removeEventListener("scroll", update);
+	}, []);
 	/*
 	 * Two different "where are we".
 	 *
@@ -125,6 +145,7 @@ export function AppFrame({
 			<RouteProgress />
 			<LinkProvider component={RouterLink}>
 				<AppShell
+					data-scrolled={isScrolled}
 					height="auto"
 					variant="wash"
 					contentPadding={0}
@@ -148,12 +169,21 @@ export function AppFrame({
 												icon={<Search aria-hidden />}
 												onClick={() => setIsSearchOpen(true)}
 											/>
+											{/* A closed ring reads larger than the open magnifier
+											   beside it, so it is drawn at 20 rather than 24; the
+											   stroke stays 2px so it does not look thinner. */}
 											<IconButton
 												label="Shortcuts and help"
 												tooltip="Shortcuts (?)"
 												variant="ghost"
 												size="sm"
-												icon={<CircleQuestionMark aria-hidden />}
+												icon={
+													<CircleQuestionMark
+														aria-hidden
+														size={20}
+														absoluteStrokeWidth
+													/>
+												}
 												onClick={() => setIsHelpOpen(true)}
 											/>
 										</>

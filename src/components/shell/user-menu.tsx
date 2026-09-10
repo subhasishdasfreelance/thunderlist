@@ -46,9 +46,14 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 				variant: "ghost",
 				size: "sm",
 				isIconOnly: true,
+				/*
+				 * `xsm`, 20px, not the 24 of the icons beside it: a solid disc reads
+				 * larger than a line drawing of the same size, and at 20 it matches
+				 * the help ring.
+				 */
 				icon: (
 					<Avatar
-						size="sm"
+						size="xsm"
 						name={user.name}
 						src={user.image ?? undefined}
 						tooltip={false}

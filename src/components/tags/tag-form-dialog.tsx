@@ -1,11 +1,15 @@
 import { Button } from "@astryxdesign/core/Button";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { ScheduleFields } from "#/components/common/schedule-fields";
+import type { TagValues } from "#/lib/changes";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 
 const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
@@ -14,10 +18,13 @@ const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
 }));
 
 /**
- * Create or rename a tag.
+ * Create or edit a tag.
  *
  * Renaming here is enough to rename it everywhere: tasks reference a tag by id,
  * so the name lives in exactly one place.
+ *
+ * The description and dates are a checklist's, and all of them are optional: a
+ * tag without dates still counts its tasks, it just has no pace to keep.
  */
 export function TagFormDialog({
 	isOpen,
@@ -31,15 +38,25 @@ export function TagFormDialog({
 	tag?: Tag;
 	/** Every other tag name, so a duplicate is caught before it is queued. */
 	existingNames: ReadonlyArray<string>;
-	onSubmit: (values: { name: string; color: TagColor }) => void;
+	onSubmit: (values: TagValues) => void;
 }) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<TagColor>("blue");
+	const [description, setDescription] = useState("");
+	const [startDate, setStartDate] = useState<ISODateString | undefined>(
+		undefined,
+	);
+	const [deadline, setDeadline] = useState<ISODateString | undefined>(
+		undefined,
+	);
 
 	useEffect(() => {
 		if (!isOpen) return;
 		setName(tag?.name ?? "");
 		setColor(tag?.color ?? "blue");
+		setDescription(tag?.description ?? "");
+		setStartDate((tag?.startDate as ISODateString | null) ?? undefined);
+		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
 	}, [isOpen, tag]);
 
 	const trimmed = name.trim();
@@ -52,7 +69,13 @@ export function TagFormDialog({
 
 	function save() {
 		if (!isValid) return;
-		onSubmit({ name: trimmed, color });
+		onSubmit({
+			name: trimmed,
+			color,
+			description: description.trim(),
+			startDate: startDate ?? null,
+			deadline: deadline ?? null,
+		});
 	}
 
 	return (
@@ -60,7 +83,6 @@ export function TagFormDialog({
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 			title={tag ? "Edit tag" : "New tag"}
-			width={400}
 			actions={() => (
 				<HStack gap={2} hAlign="end">
 					<Button
@@ -111,6 +133,23 @@ export function TagFormDialog({
 						label={trimmed === "" ? "Preview" : trimmed}
 					/>
 				</HStack>
+
+				<TextArea
+					label="Description"
+					isOptional
+					rows={3}
+					value={description}
+					onChange={setDescription}
+					placeholder="What this tag gathers"
+				/>
+
+				<ScheduleFields
+					startDate={startDate}
+					deadline={deadline}
+					onStartDateChange={setStartDate}
+					onDeadlineChange={setDeadline}
+					isStartDateOptional
+				/>
 			</VStack>
 		</FormDialog>
 	);

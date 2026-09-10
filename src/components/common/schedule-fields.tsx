@@ -4,7 +4,8 @@ import { FieldRow } from "#/components/common/field-row";
 import { formatDate } from "#/lib/format-date";
 
 /**
- * The start date and deadline pair, shared by the checklist and tracker forms.
+ * The start date and deadline pair, shared by the checklist, tracker and tag
+ * forms.
  *
  * Start date is required and pre-filled with today, but editable, so something
  * begun last month is paced from when it really began rather than from when it
@@ -16,18 +17,29 @@ export function ScheduleFields({
 	deadline,
 	onStartDateChange,
 	onDeadlineChange,
+	isStartDateOptional = false,
 }: {
 	startDate: ISODateString | undefined;
 	deadline: ISODateString | undefined;
 	onStartDateChange: (value: ISODateString | undefined) => void;
 	onDeadlineChange: (value: ISODateString | undefined) => void;
+	/**
+	 * A tag's start date may be left empty, and is then counted from the day the
+	 * tag was made.
+	 */
+	isStartDateOptional?: boolean;
 }) {
 	return (
 		<FieldRow>
 			<DateInput
 				label="Start date"
-				isRequired
-				description="Set it back to log work you have already done."
+				isRequired={!isStartDateOptional}
+				isOptional={isStartDateOptional}
+				description={
+					isStartDateOptional
+						? "Leave empty to count from the day it was made."
+						: "Set it back to log work you have already done."
+				}
 				format={formatDate}
 				value={startDate}
 				onChange={onStartDateChange}

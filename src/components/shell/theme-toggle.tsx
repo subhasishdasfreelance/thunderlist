@@ -1,22 +1,25 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Monitor, Moon, SunMedium } from "lucide-react";
+import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { type ColorScheme, setColorScheme, useColorScheme } from "#/lib/theme";
 
 const OPTIONS: Array<{
 	scheme: ColorScheme;
 	label: string;
-	icon: typeof SunMedium;
+	icon: typeof Sun;
+	/** Drawn size in the bar, in px. */
+	size: number;
 }> = [
 	/*
-	 * `SunMedium`, not `Sun`: the full sun's rays run to the edge of its box, so
-	 * beside a magnifier and a circled question mark — both of which sit well
-	 * inside theirs — it reads a size larger than everything else in the bar
-	 * even though every icon is drawn at 24. The shorter rays match the rest.
+	 * Sized by eye against the search magnifier, not all at 24 — icons drawn at
+	 * the same size do not look the same size. A closed outline like the monitor
+	 * reads larger than an open glyph, so it is drawn smaller; the sun and moon
+	 * are mostly empty space and sit between the two. The full sun, not
+	 * `SunMedium`: its short rays made it the smallest thing in the bar.
 	 */
-	{ scheme: "light", label: "Light", icon: SunMedium },
-	{ scheme: "dark", label: "Dark", icon: Moon },
-	{ scheme: "system", label: "Match system", icon: Monitor },
+	{ scheme: "light", label: "Light", icon: Sun, size: 22 },
+	{ scheme: "dark", label: "Dark", icon: Moon, size: 22 },
+	{ scheme: "system", label: "Match system", icon: Monitor, size: 20 },
 ];
 
 /**
@@ -49,7 +52,7 @@ export function ThemeToggle() {
 				// Keyed so the icon re-mounts and cross-fades when the scheme changes.
 				icon: (
 					<span key={scheme} className="thunderlist-swap">
-						<ActiveIcon aria-hidden />
+						<ActiveIcon aria-hidden size={active.size} absoluteStrokeWidth />
 					</span>
 				),
 			}}

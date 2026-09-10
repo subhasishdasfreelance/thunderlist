@@ -17,9 +17,11 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
+import { calculateChecklistProgress } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
 import type { ChecklistDetail } from "#/schemas/checklist";
+import type { TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskListName, TaskRefEntry } from "#/schemas/task-list";
 
@@ -63,6 +65,32 @@ function eachChecklist(
 	}
 }
 
+/**
+ * Apply `patch` to the tasks on every tag page currently in the cache.
+ *
+ * The same walk as `eachChecklist`, for the same reason: `["tags"]` is the tag
+ * list's own key as well as the first segment of every tag page's.
+ */
+function eachTag(
+	client: QueryClient,
+	patch: (entries: Array<TagTaskEntry>) => Array<TagTaskEntry>,
+): void {
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+
+		client.setQueryData<TagDetail>(key, (detail) => {
+			if (!detail) return detail;
+
+			const tasks = patch(detail.tasks);
+			return {
+				...detail,
+				tasks,
+				progress: calculateChecklistProgress(tasks.map((entry) => entry.task)),
+			};
+		});
+	}
+}
+
 function eachTaskList(
 	client: QueryClient,
 	patch: (lists: TaskLists) => TaskLists,
@@ -85,6 +113,14 @@ function patchTask(
 		),
 	}));
 
+	eachTag(client, (entries) =>
+		entries.map((entry) =>
+			entry.task.taskId === taskId
+				? { ...entry, task: change(entry.task) }
+				: entry,
+		),
+	);
+
 	eachTaskList(client, (lists) => ({
 		today: lists.today.map((entry) =>
 			entry.item.taskId === taskId && entry.task
@@ -104,6 +140,10 @@ function dropTask(client: QueryClient, taskId: string): void {
 		...detail,
 		tasks: detail.tasks.filter((task) => task.taskId !== taskId),
 	}));
+
+	eachTag(client, (entries) =>
+		entries.filter((entry) => entry.task.taskId !== taskId),
+	);
 
 	eachTaskList(client, (lists) => ({
 		today: lists.today.filter((entry) => entry.item.taskId !== taskId),

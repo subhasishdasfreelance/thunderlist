@@ -11,12 +11,64 @@
  */
 
 import { AppError } from "#/lib/errors";
-import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import type { Tag, TagColor } from "#/schemas/tag";
-import { removeTagFromTasks } from "./checklist.server";
+import {
+	collections,
+	DOMAIN_FIELDS,
+	type TaskDoc,
+} from "#/lib/mongo/client.server";
+import { paceStatus } from "#/lib/progress";
+import { calculateChecklistProgress } from "#/lib/tasks/tasks";
+import {
+	type Tag,
+	type TagColor,
+	type TagDetail,
+	type TagSummary,
+	tagStartDate,
+} from "#/schemas/tag";
+import type { Task } from "#/schemas/task";
+import { removeTagFromTasks, withTrackedCompletion } from "./checklist.server";
 
 function byName(a: Tag, b: Tag): number {
 	return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
+/**
+ * A stored tag with its schedule filled in.
+ *
+ * Tags made before they had a schedule have none of its fields at all, and a
+ * missing field means the same as an empty one.
+ */
+function withSchedule(tag: Tag): Tag {
+	return {
+		...tag,
+		description: tag.description ?? "",
+		startDate: tag.startDate ?? null,
+		deadline: tag.deadline ?? null,
+	};
+}
+
+/**
+ * A tag with its progress, judged exactly as a checklist's is: the share of
+ * the tasks carrying it that are done, against its own dates.
+ */
+function summarise(
+	tag: Tag,
+	tasks: ReadonlyArray<Pick<Task, "completed">>,
+): TagSummary {
+	const progress = calculateChecklistProgress(tasks);
+
+	return {
+		...tag,
+		progress,
+		status:
+			progress.total === 0
+				? null
+				: paceStatus({
+						startDate: tagStartDate(tag),
+						deadline: tag.deadline,
+						fractionComplete: progress.completed / progress.total,
+					}),
+	};
 }
 
 export async function listTags(userId: string): Promise<Array<Tag>> {
@@ -25,7 +77,102 @@ export async function listTags(userId: string): Promise<Array<Tag>> {
 		.find({ userId }, { projection: DOMAIN_FIELDS })
 		.toArray();
 
-	return tags.sort(byName);
+	return tags.map(withSchedule).sort(byName);
+}
+
+/**
+ * Every tag with its progress, for the Tags screen.
+ *
+ * Kept apart from `listTags`, which most screens read for names and colours
+ * alone: counting means reading every task, and a screen that only highlights
+ * `#name` should not pay for that.
+ */
+export async function listTagSummaries(
+	userId: string,
+): Promise<Array<TagSummary>> {
+	const current = await collections();
+
+	const [tags, stored] = await Promise.all([
+		listTags(userId),
+		current.tasks
+			.find(
+				{ userId },
+				{ projection: { _id: 0, tagIds: 1, completed: 1, trackerId: 1 } },
+			)
+			.toArray(),
+	]);
+
+	// Counted the way a checklist counts, so a task finished by its tracker is
+	// done here as well.
+	const tasks = await withTrackedCompletion(current, userId, stored);
+
+	const byTag = new Map<string, Array<Pick<Task, "completed">>>();
+	for (const task of tasks) {
+		for (const tagId of task.tagIds) {
+			const existing = byTag.get(tagId);
+			if (existing) existing.push(task);
+			else byTag.set(tagId, [task]);
+		}
+	}
+
+	return tags.map((tag) => summarise(tag, byTag.get(tag.tagId) ?? []));
+}
+
+/**
+ * One tag and every task carrying it, from whichever checklist — or none.
+ *
+ * Each task comes with the title of the checklist it lives in, because on a
+ * tag's page that is the one thing a row cannot take for granted.
+ */
+export async function getTag(
+	userId: string,
+	tagId: string,
+): Promise<TagDetail> {
+	const current = await collections();
+
+	const tag = await current.tags.findOne(
+		{ tagId, userId },
+		{ projection: DOMAIN_FIELDS },
+	);
+	if (!tag) throw new AppError("not_found", "That tag no longer exists.");
+
+	const stored = await current.tasks
+		.find({ userId, tagIds: tagId })
+		.project<TaskDoc>(DOMAIN_FIELDS)
+		.toArray();
+
+	const checklistIds = [
+		...new Set(
+			stored.flatMap((task) =>
+				task.checklistId === null ? [] : [task.checklistId],
+			),
+		),
+	];
+
+	const [checklists, tasks] = await Promise.all([
+		current.checklists
+			.find(
+				{ userId, checklistId: { $in: checklistIds } },
+				{ projection: { _id: 0, checklistId: 1, title: 1 } },
+			)
+			.toArray(),
+		// Finished by its tracker counts as finished; see `withTrackedCompletion`.
+		withTrackedCompletion(current, userId, stored),
+	]);
+
+	const titles = new Map(
+		checklists.map((checklist) => [checklist.checklistId, checklist.title]),
+	);
+
+	return {
+		...summarise(withSchedule(tag), tasks),
+		tasks: tasks.map(({ checklistId, ...task }) => ({
+			task,
+			checklistId,
+			checklistTitle:
+				checklistId === null ? null : (titles.get(checklistId) ?? null),
+		})),
+	};
 }
 
 /**
@@ -62,6 +209,9 @@ export async function createTag(
 		tagId: string;
 		name: string;
 		color: TagColor;
+		description: string;
+		startDate: string | null;
+		deadline: string | null;
 	},
 ): Promise<Tag> {
 	const current = await collections();
@@ -72,7 +222,7 @@ export async function createTag(
 		{ tagId: input.tagId, userId },
 		{ projection: DOMAIN_FIELDS },
 	);
-	if (existing) return existing;
+	if (existing) return withSchedule(existing);
 
 	await assertNameIsFree(userId, input.name);
 
@@ -83,6 +233,9 @@ export async function createTag(
 		tagId: input.tagId,
 		name: input.name,
 		color: input.color,
+		description: input.description,
+		startDate: input.startDate,
+		deadline: input.deadline,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -95,7 +248,13 @@ export async function createTag(
 export async function updateTag(
 	userId: string,
 	tagId: string,
-	patch: { name?: string; color?: TagColor },
+	patch: {
+		name?: string;
+		color?: TagColor;
+		description?: string;
+		startDate?: string | null;
+		deadline?: string | null;
+	},
 ): Promise<Tag> {
 	if (patch.name !== undefined) {
 		await assertNameIsFree(userId, patch.name, tagId);
@@ -110,7 +269,7 @@ export async function updateTag(
 
 	if (!next) throw new AppError("not_found", "That tag no longer exists.");
 
-	return next;
+	return withSchedule(next);
 }
 
 /**

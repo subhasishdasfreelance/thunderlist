@@ -189,10 +189,15 @@ export function createEntry(
 	return entryId;
 }
 
-export function createTag(
-	apply: ApplyChange,
-	values: { name: string; color: TagColor },
-): string {
+export type TagValues = {
+	name: string;
+	color: TagColor;
+	description: string;
+	startDate: string | null;
+	deadline: string | null;
+};
+
+export function createTag(apply: ApplyChange, values: TagValues): string {
 	const tagId = createId(ID_PREFIX.tag);
 	apply({ kind: "tag.create", tagId, ...values });
 	return tagId;
@@ -226,7 +231,13 @@ export function createTagResolver(
 		const already = minted.get(key);
 		if (already) return already;
 
-		const tagId = createTag(apply, { name, color: randomTagColor() });
+		const tagId = createTag(apply, {
+			name,
+			color: randomTagColor(),
+			description: "",
+			startDate: null,
+			deadline: null,
+		});
 		minted.set(key, tagId);
 		return tagId;
 	};

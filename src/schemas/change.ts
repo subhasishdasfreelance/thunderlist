@@ -6,7 +6,7 @@ import {
 } from "./checklist";
 import {
 	createTagInputSchema,
-	deleteTagInputSchema,
+	tagIdInputSchema,
 	updateTagInputSchema,
 } from "./tag";
 import {
@@ -102,7 +102,7 @@ const changeSchema = v.variant("kind", [
 
 	v.object({ kind: v.literal("tag.create"), ...createTagInputSchema.entries }),
 	v.object({ kind: v.literal("tag.update"), ...updateTagInputSchema.entries }),
-	v.object({ kind: v.literal("tag.delete"), ...deleteTagInputSchema.entries }),
+	v.object({ kind: v.literal("tag.delete"), ...tagIdInputSchema.entries }),
 ]);
 
 export type Change = v.InferOutput<typeof changeSchema>;

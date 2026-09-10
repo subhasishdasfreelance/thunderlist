@@ -55,6 +55,11 @@ body {
  * sitting behind a solid block, so a page reads as one surface that continues
  * underneath them.
  *
+ * The top bar only turns to glass once the page has scrolled. At the top there
+ * is nothing underneath it to separate from, so it stays clear and reads as the
+ * top of the page rather than a strip laid over it. `AppFrame` sets
+ * `data-scrolled`.
+ *
  * The alpha is a balance: translucency costs contrast, and these bars carry the
  * app's navigation, so the blur is asked to do most of the separating and the
  * wash only has to be thin enough to see through. `color-mix` keeps the colour
@@ -62,7 +67,14 @@ body {
  * palette.
  */
 @layer components {
-	.astryx-app-shell-header,
+	.astryx-app-shell-header {
+		background-color: transparent;
+		transition:
+			background-color var(--duration-fast) var(--ease-standard),
+			backdrop-filter var(--duration-fast) var(--ease-standard);
+	}
+
+	[data-scrolled="true"] .astryx-app-shell-header,
 	.thunderlist-glass {
 		background-color: color-mix(
 			in srgb,
@@ -79,7 +91,7 @@ body {
 	 * exactly the unreadable case. Those browsers get the opaque surface.
 	 */
 	@supports not (backdrop-filter: blur(1px)) {
-		.astryx-app-shell-header,
+		[data-scrolled="true"] .astryx-app-shell-header,
 		.thunderlist-glass {
 			background-color: var(--color-background-surface);
 		}
@@ -419,10 +431,14 @@ body {
 		opacity: 1;
 	}
 
-	/* The bolt, breathing while it waits. */
+	/*
+	 * The bolt, breathing while it waits, in the gold of `public/logo.svg`. It is
+	 * the brand's colour rather than a theme token, so like the bolt in the bar
+	 * it stays the same in both schemes.
+	 */
 	.thunderlist-loading-mark {
 		display: inline-flex;
-		color: var(--color-icon-accent);
+		color: #efc75e;
 		animation: thunderlist-breathe var(--duration-slow-max) var(--ease-standard)
 			infinite;
 	}
