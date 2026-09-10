@@ -21,14 +21,17 @@ export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 const STORAGE_KEY = "thunderlist.theme.v1";
 
 /**
- * The phone's status bar, painted the colour of the page under the top bar.
+ * The phone's status bar: the page colour in light mode, black in dark mode.
  * Android picks light or dark text for it from how light this colour is.
  *
  * One `theme-color` tag, set from the scheme in force. A pair with `media`
  * queries would need no script, but Chrome on Android ignores `media` there
  * and takes the first tag, which left a light bar over the app in dark mode.
+ *
+ * The installed app in dark mode ignores this tag altogether and uses
+ * `theme_color` from `public/manifest.webmanifest`, so the two are kept black.
  */
-export const STATUS_BAR_COLORS = { light: "#F1F0F9", dark: "#0F1018" } as const;
+export const STATUS_BAR_COLORS = { light: "#F1F0F9", dark: "#000000" } as const;
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 

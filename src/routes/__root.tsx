@@ -88,7 +88,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			{ rel: "icon", type: "image/png", sizes: "640x640", href: "/logo.png" },
 			// Installing to a home screen. iOS fills a transparent icon with black,
 			// so its icon has the brand blue behind the bolt.
-			{ rel: "manifest", href: "/manifest.webmanifest" },
+			// `?v=2` is an address no phone has cached: an earlier build let the file
+			// be kept for a week, and a reinstall kept reading that old copy. The
+			// file is never cached now, so this should not need changing again.
+			{ rel: "manifest", href: "/manifest.webmanifest?v=2" },
 			{ rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
 		],
 	}),
