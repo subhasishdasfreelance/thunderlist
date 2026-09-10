@@ -6,6 +6,18 @@ import { Flag } from "lucide-react";
 import { clampPercent } from "#/lib/progress";
 
 /**
+ * How many tasks should be done by now: "6 tasks". The `expectedReading` for
+ * anything counted in tasks — a checklist, a tag, the day.
+ *
+ * Rounded to a whole task, since a task is either done or not. A tracker's
+ * reading keeps a decimal place because "2.5 km" is a real distance.
+ */
+export function formatExpectedTasks(elapsed: number, total: number): string {
+	const tasks = Math.round(elapsed * total);
+	return `${tasks} ${tasks === 1 ? "task" : "tasks"}`;
+}
+
+/**
  * A progress bar with the pace target drawn on it.
  *
  * The target is the point the work should have reached by today, given its
@@ -14,6 +26,11 @@ import { clampPercent } from "#/lib/progress";
  * on a phone and no use to anyone reading with a screen reader.
  *
  * With no deadline there is no target, and none is invented.
+ *
+ * On a phone the footnote and the target rarely fit side by side, so the target
+ * drops onto a line of its own instead of both being squeezed into ragged
+ * halves. The gap matches the one above, so the bar and the two lines stay
+ * evenly spaced.
  */
 export function ProgressMeter({
 	label,
@@ -56,7 +73,7 @@ export function ProgressMeter({
 				}
 			/>
 
-			<HStack gap={2} hAlign="between" vAlign="center">
+			<HStack gap={1.5} hAlign="between" vAlign="center" wrap="wrap">
 				<Text type="supporting">{footnote}</Text>
 
 				{expected === null ? null : (

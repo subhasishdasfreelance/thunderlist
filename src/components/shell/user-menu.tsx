@@ -44,12 +44,12 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 			button={{
 				label: `Account: ${user.name}`,
 				variant: "ghost",
-				size: "sm",
+				size: "md",
 				isIconOnly: true,
 				/*
-				 * `xsm`, 20px, not the 24 of the icons beside it: a solid disc reads
-				 * larger than a line drawing of the same size, and at 20 it matches
-				 * the help ring.
+				 * `xsm`, 20px, not the 26 of the icons beside it: a solid disc reads
+				 * larger than a line drawing of the same size, so at 20 it sits level
+				 * with the 22px help ring.
 				 */
 				icon: (
 					<Avatar

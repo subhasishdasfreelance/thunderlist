@@ -116,6 +116,7 @@ export function TaskListScreen({
 	const [isCreatingTag, setIsCreatingTag] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
 	const [editing, setEditing] = useState<Task | null>(null);
+	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	const [isClearingAll, setIsClearingAll] = useState(false);
 	const { apply } = useApplyChange();
 
@@ -294,6 +295,9 @@ export function TaskListScreen({
 					}),
 				onEdit: () => {
 					if (entry.task) setEditing(entry.task);
+				},
+				onDelete: () => {
+					if (entry.task) setPendingDelete(entry.task);
 				},
 				// Straight to the task, not just the checklist it lives in.
 				onOpenChecklist: entry.checklistId
@@ -474,6 +478,22 @@ export function TaskListScreen({
 				onAction={() => {
 					clearAll();
 					setIsClearingAll(false);
+				}}
+			/>
+
+			<AlertDialog
+				isOpen={pendingDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) setPendingDelete(null);
+				}}
+				title={`Delete "${pendingDelete?.title ?? ""}"?`}
+				description="This task will be deleted."
+				actionLabel="Delete"
+				onAction={() => {
+					if (pendingDelete) {
+						apply({ kind: "task.delete", taskId: pendingDelete.taskId });
+					}
+					setPendingDelete(null);
 				}}
 			/>
 

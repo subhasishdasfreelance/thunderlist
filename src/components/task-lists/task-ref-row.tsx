@@ -22,6 +22,7 @@ export type TaskRefRowActions = TaskQuickActions & {
 	onRemove: () => void;
 	onMove: (direction: "up" | "down") => void;
 	onEdit: () => void;
+	onDelete: () => void;
 	/** `null` for a task that belongs to no checklist. */
 	onOpenChecklist: (() => void) | null;
 };
@@ -199,6 +200,11 @@ export function TaskRefRow({
 							onClick: actions.onEdit,
 						},
 						backlogMenuItem(list, actions),
+						{
+							label: "Delete task",
+							variant: "destructive" as const,
+							onClick: actions.onDelete,
+						},
 						// Moving a row by hand only means something while the list is in
 						// the order you put it in. Sorted, the position is derived and
 						// the buttons would promise something they cannot do.

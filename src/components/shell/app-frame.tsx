@@ -165,22 +165,24 @@ export function AppFrame({
 												label="Search"
 												tooltip="Search (Ctrl+K)"
 												variant="ghost"
-												size="sm"
-												icon={<Search aria-hidden />}
+												size="md"
+												icon={
+													<Search aria-hidden size={26} absoluteStrokeWidth />
+												}
 												onClick={() => setIsSearchOpen(true)}
 											/>
 											{/* A closed ring reads larger than the open magnifier
-											   beside it, so it is drawn at 20 rather than 24; the
+											   beside it, so it is drawn at 22 rather than 26; the
 											   stroke stays 2px so it does not look thinner. */}
 											<IconButton
 												label="Shortcuts and help"
 												tooltip="Shortcuts (?)"
 												variant="ghost"
-												size="sm"
+												size="md"
 												icon={
 													<CircleQuestionMark
 														aria-hidden
-														size={20}
+														size={22}
 														absoluteStrokeWidth
 													/>
 												}

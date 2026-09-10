@@ -19,7 +19,10 @@ import { CompletedSection } from "#/components/common/completed-section";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
-import { ProgressMeter } from "#/components/common/progress-meter";
+import {
+	formatExpectedTasks,
+	ProgressMeter,
+} from "#/components/common/progress-meter";
 import { ShowMore } from "#/components/common/show-more";
 import { SortToggle } from "#/components/common/sort-toggle";
 import { ErrorNotice } from "#/components/common/states";
@@ -273,6 +276,11 @@ function ChecklistDetailPage() {
 						label={`${detail.title} progress`}
 						percent={progress.percent}
 						expectedPercent={elapsed === null ? null : elapsed * 100}
+						expectedReading={
+							elapsed === null
+								? undefined
+								: formatExpectedTasks(elapsed, progress.total)
+						}
 						footnote={`${progress.completed} / ${progress.total} ${
 							progress.total === 1 ? "task" : "tasks"
 						}${detail.deadline ? ` · due ${formatDate(detail.deadline)}` : ""}`}

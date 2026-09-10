@@ -29,8 +29,8 @@ export const Route = createFileRoute("/tags/untagged")({
  * The tasks carrying no tag, opened from their card on the Tags screen.
  *
  * Not a tag, so none of a tag's page: no dates, no pace, nothing to edit or
- * delete. Only the list, a page at a time, each row opening its task in its
- * checklist — where writing `#name` into the title is how it gets a tag.
+ * delete. Only the list, a page at a time, each row opening its task where it
+ * lives — where writing `#name` into the title is how it gets a tag.
  */
 function UntaggedPage() {
 	const index = useQuery(searchIndexQuery());

@@ -131,23 +131,30 @@ export function HelpDialog({
 					</VStack>
 				))}
 
-				<Divider />
-
-				<VStack gap={1}>
-					<Text type="label" weight="semibold" color="secondary">
-						How to work this
-					</Text>
-					{WORKFLOW.map((row) => (
-						<HStack key={row.step} gap={2} vAlign="start">
-							<Text weight="semibold">{row.step}</Text>
-							<Text type="supporting">{row.what}</Text>
-						</HStack>
-					))}
-				</VStack>
-
+				{/* With the shortcuts it is about, not after the guide. */}
 				<Text type="supporting">
 					No keyboard? Every one of these is a button on the row.
 				</Text>
+
+				<Divider />
+
+				{/*
+				 * One column: each idea named, then said. Side by side, the names
+				 * pushed the sentences into a narrow column of short ragged lines.
+				 */}
+				<VStack gap={2}>
+					<Text type="label" weight="semibold" color="secondary">
+						How to work this
+					</Text>
+					<VStack gap={3}>
+						{WORKFLOW.map((row) => (
+							<VStack key={row.step} gap={0.5}>
+								<Text weight="medium">{row.step}</Text>
+								<Text type="supporting">{row.what}</Text>
+							</VStack>
+						))}
+					</VStack>
+				</VStack>
 			</VStack>
 		</FormDialog>
 	);

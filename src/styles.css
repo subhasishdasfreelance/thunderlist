@@ -62,27 +62,48 @@ body {
  *
  * The alpha is a balance: translucency costs contrast, and these bars carry the
  * app's navigation, so the blur is asked to do most of the separating and the
- * wash only has to be thin enough to see through. `color-mix` keeps the colour
- * tied to the surface token instead of hardcoding one, so it still tracks the
- * palette.
+ * wash only has to be thin enough to see through. A heavy blur is what lets the
+ * wash be this thin: what passes underneath arrives as colour, never as a ghost
+ * of its text behind the bar's own. `color-mix` keeps the colour tied to the
+ * surface token instead of hardcoding one, so it still tracks the palette.
  */
 @layer components {
 	.astryx-app-shell-header {
 		background-color: transparent;
 		transition:
 			background-color var(--duration-fast) var(--ease-standard),
-			backdrop-filter var(--duration-fast) var(--ease-standard);
+			backdrop-filter var(--duration-fast) var(--ease-standard),
+			box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
 	[data-scrolled="true"] .astryx-app-shell-header,
 	.thunderlist-glass {
 		background-color: color-mix(
 			in srgb,
-			var(--color-background-surface) 72%,
+			var(--color-background-surface) 60%,
 			transparent
 		);
-		-webkit-backdrop-filter: saturate(180%) blur(16px);
-		backdrop-filter: saturate(180%) blur(16px);
+		-webkit-backdrop-filter: saturate(190%) blur(28px);
+		backdrop-filter: saturate(190%) blur(28px);
+	}
+
+	/*
+	 * An edge rather than a slab: a hairline where the glass meets the page, a
+	 * lit rim just inside it, and a shadow soft enough to read as depth rather
+	 * than as a border. The rim is near-invisible in the dark, where a bright
+	 * line would be the loudest thing on the screen.
+	 */
+	[data-scrolled="true"] .astryx-app-shell-header {
+		box-shadow:
+			inset 0 -1px 0 var(--color-border),
+			0 10px 30px -20px var(--color-shadow);
+	}
+
+	.thunderlist-glass {
+		box-shadow:
+			inset 0 1px 0
+				light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.06)),
+			0 -10px 30px -20px var(--color-shadow);
 	}
 
 	/*
@@ -505,7 +526,7 @@ body {
 	}
 
 	.thunderlist-brand-name {
-		font-size: 1.0625rem;
+		font-size: 1.125rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--color-text-primary);

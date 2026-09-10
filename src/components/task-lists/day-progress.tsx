@@ -3,7 +3,10 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useEffect, useState } from "react";
 import { PaceLabel } from "#/components/common/pace-label";
-import { ProgressMeter } from "#/components/common/progress-meter";
+import {
+	formatExpectedTasks,
+	ProgressMeter,
+} from "#/components/common/progress-meter";
 import { type Stat, StatGrid } from "#/components/common/stat-grid";
 import { dayPace, formatHoursLeft, formatTimeOfDay } from "#/lib/day-pace";
 
@@ -111,6 +114,7 @@ export function DayProgress({
 						label="Today's progress"
 						percent={percent}
 						expectedPercent={pace.elapsed * 100}
+						expectedReading={formatExpectedTasks(pace.elapsed, total)}
 						footnote={`${completed} / ${total} ${total === 1 ? "task" : "tasks"} · ${formatHoursLeft(
 							pace.hoursRemaining,
 						)} left today`}

@@ -2,7 +2,10 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { PaceLabel } from "#/components/common/pace-label";
-import { ProgressMeter } from "#/components/common/progress-meter";
+import {
+	formatExpectedTasks,
+	ProgressMeter,
+} from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
 import { computeVelocity, elapsedFraction } from "#/lib/progress";
 import type { ChecklistSummary } from "#/schemas/checklist";
@@ -56,6 +59,11 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 					label={`${checklist.title} progress`}
 					percent={progress.percent}
 					expectedPercent={elapsed === null ? null : elapsed * 100}
+					expectedReading={
+						elapsed === null
+							? undefined
+							: formatExpectedTasks(elapsed, progress.total)
+					}
 					footnote={`${progress.completed} / ${progress.total} ${
 						progress.total === 1 ? "task" : "tasks"
 					}`}

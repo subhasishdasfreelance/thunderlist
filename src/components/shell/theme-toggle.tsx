@@ -11,15 +11,15 @@ const OPTIONS: Array<{
 	size: number;
 }> = [
 	/*
-	 * Sized by eye against the search magnifier, not all at 24 — icons drawn at
+	 * Sized by eye against the search magnifier, not all at 26 — icons drawn at
 	 * the same size do not look the same size. A closed outline like the monitor
 	 * reads larger than an open glyph, so it is drawn smaller; the sun and moon
 	 * are mostly empty space and sit between the two. The full sun, not
 	 * `SunMedium`: its short rays made it the smallest thing in the bar.
 	 */
-	{ scheme: "light", label: "Light", icon: Sun, size: 22 },
-	{ scheme: "dark", label: "Dark", icon: Moon, size: 22 },
-	{ scheme: "system", label: "Match system", icon: Monitor, size: 20 },
+	{ scheme: "light", label: "Light", icon: Sun, size: 24 },
+	{ scheme: "dark", label: "Dark", icon: Moon, size: 24 },
+	{ scheme: "system", label: "Match system", icon: Monitor, size: 22 },
 ];
 
 /**
@@ -47,7 +47,7 @@ export function ThemeToggle() {
 				label: `Theme: ${active.label}`,
 				tooltip: "Theme",
 				variant: "ghost",
-				size: "sm",
+				size: "md",
 				isIconOnly: true,
 				// Keyed so the icon re-mounts and cross-fades when the scheme changes.
 				icon: (

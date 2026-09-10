@@ -14,7 +14,7 @@ import {
 import { useRowShortcuts } from "#/lib/use-row-shortcuts";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
-import type { TaskListName } from "#/schemas/task-list";
+import { TASK_LIST_LABELS, type TaskListName } from "#/schemas/task-list";
 
 export type TaskRowActions = TaskQuickActions & {
 	onToggle: (completed: boolean) => void;
@@ -44,6 +44,7 @@ export function TaskRow({
 	tags,
 	actions,
 	checklist,
+	onOpenList,
 }: {
 	task: Task;
 	/** Which reference list this task is on, if any. */
@@ -56,6 +57,11 @@ export function TaskRow({
 	 * answer. `null` is a task that belongs to no checklist.
 	 */
 	checklist?: { title: string | null; onOpen: () => void } | null;
+	/**
+	 * Opens the list holding a task that belongs to no checklist — the only
+	 * place it lives — with the task ringed there.
+	 */
+	onOpenList?: (list: TaskListName) => void;
 }) {
 	const [isHovered, setIsHovered] = useState(false);
 
@@ -98,6 +104,18 @@ export function TaskRow({
 	const title = (
 		<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
 	);
+
+	// Where it lives is the way into it, as it is on Today: its checklist, or
+	// for a task in no checklist, the list holding it.
+	const crumb =
+		checklist?.title != null
+			? { title: checklist.title, onOpen: checklist.onOpen }
+			: checklist === null && listState !== null && onOpenList
+				? {
+						title: TASK_LIST_LABELS[listState],
+						onOpen: () => onOpenList(listState),
+					}
+				: null;
 
 	return (
 		/*
@@ -143,8 +161,7 @@ export function TaskRow({
 					}
 					onChange={actions.onToggle}
 				/>
-				{/* The checklist name is the way into it, as it is on Today. */}
-				{checklist?.title == null ? (
+				{crumb === null ? (
 					title
 				) : (
 					<VStack gap={0}>
@@ -152,10 +169,10 @@ export function TaskRow({
 						<button
 							type="button"
 							className="thunderlist-crumb"
-							title={`Open ${checklist.title}`}
-							onClick={checklist.onOpen}
+							title={`Open ${crumb.title}`}
+							onClick={crumb.onOpen}
 						>
-							{checklist.title}
+							{crumb.title}
 						</button>
 					</VStack>
 				)}
