@@ -20,22 +20,6 @@ export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 const STORAGE_KEY = "thunderlist.theme.v1";
 
-/**
- * The phone's status bar, painted the colour of the page under the top bar.
- * Android picks light or dark text for it from how light this colour is.
- *
- * One `theme-color` tag, set from the scheme in force. A pair with `media`
- * queries would need no script, but Chrome on Android ignores `media` there
- * and takes the first tag, which left a light bar over the app in dark mode.
- *
- * The installed app on Android ignores this tag and uses `theme_color` from
- * `public/manifest.webmanifest`, which holds a single colour for both modes:
- * the dark one, by choice. This tag still sets the bar in a browser tab.
- */
-export const STATUS_BAR_COLORS = { light: "#F1F0F9", dark: "#0F1018" } as const;
-
-const DARK_QUERY = "(prefers-color-scheme: dark)";
-
 function isColorScheme(value: unknown): value is ColorScheme {
 	return (COLOR_SCHEMES as ReadonlyArray<unknown>).includes(value);
 }
@@ -49,22 +33,7 @@ function isColorScheme(value: unknown): value is ColorScheme {
  */
 export const THEME_INIT_SCRIPT = `try{var s=localStorage.getItem(${JSON.stringify(
 	STORAGE_KEY,
-)});if(s==="light"||s==="dark")document.documentElement.setAttribute("data-theme",s);var d=s==="dark"||(s!=="light"&&matchMedia(${JSON.stringify(
-	DARK_QUERY,
-)}).matches),m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",${JSON.stringify(
-	STATUS_BAR_COLORS,
-)}[d?"dark":"light"])}catch(e){}`;
-
-/** Point the `theme-color` tag at the scheme in force. */
-function paintStatusBar(scheme: ColorScheme): void {
-	const isDark =
-		scheme === "dark" ||
-		(scheme === "system" && window.matchMedia(DARK_QUERY).matches);
-
-	document
-		.querySelector('meta[name="theme-color"]')
-		?.setAttribute("content", STATUS_BAR_COLORS[isDark ? "dark" : "light"]);
-}
+)});if(s==="light"||s==="dark")document.documentElement.setAttribute("data-theme",s)}catch(e){}`;
 
 let current: ColorScheme = "system";
 let isHydrated = false;
@@ -88,11 +57,6 @@ function hydrate(): void {
 	if (isHydrated) return;
 	isHydrated = true;
 	current = read();
-
-	// Following the system, the status bar has to follow it when it changes too.
-	window
-		.matchMedia(DARK_QUERY)
-		.addEventListener("change", () => paintStatusBar(current));
 }
 
 /** How long the whole page is allowed to cross-fade between schemes. */
@@ -122,7 +86,6 @@ export function setColorScheme(scheme: ColorScheme): void {
 
 	current = scheme;
 	easeTheChange();
-	paintStatusBar(scheme);
 
 	try {
 		localStorage.setItem(STORAGE_KEY, scheme);

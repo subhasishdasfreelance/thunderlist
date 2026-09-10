@@ -10,7 +10,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
-import { STATUS_BAR_COLORS, THEME_INIT_SCRIPT } from "#/lib/theme";
+import { THEME_INIT_SCRIPT } from "#/lib/theme";
 import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
@@ -161,15 +161,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 			<head>
 				<HeadContent />
 				{/*
-				 * The phone's status bar. The script below sets it to the scheme in
-				 * force before the first paint, which is why a different `content`
-				 * is expected at hydration; see `STATUS_BAR_COLORS`.
+				 * The phone's status bar: the app's dark background in both schemes.
+				 * The installed app on Android takes a single colour, `theme_color`
+				 * in `public/manifest.webmanifest`, so that one is dark. This tag
+				 * matches it, so Android picks white text for the bar everywhere
+				 * and a browser tab looks the same as the installed app.
 				 */}
-				<meta
-					name="theme-color"
-					content={STATUS_BAR_COLORS.light}
-					suppressHydrationWarning
-				/>
+				<meta name="theme-color" content="#0F1018" />
 				{/*
 				 * Sets the colour scheme before the first paint. Anything later —
 				 * an effect, a hydration pass — renders the default scheme first,
