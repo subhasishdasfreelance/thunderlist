@@ -1,7 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -12,24 +11,14 @@ import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import type { TrackerValues } from "#/lib/changes";
 import { todayDateOnly } from "#/schemas/common";
-import {
-	TRACKER_TYPE_DEFAULT_UNITS,
-	TRACKER_TYPE_LABELS,
-	TRACKER_TYPES,
-	type Tracker,
-	type TrackerType,
-} from "#/schemas/tracker";
-
-const TYPE_OPTIONS = TRACKER_TYPES.map((type) => ({
-	value: type,
-	label: TRACKER_TYPE_LABELS[type],
-}));
+import { TRACKER_TYPE_DEFAULT_UNITS, type Tracker } from "#/schemas/tracker";
 
 /**
  * Create or edit a tracker.
  *
- * Type only changes defaults and which extra fields appear; the underlying
- * record is the same for a book, a course or a running goal.
+ * There is no type to pick: the unit already says what is being counted, so a
+ * new tracker is saved as "custom". One that already has a type keeps it — an
+ * existing book still shows its author field and cannot pass its last page.
  */
 export function TrackerFormDialog({
 	isOpen,
@@ -43,7 +32,6 @@ export function TrackerFormDialog({
 	onSubmit: (values: TrackerValues) => void;
 }) {
 	const [title, setTitle] = useState("");
-	const [type, setType] = useState<TrackerType>("book");
 	const [unit, setUnit] = useState("pages");
 	const [startValue, setStartValue] = useState<number | null>(null);
 	const [targetValue, setTargetValue] = useState<number | null>(null);
@@ -60,7 +48,6 @@ export function TrackerFormDialog({
 	useEffect(() => {
 		if (!isOpen) return;
 		setTitle(tracker?.title ?? "");
-		setType(tracker?.type ?? "book");
 		setUnit(tracker?.unit ?? TRACKER_TYPE_DEFAULT_UNITS.book);
 		setStartValue(tracker?.startValue ?? 0);
 		setTargetValue(tracker?.targetValue ?? null);
@@ -73,18 +60,6 @@ export function TrackerFormDialog({
 		setCoverUrl(tracker?.coverUrl ?? "");
 		setAuthor(tracker?.author ?? "");
 	}, [isOpen, tracker]);
-
-	/** Switching type suggests its usual unit, but never overwrites a custom one. */
-	function changeType(next: string) {
-		const nextType = next as TrackerType;
-		setType(nextType);
-		setUnit((current) =>
-			current === "" ||
-			Object.values(TRACKER_TYPE_DEFAULT_UNITS).includes(current)
-				? TRACKER_TYPE_DEFAULT_UNITS[nextType]
-				: current,
-		);
-	}
 
 	const trimmedTitle = title.trim();
 	const from = startValue ?? 0;
@@ -107,7 +82,7 @@ export function TrackerFormDialog({
 
 		onSubmit({
 			title: trimmedTitle,
-			type,
+			type: tracker?.type ?? "custom",
 			unit: unit.trim(),
 			targetValue,
 			startValue: from,
@@ -153,13 +128,6 @@ export function TrackerFormDialog({
 					placeholder="Dune"
 				/>
 
-				<Selector
-					label="Type"
-					options={TYPE_OPTIONS}
-					value={type}
-					onChange={changeType}
-				/>
-
 				<FieldRow>
 					<TextInput
 						label="Unit"
@@ -188,7 +156,7 @@ export function TrackerFormDialog({
 					placeholder="0"
 				/>
 
-				{type === "book" ? (
+				{tracker?.type === "book" ? (
 					<TextInput
 						label="Author"
 						isOptional
