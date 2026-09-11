@@ -15,11 +15,14 @@ import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
 	createChecklist,
+	createTagResolver,
 	useApplyChange,
 } from "#/lib/changes";
 import { lagFraction } from "#/lib/progress";
+import { useNow } from "#/lib/use-now";
 import { checklistsQuery } from "#/queries/checklists";
-import { primeQuery } from "#/queries/prime";
+import { deferQuery, primeQuery } from "#/queries/prime";
+import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
 /**
@@ -28,16 +31,24 @@ import type { ChecklistSummary } from "#/schemas/checklist";
  * The same measure the pace label on the card is drawn from, so the order
  * agrees with what each card says about itself.
  */
-function lag(checklist: ChecklistSummary): number {
+function lag(checklist: ChecklistSummary, now: number): number {
 	return lagFraction({
 		startDate: checklist.startDate,
 		deadline: checklist.deadline,
+		deadlineTime: checklist.deadlineTime,
+		dailyWindow: checklist.dailyWindow,
+		now,
 		fractionComplete: checklist.progress.percent / 100,
 	});
 }
 
 export const Route = createFileRoute("/checklists/")({
-	loader: ({ context }) => primeQuery(context.queryClient, checklistsQuery()),
+	loader: ({ context }) => {
+		// Only the new-checklist form needs the tags, and not on the first frame.
+		deferQuery(context.queryClient, tagsQuery());
+
+		return primeQuery(context.queryClient, checklistsQuery());
+	},
 	component: ChecklistsPage,
 });
 
@@ -50,8 +61,10 @@ function ChecklistsPage() {
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
 	);
+	const tagsResult = useQuery(tagsQuery());
 
 	const checklists = data ?? [];
+	const tags = tagsResult.data ?? [];
 
 	/*
 	 * Behind first, or the order they were made in.
@@ -61,9 +74,12 @@ function ChecklistsPage() {
 	 * "which of these needs me", and that is an ordering of the cards already on
 	 * the screen rather than a row of figures above them.
 	 */
-	const ordered = isBehindFirst
-		? [...checklists].sort((a, b) => lag(b) - lag(a))
-		: checklists;
+	// Judged on the viewer's clock, so sorted only once the browser has it.
+	const now = useNow();
+	const ordered =
+		isBehindFirst && now !== null
+			? [...checklists].sort((a, b) => lag(b, now) - lag(a, now))
+			: checklists;
 
 	function create(values: ChecklistValues) {
 		const checklistId = createChecklist(apply, values);
@@ -101,7 +117,8 @@ function ChecklistsPage() {
 				<VStack gap={3}>
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<Text type="label" weight="semibold">
-							Your Checklists
+							{checklists.length}{" "}
+							{checklists.length === 1 ? "checklist" : "checklists"}
 						</Text>
 						<OrderToggle
 							isSorted={isBehindFirst}
@@ -119,6 +136,8 @@ function ChecklistsPage() {
 			<ChecklistFormDialog
 				isOpen={isFormOpen}
 				onOpenChange={setIsFormOpen}
+				tags={tags}
+				resolveTags={(names) => names.map(createTagResolver(apply, tags))}
 				onSubmit={create}
 			/>
 		</VStack>

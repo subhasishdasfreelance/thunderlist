@@ -1,8 +1,11 @@
 import * as v from "valibot";
 import {
+	dailyWindowSchema,
 	dateOnlySchema,
 	descriptionSchema,
 	idSchema,
+	tagIdsSchema,
+	timeOfDaySchema,
 	titleSchema,
 } from "./common";
 import type { Task } from "./task";
@@ -32,6 +35,24 @@ const checklistSchema = v.object({
 	startDate: dateOnlySchema,
 	/** The day it should be finished by. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
+	/**
+	 * The time on the deadline day it is due by. Absent or `null` means the
+	 * start of that day, which is what a deadline meant before it had a time.
+	 */
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+	/**
+	 * The hours of every day it is worked in, when it repeats daily rather than
+	 * running to a deadline; see `dailyWindowSchema`. Absent or `null` for none.
+	 */
+	dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
+	/**
+	 * Tags every task in the checklist carries, done or not, including tasks
+	 * added later. Taking one off here takes it off them again.
+	 *
+	 * Absent on checklists made before they could be tagged, which is the same
+	 * as none.
+	 */
+	tagIds: v.optional(v.array(idSchema)),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -45,12 +66,19 @@ export type ChecklistProgress = {
 	percent: number;
 };
 
+/**
+ * A checklist with its progress. Its pace is not here: that is judged on the
+ * viewer's clock, in the browser; see `usePace`.
+ */
 export type ChecklistSummary = Checklist & {
 	progress: ChecklistProgress;
-	status: PaceStatus | null;
 };
 
 export type ChecklistDetail = ChecklistSummary & {
+	/**
+	 * The open tasks. The finished ones are read separately and later, though
+	 * `progress` counts them all; see `getChecklistCompleted`.
+	 */
 	tasks: Array<Task>;
 };
 
@@ -60,6 +88,9 @@ export const createChecklistInputSchema = v.object({
 	description: v.optional(descriptionSchema, ""),
 	startDate: dateOnlySchema,
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
+	dailyWindow: v.optional(v.nullable(dailyWindowSchema), null),
+	tagIds: v.optional(tagIdsSchema, []),
 });
 
 export const updateChecklistInputSchema = v.object({
@@ -70,6 +101,9 @@ export const updateChecklistInputSchema = v.object({
 			description: v.optional(descriptionSchema),
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
+			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
+			tagIds: v.optional(tagIdsSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

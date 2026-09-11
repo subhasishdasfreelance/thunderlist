@@ -14,7 +14,6 @@ export const ID_PREFIX = {
 	tracker: "trk",
 	task: "tsk",
 	entry: "ent",
-	listItem: "itm",
 	tag: "tag",
 	/** Identifies a queued change in the browser; never written to the database. */
 	change: "chg",

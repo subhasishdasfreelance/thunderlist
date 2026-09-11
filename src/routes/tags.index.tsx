@@ -16,6 +16,7 @@ import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { UntaggedCard } from "#/components/tags/untagged-card";
 import { createTag, useApplyChange } from "#/lib/changes";
 import { lagFraction } from "#/lib/progress";
+import { useNow } from "#/lib/use-now";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
 import { tagSummariesQuery } from "#/queries/tags";
@@ -25,10 +26,13 @@ import { type TagSummary, tagStartDate } from "#/schemas/tag";
  * How far behind a tag is, worst first — the same measure its pace label is
  * drawn from, as on the Checklists screen.
  */
-function lag(tag: TagSummary): number {
+function lag(tag: TagSummary, now: number): number {
 	return lagFraction({
 		startDate: tagStartDate(tag),
 		deadline: tag.deadline,
+		deadlineTime: tag.deadlineTime,
+		dailyWindow: tag.dailyWindow,
+		now,
 		fractionComplete: tag.progress.percent / 100,
 	});
 }
@@ -72,9 +76,12 @@ function TagsPage() {
 		[index.data],
 	);
 
-	const ordered = isBehindFirst
-		? [...tags].sort((a, b) => lag(b) - lag(a))
-		: tags;
+	// Judged on the viewer's clock, so sorted only once the browser has it.
+	const now = useNow();
+	const ordered =
+		isBehindFirst && now !== null
+			? [...tags].sort((a, b) => lag(b, now) - lag(a, now))
+			: tags;
 
 	return (
 		<VStack gap={4}>

@@ -8,8 +8,10 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity, elapsedFraction } from "#/lib/progress";
-import { type TagSummary, tagStartDate } from "#/schemas/tag";
+import { computeVelocity } from "#/lib/progress";
+import { usePace } from "#/lib/use-pace";
+import { type TagSummary, tagParam, tagStartDate } from "#/schemas/tag";
+import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
 
 /**
  * A tag at a glance, the way a checklist card shows a checklist: its share of
@@ -20,7 +22,10 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 	const { progress } = tag;
 	const startDate = tagStartDate(tag);
 
-	const elapsed = elapsedFraction({ startDate, deadline: tag.deadline });
+	const pace = usePace(
+		{ ...tag, startDate },
+		progress.total === 0 ? null : progress.completed / progress.total,
+	);
 
 	const summary =
 		progress.total === 0
@@ -36,29 +41,37 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 					progress.completed >= progress.total,
 				);
 
+	// Today and the Backlog carry their marks, so they read as the two they are.
+	const Mark = tag.special === null ? null : SPECIAL_TAG_ICONS[tag.special];
+
 	return (
 		<ClickableCard
 			label={`${tag.name}, ${progress.percent}% complete`}
-			href={`/tags/${tag.tagId}`}
+			href={`/tags/${tagParam(tag)}`}
 			padding={3}
 		>
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<HStack gap={1.5} vAlign="center">
-						<Token size="sm" color={tag.color} label={tag.name} />
+						<Token
+							size="sm"
+							color={tag.color}
+							label={tag.name}
+							icon={Mark === null ? undefined : <Mark aria-hidden />}
+						/>
 						<Text color="secondary">({progress.percent}%)</Text>
 					</HStack>
-					<PaceLabel status={tag.status} />
+					<PaceLabel status={pace.status} />
 				</HStack>
 
 				<ProgressMeter
 					label={`${tag.name} progress`}
 					percent={progress.percent}
-					expectedPercent={elapsed === null ? null : elapsed * 100}
+					elapsed={pace.elapsed}
 					expectedReading={
-						elapsed === null
+						pace.elapsed == null
 							? undefined
-							: formatExpectedTasks(elapsed, progress.total)
+							: formatExpectedTasks(pace.elapsed, progress.total)
 					}
 					footnote={`${progress.completed} / ${progress.total} ${
 						progress.total === 1 ? "task" : "tasks"

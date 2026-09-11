@@ -3,7 +3,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
-import { TrendingUp } from "lucide-react";
+import { ListChecks, TrendingUp } from "lucide-react";
 import {
 	type CSSProperties,
 	type KeyboardEvent,
@@ -21,6 +21,7 @@ import {
 	sameTagName,
 	sameTrackerName,
 } from "#/lib/tags/inline-tags";
+import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
@@ -30,14 +31,15 @@ const MAX_SUGGESTIONS = 6;
 /**
  * One offer in the list.
  *
- * `kind` says which mark it completes, because the two are picked and drawn
+ * `kind` says which mark it completes, because they are picked and drawn
  * differently: a tag can be invented as it is typed and shows as a coloured
- * token, a tracker has to already exist and shows as its own title.
- * `color: null` marks a name that is not a tag yet.
+ * token, while a tracker or a checklist has to already exist and shows as its
+ * own title. `color: null` marks a name that is not a tag yet.
  */
 type Suggestion =
 	| { kind: "tag"; name: string; color: Tag["color"] | null }
-	| { kind: "tracker"; name: string };
+	| { kind: "tracker"; name: string }
+	| { kind: "checklist"; name: string };
 
 function tagSuggestions(
 	query: string,
@@ -73,42 +75,65 @@ function tagSuggestions(
 }
 
 /**
- * The trackers whose titles contain what has been typed.
+ * The trackers and checklists whose titles contain what has been typed.
  *
+ * Both answer to `&`, so both are searched together, anywhere in the title.
  * No "create it" offer at the end, unlike tags: a tracker has a target, a unit
- * and a deadline, none of which fit on this line. An unmatched name stays
- * ordinary text and the task is an ordinary task.
+ * and a deadline, and a checklist has tasks, none of which fit on this line.
+ * An unmatched name stays ordinary text and the task is an ordinary task.
  */
-function trackerSuggestions(
+function linkSuggestions(
 	query: string,
 	trackers: ReadonlyArray<TrackerSummary>,
+	checklists: ReadonlyArray<Pick<Checklist, "title">>,
 ): Array<Suggestion> {
 	const lower = query.trim().toLowerCase();
 
-	return trackers
-		.filter((tracker) => tracker.title.toLowerCase().includes(lower))
-		.sort((a, b) => {
-			const aStarts = a.title.toLowerCase().startsWith(lower);
-			const bStarts = b.title.toLowerCase().startsWith(lower);
-			if (aStarts !== bStarts) return aStarts ? -1 : 1;
-			return a.title.localeCompare(b.title);
-		})
-		.slice(0, MAX_SUGGESTIONS)
-		.map((tracker): Suggestion => ({ kind: "tracker", name: tracker.title }));
+	const candidates: Array<Suggestion> = [
+		...trackers.map(
+			(tracker): Suggestion => ({ kind: "tracker", name: tracker.title }),
+		),
+		...checklists.map(
+			(checklist): Suggestion => ({ kind: "checklist", name: checklist.title }),
+		),
+	];
+
+	return (
+		candidates
+			.filter((candidate) => candidate.name.toLowerCase().includes(lower))
+			// A line is matched by name, so two of a kind with one title are one
+			// pick, not two.
+			.filter(
+				(candidate, index, all) =>
+					all.findIndex(
+						(other) =>
+							other.kind === candidate.kind &&
+							sameTrackerName(other.name, candidate.name),
+					) === index,
+			)
+			.sort((a, b) => {
+				const aStarts = a.name.toLowerCase().startsWith(lower);
+				const bStarts = b.name.toLowerCase().startsWith(lower);
+				if (aStarts !== bStarts) return aStarts ? -1 : 1;
+				return a.name.localeCompare(b.name);
+			})
+			.slice(0, MAX_SUGGESTIONS)
+	);
 }
 
 /**
- * A text field that completes `#tags` and `&trackers` as they are typed.
+ * A text field that completes `#tags`, and `&trackers` and `&checklists`, as
+ * they are typed.
  *
  * Tagging only happens if it is faster than not bothering, so a tag is written
  * in the same keystrokes as the task itself — "buy milk #shopping" — and the
  * tags that already exist are offered as soon as the `#` is typed. Anything not
  * on the list can still be typed straight through.
  *
- * A line beginning `&` names a tracker instead, and completes the same way. It
- * claims the whole line, because a tracker's title is its real title and has
- * spaces in it — so the two marks never compete for the same keystrokes and
- * only one list can be open at a time.
+ * A line beginning `&` names a tracker or a checklist instead, and completes
+ * the same way. It claims the whole line, because their titles are real titles
+ * with spaces in them — so the two marks never compete for the same keystrokes
+ * and only one list can be open at a time.
  *
  * The suggestion list owns Enter only while it is open, so Enter still submits
  * the moment nothing is being written.
@@ -121,6 +146,7 @@ export function TagTextField({
 	onSubmit,
 	tags,
 	trackers = [],
+	checklists = [],
 	multiline = false,
 	rows,
 	hasAutoFocus = false,
@@ -134,6 +160,8 @@ export function TagTextField({
 	tags: ReadonlyArray<Tag>;
 	/** Every tracker, for completing a line that begins `&`. */
 	trackers?: ReadonlyArray<TrackerSummary>;
+	/** The checklists a line beginning `&` may also name. */
+	checklists?: ReadonlyArray<Pick<Checklist, "checklistId" | "title">>;
 	multiline?: boolean;
 	rows?: number;
 	hasAutoFocus?: boolean;
@@ -165,7 +193,7 @@ export function TagTextField({
 
 	const suggestions =
 		trackerQuery !== null
-			? trackerSuggestions(trackerQuery.query, trackers)
+			? linkSuggestions(trackerQuery.query, trackers, checklists)
 			: tagQuery !== null
 				? tagSuggestions(tagQuery.query, tags)
 				: [];
@@ -187,7 +215,7 @@ export function TagTextField({
 
 	function pick(suggestion: Suggestion) {
 		const next =
-			suggestion.kind === "tracker"
+			suggestion.kind !== "tag"
 				? trackerQuery === null
 					? null
 					: applyTrackerSuggestion(value, trackerQuery, suggestion.name)
@@ -200,7 +228,7 @@ export function TagTextField({
 		// A tracker is the whole line, so picking one finishes it and the list has
 		// nothing left to offer. A tag can be followed by another, so that list
 		// stays up. Typing again reopens either.
-		if (suggestion.kind === "tracker") setIsDismissed(true);
+		if (suggestion.kind !== "tag") setIsDismissed(true);
 
 		onChange(next.text);
 		setCaret(next.caret);
@@ -251,7 +279,7 @@ export function TagTextField({
 			const highlighted = suggestions[index];
 			const isFinished =
 				highlighted !== undefined &&
-				(highlighted.kind === "tracker"
+				(highlighted.kind !== "tag"
 					? sameTrackerName(highlighted.name, typed)
 					: sameTagName(highlighted.name, typed));
 
@@ -362,7 +390,7 @@ export function TagTextField({
 				// this is a hint about what is being typed rather than a control.
 				<ul className="thunderlist-suggestions absolute top-full left-0 z-30 mt-1 max-h-60 w-max min-w-40 max-w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg">
 					{suggestions.map((suggestion, position) => (
-						<li key={suggestion.name}>
+						<li key={`${suggestion.kind}:${suggestion.name}`}>
 							<button
 								type="button"
 								className={`flex w-full cursor-pointer items-center gap-2 whitespace-nowrap px-3 py-1.5 text-left ${
@@ -373,9 +401,15 @@ export function TagTextField({
 								onMouseEnter={() => setActive(position)}
 								onClick={() => pick(suggestion)}
 							>
-								{suggestion.kind === "tracker" ? (
+								{suggestion.kind !== "tag" ? (
 									<>
-										<Icon icon={TrendingUp} size="sm" color="secondary" />
+										<Icon
+											icon={
+												suggestion.kind === "tracker" ? TrendingUp : ListChecks
+											}
+											size="sm"
+											color="secondary"
+										/>
 										<Text>{suggestion.name}</Text>
 									</>
 								) : (

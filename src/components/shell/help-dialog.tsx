@@ -56,7 +56,7 @@ const GROUPS: Array<Group> = [
 const WORKFLOW: Array<{ step: string; what: string }> = [
 	{
 		step: "Park it",
-		what: "Anything you might do goes in the Backlog. Out of your head, off today.",
+		what: "Anything you might do gets #backlog, from a task's menu. Out of your head, off today.",
 	},
 	{
 		step: "Group it",
@@ -68,7 +68,7 @@ const WORKFLOW: Array<{ step: string; what: string }> = [
 	},
 	{
 		step: "Pick today",
-		what: "Each morning pull a few things onto Today. It is a plan, not a store.",
+		what: "Each morning press the bolt on a few tasks to put them on #today. It is a plan, not a store.",
 	},
 	{
 		step: "Let it tell you",

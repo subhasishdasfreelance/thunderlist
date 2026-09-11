@@ -22,18 +22,10 @@ import {
 	createTask,
 	deleteChecklist,
 	deleteTask,
-	readChecklistTaskIds,
-	removeTagFromTasks,
 	updateChecklist,
 	updateTask,
 } from "./checklist.server";
 import { createTag, deleteTag, updateTag } from "./tag.server";
-import {
-	addTaskRef,
-	moveTaskRef,
-	removeTaskRef,
-	removeTaskRefsFor,
-} from "./task-list.server";
 import {
 	createProgressEntry,
 	createTracker,
@@ -53,28 +45,13 @@ async function run(userId: string, change: Change): Promise<void> {
 			await updateChecklist(userId, change.checklistId, change.patch);
 			return;
 
-		case "checklist.delete": {
-			// Clear the references first: if this fails nothing has been destroyed
-			// yet, and the checklist is still there to try again.
-			const taskIds = await readChecklistTaskIds(userId, change.checklistId);
-			await removeTaskRefsFor(userId, taskIds);
+		case "checklist.delete":
 			await deleteChecklist(userId, change.checklistId);
 			return;
-		}
 
-		case "task.create": {
+		case "task.create":
 			await createTask(userId, change);
-
-			// Only once the task exists. Both writes happen inside this one
-			// request, so they are ordered — which is exactly what two separate
-			// requests could not guarantee, and why placing a task on a list is
-			// one change rather than two.
-			if (change.place) {
-				await addTaskRef(userId, { ...change.place, taskId: change.taskId });
-			}
-
 			return;
-		}
 
 		case "task.update":
 			await updateTask(userId, change.taskId, change.patch);
@@ -82,7 +59,6 @@ async function run(userId: string, change: Change): Promise<void> {
 
 		case "task.delete":
 			await deleteTask(userId, change.taskId);
-			await removeTaskRefsFor(userId, [change.taskId]);
 			return;
 
 		case "tracker.create":
@@ -114,18 +90,6 @@ async function run(userId: string, change: Change): Promise<void> {
 			await deleteProgressEntry(userId, change.trackerId, change.entryId);
 			return;
 
-		case "ref.add":
-			await addTaskRef(userId, change);
-			return;
-
-		case "ref.remove":
-			await removeTaskRef(userId, change.list, change.itemId);
-			return;
-
-		case "ref.move":
-			await moveTaskRef(userId, change.list, change.itemId, change.direction);
-			return;
-
 		case "tag.create":
 			await createTag(userId, change);
 			return;
@@ -135,7 +99,7 @@ async function run(userId: string, change: Change): Promise<void> {
 			return;
 
 		case "tag.delete":
-			await removeTagFromTasks(userId, change.tagId);
+			// It takes the tag off everything carrying it first; see `deleteTag`.
 			await deleteTag(userId, change.tagId);
 			return;
 	}

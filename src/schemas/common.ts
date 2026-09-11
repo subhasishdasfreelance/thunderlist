@@ -12,6 +12,15 @@ export const idSchema = v.pipe(
 	v.regex(/^[A-Za-z0-9_-]+$/, "Id contains unsupported characters"),
 );
 
+/**
+ * Tag ids carried by a task, a checklist or a tracker, in the order the user
+ * applied them.
+ */
+export const tagIdsSchema = v.pipe(
+	v.array(idSchema),
+	v.maxLength(20, "At most 20 tags can be applied"),
+);
+
 /** No upper limit: a title is as long as whoever writes it needs it to be. */
 export const titleSchema = v.pipe(
 	v.string(),
@@ -37,6 +46,32 @@ export const dateOnlySchema = v.pipe(
 	v.isoDate("Use a YYYY-MM-DD date"),
 );
 
+/** A time of day with no timezone, e.g. `18:30`: the viewer's own clock. */
+export const timeOfDaySchema = v.pipe(
+	v.string(),
+	v.regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use an HH:MM time"),
+);
+
+/**
+ * The hours of every day something is worked in, e.g. `06:00` to `22:00`.
+ *
+ * Something paced to one is measured against today's stretch of it — each day
+ * afresh — instead of against a deadline. It has to end after it starts: a
+ * window across midnight would belong to two days at once.
+ */
+export const dailyWindowSchema = v.pipe(
+	v.object({ from: timeOfDaySchema, to: timeOfDaySchema }),
+	v.check(
+		(window) => window.to > window.from,
+		"The window has to end after it starts",
+	),
+);
+
+export type DailyWindow = v.InferOutput<typeof dailyWindowSchema>;
+
+/** The window a daily schedule starts with: morning to night. */
+export const DEFAULT_DAILY_WINDOW: DailyWindow = { from: "06:00", to: "22:00" };
+
 /** Empty string is treated as "no url" so a cleared form field round-trips. */
 export const optionalUrlSchema = v.pipe(
 	v.nullable(
@@ -44,19 +79,6 @@ export const optionalUrlSchema = v.pipe(
 	),
 	v.transform((value) => (value === "" ? null : value)),
 );
-
-/**
- * Sibling ordering. Kept as a plain number so gaps (10, 20, 30) can be used to
- * insert between two entries without renumbering the whole list.
- */
-export const sortOrderSchema = v.pipe(
-	v.number(),
-	v.finite("Sort order must be a number"),
-	v.minValue(0, "Sort order cannot be negative"),
-	v.maxValue(1_000_000_000, "Sort order is too large"),
-);
-
-export const directionSchema = v.picklist(["up", "down"] as const);
 
 /** Today as `YYYY-MM-DD` in the viewer's own timezone, not UTC. */
 export function todayDateOnly(now: Date = new Date()): string {

@@ -1,6 +1,7 @@
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { TaggedTitle } from "#/components/tags/tagged-title";
@@ -12,9 +13,8 @@ import {
 	TodayButton,
 } from "#/components/tasks/task-actions";
 import { useRowShortcuts } from "#/lib/use-row-shortcuts";
-import type { Tag } from "#/schemas/tag";
+import { specialTag, type Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
-import { TASK_LIST_LABELS, type TaskListName } from "#/schemas/task-list";
 
 export type TaskRowActions = TaskQuickActions & {
 	onToggle: (completed: boolean) => void;
@@ -25,10 +25,10 @@ export type TaskRowActions = TaskQuickActions & {
 /**
  * One task in a checklist, or on a tag's page among tasks from several.
  *
- * The four things done most often — planning a task for today, parking it, and
- * saying whether it is urgent or important — are buttons on the row itself
- * rather than entries buried in a menu. Each toggles, so a mistake costs one
- * click and the row never grows a third state.
+ * The four things done most often — putting a task on Today, parking it in the
+ * Backlog, and saying whether it is urgent or important — are buttons on the
+ * row itself rather than entries buried in a menu. Each toggles, so a mistake
+ * costs one click and the row never grows a third state.
  *
  * Every one of them also answers to a key while the pointer is over the row,
  * which is what makes going down a list quick: the pointer picks, the keyboard
@@ -40,15 +40,12 @@ export type TaskRowActions = TaskQuickActions & {
  */
 export function TaskRow({
 	task,
-	listState,
 	tags,
 	actions,
 	checklist,
-	onOpenList,
 }: {
 	task: Task;
-	/** Which reference list this task is on, if any. */
-	listState: TaskListName | null;
+	/** Every tag that exists: for the highlights, and for Today and the Backlog. */
 	tags: ReadonlyArray<Tag>;
 	actions: TaskRowActions;
 	/**
@@ -57,65 +54,81 @@ export function TaskRow({
 	 * answer. `null` is a task that belongs to no checklist.
 	 */
 	checklist?: { title: string | null; onOpen: () => void } | null;
-	/**
-	 * Opens the list holding a task that belongs to no checklist — the only
-	 * place it lives — with the task ringed there.
-	 */
-	onOpenList?: (list: TaskListName) => void;
 }) {
 	const [isHovered, setIsHovered] = useState(false);
 
-	/** Its state comes from a tracker, so nothing here may set it by hand. */
-	const isTracked = task.trackerId !== null;
 	/**
-	 * On Today and in no checklist, taking it off Today deletes it, so it has no
-	 * Today toggle here either; see `TaskRefRow`.
+	 * Its state comes from a tracker or another checklist, so nothing here may
+	 * set it by hand.
 	 */
-	const isLooseOnToday = checklist === null && listState === "today";
+	const isTracked = task.trackerId !== null || task.linkedChecklistId != null;
+
+	const today = specialTag(tags, "today");
+	const backlog = specialTag(tags, "backlog");
+	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
+	const isOnBacklog = backlog !== null && task.tagIds.includes(backlog.tagId);
+
+	/*
+	 * A task in no checklist lives under its tags, so it is never left with
+	 * none. Taken off Today when that is its only tag, it is parked in the
+	 * Backlog rather than vanishing; and when the Backlog is its only tag, it
+	 * cannot be taken out — only put on Today, or deleted.
+	 */
+	const isOnlyUnder = (tag: Tag | null) =>
+		checklist === null &&
+		tag !== null &&
+		task.tagIds.length === 1 &&
+		task.tagIds[0] === tag.tagId;
+	const isTodayItsHome = isOnlyUnder(today);
+	const isBacklogItsHome = isOnlyUnder(backlog);
 
 	const shortcuts = useMemo(
 		() => ({
 			[TASK_SHORTCUTS.today]: () => {
-				if (isLooseOnToday) return;
-				actions.onSetList(listState === "today" ? null : "today");
+				if (today === null) return;
+				if (isOnToday && isTodayItsHome) actions.onSetSpecial("backlog", true);
+				else actions.onSetSpecial("today", !isOnToday);
 			},
-			[TASK_SHORTCUTS.backlog]: () =>
-				actions.onSetList(listState === "backlog" ? null : "backlog"),
+			[TASK_SHORTCUTS.backlog]: () => {
+				if (backlog === null || (isOnBacklog && isBacklogItsHome)) return;
+				actions.onSetSpecial("backlog", !isOnBacklog);
+			},
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task.urgent),
 			[TASK_SHORTCUTS.important]: () => actions.onSetImportant(!task.important),
 			[TASK_SHORTCUTS.complete]: () => {
-				if (task.trackerId === null) actions.onToggle(!task.completed);
+				if (!isTracked) actions.onToggle(!task.completed);
 			},
 			[TASK_SHORTCUTS.edit]: actions.onRename,
 		}),
 		[
 			actions,
-			listState,
-			isLooseOnToday,
+			today,
+			backlog,
+			isOnToday,
+			isOnBacklog,
+			isTodayItsHome,
+			isBacklogItsHome,
 			task.urgent,
 			task.important,
 			task.completed,
-			task.trackerId,
+			isTracked,
 		],
 	);
 
 	useRowShortcuts(isHovered, shortcuts);
 
 	const title = (
-		<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
+		<TaggedTitle
+			title={task.title}
+			tags={tags}
+			tagIds={task.tagIds}
+			isMuted={task.completed}
+		/>
 	);
 
-	// Where it lives is the way into it, as it is on Today: its checklist, or
-	// for a task in no checklist, the list holding it.
-	const crumb =
-		checklist?.title != null
-			? { title: checklist.title, onOpen: checklist.onOpen }
-			: checklist === null && listState !== null && onOpenList
-				? {
-						title: TASK_LIST_LABELS[listState],
-						onOpen: () => onOpenList(listState),
-					}
-				: null;
+	// Where it lives is the way into it: the checklist, on a screen that is not
+	// that checklist's own.
+	const crumb = checklist?.title != null ? checklist : null;
 
 	return (
 		/*
@@ -157,33 +170,43 @@ export function TaskRow({
 					value={task.completed}
 					isDisabled={isTracked}
 					disabledMessage={
-						isTracked ? "Finishes when its tracker does." : undefined
+						task.linkedChecklistId != null
+							? "Finishes when its checklist does."
+							: isTracked
+								? "Finishes when its tracker does."
+								: undefined
 					}
 					onChange={actions.onToggle}
 				/>
-				{crumb === null ? (
+				{crumb === null && !task.caption ? (
 					title
 				) : (
 					<VStack gap={0}>
 						{title}
-						<button
-							type="button"
-							className="thunderlist-crumb"
-							title={`Open ${crumb.title}`}
-							onClick={crumb.onOpen}
-						>
-							{crumb.title}
-						</button>
+						{task.caption ? (
+							<Text type="supporting">{task.caption}</Text>
+						) : null}
+						{crumb === null ? null : (
+							<button
+								type="button"
+								className="thunderlist-crumb"
+								title={`Open ${crumb.title}`}
+								onClick={crumb.onOpen}
+							>
+								{crumb.title}
+							</button>
+						)}
 					</VStack>
 				)}
 			</div>
 
 			<div className="order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
-				{isLooseOnToday ? null : (
+				{today === null ? null : (
 					<TodayButton
 						title={task.title}
-						listState={listState}
-						actions={actions}
+						today={today}
+						isOn={isOnToday}
+						onToggle={shortcuts[TASK_SHORTCUTS.today]}
 					/>
 				)}
 
@@ -204,7 +227,15 @@ export function TaskRow({
 							label: `Edit (${TASK_SHORTCUTS.edit})`,
 							onClick: actions.onRename,
 						},
-						backlogMenuItem(listState, actions),
+						...(backlog === null || (isOnBacklog && isBacklogItsHome)
+							? []
+							: [
+									backlogMenuItem(
+										backlog,
+										isOnBacklog,
+										shortcuts[TASK_SHORTCUTS.backlog],
+									),
+								]),
 						{
 							label: "Delete task",
 							variant: "destructive" as const,

@@ -31,7 +31,7 @@ export function UntaggedCard({ tasks }: { tasks: ReadonlyArray<TaggedTask> }) {
 				<ProgressMeter
 					label="Untagged progress"
 					percent={progress.percent}
-					expectedPercent={null}
+					elapsed={null}
 					footnote={`${progress.completed} / ${progress.total} ${
 						progress.total === 1 ? "task" : "tasks"
 					}`}

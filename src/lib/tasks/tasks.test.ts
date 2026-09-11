@@ -3,6 +3,7 @@ import type { Task } from "#/schemas/task";
 import {
 	calculateChecklistProgress,
 	compareTasks,
+	mergeReads,
 	orderTasks,
 	sortTasks,
 } from "./tasks";
@@ -169,5 +170,27 @@ describe("orderTasks by priority", () => {
 		orderTasks(tasks, "priority");
 
 		expect(tasks.map((row) => row.taskId)).toEqual(["a", "b"]);
+	});
+});
+
+describe("mergeReads", () => {
+	const id = (row: { id: string }) => row.id;
+
+	it("puts the open tasks and the finished ones together", () => {
+		expect(mergeReads([{ id: "a" }], [{ id: "b" }], id)).toEqual([
+			{ id: "a" },
+			{ id: "b" },
+		]);
+	});
+
+	it("keeps a task in both reads once, as the open read has it", () => {
+		// Ticked on screen: the open read has the change, the other is stale.
+		const merged = mergeReads(
+			[{ id: "a", done: true }],
+			[{ id: "a", done: false }],
+			id,
+		);
+
+		expect(merged).toEqual([{ id: "a", done: true }]);
 	});
 });

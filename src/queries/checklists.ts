@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
+	getChecklistCompletedFn,
 	getChecklistFn,
 	listChecklistsFn,
 } from "#/functions/checklist.functions";
@@ -21,5 +22,13 @@ export const checklistQuery = (checklistId: string) =>
 		 * time, and retrying it three times just delays the screen the browser
 		 * could already draw.
 		 */
+		retry: false,
+	});
+
+/** The finished tasks, which the screen asks for once it has settled. */
+export const checklistCompletedQuery = (checklistId: string) =>
+	queryOptions({
+		queryKey: queryKeys.checklistCompleted(checklistId),
+		queryFn: () => getChecklistCompletedFn({ data: { checklistId } }),
 		retry: false,
 	});

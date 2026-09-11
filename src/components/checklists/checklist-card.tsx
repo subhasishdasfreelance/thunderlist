@@ -7,7 +7,8 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity, elapsedFraction } from "#/lib/progress";
+import { computeVelocity } from "#/lib/progress";
+import { usePace } from "#/lib/use-pace";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
 /**
@@ -17,10 +18,10 @@ import type { ChecklistSummary } from "#/schemas/checklist";
 export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 	const { progress } = checklist;
 
-	const elapsed = elapsedFraction({
-		startDate: checklist.startDate,
-		deadline: checklist.deadline,
-	});
+	const pace = usePace(
+		checklist,
+		progress.total === 0 ? null : progress.completed / progress.total,
+	);
 
 	// Tasks are the unit here, so the same maths a tracker uses for pages
 	// answers "how fast am I getting through this list".
@@ -52,17 +53,17 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 							({progress.percent}%)
 						</Text>
 					</Text>
-					<PaceLabel status={checklist.status} />
+					<PaceLabel status={pace.status} />
 				</HStack>
 
 				<ProgressMeter
 					label={`${checklist.title} progress`}
 					percent={progress.percent}
-					expectedPercent={elapsed === null ? null : elapsed * 100}
+					elapsed={pace.elapsed}
 					expectedReading={
-						elapsed === null
+						pace.elapsed == null
 							? undefined
-							: formatExpectedTasks(elapsed, progress.total)
+							: formatExpectedTasks(pace.elapsed, progress.total)
 					}
 					footnote={`${progress.completed} / ${progress.total} ${
 						progress.total === 1 ? "task" : "tasks"

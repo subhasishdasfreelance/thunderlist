@@ -1,10 +1,13 @@
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Token } from "@astryxdesign/core/Token";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity, elapsedFraction } from "#/lib/progress";
+import { computeVelocity } from "#/lib/progress";
+import { usePace } from "#/lib/use-pace";
+import { type Tag, tagsFor } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 /**
@@ -36,13 +39,21 @@ export function formatExpectedReading(
 	return `${Math.round(reading * 10) / 10} ${unit}`.trim();
 }
 
-export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
+export function TrackerCard({
+	tracker,
+	tags,
+}: {
+	tracker: TrackerSummary;
+	/** Every tag that exists, for drawing the ones this tracker carries. */
+	tags: ReadonlyArray<Tag>;
+}) {
 	const { progress } = tracker;
+	const carried = tagsFor(tracker.tagIds ?? [], tags);
 
-	const elapsed = elapsedFraction({
-		startDate: tracker.startDate,
-		deadline: tracker.deadline,
-	});
+	const pace = usePace(
+		tracker,
+		progress.target > 0 ? progress.percent / 100 : null,
+	);
 
 	const summary = velocitySummary(
 		computeVelocity({
@@ -80,18 +91,31 @@ export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
 								({progress.percent}%)
 							</Text>
 						</Text>
-						<PaceLabel status={tracker.status} />
+						<PaceLabel status={pace.status} />
 					</HStack>
+
+					{carried.length === 0 ? null : (
+						<HStack gap={1} wrap="wrap">
+							{carried.map((tag) => (
+								<Token
+									key={tag.tagId}
+									size="sm"
+									color={tag.color}
+									label={tag.name}
+								/>
+							))}
+						</HStack>
+					)}
 
 					<ProgressMeter
 						label={`${tracker.title} progress`}
 						percent={progress.percent}
-						expectedPercent={elapsed === null ? null : elapsed * 100}
+						elapsed={pace.elapsed}
 						expectedReading={
-							elapsed === null
+							pace.elapsed == null
 								? undefined
 								: formatExpectedReading(
-										elapsed,
+										pace.elapsed,
 										tracker.startValue,
 										progress.target,
 										tracker.unit,

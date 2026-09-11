@@ -15,11 +15,6 @@ import {
 	updateTaskInputSchema,
 } from "./task";
 import {
-	addTaskRefInputSchema,
-	moveTaskRefInputSchema,
-	removeTaskRefInputSchema,
-} from "./task-list";
-import {
 	createProgressEntryInputSchema,
 	createTrackerInputSchema,
 	deleteProgressEntryInputSchema,
@@ -92,13 +87,6 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("entry.delete"),
 		...deleteProgressEntryInputSchema.entries,
 	}),
-
-	v.object({ kind: v.literal("ref.add"), ...addTaskRefInputSchema.entries }),
-	v.object({
-		kind: v.literal("ref.remove"),
-		...removeTaskRefInputSchema.entries,
-	}),
-	v.object({ kind: v.literal("ref.move"), ...moveTaskRefInputSchema.entries }),
 
 	v.object({ kind: v.literal("tag.create"), ...createTagInputSchema.entries }),
 	v.object({ kind: v.literal("tag.update"), ...updateTagInputSchema.entries }),

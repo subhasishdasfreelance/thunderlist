@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
+import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
@@ -56,13 +57,15 @@ export function taskFieldRows(value: string): number {
  * ever sees them. Enter still adds; Shift+Enter starts another line by hand.
  *
  * Tags are written in the same breath — "buy milk #shopping" — and completed as
- * they are typed. A line beginning `&` names a tracker instead: the task it
- * makes is finished when that tracker is, and cannot be ticked by hand.
+ * they are typed. A line beginning `&` names a tracker or another checklist
+ * instead: the task it makes is finished when that is, and cannot be ticked by
+ * hand.
  */
 export function QuickAddTask({
 	placeholder = "Add a task — #tag it, &track it, or paste a list",
 	tags,
 	trackers = [],
+	checklists = [],
 	onAdd,
 }: {
 	placeholder?: string;
@@ -70,6 +73,8 @@ export function QuickAddTask({
 	tags: ReadonlyArray<Tag>;
 	/** Every tracker, for completing a line that begins `&`. */
 	trackers?: ReadonlyArray<TrackerSummary>;
+	/** The checklists a line beginning `&` may also name. */
+	checklists?: ReadonlyArray<Pick<Checklist, "checklistId" | "title">>;
 	onAdd: (lines: Array<ParsedTitle>) => void;
 }) {
 	const [value, setValue] = useState("");
@@ -93,6 +98,7 @@ export function QuickAddTask({
 				onSubmit={add}
 				tags={tags}
 				trackers={trackers}
+				checklists={checklists}
 				multiline
 				rows={taskFieldRows(value)}
 			/>

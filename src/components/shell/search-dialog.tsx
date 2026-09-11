@@ -8,6 +8,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { searchIndexQuery } from "#/queries/system";
+import { tagsQuery } from "#/queries/tags";
+import { tagParam, tagsFor } from "#/schemas/tag";
 import { TRACKER_TYPE_LABELS } from "#/schemas/tracker";
 
 type Result = {
@@ -43,6 +45,8 @@ export function SearchDialog({
 		...searchIndexQuery(),
 		enabled: isOpen,
 	});
+	// Where a task in no checklist is shown: the page of a tag it carries.
+	const tags = useQuery({ ...tagsQuery(), enabled: isOpen });
 
 	const results = useMemo<Array<Result>>(() => {
 		const needle = query.trim().toLowerCase();
@@ -74,19 +78,23 @@ export function SearchDialog({
 
 		/*
 		 * A task result opens the page the task is actually on and scrolls to it:
-		 * its checklist, or — for one that belongs to no checklist — whichever
-		 * list is holding it. A task on neither has nowhere to be shown, so it is
-		 * not offered rather than opening a page it is not on.
+		 * its checklist, or — for one that belongs to no checklist — the page of
+		 * the first tag it carries. A task with neither has nowhere to be shown,
+		 * so it is not offered rather than opening a page it is not on.
 		 */
 		const tasks = data.tasks
 			.filter((item) => matches(item.title, needle))
 			.slice(0, MAX_PER_GROUP)
 			.flatMap((item) => {
+				const home =
+					item.checklistId === null
+						? (tagsFor(item.tagIds, tags.data ?? [])[0] ?? null)
+						: null;
 				const to =
 					item.checklistId !== null
 						? `/checklists/${item.checklistId}`
-						: item.list !== null
-							? `/${item.list}`
+						: home !== null
+							? `/tags/${tagParam(home)}`
 							: null;
 
 				if (to === null) return [];
@@ -96,9 +104,11 @@ export function SearchDialog({
 						key: `tsk-${item.taskId}`,
 						label: item.title,
 						context:
-							item.checklistTitle === null
-								? "Task"
-								: `Task in ${item.checklistTitle}`,
+							item.checklistTitle !== null
+								? `Task in ${item.checklistTitle}`
+								: home !== null
+									? `Task in #${home.name}`
+									: "Task",
 						to,
 						taskId: item.taskId,
 					},
@@ -106,7 +116,7 @@ export function SearchDialog({
 			});
 
 		return [...checklists, ...tasks, ...trackers];
-	}, [data, query]);
+	}, [data, query, tags.data]);
 
 	function open(result: Result) {
 		onOpenChange(false);

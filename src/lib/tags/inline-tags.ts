@@ -91,6 +91,78 @@ export function parseInlineTags(text: string): ParsedTitle {
 }
 
 /**
+ * Whether a tag's name can be written inline and read back unchanged.
+ *
+ * Not every name can: one given a space on the Tags screen — "Q3 launch" —
+ * would be read back as "Q3". A field that writes tags as `#name` has to know
+ * which ones it cannot write, or saving it would quietly rename them.
+ */
+export function isInlineTagName(name: string): boolean {
+	return parseInlineTags(`#${name}`).tagNames[0] === name;
+}
+
+/**
+ * A title with `#name` written at its end, the way the row's bolt adds a tag —
+ * or the title as it is, if it already writes that tag somewhere.
+ */
+export function withInlineTag(title: string, name: string): string {
+	const isWritten = parseInlineTags(title).tagNames.some((written) =>
+		sameTagName(written, name),
+	);
+
+	return isWritten ? title : `${title.trimEnd()} #${name}`;
+}
+
+/**
+ * A title with every `#name` of one tag taken out, wherever it was written —
+ * the end, the start or the middle of the sentence — and the gap it leaves
+ * closed up.
+ *
+ * A title that was nothing but the tag keeps the word without its `#`: a task
+ * cannot have an empty title, and the word is what the user wrote.
+ */
+export function withoutInlineTag(title: string, name: string): string {
+	const without = title
+		.replace(INLINE_TAG, (whole, before: string, written: string) =>
+			sameTagName(written, name) ? before : whole,
+		)
+		.replace(/[ \t]{2,}/g, " ")
+		.trim();
+
+	return without === "" ? name : without;
+}
+
+/** A title with each `#from` rewritten as `#to`, for a tag that was renamed. */
+export function renameInlineTag(
+	title: string,
+	from: string,
+	to: string,
+): string {
+	return title.replace(INLINE_TAG, (whole, before: string, written: string) =>
+		sameTagName(written, from) ? `${before}#${to}` : whole,
+	);
+}
+
+/**
+ * The tags a task carries that its title does not write — the ones it has from
+ * its checklist — so they can be drawn beside the title instead of in it.
+ */
+export function unwrittenTags<T extends { tagId: string; name: string }>(
+	title: string,
+	tagIds: ReadonlyArray<string>,
+	tags: ReadonlyArray<T>,
+): Array<T> {
+	const written = parseInlineTags(title).tagNames;
+
+	return tagIds.flatMap((tagId) => {
+		const tag = tags.find((candidate) => candidate.tagId === tagId);
+		return tag && !written.some((name) => sameTagName(name, tag.name))
+			? [tag]
+			: [];
+	});
+}
+
+/**
  * Break a title into the runs needed to draw it: plain text, and the tags
  * written in it.
  *

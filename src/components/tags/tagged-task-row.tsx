@@ -1,10 +1,9 @@
 import { Divider } from "@astryxdesign/core/Divider";
-import { HStack } from "@astryxdesign/core/Stack";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useNavigate } from "@tanstack/react-router";
 import type { TaggedTask } from "#/queries/system";
-import type { Tag } from "#/schemas/tag";
-import { TASK_LIST_LABELS } from "#/schemas/task-list";
+import { type Tag, tagParam, tagsFor } from "#/schemas/tag";
 import { TaggedTitle } from "./tagged-title";
 
 /**
@@ -12,10 +11,10 @@ import { TaggedTitle } from "./tagged-title";
  * and the tags it carries.
  *
  * Read-only, like every task row. Pressing it opens the task where it lives,
- * with the task ringed: its checklist, or for a task in no checklist, the list
- * holding it. That is where it is edited — tags included, since they are
- * written into the title as `#name`. A task on neither has nowhere to open, so
- * it is a plain row rather than a link.
+ * with the task ringed: its checklist, or for a task in no checklist, the page
+ * of the first tag it carries — usually Today's. That is where it is edited —
+ * tags included, since they are written into the title as `#name`. A task with
+ * neither has nowhere to open, so it is a plain row rather than a link.
  */
 export function TaggedTaskRow({
 	task,
@@ -28,7 +27,11 @@ export function TaggedTaskRow({
 	hasDivider: boolean;
 }) {
 	const navigate = useNavigate();
-	const { checklistId, list } = task;
+	const { checklistId } = task;
+
+	// A task in no checklist lives under its tags; the first is its page.
+	const homeTag =
+		checklistId === null ? (tagsFor(task.tagIds, tags)[0] ?? null) : null;
 
 	const open =
 		checklistId !== null
@@ -38,21 +41,38 @@ export function TaggedTaskRow({
 						params: { checklistId },
 						search: { task: task.taskId },
 					})
-			: list !== null
+			: homeTag !== null
 				? () =>
 						void navigate({
-							to: list === "today" ? "/today" : "/backlog",
+							to: "/tags/$tagId",
+							params: { tagId: tagParam(homeTag) },
 							search: { task: task.taskId },
 						})
 				: null;
 
 	// Named on the row, so it says where pressing it goes.
 	const home =
-		task.checklistTitle ?? (list === null ? null : TASK_LIST_LABELS[list]);
+		task.checklistTitle ?? (homeTag === null ? null : `#${homeTag.name}`);
+
+	const title = (
+		<TaggedTitle
+			title={task.title}
+			tags={tags}
+			tagIds={task.tagIds}
+			isMuted={task.completed}
+		/>
+	);
 
 	const content = (
 		<HStack gap={2} hAlign="between" vAlign="center" paddingBlock={1.5}>
-			<TaggedTitle title={task.title} tags={tags} isMuted={task.completed} />
+			{task.caption ? (
+				<VStack gap={0}>
+					{title}
+					<Text type="supporting">{task.caption}</Text>
+				</VStack>
+			) : (
+				title
+			)}
 			{home === null ? null : <Text type="supporting">{home}</Text>}
 		</HStack>
 	);

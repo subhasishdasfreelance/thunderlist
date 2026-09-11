@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { formatDate, formatDateWithWeekday } from "./format-date";
+import {
+	formatClock,
+	formatDate,
+	formatDateWithWeekday,
+	formatDeadline,
+	formatSchedule,
+} from "./format-date";
 
 describe("formatDate", () => {
 	it("writes a date the way the app shows it", () => {
@@ -55,5 +61,54 @@ describe("formatDateWithWeekday", () => {
 
 	it("falls back to the plain format when there is no date to read", () => {
 		expect(formatDateWithWeekday("nope")).toBe("nope");
+	});
+});
+
+describe("formatClock", () => {
+	it("writes a time the way the app shows it", () => {
+		expect(formatClock("18:30")).toBe("6:30 pm");
+		expect(formatClock("06:00")).toBe("6:00 am");
+	});
+
+	it("calls midnight and noon twelve", () => {
+		expect(formatClock("00:15")).toBe("12:15 am");
+		expect(formatClock("12:00")).toBe("12:00 pm");
+	});
+
+	it("hands back anything that is not a time", () => {
+		expect(formatClock("teatime")).toBe("teatime");
+	});
+});
+
+describe("formatDeadline", () => {
+	it("adds the time after the day", () => {
+		expect(formatDeadline("2026-10-08", "18:30")).toBe(
+			"8th Oct, 2026, 6:30 pm",
+		);
+	});
+
+	it("is the day alone without one", () => {
+		expect(formatDeadline("2026-10-08", null)).toBe("8th Oct, 2026");
+	});
+});
+
+describe("formatSchedule", () => {
+	it("says when something is due", () => {
+		expect(
+			formatSchedule({ deadline: "2026-10-08", deadlineTime: "09:00" }),
+		).toBe("due 8th Oct, 2026, 9:00 am");
+	});
+
+	it("says which hours something repeats in", () => {
+		expect(
+			formatSchedule({
+				deadline: null,
+				dailyWindow: { from: "06:00", to: "22:00" },
+			}),
+		).toBe("daily 6:00 am – 10:00 pm");
+	});
+
+	it("says nothing for a schedule that asks for nothing", () => {
+		expect(formatSchedule({ deadline: null })).toBeNull();
 	});
 });

@@ -10,6 +10,8 @@ import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import type { TagValues } from "#/lib/changes";
+import { isInlineTagName } from "#/lib/tags/inline-tags";
+import type { DailyWindow } from "#/schemas/common";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 
 const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
@@ -49,6 +51,10 @@ export function TagFormDialog({
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
+	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -57,6 +63,8 @@ export function TagFormDialog({
 		setDescription(tag?.description ?? "");
 		setStartDate((tag?.startDate as ISODateString | null) ?? undefined);
 		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(tag?.deadlineTime ?? undefined);
+		setDailyWindow(tag?.dailyWindow ?? null);
 	}, [isOpen, tag]);
 
 	const trimmed = name.trim();
@@ -65,7 +73,15 @@ export function TagFormDialog({
 			existing.toLowerCase() === trimmed.toLowerCase() &&
 			existing.toLowerCase() !== tag?.name.toLowerCase(),
 	);
-	const isValid = trimmed !== "" && !isDuplicate;
+	// Today and the Backlog are written into titles by the bolt and the menu, so
+	// their names have to read back as the same tag; see `isInlineTagName`.
+	const isUnwritable =
+		tag?.special != null && trimmed !== "" && !isInlineTagName(trimmed);
+	const isValid =
+		trimmed !== "" &&
+		!isDuplicate &&
+		!isUnwritable &&
+		(dailyWindow === null || dailyWindow.to > dailyWindow.from);
 
 	function save() {
 		if (!isValid) return;
@@ -74,7 +90,13 @@ export function TagFormDialog({
 			color,
 			description: description.trim(),
 			startDate: startDate ?? null,
-			deadline: deadline ?? null,
+			// Repeating daily takes the deadline's place; see `ScheduleFields`.
+			deadline: dailyWindow === null ? (deadline ?? null) : null,
+			deadlineTime:
+				dailyWindow === null && deadline !== undefined
+					? (deadlineTime ?? null)
+					: null,
+			dailyWindow,
 		});
 	}
 
@@ -115,7 +137,12 @@ export function TagFormDialog({
 									type: "error",
 									message: `There is already a "${trimmed}" tag.`,
 								}
-							: undefined
+							: isUnwritable
+								? {
+										type: "error",
+										message: "One word: it is written into tasks as #name.",
+									}
+								: undefined
 					}
 				/>
 
@@ -146,8 +173,12 @@ export function TagFormDialog({
 				<ScheduleFields
 					startDate={startDate}
 					deadline={deadline}
+					deadlineTime={deadlineTime}
+					dailyWindow={dailyWindow}
 					onStartDateChange={setStartDate}
 					onDeadlineChange={setDeadline}
+					onDeadlineTimeChange={setDeadlineTime}
+					onDailyWindowChange={setDailyWindow}
 					isStartDateOptional
 				/>
 			</VStack>

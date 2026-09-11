@@ -8,7 +8,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Zap } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { LoadingState } from "#/components/common/loading-state";
@@ -28,17 +28,22 @@ import {
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
 	createEntry,
+	createTagResolver,
 	createTask,
 	type EntryValues,
 	type TrackerValues,
 	useApplyChange,
 } from "#/lib/changes";
 import { dayStart } from "#/lib/chart-points";
-import { formatDate } from "#/lib/format-date";
-import { elapsedFraction } from "#/lib/progress";
-import { primeQuery } from "#/queries/prime";
-import { taskListsQuery } from "#/queries/task-lists";
+import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
+import { localMoment } from "#/lib/progress";
+import { withInlineTag } from "#/lib/tags/inline-tags";
+import { useNow } from "#/lib/use-now";
+import { paceAt } from "#/lib/use-pace";
+import { deferQuery, primeQuery } from "#/queries/prime";
+import { tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
+import { specialTag, tagsFor } from "#/schemas/tag";
 import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
 
 export const Route = createFileRoute("/trackers/$trackerId")({
@@ -51,6 +56,10 @@ export const Route = createFileRoute("/trackers/$trackerId")({
 		void context.queryClient.prefetchQuery(
 			trackerEntriesQuery(params.trackerId),
 		);
+		// The tags it carries, and for the edit form; Today's page, to say whether
+		// it is on Today. Nobody waits on them either.
+		deferQuery(context.queryClient, tagsQuery());
+		deferQuery(context.queryClient, tagQuery("today"));
 
 		return primeQuery(context.queryClient, trackerQuery(params.trackerId));
 	},
@@ -78,10 +87,13 @@ function TrackerDetailPage() {
 		trackerQuery(trackerId),
 	);
 	const history = useQuery(trackerEntriesQuery(trackerId));
-	const lists = useQuery(taskListsQuery());
+	const todayResult = useQuery(tagQuery("today"));
+	const tagsResult = useQuery(tagsQuery());
 	const entries = history.data ?? [];
+	const tags = tagsResult.data ?? [];
 
 	const [view, setView] = useState<ProgressView>("list");
+	const now = useNow();
 
 	const detail = data ?? null;
 
@@ -104,10 +116,12 @@ function TrackerDetailPage() {
 	}
 
 	const { progress } = detail;
-	const elapsed = elapsedFraction({
-		startDate: detail.startDate,
-		deadline: detail.deadline,
-	});
+	const pace = paceAt(
+		detail,
+		detail.targetValue > 0 ? progress.percent / 100 : null,
+		now,
+	);
+	const scheduleNote = formatSchedule(detail);
 
 	/**
 	 * The reading an entry is measured from. For a new entry that is where the
@@ -126,24 +140,23 @@ function TrackerDetailPage() {
 	/*
 	 * Is this tracker already on Today?
 	 *
-	 * The lists are loaded for the badge on a checklist's rows anyway, so this
-	 * costs nothing extra; while they are still arriving the button simply reads
-	 * as available, and adding twice is prevented server-side by the same task
-	 * id never being minted twice.
+	 * Read off Today's own page. While that is still arriving the button simply
+	 * reads as available.
 	 */
-	const isOnToday = (lists.data?.today ?? []).some(
-		(entry) => entry.task?.trackerId === trackerId,
+	const isOnToday = (todayResult.data?.tasks ?? []).some(
+		(entry) => entry.task.trackerId === trackerId,
 	);
+	const today = specialTag(tags, "today");
 
 	function addToToday() {
-		if (detail === null) return;
+		if (detail === null || today === null) return;
 
+		// The same task the bolt would make of it: its title, tagged for Today.
 		createTask(apply, {
 			checklistId: null,
-			title: detail.title,
-			tagIds: [],
+			title: withInlineTag(detail.title, today.name),
+			tagIds: [today.tagId],
 			trackerId,
-			onList: { list: "today", sortOrder: 0 },
 		});
 	}
 
@@ -165,8 +178,16 @@ function TrackerDetailPage() {
 					) : null}
 					<VStack gap={1}>
 						<Heading level={1}>{detail.title}</Heading>
-						<HStack gap={2} vAlign="center">
+						<HStack gap={2} vAlign="center" wrap="wrap">
 							<Token label={TRACKER_TYPE_LABELS[detail.type]} size="sm" />
+							{tagsFor(detail.tagIds ?? [], tags).map((tag) => (
+								<Token
+									key={tag.tagId}
+									label={tag.name}
+									color={tag.color}
+									size="sm"
+								/>
+							))}
 							{detail.author ? (
 								<Text type="supporting">{detail.author}</Text>
 							) : null}
@@ -202,25 +223,25 @@ function TrackerDetailPage() {
 						<Text type="large" weight="semibold">
 							{formatProgress(progress.current, progress.target, detail.unit)}
 						</Text>
-						<PaceLabel status={detail.status} />
+						<PaceLabel status={pace.status} />
 					</HStack>
 
 					<ProgressMeter
 						label={`${detail.title} progress`}
 						percent={progress.percent}
-						expectedPercent={elapsed === null ? null : elapsed * 100}
+						elapsed={pace.elapsed}
 						expectedReading={
-							elapsed === null
+							pace.elapsed == null
 								? undefined
 								: formatExpectedReading(
-										elapsed,
+										pace.elapsed,
 										detail.startValue,
 										progress.target,
 										detail.unit,
 									)
 						}
 						footnote={`${progress.percent}% complete${
-							detail.deadline ? ` · due ${formatDate(detail.deadline)}` : ""
+							scheduleNote === null ? "" : ` · ${scheduleNote}`
 						}`}
 					/>
 
@@ -250,13 +271,15 @@ function TrackerDetailPage() {
 				 * twice is pointless, so the button says so rather than piling
 				 * duplicates onto the list.
 				 */}
-				<Button
-					label={isOnToday ? "On Today" : "Add to Today"}
-					icon={<CalendarCheck aria-hidden />}
-					variant="secondary"
-					isDisabled={isOnToday}
-					onClick={addToToday}
-				/>
+				{today === null ? null : (
+					<Button
+						label={isOnToday ? `On #${today.name}` : `Add to #${today.name}`}
+						icon={<Zap aria-hidden />}
+						variant="secondary"
+						isDisabled={isOnToday}
+						onClick={addToToday}
+					/>
+				)}
 			</HStack>
 
 			<VStack gap={2}>
@@ -273,15 +296,13 @@ function TrackerDetailPage() {
 
 				{view === "chart" ? (
 					<Card padding={3}>
-						{history.isPending ? (
+						{history.isPending || now === null ? (
 							<SectionSpinner label="Loading history…" />
 						) : (
 							<ProgressChart
 								start={dayStart(detail.startDate)}
-								end={
-									detail.deadline === null ? null : dayStart(detail.deadline)
-								}
-								now={Date.now()}
+								end={localMoment(detail.deadline, detail.deadlineTime)}
+								now={now}
 								target={detail.targetValue}
 								base={detail.startValue}
 								current={detail.currentValue}
@@ -294,7 +315,7 @@ function TrackerDetailPage() {
 								endLabel={
 									detail.deadline === null
 										? "No deadline"
-										: formatDate(detail.deadline)
+										: formatDeadline(detail.deadline, detail.deadlineTime)
 								}
 								summary={`${detail.currentValue} of ${detail.targetValue} ${detail.unit} since ${formatDate(detail.startDate)}`}
 							/>
@@ -338,6 +359,8 @@ function TrackerDetailPage() {
 				isOpen={isEditOpen}
 				onOpenChange={setIsEditOpen}
 				tracker={detail}
+				tags={tags}
+				resolveTags={(names) => names.map(createTagResolver(apply, tags))}
 				onSubmit={(values: TrackerValues) => {
 					apply({ kind: "tracker.update", trackerId, patch: values });
 					setIsEditOpen(false);

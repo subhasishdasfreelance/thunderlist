@@ -13,12 +13,15 @@ import { ErrorNotice } from "#/components/common/states";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
+	createTagResolver,
 	createTracker,
 	type TrackerValues,
 	useApplyChange,
 } from "#/lib/changes";
 import { lagFraction } from "#/lib/progress";
-import { primeQuery } from "#/queries/prime";
+import { useNow } from "#/lib/use-now";
+import { deferQuery, primeQuery } from "#/queries/prime";
+import { tagsQuery } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
 import type { TrackerSummary } from "#/schemas/tracker";
 
@@ -28,16 +31,23 @@ import type { TrackerSummary } from "#/schemas/tracker";
  * The same measure the pace label on the card is drawn from, so the order
  * agrees with what each card says about itself.
  */
-function lag(tracker: TrackerSummary): number {
+function lag(tracker: TrackerSummary, now: number): number {
 	return lagFraction({
 		startDate: tracker.startDate,
 		deadline: tracker.deadline,
+		deadlineTime: tracker.deadlineTime,
+		now,
 		fractionComplete: tracker.progress.percent / 100,
 	});
 }
 
 export const Route = createFileRoute("/trackers/")({
-	loader: ({ context }) => primeQuery(context.queryClient, trackersQuery()),
+	loader: ({ context }) => {
+		// The tags on each card, and for the form; the trackers are the screen.
+		deferQuery(context.queryClient, tagsQuery());
+
+		return primeQuery(context.queryClient, trackersQuery());
+	},
 	component: TrackersPage,
 });
 
@@ -50,8 +60,10 @@ function TrackersPage() {
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackersQuery(),
 	);
+	const tagsResult = useQuery(tagsQuery());
 
 	const trackers = data ?? [];
+	const tags = tagsResult.data ?? [];
 
 	/*
 	 * Behind first, or the order they were made in.
@@ -62,9 +74,12 @@ function TrackersPage() {
 	 * needs me", and that is an ordering of the cards rather than a row of
 	 * figures above them.
 	 */
-	const ordered = isBehindFirst
-		? [...trackers].sort((a, b) => lag(b) - lag(a))
-		: trackers;
+	// Judged on the viewer's clock, so sorted only once the browser has it.
+	const now = useNow();
+	const ordered =
+		isBehindFirst && now !== null
+			? [...trackers].sort((a, b) => lag(b, now) - lag(a, now))
+			: trackers;
 
 	function create(values: TrackerValues) {
 		const trackerId = createTracker(apply, values);
@@ -107,7 +122,11 @@ function TrackersPage() {
 						/>
 					</HStack>
 					{ordered.map((tracker) => (
-						<TrackerCard key={tracker.trackerId} tracker={tracker} />
+						<TrackerCard
+							key={tracker.trackerId}
+							tracker={tracker}
+							tags={tags}
+						/>
 					))}
 				</VStack>
 			)}
@@ -115,6 +134,8 @@ function TrackersPage() {
 			<TrackerFormDialog
 				isOpen={isFormOpen}
 				onOpenChange={setIsFormOpen}
+				tags={tags}
+				resolveTags={(names) => names.map(createTagResolver(apply, tags))}
 				onSubmit={create}
 			/>
 		</VStack>

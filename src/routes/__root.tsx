@@ -54,7 +54,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		}
 
 		if (user && isLoginPage) {
-			throw redirect({ to: "/today", search: { task: undefined } });
+			throw redirect({ to: "/" });
 		}
 
 		return { user };

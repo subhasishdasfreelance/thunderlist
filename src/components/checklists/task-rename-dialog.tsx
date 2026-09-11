@@ -1,6 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -9,6 +10,10 @@ import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import { taskFieldRows } from "./quick-add-task";
+import { type NotesView, TaskNotesField } from "./task-notes-field";
+
+/** The two optional fields only this dialog writes. Empty means none. */
+export type TaskDetails = { caption: string; notes: string };
 
 /**
  * Edit a task.
@@ -21,6 +26,9 @@ import { taskFieldRows } from "./quick-add-task";
  * long title can be read and edited whole rather than scrolled along one line.
  * When adding, a line break starts the next task; here there is only the one
  * task, so a break is folded back into a space.
+ *
+ * The caption and the notes are written here and nowhere else. Adding a task
+ * stays one line of typing; these are for a second look at it.
  */
 export function TaskRenameDialog({
 	isOpen,
@@ -33,21 +41,28 @@ export function TaskRenameDialog({
 	onOpenChange: (isOpen: boolean) => void;
 	task: Task | null;
 	tags: ReadonlyArray<Tag>;
-	onSubmit: (parsed: ParsedTitle) => void;
+	onSubmit: (parsed: ParsedTitle, details: TaskDetails) => void;
 }) {
 	const [value, setValue] = useState("");
+	const [caption, setCaption] = useState("");
+	const [notes, setNotes] = useState("");
+	const [notesView, setNotesView] = useState<NotesView>("write");
 
 	useEffect(() => {
 		if (!isOpen || !task) return;
 		// The title already holds its tags, exactly where they were typed.
 		setValue(task.title);
+		setCaption(task.caption ?? "");
+		setNotes(task.notes ?? "");
+		// Notes are only ever shown here, so ones that exist open ready to read.
+		setNotesView(task.notes ? "preview" : "write");
 	}, [isOpen, task]);
 
 	const parsed = parseInlineTags(value.replace(/\s*\n\s*/g, " "));
 
 	function save() {
 		if (parsed.title === "") return;
-		onSubmit(parsed);
+		onSubmit(parsed, { caption: caption.trim(), notes: notes.trim() });
 	}
 
 	return (
@@ -74,21 +89,43 @@ export function TaskRenameDialog({
 				</HStack>
 			)}
 		>
-			<VStack gap={1}>
-				<TagTextField
-					label="Title"
-					value={value}
-					onChange={setValue}
-					onSubmit={save}
-					tags={tags}
-					multiline
-					rows={taskFieldRows(value)}
-					hasAutoFocus
+			<VStack gap={4}>
+				<VStack gap={1}>
+					<TagTextField
+						label="Title"
+						value={value}
+						onChange={setValue}
+						onSubmit={save}
+						tags={tags}
+						multiline
+						rows={taskFieldRows(value)}
+						hasAutoFocus
+					/>
+					<Text type="supporting">
+						Write tags inline, like #shopping. Removing one here takes it off
+						the task.
+					</Text>
+				</VStack>
+
+				<TextInput
+					label="Caption"
+					isOptional
+					description="Shown in small text under the title."
+					value={caption}
+					onChange={setCaption}
+					// Enter saves here too, as it does in the title.
+					onKeyDown={(event) => {
+						if (event.key === "Enter") save();
+					}}
+					width="100%"
 				/>
-				<Text type="supporting">
-					Write tags inline, like #shopping. Removing one here takes it off the
-					task.
-				</Text>
+
+				<TaskNotesField
+					value={notes}
+					onChange={setNotes}
+					view={notesView}
+					onViewChange={setNotesView}
+				/>
 			</VStack>
 		</FormDialog>
 	);

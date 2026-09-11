@@ -1,7 +1,7 @@
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
-import { CalendarCheck, Inbox, Star, Zap } from "lucide-react";
-import type { TaskListName } from "#/schemas/task-list";
+import { CircleAlert, Inbox, Star, Zap } from "lucide-react";
+import type { SpecialTag, Tag } from "#/schemas/tag";
 
 /**
  * What can be done to a task from its row, and the key that does it.
@@ -21,8 +21,11 @@ export const TASK_SHORTCUTS = {
 } as const;
 
 export type TaskQuickActions = {
-	/** `null` takes the task off whichever list it is on. */
-	onSetList: (list: TaskListName | null) => void;
+	/**
+	 * Put the task on one of the special tags, Today or the Backlog, or take it
+	 * off; see `setSpecialTag`.
+	 */
+	onSetSpecial: (kind: SpecialTag, isOn: boolean) => void;
 	onSetUrgent: (urgent: boolean) => void;
 	onSetImportant: (important: boolean) => void;
 };
@@ -37,7 +40,8 @@ export type TaskQuickActions = {
  * A flag that is on is tinted: warm for urgent, which is about time running
  * out, and a highlight for important, which is not. Both are tints Astryx
  * already uses for those meanings, so they carry the same weight here as
- * everywhere else and stay contrast-checked in both schemes.
+ * everywhere else and stay contrast-checked in both schemes. Urgent is an
+ * exclamation mark rather than a bolt, because the bolt is Today's.
  */
 export function TaskFlagButtons({
 	title,
@@ -58,7 +62,7 @@ export function TaskFlagButtons({
 					tooltip={`${urgent ? "Urgent" : "Mark urgent"} (${TASK_SHORTCUTS.urgent})`}
 					variant="ghost"
 					size="sm"
-					icon={<Zap aria-hidden />}
+					icon={<CircleAlert aria-hidden />}
 					onClick={() => actions.onSetUrgent(!urgent)}
 				/>
 			</span>
@@ -84,49 +88,53 @@ export function TaskFlagButtons({
 }
 
 /**
- * Planning a task for today, at the end of the row.
+ * Putting a task on Today, at the end of the row.
  *
- * It toggles, and that is the whole control: the button that puts a task on
- * Today is the button that takes it off again. There is no separate "remove" —
- * it would do exactly what pressing the lit button already does, and a second
- * way to do one thing is a button that has to be explained.
+ * Today is a tag, and this is the quick way to write it: the bolt adds it to the
+ * end of the title, and pressing it again takes it out wherever it was
+ * written. It is the app's own bolt, lit in the bolt's gold while the task is
+ * on Today. The tag's name is the user's to change — `#doing`, say — and the
+ * button writes whatever it is called.
  *
  * Parking something in the Backlog is a decision made far less often, so it is
  * in the menu rather than spending a button's width on every row forever.
  */
 export function TodayButton({
 	title,
-	listState,
-	actions,
+	today,
+	isOn,
+	onToggle,
 }: {
 	title: string;
-	listState: TaskListName | null;
-	actions: Pick<TaskQuickActions, "onSetList">;
+	today: Tag;
+	isOn: boolean;
+	onToggle: () => void;
 }) {
-	const isOnToday = listState === "today";
+	const name = `#${today.name}`;
 
 	return (
-		<IconButton
-			label={isOnToday ? `Take ${title} off Today` : `Plan ${title} for Today`}
-			tooltip={`${isOnToday ? "On Today — press to take off" : "Add to Today"} (${TASK_SHORTCUTS.today})`}
-			variant={isOnToday ? "primary" : "ghost"}
-			size="sm"
-			icon={<CalendarCheck aria-hidden />}
-			onClick={() => actions.onSetList(isOnToday ? null : "today")}
-		/>
+		<span className="thunderlist-flag" data-flag="today" data-on={isOn}>
+			<IconButton
+				label={isOn ? `Take ${title} off ${name}` : `Add ${title} to ${name}`}
+				tooltip={`${isOn ? `On ${name} — press to take off` : `Add to ${name}`} (${TASK_SHORTCUTS.today})`}
+				variant="ghost"
+				size="sm"
+				icon={<Zap aria-hidden />}
+				onClick={onToggle}
+			/>
+		</span>
 	);
 }
 
 /** The Backlog entry for a row's overflow menu. */
 export function backlogMenuItem(
-	listState: TaskListName | null,
-	actions: Pick<TaskQuickActions, "onSetList">,
+	backlog: Tag,
+	isOn: boolean,
+	onToggle: () => void,
 ) {
-	const isOnBacklog = listState === "backlog";
-
 	return {
-		label: `${isOnBacklog ? "Take out of the Backlog" : "Move to Backlog"} (${TASK_SHORTCUTS.backlog})`,
+		label: `${isOn ? "Take off" : "Move to"} #${backlog.name} (${TASK_SHORTCUTS.backlog})`,
 		icon: <Inbox aria-hidden />,
-		onClick: () => actions.onSetList(isOnBacklog ? null : "backlog"),
+		onClick: onToggle,
 	};
 }

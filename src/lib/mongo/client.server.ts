@@ -20,7 +20,6 @@ import { AppError } from "#/lib/errors";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
-import type { TaskListName, TaskRef } from "#/schemas/task-list";
 import type { ProgressEntry, Tracker } from "#/schemas/tracker";
 
 if (typeof window !== "undefined") {
@@ -64,7 +63,18 @@ export type EntryDoc = Omit<ProgressEntry, "delta"> &
 		trackerId: string;
 	};
 
-export type TaskRefDoc = TaskRef & Owned & { list: TaskListName };
+/**
+ * An entry from the old Today and Backlog lists, which are tags now. Read only
+ * so an account that still has some can have them moved onto its tasks; see
+ * `moveListsIntoTags`.
+ */
+export type TaskRefDoc = Owned & {
+	itemId: string;
+	taskId: string;
+	list: "today" | "backlog";
+	sortOrder: number;
+	addedAt: string;
+};
 
 export type Collections = {
 	checklists: Collection<ChecklistDoc>;
@@ -132,6 +142,15 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.trackers.createIndex({ userId: 1 }),
 		current.tags.createIndex({ tagId: 1 }, { unique: true }),
 		current.tags.createIndex({ userId: 1 }),
+		// One of each special tag per account, however many requests race to
+		// make it; see `ensureSpecialTags`.
+		current.tags.createIndex(
+			{ userId: 1, special: 1 },
+			{
+				unique: true,
+				partialFilterExpression: { special: { $type: "string" } },
+			},
+		),
 		current.tasks.createIndex({ taskId: 1 }, { unique: true }),
 		current.tasks.createIndex({ userId: 1, checklistId: 1 }),
 		current.entries.createIndex({ entryId: 1 }, { unique: true }),

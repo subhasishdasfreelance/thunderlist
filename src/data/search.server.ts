@@ -10,7 +10,6 @@
  */
 
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import type { TaskListName } from "#/schemas/task-list";
 import type { TrackerType } from "#/schemas/tracker";
 
 export type SearchIndex = {
@@ -30,12 +29,6 @@ export type SearchIndex = {
 		/** `null` for a task that belongs to no checklist. */
 		checklistId: string | null;
 		checklistTitle: string | null;
-		/**
-		 * Where to go to see a task that has no checklist: search has to send the
-		 * reader somewhere, and a loose task exists only on one of the lists.
-		 * `null` when the task has a checklist, which is the page for it.
-		 */
-		list: TaskListName | null;
 		title: string;
 		completed: boolean;
 		/** Ids into the tags collection; the Tags screen groups on these. */
@@ -43,13 +36,15 @@ export type SearchIndex = {
 		/** The Priority screen groups on these; see `priorityRank`. */
 		urgent: boolean;
 		important: boolean;
+		/** Drawn under the title on the Tags and Priority screens. */
+		caption: string;
 	}>;
 };
 
 export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 	const current = await collections();
 
-	const [checklists, trackers, tasks, refs] = await Promise.all([
+	const [checklists, trackers, tasks] = await Promise.all([
 		current.checklists
 			.find(
 				{ userId },
@@ -63,24 +58,11 @@ export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 			)
 			.toArray(),
 		current.tasks.find({ userId }, { projection: DOMAIN_FIELDS }).toArray(),
-		// Only for the tasks with no checklist below, but reading the refs whole
-		// is one query where a filtered one would need the task ids first.
-		current.taskRefs
-			.find({ userId }, { projection: { _id: 0, taskId: 1, list: 1 } })
-			.toArray(),
 	]);
 
 	const titles = new Map(
 		checklists.map((checklist) => [checklist.checklistId, checklist.title]),
 	);
-
-	// A task can be on both lists; Today is the one worth being sent to.
-	const lists = new Map<string, TaskListName>();
-	for (const ref of refs) {
-		if (ref.list === "today" || lists.get(ref.taskId) === undefined) {
-			lists.set(ref.taskId, ref.list);
-		}
-	}
 
 	return {
 		checklists,
@@ -93,12 +75,12 @@ export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 				task.checklistId === null
 					? null
 					: (titles.get(task.checklistId) ?? null),
-			list: task.checklistId === null ? (lists.get(task.taskId) ?? null) : null,
 			title: task.title,
 			completed: task.completed,
 			tagIds: task.tagIds,
 			urgent: task.urgent ?? false,
 			important: task.important ?? false,
+			caption: task.caption ?? "",
 		})),
 	};
 }

@@ -6,7 +6,7 @@
  */
 
 import type { PaceStatus } from "#/schemas/checklist";
-import { todayDateOnly } from "#/schemas/common";
+import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import type { Velocity } from "#/schemas/progress";
 import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
 
@@ -21,10 +21,10 @@ import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
  */
 export const PACE_TOLERANCE = 0.05;
 
-const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 86_400_000;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function clampPercent(value: number): number {
 	if (!Number.isFinite(value)) return 0;
@@ -159,6 +159,30 @@ export function deriveCurrentValue(
 	return latest ? latest.value : start;
 }
 
+/**
+ * The day a tracker reached its target and has stayed there since, or `null`
+ * while it has not.
+ *
+ * A tag counts a tracker as done from this day, the way it counts a task from
+ * the moment it was ticked. A reading that slipped back below the target starts
+ * the count again, so this is the start of the current run at the target, not
+ * the first time it ever got there.
+ */
+export function reachedTargetOn(
+	entries: ReadonlyArray<EntryReading>,
+	target: number,
+	start = 0,
+): string | null {
+	let since: string | null = null;
+
+	for (const entry of sortEntriesOldestFirst(entries)) {
+		const reached = trackerProgress(entry.value, target, start).percent >= 100;
+		since = reached ? (since ?? entry.recordedAt) : null;
+	}
+
+	return since;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Pace                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -168,50 +192,114 @@ export type PaceInput = {
 	startDate: string;
 	/** `YYYY-MM-DD` it should be finished by, or `null` when none was set. */
 	deadline: string | null;
+	/** `HH:MM` on the deadline day it is due by; without one, that day's start. */
+	deadlineTime?: string | null;
+	/**
+	 * The hours of every day it is paced across instead of a deadline, for
+	 * something that repeats daily; see `DailyWindow`.
+	 */
+	dailyWindow?: DailyWindow | null;
 	/**
 	 * Today, as `YYYY-MM-DD`, for the speeds, which are counted in days.
 	 * Injectable so the maths stays testable.
 	 */
 	today?: string;
 	/**
-	 * This moment, as a timestamp, for how much of the time has gone, which is
-	 * counted in hours. Injectable for the same reason.
+	 * This moment, as a timestamp, for how much of the time has gone.
+	 * Injectable for the same reason.
 	 */
 	now?: number;
 };
 
+/** A `YYYY-MM-DD` day — at an `HH:MM` on it, if given — on the viewer's clock. */
+export function localMoment(
+	date: string | null,
+	time?: string | null,
+): number | null {
+	if (!date || !DATE_ONLY.test(date)) return null;
+
+	const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+	const [hours = 0, minutes = 0] =
+		time && TIME_OF_DAY.test(time) ? time.split(":").map(Number) : [];
+	const moment = new Date(year, month - 1, day, hours, minutes).getTime();
+
+	return Number.isNaN(moment) ? null : moment;
+}
+
+/** Today's stretch of a daily window, as two moments on the viewer's clock. */
+export function todayWindow(
+	window: DailyWindow,
+	now: number,
+): { start: number; end: number } | null {
+	const day = new Date(now);
+	const at = (time: string) => {
+		if (!TIME_OF_DAY.test(time)) return null;
+		const [hours = 0, minutes = 0] = time.split(":").map(Number);
+		return new Date(
+			day.getFullYear(),
+			day.getMonth(),
+			day.getDate(),
+			hours,
+			minutes,
+		).getTime();
+	};
+
+	const start = at(window.from);
+	const end = at(window.to);
+
+	return start === null || end === null || end <= start ? null : { start, end };
+}
+
+/**
+ * The stretch of time something is paced across, as two moments.
+ *
+ * With a daily window it is today's part of it — 06:00 to 22:00 today,
+ * whichever day that is. Otherwise it runs from the start of the start date to
+ * the deadline: at its time if it has one, or the start of that day.
+ *
+ * Both are read on the viewer's own clock, because "due at 18:00" and "from six
+ * in the morning" mean the clock on the wall where the viewer is. That is also
+ * why nothing worked out from this is drawn by the server, which does not know
+ * that clock; see `useNow`.
+ *
+ * `null` when there is nothing to measure against: no deadline, a date that
+ * does not parse, or a window with no length.
+ */
+export function paceWindow(
+	input: PaceInput,
+	now: number,
+): { start: number; end: number } | null {
+	if (input.dailyWindow) return todayWindow(input.dailyWindow, now);
+
+	const start = localMoment(input.startDate);
+	const end = localMoment(input.deadline, input.deadlineTime);
+
+	// The deadline must be after the start for "elapsed" to mean anything.
+	return start === null || end === null || end <= start ? null : { start, end };
+}
+
 /**
  * How much of the available time has gone, 0-1.
  *
- * Counted in whole hours, not whole days. In days the mark stood still from
- * midnight to midnight and then jumped — a seventh of the bar at once on a
- * week-long checklist — so "expected by now" was out for most of every day.
- * The speeds are still counted in days; this is only where the mark sits.
+ * Measured to the moment, in fractional hours: four and a half hours into a
+ * nine-hour window is exactly half. Counted in whole days the mark stood still
+ * from midnight to midnight and then jumped; in whole hours it still jumped on
+ * the hour. The speeds are counted in days; this is only where the mark sits,
+ * and what "ahead" and "behind" are judged against.
  *
- * The window runs from midnight UTC on the start date to midnight UTC on the
- * deadline, the same calendar arithmetic as `daysBetween`. UTC because this is
- * worked out twice — on the server for the pace label, in the browser for the
- * bar — and a local midnight would put the two hours apart for anyone outside
- * the server's timezone. Whole hours because the page is drawn on the server
- * and taken over by the browser a moment later, and a figure that moved in
- * between would no longer match the markup it arrived in.
- *
- * `null` when there is not enough information: no deadline, an unparseable
- * start, or a window with no length. Also drives the target mark drawn on
- * progress bars, so the bar and the label always agree.
+ * `null` when there is not enough information; see `paceWindow`. Also drives
+ * the target mark drawn on progress bars, so the bar and the label always
+ * agree.
  */
 export function elapsedFraction(input: PaceInput): number | null {
-	const start = parseDateOnly(input.startDate);
-	const end = parseDateOnly(input.deadline);
-
-	// The deadline must be after the start for "elapsed" to mean anything.
-	if (start === null || end === null || end <= start) return null;
-
 	const now = input.now ?? Date.now();
-	const hoursGone = Math.floor((now - start) / MS_PER_HOUR);
-	const hoursInWindow = (end - start) / MS_PER_HOUR;
+	const window = paceWindow(input, now);
+	if (window === null) return null;
 
-	return Math.min(1, Math.max(0, hoursGone / hoursInWindow));
+	return Math.min(
+		1,
+		Math.max(0, (now - window.start) / (window.end - window.start)),
+	);
 }
 
 /**
@@ -318,12 +406,12 @@ export function computeVelocity(
  * A degree rather than a band, so a list sorted by it reads worst-first all the
  * way down instead of grouping everything unfinished together.
  */
-export function lagFraction(input: {
-	startDate: string;
-	deadline: string | null;
-	/** Progress so far, 0 to 1. */
-	fractionComplete: number;
-}): number {
+export function lagFraction(
+	input: PaceInput & {
+		/** Progress so far, 0 to 1. */
+		fractionComplete: number;
+	},
+): number {
 	if (input.fractionComplete >= 1) return 0;
 
 	const expected = elapsedFraction(input);

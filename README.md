@@ -1,15 +1,18 @@
 # Thunderlist
 
-A personal productivity app with five sections — **Today**, **Backlog**,
-**Checklists**, **Trackers** and **Tags** — stored in MongoDB.
+A personal productivity app — **Checklists**, **Trackers**, **Tags** and
+**Priority** — stored in MongoDB. **Today** and the **Backlog** are two special
+tags.
 
 Built with TanStack Start, React 19 and the [Astryx](https://astryx.atmeta.com)
 design system, with Tailwind utilities layered on top of Astryx's design tokens.
 
-- **Today** — what you plan to do today. It stores *references* to tasks, never
-  copies of them, and opens as the app's home screen.
-- **Backlog** — parked work, out of the way of today. Same shape as Today; a
-  task is on one list or the other, never both.
+- **Today** — a special tag for what you plan to do today, and the app's home
+  screen (`/tags/today`). The bolt on any task writes `#today` at the end of its
+  title; pressing it again takes the tag out wherever it was written. Paced
+  from 06:00 to 22:00 every day.
+- **Backlog** — a special tag for parked work. A task is on Today or in the
+  Backlog, never both. Both can be renamed on the Tags screen, never deleted.
 - **Checklists** — flat task lists with progress, a start date and a deadline.
 - **Trackers** — progress towards any measurable goal: a book, a course, a
   fitness target, a project.
@@ -137,7 +140,7 @@ checklists   one document per checklist
 tasks        one document per task, linked by checklistId
 trackers     one document per tracker
 entries      one reading per document, linked by trackerId
-taskRefs     Today and Backlog, told apart by `list`
+taskRefs     the old Today and Backlog lists, moved onto tags on first read
 tags         tag names and colours
 ```
 
@@ -176,19 +179,25 @@ No `delta` is stored — see [tracker progress](#how-tracker-progress-is-stored)
 
 ### `taskRefs`
 
-`itemId`, `list`, `checklistId`, `taskId`, `sortOrder`, `addedAt`.
+`itemId`, `list`, `taskId`, `sortOrder`, `addedAt`.
 
-Both lists are one collection because they are one thing: a task belongs to at
-most one of them. Neither has a `completed` field, by design. See below.
+Legacy. Today and the Backlog used to be lists of references; they are tags
+now. The first time an account's tags are read, anything still in here is
+written onto its task as `#today` or `#backlog` and deleted.
 
 ### `tags`
 
 `tagId`, `name`, `color`, `createdAt`, `updatedAt`.
 
-Tasks reference a tag by **id**, never by name. That is what makes renaming a
-tag a single document write however many tasks carry it, and why a task can
-never show a stale copy of a name. Deleting a tag strips its id from every task
-that carried it, in one `updateMany`.
+Tasks reference a tag by **id**, and also write it into the title by name.
+Renaming a tag rewrites that `#name` in the titles of the tasks carrying it, so
+an edit never reads an old name back as a new tag. Deleting a tag strips its id
+from every task that carried it, in one `updateMany`.
+
+Two tags are **special**: `today` and `backlog`. Every account has them, made
+on the first read of its tags (a unique index on `userId, special` settles two
+first requests at once); they can be renamed and recoloured but not deleted,
+and a special tag's page is addressed by its kind, `/tags/today`.
 
 Tags are **written into the task, not picked from a menu**: "buy milk
 #shopping". The `#name` is markup rather than content, so it is lifted out of
@@ -231,42 +240,30 @@ time-sortable, so the order is total and stable.
 
 ---
 
-## How Today and Backlog reference canonical tasks
+## How Today and the Backlog work
 
-Both hold `(checklistId, taskId)` pairs. When a list is rendered:
+They are tags, so a task on Today is a task carrying `#today` — in its own
+checklist, or in none — and Today's page is that tag's page. There is nothing
+to keep in step: completion lives on the task, as it always did.
 
-1. the entries of **both** lists are read, already sorted
-2. the checklists and tasks they point at are read in one query each
-3. each reference is resolved to its canonical task
+The bolt on a row writes the tag at the end of the title and takes it out
+again from wherever it was written; the row's menu does the same for the
+Backlog. A task is on Today **or** in the Backlog, never both: putting it on
+one takes it off the other.
 
-Reading them together is deliberate: they draw on the same checklists, so one
-task read serves both, and the checklist screen needs both to know which icon to
-light up on a task.
-
-Ticking a checkbox on Today writes to the task in **its own checklist**. Neither
-list has completion state of its own, so there is exactly one source of truth
-and no way for the views to disagree.
-
-A task is on Today **or** in the Backlog, never both: putting it on one takes it
-off the other.
-
-A reference whose task or checklist has been deleted is shown as "This task no
-longer exists" with a control to clear it, rather than being silently dropped.
-
-### The Inbox
-
-A task typed straight into Today or the Backlog still needs a checklist to live
-in, because those lists hold references only. The first such task creates an
-ordinary checklist called **Inbox** and the rest join it. It can be opened,
-renamed, tidied or deleted like any other checklist.
+A task typed on a tag's page belongs to no checklist and carries that tag. Such
+a task lives under its tags, so it is never left with none: taken off Today
+when that is its only tag, it is parked in the Backlog instead.
 
 ### Completed work
 
-Completed tasks move to a **Completed** section at the bottom of the list rather
-than staying in place, with one control to clear it. What clearing means follows
-what the screen holds: in a checklist it deletes the tasks (behind a
-confirmation), while on Today and the Backlog — which hold references only — it
-takes them off the list and leaves the tasks where they live.
+Completed tasks move to a folded **Completed** section at the bottom of the
+list, with one control to clear it. They are not read with the page: the page
+brings the open tasks and the counts, and the finished tasks follow once
+nothing else is loading and the browser is idle — or at once, if the section is
+opened first. What clearing means follows the screen: on a checklist or an
+ordinary tag it deletes the tasks, while on Today and the Backlog it only takes
+the tag off (deleting only a task that had nothing else).
 
 ### Adding several tasks at once
 
@@ -302,17 +299,22 @@ just a tracker `type`; nothing in the generic logic knows about pages.
 
 ### Pace and velocity
 
-Every checklist and tracker has a **start date** (defaulting to today, but
+Every checklist, tag and tracker has a **start date** (defaulting to today, but
 editable, so something begun last month is paced from when it really began) and
-an optional **deadline**.
+an optional **deadline**, which can carry a time: due at 18:30, not just due on
+Friday. A checklist or a tag can instead **repeat daily** — the same hours every
+day, 06:00 to 22:00 to begin with — and is then paced against today's stretch
+of them. Today starts that way.
 
 **Pace** (`Ahead` / `On track` / `Behind`) compares how much is done against how
-much of the time between those two dates has passed, with a 5-point tolerance.
-That time is counted in whole hours from midnight UTC on the start date, so the
-mark moves through the day instead of jumping at midnight; the stats below are
-still counted in days. With no deadline there is no status — the app never
-invents one. The same figure draws the target mark on each progress bar and the
-"62% expected by now" line underneath it, so the bar and the words always agree.
+much of that window has passed, with a 5-point tolerance. The time is measured
+to the minute in fractional hours — four and a half hours of a nine-hour window
+is exactly half — on the viewer's own clock, so it is worked out in the
+browser: the server knows neither the clock nor the time zone, and draws no
+figure it would have to take back. With no deadline there is no status — the
+app never invents one. The same figure places the bolt on each progress bar and
+writes the "62% expected by now" line under it, so the bar and the words always
+agree. The speeds are counted in days, or in hours for a daily window.
 
 ### Stats
 
@@ -381,6 +383,8 @@ cheap by shape instead:
 - the tracker list is **one query** — the denormalised `currentValue` is what
   the cards show
 - a tracker's full history is read only when you open it
+- a checklist's or a tag's finished tasks are read after the rest of its
+  screen, once the browser is idle
 - the search index doubles as the task source for the Tags screen and the "add
   from a checklist" picker, so neither costs an extra read
 - mutations write **one document**, never a collection

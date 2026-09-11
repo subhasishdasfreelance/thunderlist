@@ -9,8 +9,15 @@ import { type FormEvent, useEffect, useState } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
+import {
+	draftTagIds,
+	EMPTY_TAGS_DRAFT,
+	TagsField,
+	tagsDraft,
+} from "#/components/tags/tags-field";
 import type { TrackerValues } from "#/lib/changes";
 import { todayDateOnly } from "#/schemas/common";
+import type { Tag } from "#/schemas/tag";
 import { TRACKER_TYPE_DEFAULT_UNITS, type Tracker } from "#/schemas/tracker";
 
 /**
@@ -24,11 +31,17 @@ export function TrackerFormDialog({
 	isOpen,
 	onOpenChange,
 	tracker,
+	tags,
+	resolveTags,
 	onSubmit,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	tracker?: Tracker;
+	/** Every tag that exists, for the tags field. */
+	tags: ReadonlyArray<Tag>;
+	/** Tag names to ids, making a tag for any name that does not exist yet. */
+	resolveTags: (names: Array<string>) => Array<string>;
 	onSubmit: (values: TrackerValues) => void;
 }) {
 	const [title, setTitle] = useState("");
@@ -41,10 +54,15 @@ export function TrackerFormDialog({
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
 	const [description, setDescription] = useState("");
 	const [coverUrl, setCoverUrl] = useState("");
 	const [author, setAuthor] = useState("");
+	const [tagDraft, setTagDraft] = useState(EMPTY_TAGS_DRAFT);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
 	useEffect(() => {
 		if (!isOpen) return;
 		setTitle(tracker?.title ?? "");
@@ -56,9 +74,11 @@ export function TrackerFormDialog({
 				(todayDateOnly() as ISODateString),
 		);
 		setDeadline((tracker?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(tracker?.deadlineTime ?? undefined);
 		setDescription(tracker?.description ?? "");
 		setCoverUrl(tracker?.coverUrl ?? "");
 		setAuthor(tracker?.author ?? "");
+		setTagDraft(tagsDraft(tracker?.tagIds ?? [], tags));
 	}, [isOpen, tracker]);
 
 	const trimmedTitle = title.trim();
@@ -76,8 +96,7 @@ export function TrackerFormDialog({
 		targetValue > from &&
 		startDate !== undefined;
 
-	function submit(event: FormEvent) {
-		event.preventDefault();
+	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
 		onSubmit({
@@ -88,10 +107,17 @@ export function TrackerFormDialog({
 			startValue: from,
 			startDate,
 			deadline: deadline ?? null,
+			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
 			description: description.trim(),
 			coverUrl: coverUrl.trim() === "" ? null : coverUrl.trim(),
 			author: author.trim(),
+			tagIds: draftTagIds(tagDraft, resolveTags),
 		});
+	}
+
+	function submit(event: FormEvent) {
+		event.preventDefault();
+		save();
 	}
 
 	return (
@@ -177,8 +203,19 @@ export function TrackerFormDialog({
 				<ScheduleFields
 					startDate={startDate}
 					deadline={deadline}
+					deadlineTime={deadlineTime}
 					onStartDateChange={setStartDate}
 					onDeadlineChange={setDeadline}
+					onDeadlineTimeChange={setDeadlineTime}
+				/>
+
+				<TagsField
+					label="Tags"
+					description="Under each of these tags, this tracker counts as one thing to finish."
+					tags={tags}
+					draft={tagDraft}
+					onChange={setTagDraft}
+					onSubmit={save}
 				/>
 
 				<TextArea

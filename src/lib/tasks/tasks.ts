@@ -75,6 +75,21 @@ export function orderTasks(
 }
 
 /**
+ * A list's open tasks and its finished ones, read separately, as one list.
+ *
+ * For a moment a task can be in both — ticked on screen before either read has
+ * caught up with it — and it is kept once, as `open` has it.
+ */
+export function mergeReads<T>(
+	open: ReadonlyArray<T>,
+	finished: ReadonlyArray<T>,
+	idOf: (item: T) => string,
+): Array<T> {
+	const seen = new Set(open.map(idOf));
+	return [...open, ...finished.filter((item) => !seen.has(idOf(item)))];
+}
+
+/**
  * Completion across the checklist. Counting every task equally keeps the number
  * the user sees the same as the number of checkboxes on screen.
  */

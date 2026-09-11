@@ -24,7 +24,7 @@ const ASSETS = "thunderlist-assets-v1";
 const PAGES = "thunderlist-pages-v1";
 
 /** Pages kept for opening offline: the one the installed app opens on. */
-const OFFLINE_PAGES = new Set(["/today"]);
+const OFFLINE_PAGES = new Set(["/tags/today"]);
 
 /*
  * Every deploy brings a new set of hashed files and leaves the old ones behind,

@@ -1,9 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-/** Thunderlist opens straight into the app; there is no landing page. */
+/**
+ * Thunderlist opens straight into the app, on Today — a tag, whose page is at
+ * the same address in every account; see `tagParam`.
+ */
 export const Route = createFileRoute("/")({
 	beforeLoad: () => {
-		// `/today` takes an optional `?task=`; the bare list is what is wanted here.
-		throw redirect({ to: "/today", search: { task: undefined } });
+		throw redirect({
+			to: "/tags/$tagId",
+			params: { tagId: "today" },
+			search: { task: undefined },
+		});
 	},
 });

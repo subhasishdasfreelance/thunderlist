@@ -16,12 +16,23 @@ import { applyChangeFn } from "#/functions/change.functions";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
-import { sameTagName, sameTrackerName } from "#/lib/tags/inline-tags";
+import {
+	sameTagName,
+	sameTrackerName,
+	withInlineTag,
+	withoutInlineTag,
+} from "#/lib/tags/inline-tags";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
-import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
-import type { TaskPatch } from "#/schemas/task";
-import type { TaskListName } from "#/schemas/task-list";
+import type { DailyWindow } from "#/schemas/common";
+import {
+	type SpecialTag,
+	specialTag,
+	TAG_COLORS,
+	type Tag,
+	type TagColor,
+} from "#/schemas/tag";
+import type { Task, TaskPatch } from "#/schemas/task";
 import type { Tracker, TrackerSummary } from "#/schemas/tracker";
 
 /**
@@ -166,6 +177,12 @@ export type ChecklistValues = {
 	description: string;
 	startDate: string;
 	deadline: string | null;
+	/** `HH:MM` on the deadline day; see `Checklist.deadlineTime`. */
+	deadlineTime: string | null;
+	/** Paced to the same hours every day instead; see `Checklist.dailyWindow`. */
+	dailyWindow: DailyWindow | null;
+	/** Carried by every task in the checklist; see `Checklist.tagIds`. */
+	tagIds: Array<string>;
 };
 
 /** Returns the new id so the caller can navigate straight into it. */
@@ -186,12 +203,11 @@ export function createTask(
 		tagIds: Array<string>;
 		/** A tracker this task should follow rather than be ticked. */
 		trackerId?: string | null;
-		/** A list to put it on at the same time, for a task typed into one. */
-		onList?: { list: TaskListName; sortOrder: number };
+		/** Another checklist this task stands for, done when that one is. */
+		linkedChecklistId?: string | null;
 	},
 ): string {
 	const taskId = createId(ID_PREFIX.task);
-	const { onList, ...rest } = input;
 
 	apply({
 		kind: "task.create",
@@ -200,11 +216,8 @@ export function createTask(
 		urgent: false,
 		important: false,
 		trackerId: null,
-		place:
-			onList === undefined
-				? null
-				: { ...onList, itemId: createId(ID_PREFIX.listItem) },
-		...rest,
+		linkedChecklistId: null,
+		...input,
 	});
 
 	return taskId;
@@ -218,11 +231,45 @@ export function updateTask(
 	apply({ kind: "task.update", taskId, patch });
 }
 
-export function addTaskRef(
+/**
+ * Put a task on one of the special tags, or take it off.
+ *
+ * The tag is written into the title the way the user would have typed it — at
+ * the end — and taken off by removing it wherever it was written, the middle
+ * of the sentence included. Today and the Backlog exclude each other, as the
+ * lists they replaced did: a task is planned or parked, never both, so putting
+ * it on one takes it off the other.
+ *
+ * Nothing happens until the tags have loaded, since until then there is no
+ * telling what the tag is called.
+ */
+export function setSpecialTag(
 	apply: ApplyChange,
-	input: { list: TaskListName; taskId: string; sortOrder: number },
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	kind: SpecialTag,
+	isOn: boolean,
+	tags: ReadonlyArray<Tag>,
 ): void {
-	apply({ kind: "ref.add", itemId: createId(ID_PREFIX.listItem), ...input });
+	const tag = specialTag(tags, kind);
+	if (tag === null) return;
+
+	if (!isOn) {
+		updateTask(apply, task.taskId, {
+			title: withoutInlineTag(task.title, tag.name),
+			tagIds: task.tagIds.filter((tagId) => tagId !== tag.tagId),
+		});
+		return;
+	}
+
+	const other = specialTag(tags, kind === "today" ? "backlog" : "today");
+	const title =
+		other === null ? task.title : withoutInlineTag(task.title, other.name);
+	const kept = task.tagIds.filter((tagId) => tagId !== other?.tagId);
+
+	updateTask(apply, task.taskId, {
+		title: withInlineTag(title, tag.name),
+		tagIds: [...new Set([...kept, tag.tagId])],
+	});
 }
 
 export function createTracker(
@@ -243,9 +290,12 @@ export type TrackerValues = {
 	startValue: number;
 	startDate: string;
 	deadline: string | null;
+	deadlineTime: string | null;
 	description: string;
 	coverUrl: string | null;
 	author: string;
+	/** Under each, the tracker counts towards that tag's progress. */
+	tagIds: Array<string>;
 };
 
 export type EntryValues = { value: number; recordedAt: string; note: string };
@@ -266,6 +316,8 @@ export type TagValues = {
 	description: string;
 	startDate: string | null;
 	deadline: string | null;
+	deadlineTime: string | null;
+	dailyWindow: DailyWindow | null;
 };
 
 export function createTag(apply: ApplyChange, values: TagValues): string {
@@ -308,6 +360,8 @@ export function createTagResolver(
 			description: "",
 			startDate: null,
 			deadline: null,
+			deadlineTime: null,
+			dailyWindow: null,
 		});
 		minted.set(key, tagId);
 		return tagId;
@@ -330,5 +384,22 @@ export function resolveTrackerName(
 
 	return (
 		trackers.find((tracker) => sameTrackerName(tracker.title, name)) ?? null
+	);
+}
+
+/**
+ * The checklist a `&` line names, for a task that stands for it.
+ *
+ * Asked only once no tracker answers to the name: `&` names either, and when a
+ * tracker and a checklist share a title, the tracker wins.
+ */
+export function resolveChecklistName<
+	T extends { checklistId: string; title: string },
+>(checklists: ReadonlyArray<T>, name: string | null): T | null {
+	if (name === null) return null;
+
+	return (
+		checklists.find((checklist) => sameTrackerName(checklist.title, name)) ??
+		null
 	);
 }

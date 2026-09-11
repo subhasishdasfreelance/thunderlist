@@ -17,7 +17,6 @@ import {
 import {
 	computeVelocity,
 	deriveCurrentValue,
-	paceStatus,
 	trackerProgress,
 	withDeltas,
 } from "#/lib/progress";
@@ -84,24 +83,18 @@ async function requireEntry(
 	return entry;
 }
 
-function summarise(tracker: Tracker): TrackerSummary {
-	const progress = trackerProgress(
-		tracker.currentValue,
-		tracker.targetValue,
-		tracker.startValue,
-	);
-
+/**
+ * A tracker with its progress. Its pace is judged in the browser, on the
+ * viewer's own clock, which this server does not know; see `usePace`.
+ */
+export function summarise(tracker: Tracker): TrackerSummary {
 	return {
 		...tracker,
-		progress,
-		status:
-			tracker.targetValue > 0
-				? paceStatus({
-						startDate: tracker.startDate,
-						deadline: tracker.deadline,
-						fractionComplete: tracker.currentValue / tracker.targetValue,
-					})
-				: null,
+		progress: trackerProgress(
+			tracker.currentValue,
+			tracker.targetValue,
+			tracker.startValue,
+		),
 	};
 }
 
@@ -170,9 +163,11 @@ export async function createTracker(
 		startValue: number;
 		startDate: string;
 		deadline: string | null;
+		deadlineTime: string | null;
 		description: string;
 		coverUrl: string | null;
 		author: string;
+		tagIds: Array<string>;
 	},
 ): Promise<Tracker> {
 	const current = await collections();
@@ -202,6 +197,8 @@ export async function createTracker(
 		author: input.author === "" ? null : input.author,
 		startDate: input.startDate,
 		deadline: input.deadline,
+		deadlineTime: input.deadlineTime,
+		tagIds: input.tagIds,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -222,9 +219,11 @@ export async function updateTracker(
 		startValue?: number;
 		startDate?: string;
 		deadline?: string | null;
+		deadlineTime?: string | null;
 		description?: string;
 		coverUrl?: string | null;
 		author?: string;
+		tagIds?: Array<string>;
 	},
 ): Promise<Tracker> {
 	const current = await collections();

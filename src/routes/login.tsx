@@ -32,7 +32,7 @@ function LoginPage() {
 		try {
 			await authClient.signIn.social({
 				provider: "google",
-				callbackURL: "/today",
+				callbackURL: "/",
 			});
 		} catch {
 			// The redirect never happened, so this page is still here to say so.

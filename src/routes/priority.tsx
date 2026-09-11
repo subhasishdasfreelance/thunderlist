@@ -6,7 +6,7 @@ import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { CircleDashed, Flame, Star, Zap } from "lucide-react";
+import { CircleAlert, CircleDashed, Flame, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
@@ -40,9 +40,9 @@ export const Route = createFileRoute("/priority")({
  * flags at once is the corner to do first, so it gets a mark of its own rather
  * than borrowing one of the two.
  */
-const BAND_ICONS: Record<PriorityRank, typeof Zap> = {
+const BAND_ICONS: Record<PriorityRank, typeof CircleAlert> = {
 	"urgent-important": Flame,
-	urgent: Zap,
+	urgent: CircleAlert,
 	important: Star,
 	none: CircleDashed,
 };

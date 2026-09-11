@@ -1,11 +1,12 @@
 import * as v from "valibot";
-import type { PaceStatus } from "./checklist";
 import {
 	dateOnlySchema,
 	descriptionSchema,
 	idSchema,
 	noteSchema,
 	optionalUrlSchema,
+	tagIdsSchema,
+	timeOfDaySchema,
 	titleSchema,
 } from "./common";
 import type { Velocity } from "./progress";
@@ -101,6 +102,16 @@ const trackerSchema = v.object({
 	startDate: dateOnlySchema,
 	/** The day the target should be reached. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
+	/** The time on the deadline day it is due by; see `Checklist.deadlineTime`. */
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+	/**
+	 * Tags the tracker carries. Under each one it counts as a single thing to
+	 * finish, done once it reaches its target.
+	 *
+	 * Absent on trackers made before they could be tagged, which is the same as
+	 * none.
+	 */
+	tagIds: v.optional(v.array(idSchema)),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -114,9 +125,9 @@ export type TrackerProgress = {
 	percent: number;
 };
 
+/** A tracker with its progress; its pace is judged in the browser, see `usePace`. */
 export type TrackerSummary = Tracker & {
 	progress: TrackerProgress;
-	status: PaceStatus | null;
 };
 
 /**
@@ -158,9 +169,11 @@ export const createTrackerInputSchema = v.object({
 	startValue: v.optional(progressValueSchema, 0),
 	startDate: dateOnlySchema,
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	description: v.optional(descriptionSchema, ""),
 	coverUrl: v.optional(optionalUrlSchema, null),
 	author: v.optional(authorSchema, ""),
+	tagIds: v.optional(tagIdsSchema, []),
 });
 
 export const updateTrackerInputSchema = v.object({
@@ -174,9 +187,11 @@ export const updateTrackerInputSchema = v.object({
 			startValue: v.optional(progressValueSchema),
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
+			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			description: v.optional(descriptionSchema),
 			coverUrl: v.optional(optionalUrlSchema),
 			author: v.optional(authorSchema),
+			tagIds: v.optional(tagIdsSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

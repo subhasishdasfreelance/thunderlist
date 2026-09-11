@@ -1,71 +1,66 @@
 /**
- * How today is going, measured in hours rather than days.
+ * How a day is going, measured in hours rather than days.
  *
  * Every other pace figure in the app spans weeks, so whole days are the right
- * grain for them. Today is one day: measured that way it would read "0 of 1
- * days elapsed" from breakfast until midnight and never move. So this measures
+ * grain for them. Something paced to a daily window — Today, from six in the
+ * morning to ten at night — is one day long, again and again: measured in days
+ * it would read "0 of 1 days elapsed" all day and never move. So this measures
  * the same things against the clock instead.
  *
- * The window is always midnight to midnight, worked out from the moment it is
- * asked. Nothing is stored, so crossing midnight simply starts reporting
- * against the next one — the tasks on the list are untouched by it.
+ * The window is today's, worked out from the moment it is asked. Nothing is
+ * stored, so tomorrow simply reports against tomorrow's — the tasks themselves
+ * are untouched by it.
  *
  * Pure, apart from taking the current time as an argument.
  */
 
-import { PACE_TOLERANCE } from "#/lib/progress";
-import type { PaceStatus } from "#/schemas/checklist";
-
 const MS_PER_HOUR = 3_600_000;
-const HOURS_PER_DAY = 24;
 
 export type DayPace = {
-	/** Midnight at the end of today: what the day is being measured against. */
+	/** When today's window opens and closes. */
+	startsAt: Date;
 	endsAt: Date;
-	/** How much of the day has gone, 0-1. */
-	elapsed: number;
+	/** Its length, which can be fractional: 06:00 to 10:30 is 4.5. */
+	hoursInWindow: number;
 	hoursElapsed: number;
 	hoursRemaining: number;
-	/** Tasks finished per hour so far. `null` before the first whole minute. */
+	/** Tasks finished per hour so far. `null` before the first quarter hour. */
 	perHour: number | null;
-	/** What the whole day asked for, spread evenly. */
+	/** What the whole window asked for, spread evenly. */
 	expectedPerHour: number | null;
-	/** What it takes from now to clear the list by midnight. */
+	/** What it takes from now to clear the list before the window closes. */
 	requiredPerHour: number | null;
 	/** When the list is cleared at the current rate, or `null` if never. */
 	projectedFinish: Date | null;
-	status: PaceStatus | null;
 };
-
-/** Midnight at the start of the day `now` falls in. */
-function startOfDay(now: Date): Date {
-	return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
 
 export function dayPace(input: {
 	total: number;
 	completed: number;
 	now: Date;
+	/** Today's window, as two moments; see `todayWindow`. */
+	window: { start: number; end: number };
 }): DayPace {
-	const { total, completed, now } = input;
+	const { total, completed, now, window } = input;
 
-	const start = startOfDay(now);
-	const endsAt = new Date(start.getTime() + HOURS_PER_DAY * MS_PER_HOUR);
+	const hoursInWindow = (window.end - window.start) / MS_PER_HOUR;
+	const withinWindow = (hours: number) =>
+		Math.min(hoursInWindow, Math.max(0, hours));
 
-	const hoursElapsed = (now.getTime() - start.getTime()) / MS_PER_HOUR;
-	const hoursRemaining = Math.max(
-		0,
-		(endsAt.getTime() - now.getTime()) / MS_PER_HOUR,
+	const hoursElapsed = withinWindow(
+		(now.getTime() - window.start) / MS_PER_HOUR,
 	);
-	const elapsed = Math.min(1, Math.max(0, hoursElapsed / HOURS_PER_DAY));
+	const hoursRemaining = withinWindow(
+		(window.end - now.getTime()) / MS_PER_HOUR,
+	);
 
 	const outstanding = Math.max(0, total - completed);
 
-	// An empty list has no pace to report; a rate over the first few seconds of
-	// the day is noise rather than information.
+	// An empty list has no pace to report; a rate over the first few minutes of
+	// the window is noise rather than information.
 	const perHour =
 		total === 0 || hoursElapsed < 0.25 ? null : completed / hoursElapsed;
-	const expectedPerHour = total === 0 ? null : total / HOURS_PER_DAY;
+	const expectedPerHour = total === 0 ? null : total / hoursInWindow;
 	const requiredPerHour =
 		total === 0
 			? null
@@ -78,30 +73,20 @@ export function dayPace(input: {
 			? null
 			: new Date(now.getTime() + (outstanding / perHour) * MS_PER_HOUR);
 
-	const status =
-		total === 0
-			? null
-			: (() => {
-					const drift = completed / total - elapsed;
-					if (drift > PACE_TOLERANCE) return "ahead" as const;
-					if (drift < -PACE_TOLERANCE) return "behind" as const;
-					return "on_track" as const;
-				})();
-
 	return {
-		endsAt,
-		elapsed,
+		startsAt: new Date(window.start),
+		endsAt: new Date(window.end),
+		hoursInWindow,
 		hoursElapsed,
 		hoursRemaining,
 		perHour,
 		expectedPerHour,
 		requiredPerHour,
 		projectedFinish,
-		status,
 	};
 }
 
-/** "3h 20m left", or "18m left" once the hours have gone. */
+/** "3h 20m", or "18m" once the hours have gone. */
 export function formatHoursLeft(hours: number): string {
 	const whole = Math.floor(hours);
 	const minutes = Math.round((hours - whole) * 60);

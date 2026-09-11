@@ -4,8 +4,13 @@ import {
 	activeTrackerQuery,
 	applyTagSuggestion,
 	applyTrackerSuggestion,
+	isInlineTagName,
 	parseInlineTags,
+	renameInlineTag,
 	splitTitleTags,
+	unwrittenTags,
+	withInlineTag,
+	withoutInlineTag,
 } from "./inline-tags";
 
 describe("parseInlineTags", () => {
@@ -197,5 +202,96 @@ describe("tracker lines", () => {
 			text: "buy milk\n&Dune\nwalk",
 			caret: 14,
 		});
+	});
+});
+
+describe("isInlineTagName", () => {
+	it("accepts a name that reads back the same", () => {
+		expect(isInlineTagName("shopping")).toBe(true);
+		expect(isInlineTagName("q3-launch")).toBe(true);
+	});
+
+	it("refuses one that would be cut short or lost", () => {
+		// Written inline, these read back as "Q3" and as nothing at all.
+		expect(isInlineTagName("Q3 launch")).toBe(false);
+		expect(isInlineTagName("-draft")).toBe(false);
+	});
+});
+
+describe("withInlineTag", () => {
+	it("writes the tag at the end, the way the bolt adds it", () => {
+		expect(withInlineTag("call mum", "today")).toBe("call mum #today");
+	});
+
+	it("leaves a title that already writes it, anywhere and in any case", () => {
+		expect(withInlineTag("call #Today mum", "today")).toBe("call #Today mum");
+	});
+
+	it("does not mistake a longer tag for it", () => {
+		expect(withInlineTag("plan #todays-list", "today")).toBe(
+			"plan #todays-list #today",
+		);
+	});
+});
+
+describe("withoutInlineTag", () => {
+	it("takes it off the end", () => {
+		expect(withoutInlineTag("call mum #today", "today")).toBe("call mum");
+	});
+
+	it("takes it out of the middle and closes the gap", () => {
+		expect(withoutInlineTag("call #today mum", "today")).toBe("call mum");
+	});
+
+	it("takes it off the start", () => {
+		expect(withoutInlineTag("#today call mum", "today")).toBe("call mum");
+	});
+
+	it("takes every mention, whatever the case, and nothing else", () => {
+		expect(withoutInlineTag("#Today call #home #TODAY", "today")).toBe(
+			"call #home",
+		);
+		expect(withoutInlineTag("plan #todays-list", "today")).toBe(
+			"plan #todays-list",
+		);
+	});
+
+	it("keeps the word when the tag was the whole title", () => {
+		expect(withoutInlineTag("#today", "today")).toBe("today");
+	});
+});
+
+describe("renameInlineTag", () => {
+	it("rewrites each mention in place", () => {
+		expect(renameInlineTag("call #today mum #Today", "today", "doing")).toBe(
+			"call #doing mum #doing",
+		);
+	});
+
+	it("leaves other tags and look-alikes alone", () => {
+		expect(renameInlineTag("C# #todays #home", "today", "doing")).toBe(
+			"C# #todays #home",
+		);
+	});
+});
+
+describe("unwrittenTags", () => {
+	const tags = [
+		{ tagId: "tag_shop", name: "shopping" },
+		{ tagId: "tag_home", name: "Home" },
+	];
+
+	it("returns the tags the title does not write, in the task's order", () => {
+		expect(
+			unwrittenTags("buy milk #shopping", ["tag_home", "tag_shop"], tags),
+		).toEqual([{ tagId: "tag_home", name: "Home" }]);
+	});
+
+	it("counts a written tag whatever its case", () => {
+		expect(unwrittenTags("tidy #home", ["tag_home"], tags)).toEqual([]);
+	});
+
+	it("skips an id with no tag behind it", () => {
+		expect(unwrittenTags("anything", ["tag_gone"], tags)).toEqual([]);
 	});
 });

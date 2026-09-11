@@ -1,12 +1,5 @@
 import * as v from "valibot";
-import { idSchema, sortOrderSchema, titleSchema } from "./common";
-import { TASK_LIST_NAMES } from "./task-list";
-
-/** Tag ids carried by a task. Order is the order the user applied them in. */
-const tagIdsSchema = v.pipe(
-	v.array(idSchema),
-	v.maxLength(20, "A task can carry at most 20 tags"),
-);
+import { idSchema, tagIdsSchema, titleSchema } from "./common";
 
 /**
  * A task exactly as it is stored.
@@ -30,7 +23,13 @@ const taskSchema = v.object({
 	 * there is no honest way to invent a day for them.
 	 */
 	completedAt: v.optional(v.nullable(v.string()), null),
-	/** Ids into the tags collection. Names live there so renaming is one write. */
+	/**
+	 * Ids into the tags collection. Names live there so renaming is one write.
+	 *
+	 * The tags written in the title, plus every tag its checklist carries. The
+	 * checklist's are stored on the task rather than looked up on each read, so
+	 * a tag's page still finds all of its tasks with one query.
+	 */
 	tagIds: v.array(idSchema),
 	/**
 	 * The tracker this task stands for, or `null` for an ordinary task.
@@ -43,6 +42,16 @@ const taskSchema = v.object({
 	 */
 	trackerId: v.optional(v.nullable(idSchema), null),
 	/**
+	 * The checklist this task stands for, or absent or `null` for an ordinary
+	 * task.
+	 *
+	 * The same idea as `trackerId`: a task standing for a checklist is done when
+	 * every task in that checklist is, so it is worked out on read and cannot be
+	 * ticked by hand. A checklist can never end up inside itself, however deep
+	 * the nesting — the server refuses the task that would do it.
+	 */
+	linkedChecklistId: v.optional(v.nullable(idSchema)),
+	/**
 	 * Needs doing soon, whether or not it matters much.
 	 *
 	 * Urgency and importance are kept apart rather than collapsed into one
@@ -54,6 +63,22 @@ const taskSchema = v.object({
 	urgent: v.optional(v.boolean(), false),
 	/** Matters, whether or not it is pressing. */
 	important: v.optional(v.boolean(), false),
+	/**
+	 * A line of detail drawn small under the title wherever the task is listed.
+	 * Absent or empty means none.
+	 *
+	 * Like the notes, it is only ever written from the edit dialog: adding a task
+	 * is one line of typing, and a second field there would slow down the thing
+	 * that has to stay quick.
+	 */
+	caption: v.optional(v.string()),
+	/**
+	 * Longer notes, in Markdown. Absent or empty means none.
+	 *
+	 * Shown only in the edit dialog, never on a row: a list is for scanning, and
+	 * notes are the part of a task nobody scans.
+	 */
+	notes: v.optional(v.string()),
 });
 
 export type Task = v.InferOutput<typeof taskSchema>;
@@ -93,9 +118,9 @@ export const createTaskInputSchema = v.object({
 	/**
 	 * The checklist it belongs to, or `null` for a task that belongs to none.
 	 *
-	 * A task jotted straight onto Today is not part of any list of work — it is
-	 * just a thing to do — and inventing a checklist to hold it only puts a
-	 * checklist nobody asked for on the Checklists screen.
+	 * A task jotted straight onto a tag's page — Today's, usually — is not part
+	 * of any list of work; it is just a thing to do, and inventing a checklist to
+	 * hold it only puts a checklist nobody asked for on the Checklists screen.
 	 */
 	checklistId: v.nullable(idSchema),
 	taskId: idSchema,
@@ -104,28 +129,10 @@ export const createTaskInputSchema = v.object({
 	tagIds: v.optional(tagIdsSchema, []),
 	/** A tracker this task stands for; see `taskSchema`. */
 	trackerId: v.optional(v.nullable(idSchema), null),
+	/** A checklist this task stands for; see `taskSchema`. */
+	linkedChecklistId: v.optional(v.nullable(idSchema), null),
 	urgent: v.optional(v.boolean(), false),
 	important: v.optional(v.boolean(), false),
-	/**
-	 * Put it straight on a list, in the same breath as creating it.
-	 *
-	 * A task typed into Today is one act, and it used to be two changes — create,
-	 * then reference — fired together without waiting. They raced: the reference
-	 * could arrive first, find no such task, and be refused, so the task existed
-	 * but never appeared on the list. Ordering two independent requests is not
-	 * something a caller can be relied on to remember, so the dependency is
-	 * expressed here instead and settled in one write on the server.
-	 */
-	place: v.optional(
-		v.nullable(
-			v.object({
-				list: v.picklist(TASK_LIST_NAMES),
-				itemId: idSchema,
-				sortOrder: sortOrderSchema,
-			}),
-		),
-		null,
-	),
 });
 
 /**
@@ -139,6 +146,9 @@ const taskPatchSchema = v.pipe(
 		tagIds: v.optional(tagIdsSchema),
 		urgent: v.optional(v.boolean()),
 		important: v.optional(v.boolean()),
+		// No upper limit on either, for the same reason a title has none.
+		caption: v.optional(v.pipe(v.string(), v.trim())),
+		notes: v.optional(v.pipe(v.string(), v.trim())),
 	}),
 	v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 );

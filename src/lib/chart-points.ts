@@ -24,9 +24,12 @@ export function dayStart(date: string): number {
  * dropped or invented a date. That keeps the line ending where the figures say
  * it should — at the true completed count — and is why an old checklist starts
  * its curve part-way up instead of at zero.
+ *
+ * Anything with a tick and a moment can be counted this way: a tag's page
+ * passes its trackers in alongside its tasks.
  */
 export function completionPoints(
-	tasks: ReadonlyArray<Task>,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "completed" | "completedAt">>,
 	from: number,
 ): Array<ChartPoint> {
 	const timed: Array<{ id: string; at: number }> = [];
@@ -53,12 +56,4 @@ export function completionPoints(
 	}
 
 	return points;
-}
-
-/** A day in milliseconds, which is what Today is measured against. */
-export const DAY_MS = 24 * 3_600_000;
-
-/** Midnight at the start of today, in the reader's own zone. */
-export function startOfDay(now: Date = new Date()): number {
-	return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }

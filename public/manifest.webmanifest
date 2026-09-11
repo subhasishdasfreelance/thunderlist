@@ -4,7 +4,7 @@
 	"short_name": "Thunderlist",
 	"description": "Thunderlist is a personal productivity app for today's tasks, checklists and progress trackers.",
 	"lang": "en",
-	"start_url": "/today",
+	"start_url": "/tags/today",
 	"scope": "/",
 	"display": "standalone",
 	"background_color": "#000000",
