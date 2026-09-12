@@ -20,6 +20,8 @@ export type TaskRowActions = TaskQuickActions & {
 	onToggle: (completed: boolean) => void;
 	onRename: () => void;
 	onDelete: () => void;
+	/** Move it into another checklist. Left out where a screen offers no move. */
+	onMove?: () => void;
 };
 
 /**
@@ -227,6 +229,9 @@ export function TaskRow({
 							label: `Edit (${TASK_SHORTCUTS.edit})`,
 							onClick: actions.onRename,
 						},
+						...(actions.onMove === undefined
+							? []
+							: [{ label: "Move to checklist…", onClick: actions.onMove }]),
 						...(backlog === null || (isOnBacklog && isBacklogItsHome)
 							? []
 							: [

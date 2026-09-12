@@ -30,6 +30,7 @@ export function ChecklistFormDialog({
 	checklist,
 	tags,
 	resolveTags,
+	isSaving = false,
 	onSubmit,
 }: {
 	isOpen: boolean;
@@ -39,6 +40,8 @@ export function ChecklistFormDialog({
 	tags: ReadonlyArray<Tag>;
 	/** Tag names to ids, making a tag for any name that does not exist yet. */
 	resolveTags: (names: Array<string>) => Array<string>;
+	/** The save is on its way; the button waits with it. */
+	isSaving?: boolean;
 	onSubmit: (values: ChecklistValues) => void;
 }) {
 	const [title, setTitle] = useState("");
@@ -121,6 +124,7 @@ export function ChecklistFormDialog({
 						type="submit"
 						form={formId}
 						isDisabled={!isValid}
+						isLoading={isSaving}
 					/>
 				</HStack>
 			)}

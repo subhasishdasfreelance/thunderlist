@@ -52,6 +52,7 @@ function checklistNeeded(change: Change): string | null {
 		case "checklist.update":
 		case "checklist.delete":
 		case "task.create":
+		case "task.move":
 			return change.checklistId;
 		default:
 			return null;
@@ -162,6 +163,9 @@ export function useApplyChange() {
 
 export type ApplyChange = (change: Change) => void;
 
+/** `applyAsync`: settles once the server has the change, or has refused it. */
+export type ApplyChangeAsync = (change: Change) => Promise<void>;
+
 /* -------------------------------------------------------------------------- */
 /* Builders                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -185,13 +189,16 @@ export type ChecklistValues = {
 	tagIds: Array<string>;
 };
 
-/** Returns the new id so the caller can navigate straight into it. */
-export function createChecklist(
-	apply: ApplyChange,
+/**
+ * Resolves with the new id once the server has written it, so the caller can
+ * go into it knowing it is there; rejects if it was refused.
+ */
+export async function createChecklist(
+	applyAsync: ApplyChangeAsync,
 	values: ChecklistValues,
-): string {
+): Promise<string> {
 	const checklistId = createId(ID_PREFIX.checklist);
-	apply({ kind: "checklist.create", checklistId, ...values });
+	await applyAsync({ kind: "checklist.create", checklistId, ...values });
 	return checklistId;
 }
 
@@ -272,12 +279,13 @@ export function setSpecialTag(
 	});
 }
 
-export function createTracker(
-	apply: ApplyChange,
+/** Resolves once the server has written it; see `createChecklist`. */
+export async function createTracker(
+	applyAsync: ApplyChangeAsync,
 	values: Omit<TrackerValues, never>,
-): string {
+): Promise<string> {
 	const trackerId = createId(ID_PREFIX.tracker);
-	apply({ kind: "tracker.create", trackerId, ...values });
+	await applyAsync({ kind: "tracker.create", trackerId, ...values });
 	return trackerId;
 }
 

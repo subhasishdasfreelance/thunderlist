@@ -22,6 +22,7 @@ import {
 	createTask,
 	deleteChecklist,
 	deleteTask,
+	moveTask,
 	updateChecklist,
 	updateTask,
 } from "./checklist.server";
@@ -59,6 +60,10 @@ async function run(userId: string, change: Change): Promise<void> {
 
 		case "task.delete":
 			await deleteTask(userId, change.taskId);
+			return;
+
+		case "task.move":
+			await moveTask(userId, change.taskId, change.checklistId);
 			return;
 
 		case "tracker.create":

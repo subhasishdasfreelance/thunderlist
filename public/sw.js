@@ -6,13 +6,15 @@
  *    content, so a file of a given name never changes. Those are answered from
  *    the cache without touching the network.
  *
- * 2. Pages. Always from the network, so every open gets the latest version of
- *    the app and of its data. Navigation preload starts the request while this
- *    worker is still waking up, rather than making the page wait for it.
+ * 2. Pages. From the network, so every page gets the latest version of the app
+ *    and of its data. Navigation preload starts the request while this worker
+ *    is still waking up, rather than making the page wait for it.
  *
- * 3. Offline. The latest copy of Today — the page the installed app opens on —
- *    is kept, with everything it loads, and used only when the network cannot
- *    be reached, so the app still opens without a connection.
+ * 3. The start page. The latest copy of Today — the page the installed app
+ *    opens on — is kept, with everything it loads. A launch paints that copy
+ *    at once, like a native app opening on what it last showed, while a fresh
+ *    one is fetched behind it for next time. It is also what the app opens on
+ *    without a connection.
  *
  * Nothing else is touched. Server functions, sign-in and anything from another
  * origin go to the network exactly as if this file did not exist.
@@ -23,7 +25,7 @@ const ASSETS = "thunderlist-assets-v1";
 /** Also cleared on sign-out, by name, in `src/components/shell/user-menu.tsx`. */
 const PAGES = "thunderlist-pages-v1";
 
-/** Pages kept for opening offline: the one the installed app opens on. */
+/** Pages kept for launching from: the one the installed app opens on. */
 const OFFLINE_PAGES = new Set(["/tags/today"]);
 
 /*
@@ -66,7 +68,7 @@ self.addEventListener("fetch", (event) => {
 	if (request.mode === "navigate") {
 		event.respondWith(
 			OFFLINE_PAGES.has(url.pathname) && url.search === ""
-				? fromNetworkKeepingCopy(event)
+				? fromCacheRefreshing(event)
 				: fromNetwork(event),
 		);
 		return;
@@ -84,6 +86,53 @@ self.addEventListener("fetch", (event) => {
 async function fromNetwork(event) {
 	const preloaded = await event.preloadResponse;
 	return preloaded ?? fetch(event.request);
+}
+
+/**
+ * The start page: the kept copy at once, refreshed from the network behind it.
+ *
+ * Waiting on the network put a blank window in front of every launch, since
+ * the server reads the day's tasks before it answers. The kept copy paints
+ * straight away instead, and its data is only a starting point: every read on
+ * the page is already stale when it is drawn, so each is asked for again as the
+ * page wakes, and the screen catches up within a round trip.
+ *
+ * With no usable copy — a first launch, just after signing out, or a copy
+ * whose files have gone — it is the network, as for any other page.
+ */
+async function fromCacheRefreshing(event) {
+	const saved = await savedPage(event.request.url);
+	if (!saved) return fromNetworkKeepingCopy(event);
+
+	event.waitUntil(
+		fromNetwork(event)
+			.then((response) => savePage(event.request.url, response))
+			.catch(() => {}),
+	);
+	return saved;
+}
+
+/**
+ * The kept copy of a page, while everything it loads is kept too. The files are
+ * trimmed oldest first, and a copy whose bundle has been trimmed away opens onto
+ * nothing once a deploy has taken those files off the server.
+ */
+async function savedPage(url) {
+	const saved = await (await caches.open(PAGES)).match(url);
+	if (!saved) return null;
+
+	const assets = await caches.open(ASSETS);
+	for (const file of assetsIn(await saved.clone().text())) {
+		if (!(await assets.match(file))) return null;
+	}
+	return saved;
+}
+
+/** The hashed files a page loads, by path. */
+function assetsIn(html) {
+	return new Set(
+		Array.from(html.matchAll(/["'](\/assets\/[^"'?#\s]+)/g), (m) => m[1]),
+	);
 }
 
 /** A page from the network, keeping a copy for when there is no network. */
@@ -117,13 +166,10 @@ async function savePage(url, response) {
 
 	const html = await response.text();
 	const assets = await caches.open(ASSETS);
-	const files = new Set(
-		Array.from(html.matchAll(/["'](\/assets\/[^"'?#\s]+)/g), (m) => m[1]),
-	);
 
 	try {
 		await Promise.all(
-			[...files].map(async (file) => {
+			[...assetsIn(html)].map(async (file) => {
 				if (!(await assets.match(file))) await assets.add(file);
 			}),
 		);

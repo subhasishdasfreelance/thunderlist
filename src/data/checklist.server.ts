@@ -20,14 +20,15 @@ import {
 } from "#/lib/mongo/client.server";
 import { trackerProgress } from "#/lib/progress";
 import { parseInlineTags, sameTagName } from "#/lib/tags/inline-tags";
-import { calculateChecklistProgress } from "#/lib/tasks/tasks";
-import type {
-	Checklist,
-	ChecklistDetail,
-	ChecklistSummary,
-} from "#/schemas/checklist";
+import {
+	calculateChecklistProgress,
+	orderTasks,
+	type Page,
+	pageOf,
+} from "#/lib/tasks/tasks";
+import type { Checklist, ChecklistSummary } from "#/schemas/checklist";
 import type { DailyWindow } from "#/schemas/common";
-import type { Task, TaskPatch } from "#/schemas/task";
+import type { Task, TaskPageView, TaskPatch } from "#/schemas/task";
 
 /**
  * Just enough of a task to count progress with. `trackerId` is part of that: a
@@ -282,28 +283,58 @@ async function checklistsFinished(
 	);
 }
 
+/**
+ * A checklist with its progress, for the top of its screen.
+ *
+ * Every task is counted, but none comes back: the open ones are read a page at
+ * a time, and the finished ones only once their section is opened; see
+ * `getChecklistOpenTasks` and `getChecklistCompleted`.
+ */
 export async function getChecklist(
 	userId: string,
 	checklistId: string,
-): Promise<ChecklistDetail> {
+): Promise<ChecklistSummary> {
 	const current = await collections();
 	const checklist = await requireChecklist(current, userId, checklistId);
 
-	const tasks = await readChecklistTasks(current, userId, checklistId);
+	const stored = await current.tasks
+		.find({ checklistId, userId }, { projection: PROGRESS_FIELDS })
+		.toArray();
 
-	// Every task is counted, but only the open ones come back: the finished
-	// ones are read on their own once the screen has settled.
-	return {
-		...summarise(checklist, tasks),
-		tasks: tasks.filter((task) => !task.completed),
-	};
+	return summarise(
+		checklist,
+		await withTrackedCompletion(current, userId, stored),
+	);
 }
 
 /**
- * The finished tasks of a checklist, read after the rest of its screen.
+ * A page of a checklist's open tasks, in the order its screen shows them.
  *
- * They are the long tail of a list and nobody is waiting on them, so they
- * are not part of `getChecklist`; see `useWhenIdle`.
+ * Every task is still read, since which are open is only known once completion
+ * has been worked out; see `readChecklistTasks`. Only the page asked for is
+ * sent.
+ */
+export async function getChecklistOpenTasks(
+	userId: string,
+	checklistId: string,
+	view: TaskPageView,
+): Promise<Page<Task>> {
+	const current = await collections();
+	await requireChecklist(current, userId, checklistId);
+
+	const tasks = await readChecklistTasks(current, userId, checklistId);
+	const open = tasks.filter((task) => !task.completed);
+
+	return pageOf(orderTasks(open, view.sort), view, (task) => task.taskId);
+}
+
+/**
+ * The finished tasks of a checklist, read once its Completed section is
+ * opened.
+ *
+ * They are the long tail of a list and nobody is waiting on them, so they are
+ * not read with the rest of the screen. They are read whole, because the chart
+ * drawn from them and clearing them both need every one.
  */
 export async function getChecklistCompleted(
 	userId: string,
@@ -382,6 +413,28 @@ export async function createChecklist(
 }
 
 /**
+ * The tags among `tagIds` a title does not write as `#name`: the ones a task
+ * only inherited from its checklist, and so can lose with it. A tag its title
+ * does write was typed, and taking it away would leave the title naming a tag
+ * the task no longer carries.
+ */
+function untypedTags(
+	title: string,
+	tagIds: ReadonlyArray<string>,
+	names: ReadonlyMap<string, string>,
+): Array<string> {
+	const typed = parseInlineTags(title).tagNames;
+
+	return tagIds.filter((tagId) => {
+		const name = names.get(tagId);
+		return (
+			name === undefined ||
+			!typed.some((typedName) => sameTagName(typedName, name))
+		);
+	});
+}
+
+/**
  * Bring a checklist's tasks in line with a change to its tags.
  *
  * An added tag goes onto every task in it, done or not. A removed one comes off
@@ -428,23 +481,14 @@ async function retagTasks(
 	const names = new Map(tags.map((tag) => [tag.tagId, tag.name]));
 
 	await current.tasks.bulkWrite(
-		tasks.map((task) => {
-			const typed = parseInlineTags(task.title).tagNames;
-			const dropped = removed.filter((tagId) => {
-				const name = names.get(tagId);
-				return (
-					name === undefined ||
-					!typed.some((typedName) => sameTagName(typedName, name))
-				);
-			});
-
-			return {
-				updateOne: {
-					filter: { taskId: task.taskId, userId },
-					update: { $pull: { tagIds: { $in: dropped } } },
+		tasks.map((task) => ({
+			updateOne: {
+				filter: { taskId: task.taskId, userId },
+				update: {
+					$pull: { tagIds: { $in: untypedTags(task.title, removed, names) } },
 				},
-			};
-		}),
+			},
+		})),
 	);
 }
 
@@ -726,6 +770,92 @@ export async function updateTask(
 	if (!next) throw new AppError("not_found", "That task no longer exists.");
 
 	return next;
+}
+
+/**
+ * Move a task into another checklist.
+ *
+ * Its tags go with the move: the tags of the checklist it leaves come off,
+ * except any its title writes as `#name` — see `untypedTags` — and the tags of
+ * the checklist it joins go on, as they would for a task added there. A task
+ * standing for a checklist cannot be moved into that checklist, or into one
+ * inside it; see `assertCanContain`.
+ */
+export async function moveTask(
+	userId: string,
+	taskId: string,
+	checklistId: string,
+): Promise<void> {
+	const current = await collections();
+	const target = await requireChecklist(current, userId, checklistId);
+
+	const task = await current.tasks.findOne(
+		{ taskId, userId },
+		{
+			projection: {
+				_id: 0,
+				title: 1,
+				tagIds: 1,
+				checklistId: 1,
+				linkedChecklistId: 1,
+			},
+		},
+	);
+	if (!task) throw new AppError("not_found", "That task no longer exists.");
+
+	// Already there is the outcome this asked for, not a failure.
+	if (task.checklistId === checklistId) return;
+
+	if (task.linkedChecklistId != null) {
+		await assertCanContain(
+			current,
+			userId,
+			checklistId,
+			task.linkedChecklistId,
+		);
+	}
+
+	const source =
+		task.checklistId === null
+			? null
+			: await current.checklists.findOne(
+					{ checklistId: task.checklistId, userId },
+					{ projection: { _id: 0, tagIds: 1 } },
+				);
+	const joining = target.tagIds ?? [];
+	const leaving = (source?.tagIds ?? []).filter(
+		(tagId) => !joining.includes(tagId),
+	);
+
+	const names =
+		leaving.length === 0
+			? []
+			: await current.tags
+					.find(
+						{ userId, tagId: { $in: leaving } },
+						{ projection: { _id: 0, tagId: 1, name: 1 } },
+					)
+					.toArray();
+	const dropped = untypedTags(
+		task.title,
+		leaving,
+		new Map(names.map((tag) => [tag.tagId, tag.name])),
+	);
+
+	await current.tasks.updateOne(
+		{ taskId, userId },
+		{
+			$set: {
+				checklistId,
+				tagIds: [
+					...new Set([
+						...task.tagIds.filter((tagId) => !dropped.includes(tagId)),
+						...joining,
+					]),
+				],
+			},
+		},
+	);
 }
 
 /** Delete a task. Already gone is the outcome this asked for, not a failure. */

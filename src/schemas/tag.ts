@@ -150,12 +150,11 @@ export type TagTrackerEntry = {
 	completedOn: string | null;
 };
 
+/**
+ * A tag's page, less its tasks: those are read a page at a time, though
+ * `progress` counts them all; see `getTagOpenTasks`.
+ */
 export type TagDetail = TagSummary & {
-	/**
-	 * The open tasks. The finished ones are read separately and later, though
-	 * `progress` counts them all; see `getTagCompleted`.
-	 */
-	tasks: Array<TagTaskEntry>;
 	/** Each counts once towards the tag's progress, the way a task does. */
 	trackers: Array<TagTrackerEntry>;
 };

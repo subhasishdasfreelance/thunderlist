@@ -3,10 +3,12 @@ import type { ProgressEntry } from "#/schemas/tracker";
 import {
 	addDays,
 	clampPercent,
+	compareBehind,
 	computeVelocity,
 	daysBetween,
 	deriveCurrentValue,
 	elapsedFraction,
+	isOverdue,
 	paceStatus,
 	reachedTargetOn,
 	sortEntriesOldestFirst,
@@ -349,6 +351,39 @@ describe("elapsedFraction", () => {
 	});
 });
 
+describe("compareBehind", () => {
+	// On the local clock, which is what the app paces by.
+	const now = new Date(2026, 8, 6).getTime();
+	const due = (deadline: string, fractionComplete: number) => ({
+		startDate: "2026-09-01",
+		deadline,
+		now,
+		fractionComplete,
+	});
+
+	it("puts anything overdue first, even when it owes less of the whole", () => {
+		const overdue = due("2026-09-05", 0.9);
+		const untouched = due("2026-09-11", 0);
+
+		expect([untouched, overdue].sort(compareBehind)).toEqual([
+			overdue,
+			untouched,
+		]);
+	});
+
+	it("orders the rest by how much of the work is owed", () => {
+		const behind = due("2026-09-11", 0.1);
+		const ahead = due("2026-09-11", 0.9);
+
+		expect([ahead, behind].sort(compareBehind)).toEqual([behind, ahead]);
+	});
+
+	it("never counts finished work as overdue", () => {
+		expect(isOverdue(due("2026-09-05", 1))).toBe(false);
+		expect(isOverdue(due("2026-09-05", 0.5))).toBe(true);
+	});
+});
+
 describe("paceStatus", () => {
 	const startDate = "2026-09-01";
 	const deadline = "2026-09-11"; // a ten day window
@@ -388,24 +423,33 @@ describe("paceStatus", () => {
 		).toBe("behind");
 	});
 
-	it("tolerates a small drift", () => {
+	it("tolerates a drift of up to one point either way", () => {
 		expect(
 			paceStatus({
 				startDate,
 				deadline,
-				fractionComplete: 0.53,
+				fractionComplete: 0.505,
+				now: halfway,
+			}),
+		).toBe("on_track");
+
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.495,
 				now: halfway,
 			}),
 		).toBe("on_track");
 	});
 
-	it("stops calling it on track past five points either way", () => {
-		// Six points out, which at the old ten-point tolerance read as on track.
+	it("stops calling it on track past one point either way", () => {
+		// Two points out, which at the old five-point tolerance read as on track.
 		expect(
 			paceStatus({
 				startDate,
 				deadline,
-				fractionComplete: 0.56,
+				fractionComplete: 0.52,
 				now: halfway,
 			}),
 		).toBe("ahead");
@@ -414,7 +458,7 @@ describe("paceStatus", () => {
 			paceStatus({
 				startDate,
 				deadline,
-				fractionComplete: 0.44,
+				fractionComplete: 0.48,
 				now: halfway,
 			}),
 		).toBe("behind");

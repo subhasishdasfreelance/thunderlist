@@ -13,10 +13,13 @@ import { PAGE_SIZE } from "#/lib/use-show-more";
 export function ShowMore({
 	hidden,
 	onShowMore,
+	isLoading = false,
 }: {
 	/** Rows not yet shown. With none, there is nothing to render. */
 	hidden: number;
 	onShowMore: () => void;
+	/** The next page is on its way from the server. */
+	isLoading?: boolean;
 }) {
 	if (hidden === 0) return null;
 
@@ -29,6 +32,7 @@ export function ShowMore({
 					variant="ghost"
 					size="sm"
 					icon={<ChevronDown aria-hidden />}
+					isLoading={isLoading}
 					onClick={onShowMore}
 				/>
 			</HStack>

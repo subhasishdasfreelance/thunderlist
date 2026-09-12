@@ -4,7 +4,9 @@ import {
 	calculateChecklistProgress,
 	compareTasks,
 	mergeReads,
+	orderByTask,
 	orderTasks,
+	pageOf,
 	sortTasks,
 } from "./tasks";
 
@@ -21,6 +23,55 @@ function task(partial: Partial<Task> & { taskId: string }): Task {
 		...partial,
 	};
 }
+
+describe("pageOf", () => {
+	const ids = ["a", "b", "c", "d", "e"];
+	const idOf = (id: string) => id;
+
+	it("sends the first rows and says how many there are", () => {
+		expect(pageOf(ids, { limit: 2 }, idOf)).toEqual({
+			items: ["a", "b"],
+			total: 5,
+		});
+	});
+
+	it("reads on as far as the row to reveal", () => {
+		expect(pageOf(ids, { limit: 2, reveal: "d" }, idOf).items).toEqual([
+			"a",
+			"b",
+			"c",
+			"d",
+		]);
+	});
+
+	it("ignores a row to reveal that is not in the list", () => {
+		expect(pageOf(ids, { limit: 2, reveal: "z" }, idOf).items).toEqual([
+			"a",
+			"b",
+		]);
+	});
+});
+
+describe("orderByTask", () => {
+	it("orders rows by the task they carry, as `orderTasks` orders tasks", () => {
+		const rows = [
+			{ task: task({ taskId: "tsk_1", addedAt: "2026-01-01T00:00:00.000Z" }) },
+			{
+				task: task({
+					taskId: "tsk_2",
+					addedAt: "2026-01-02T00:00:00.000Z",
+					urgent: true,
+				}),
+			},
+			{ task: task({ taskId: "tsk_3", addedAt: "2026-01-03T00:00:00.000Z" }) },
+		];
+		const idsIn = (order: "newest" | "priority") =>
+			orderByTask(rows, order, (row) => row.task).map((row) => row.task.taskId);
+
+		expect(idsIn("newest")).toEqual(["tsk_3", "tsk_2", "tsk_1"]);
+		expect(idsIn("priority")).toEqual(["tsk_2", "tsk_3", "tsk_1"]);
+	});
+});
 
 describe("sortTasks", () => {
 	it("puts the newest first", () => {

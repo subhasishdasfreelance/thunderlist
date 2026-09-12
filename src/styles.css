@@ -47,25 +47,26 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Glass navigation                                                           */
+/* Glass                                                                      */
 /* -------------------------------------------------------------------------- */
 
 /*
- * The top bar and the phone's bottom bar float over the content rather than
- * sitting behind a solid block, so a page reads as one surface that continues
- * underneath them.
+ * The top bar, the phone's bottom bar and everything that opens over the page
+ * — dialogs, menus, pickers, the tag suggestions — are glass rather than solid
+ * blocks, so a page reads as one surface that continues underneath them.
  *
  * The top bar only turns to glass once the page has scrolled. At the top there
  * is nothing underneath it to separate from, so it stays clear and reads as the
  * top of the page rather than a strip laid over it. `AppFrame` sets
  * `data-scrolled`.
  *
- * The alpha is a balance: translucency costs contrast, and these bars carry the
- * app's navigation, so the blur is asked to do most of the separating and the
- * wash only has to be thin enough to see through. A heavy blur is what lets the
- * wash be this thin: what passes underneath arrives as colour, never as a ghost
- * of its text behind the bar's own. `color-mix` keeps the colour tied to the
- * surface token instead of hardcoding one, so it still tracks the palette.
+ * The alpha is a balance: translucency costs contrast, so the blur is asked to
+ * do the separating and the wash only has to be thin enough to see through. A
+ * blur this heavy is what lets the wash be this thin: what passes underneath
+ * arrives as colour, never as a ghost of its text behind the glass's own, and
+ * the saturation keeps that colour from turning muddy. `color-mix` keeps each
+ * wash tied to its surface token instead of hardcoding one, so it still tracks
+ * the palette.
  */
 @layer components {
 	.astryx-app-shell-header {
@@ -76,15 +77,56 @@ body {
 			box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
+	/*
+	 * How much of its surface each kind of glass keeps. The bars carry short
+	 * labels and icons, and are the thinnest. Dialogs, menus and pickers carry
+	 * text to be read over whatever is under them — a menu has no scrim — so
+	 * they keep more.
+	 */
+	:root {
+		--thunderlist-bar-wash: 42%;
+		--thunderlist-overlay-wash: 64%;
+	}
+
 	[data-scrolled="true"] .astryx-app-shell-header,
 	.thunderlist-glass {
 		background-color: color-mix(
 			in srgb,
-			var(--color-background-surface) 60%,
+			var(--color-background-surface) var(--thunderlist-bar-wash),
 			transparent
 		);
-		-webkit-backdrop-filter: saturate(190%) blur(28px);
-		backdrop-filter: saturate(190%) blur(28px);
+		-webkit-backdrop-filter: saturate(180%) blur(36px);
+		backdrop-filter: saturate(180%) blur(36px);
+	}
+
+	/*
+	 * Everything that opens over the page: dialogs, the menus and pickers
+	 * Astryx opens as popovers, and the tag suggestions, drawn the same way.
+	 * Tooltips are not popover surfaces and stay solid and inverted, which is
+	 * the whole point of a tooltip.
+	 */
+	.astryx-dialog {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-surface) var(--thunderlist-overlay-wash),
+			transparent
+		);
+	}
+
+	.astryx-popover-surface,
+	.thunderlist-suggestions {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-popover) var(--thunderlist-overlay-wash),
+			transparent
+		);
+	}
+
+	.astryx-dialog,
+	.astryx-popover-surface,
+	.thunderlist-suggestions {
+		-webkit-backdrop-filter: saturate(180%) blur(40px);
+		backdrop-filter: saturate(180%) blur(40px);
 	}
 
 	/*
@@ -107,14 +149,22 @@ body {
 	}
 
 	/*
-	 * Without backdrop-filter there is no blur to separate the bar from what is
-	 * behind it, and a flat wash of translucent white over arbitrary content is
-	 * exactly the unreadable case. Those browsers get the opaque surface.
+	 * Without backdrop-filter there is no blur to separate the glass from what
+	 * is behind it, and a thin wash over arbitrary content is exactly the
+	 * unreadable case — as it is for anyone who has asked their system for less
+	 * transparency or more contrast. All of them get the solid surface.
 	 */
 	@supports not (backdrop-filter: blur(1px)) {
-		[data-scrolled="true"] .astryx-app-shell-header,
-		.thunderlist-glass {
-			background-color: var(--color-background-surface);
+		:root {
+			--thunderlist-bar-wash: 100%;
+			--thunderlist-overlay-wash: 100%;
+		}
+	}
+
+	@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+		:root {
+			--thunderlist-bar-wash: 100%;
+			--thunderlist-overlay-wash: 100%;
 		}
 	}
 

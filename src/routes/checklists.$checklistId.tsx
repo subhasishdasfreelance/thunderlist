@@ -6,11 +6,12 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useIsFetching, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
+import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
@@ -54,10 +55,10 @@ import { mergeReads, orderTasks, type SortOrder } from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
-import { useShowMore } from "#/lib/use-show-more";
-import { useWhenIdle } from "#/lib/use-when-idle";
+import { firstPage, PAGE_SIZE, useShowMore } from "#/lib/use-show-more";
 import {
 	checklistCompletedQuery,
+	checklistOpenQuery,
 	checklistQuery,
 	checklistsQuery,
 } from "#/queries/checklists";
@@ -78,7 +79,8 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		task: typeof search.task === "string" ? search.task : undefined,
 	}),
-	loader: ({ context, params }) => {
+	loaderDeps: ({ search }) => ({ task: search.task }),
+	loader: async ({ context, params, deps }) => {
 		// Quick-add needs the tags, the trackers and the checklists, but nobody
 		// is typing on the first frame, so none of them is waited for. The tags
 		// also say which tasks are on Today, which is the bolt on a row.
@@ -86,7 +88,14 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 		deferQuery(context.queryClient, trackersQuery());
 		deferQuery(context.queryClient, checklistsQuery());
 
-		return primeQuery(context.queryClient, checklistQuery(params.checklistId));
+		// The checklist and the first page of what is left to do are the screen.
+		await Promise.all([
+			primeQuery(context.queryClient, checklistQuery(params.checklistId)),
+			primeQuery(
+				context.queryClient,
+				checklistOpenQuery(params.checklistId, firstPage(deps.task)),
+			),
+		]);
 	},
 	component: ChecklistDetailPage,
 });
@@ -98,12 +107,14 @@ function ChecklistDetailPage() {
 	const { apply } = useApplyChange();
 
 	const [renaming, setRenaming] = useState<Task | null>(null);
+	const [moving, setMoving] = useState<Task | null>(null);
 	const [isCreatingTag, setIsCreatingTag] = useState(false);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	const [isDeletingChecklist, setIsDeletingChecklist] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
+	const [openLimit, setOpenLimit] = useState(PAGE_SIZE);
 	const [wantsCompleted, setWantsCompleted] = useState(false);
 
 	const { data, isError, error, refetch } = useQuery(
@@ -111,15 +122,23 @@ function ChecklistDetailPage() {
 	);
 
 	/*
-	 * The finished tasks are read last: once everything else on the screen has
-	 * arrived and the browser has a moment to spare — or straight away, if the
-	 * Completed section is opened before then.
+	 * What is still to do, a page at a time: the first page comes with the
+	 * screen, and each "Show more" reads the next one then, not before. The rows
+	 * on screen stay up while a longer page, or another order, is on its way.
 	 */
-	const fetching = useIsFetching();
-	const isSettled = useWhenIdle(data !== undefined && fetching === 0);
+	const openResult = useQuery({
+		...checklistOpenQuery(checklistId, {
+			sort,
+			limit: openLimit,
+			reveal: focusTaskId,
+		}),
+		placeholderData: keepPreviousData,
+	});
+
+	// The finished tasks are read once their section is opened, and not before.
 	const completedResult = useQuery({
 		...checklistCompletedQuery(checklistId),
-		enabled: isSettled || wantsCompleted,
+		enabled: wantsCompleted,
 	});
 	const tagsResult = useQuery(tagsQuery());
 	const trackersResult = useQuery(trackersQuery());
@@ -127,16 +146,16 @@ function ChecklistDetailPage() {
 
 	const detail = data ?? null;
 
-	// The open tasks come with the checklist and the finished ones after it; the
-	// screen sorts the two together.
+	// The open tasks and the finished ones are read apart; the screen sorts the
+	// two together.
 	const allTasks = useMemo(
 		() =>
 			mergeReads(
-				detail?.tasks ?? [],
+				openResult.data?.items ?? [],
 				completedResult.data ?? [],
 				(task) => task.taskId,
 			),
-		[detail, completedResult.data],
+		[openResult.data, completedResult.data],
 	);
 	const rows = useMemo(() => orderTasks(allTasks, sort), [allTasks, sort]);
 
@@ -147,11 +166,20 @@ function ChecklistDetailPage() {
 		[rows],
 	);
 
+	// Open tasks still on the server, past the ones read so far.
+	const openHidden =
+		openResult.data === undefined
+			? 0
+			: openResult.data.total - openResult.data.items.length;
+	const openCount = open.length + openHidden;
+
+	function showMoreOpen() {
+		setOpenLimit(
+			Math.max(openLimit, openResult.data?.items.length ?? 0) + PAGE_SIZE,
+		);
+	}
+
 	// Twenty rows at a time, but never hiding the row a `?task=` link was sent to.
-	const openPaging = useShowMore(
-		open,
-		open.findIndex((task) => task.taskId === focusTaskId),
-	);
 	const completedPaging = useShowMore(
 		completed,
 		completed.findIndex((task) => task.taskId === focusTaskId),
@@ -194,6 +222,7 @@ function ChecklistDetailPage() {
 				onSetImportant: (important) =>
 					updateTask(apply, task.taskId, { important }),
 				onRename: () => setRenaming(task),
+				onMove: () => setMoving(task),
 				onDelete: () => setPendingDelete(task),
 			}}
 		/>
@@ -329,21 +358,30 @@ function ChecklistDetailPage() {
 				onAdd={addTasks}
 			/>
 
-			{open.length === 0 ? null : (
+			{openCount === 0 ? null : (
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<Text type="label" weight="semibold" color="secondary">
-						{open.length} to do
+						{openCount} to do
 					</Text>
 					<SortToggle order={sort} onChange={setSort} />
 				</HStack>
 			)}
 
-			{rows.length === 0 ? (
+			{progress.total === 0 ? (
 				<EmptyState
 					title="No tasks yet."
 					description="Type above to add the first one. Tag it inline with #."
 				/>
-			) : open.length === 0 ? (
+			) : openResult.data === undefined ? (
+				openResult.isError ? (
+					<ErrorNotice
+						error={openResult.error}
+						onRetry={() => void openResult.refetch()}
+					/>
+				) : (
+					<SectionSpinner label="Loading tasks…" />
+				)
+			) : openCount === 0 ? (
 				<EmptyState
 					title="All done."
 					description="Everything here is complete."
@@ -351,7 +389,7 @@ function ChecklistDetailPage() {
 			) : (
 				<Card padding={0}>
 					<VStack gap={0} paddingBlock={2}>
-						{openPaging.shown.map((task, index) => (
+						{open.map((task, index) => (
 							<div
 								key={task.taskId}
 								className="thunderlist-row thunderlist-task-row"
@@ -363,8 +401,9 @@ function ChecklistDetailPage() {
 							</div>
 						))}
 						<ShowMore
-							hidden={openPaging.hidden}
-							onShowMore={openPaging.showMore}
+							hidden={openHidden}
+							isLoading={openResult.isPlaceholderData}
+							onShowMore={showMoreOpen}
 						/>
 					</VStack>
 				</Card>
@@ -461,6 +500,27 @@ function ChecklistDetailPage() {
 						});
 					}
 					setRenaming(null);
+				}}
+			/>
+
+			<ChecklistPickerDialog
+				isOpen={moving !== null}
+				onOpenChange={(open) => {
+					if (!open) setMoving(null);
+				}}
+				title="Move to checklist"
+				subtitle={moving?.title}
+				checklists={otherChecklists}
+				isLoading={checklistsResult.isPending}
+				onPick={(target) => {
+					if (moving) {
+						apply({
+							kind: "task.move",
+							taskId: moving.taskId,
+							checklistId: target,
+						});
+					}
+					setMoving(null);
 				}}
 			/>
 

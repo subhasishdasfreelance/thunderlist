@@ -2,8 +2,10 @@ import { queryOptions } from "@tanstack/react-query";
 import {
 	getChecklistCompletedFn,
 	getChecklistFn,
+	getChecklistOpenTasksFn,
 	listChecklistsFn,
 } from "#/functions/checklist.functions";
+import type { TaskPageView } from "#/schemas/task";
 import { queryKeys } from "./keys";
 
 export const checklistsQuery = () =>
@@ -25,7 +27,15 @@ export const checklistQuery = (checklistId: string) =>
 		retry: false,
 	});
 
-/** The finished tasks, which the screen asks for once it has settled. */
+/** One page of the open tasks; see `getChecklistOpenTasks`. */
+export const checklistOpenQuery = (checklistId: string, view: TaskPageView) =>
+	queryOptions({
+		queryKey: queryKeys.checklistOpenPage(checklistId, view),
+		queryFn: () => getChecklistOpenTasksFn({ data: { checklistId, ...view } }),
+		retry: false,
+	});
+
+/** The finished tasks, which the screen asks for once they are opened. */
 export const checklistCompletedQuery = (checklistId: string) =>
 	queryOptions({
 		queryKey: queryKeys.checklistCompleted(checklistId),

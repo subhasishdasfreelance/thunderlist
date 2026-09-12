@@ -41,10 +41,17 @@ import { withInlineTag } from "#/lib/tags/inline-tags";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { tagQuery, tagsQuery } from "#/queries/tags";
+import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { specialTag, tagsFor } from "#/schemas/tag";
+import type { TaskPageView } from "#/schemas/task";
 import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
+
+/**
+ * All of Today's open tasks, to see whether this tracker is among them. The one
+ * list still read whole: a day's is short, and nothing waits for it.
+ */
+const ALL_OF_TODAY: TaskPageView = { sort: "newest", limit: 1000 };
 
 export const Route = createFileRoute("/trackers/$trackerId")({
 	/*
@@ -56,10 +63,11 @@ export const Route = createFileRoute("/trackers/$trackerId")({
 		void context.queryClient.prefetchQuery(
 			trackerEntriesQuery(params.trackerId),
 		);
-		// The tags it carries, and for the edit form; Today's page, to say whether
-		// it is on Today. Nobody waits on them either.
+		// The tags it carries, and for the edit form; Today's page and its open
+		// tasks, to say whether it is on Today. Nobody waits on them either.
 		deferQuery(context.queryClient, tagsQuery());
 		deferQuery(context.queryClient, tagQuery("today"));
+		deferQuery(context.queryClient, tagOpenQuery("today", ALL_OF_TODAY));
 
 		return primeQuery(context.queryClient, trackerQuery(params.trackerId));
 	},
@@ -87,7 +95,10 @@ function TrackerDetailPage() {
 		trackerQuery(trackerId),
 	);
 	const history = useQuery(trackerEntriesQuery(trackerId));
-	const todayResult = useQuery(tagQuery("today"));
+	// Today's page is held as well as its tasks, so a task added to it from here
+	// is drawn there at once; see `applyOptimistically`.
+	useQuery(tagQuery("today"));
+	const todayResult = useQuery(tagOpenQuery("today", ALL_OF_TODAY));
 	const tagsResult = useQuery(tagsQuery());
 	const entries = history.data ?? [];
 	const tags = tagsResult.data ?? [];
@@ -143,7 +154,7 @@ function TrackerDetailPage() {
 	 * Read off Today's own page. While that is still arriving the button simply
 	 * reads as available.
 	 */
-	const isOnToday = (todayResult.data?.tasks ?? []).some(
+	const isOnToday = (todayResult.data?.items ?? []).some(
 		(entry) => entry.task.trackerId === trackerId,
 	);
 	const today = specialTag(tags, "today");

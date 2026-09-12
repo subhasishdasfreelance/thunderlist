@@ -15,7 +15,7 @@ import { TagCard } from "#/components/tags/tag-card";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { UntaggedCard } from "#/components/tags/untagged-card";
 import { createTag, useApplyChange } from "#/lib/changes";
-import { lagFraction } from "#/lib/progress";
+import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
@@ -23,18 +23,19 @@ import { tagSummariesQuery } from "#/queries/tags";
 import { type TagSummary, tagStartDate } from "#/schemas/tag";
 
 /**
- * How far behind a tag is, worst first — the same measure its pace label is
- * drawn from, as on the Checklists screen.
+ * Where a tag stands against its schedule, for ordering the most behind first
+ * — the same measure its pace label is drawn from, as on the Checklists
+ * screen; see `compareBehind`.
  */
-function lag(tag: TagSummary, now: number): number {
-	return lagFraction({
+function standing(tag: TagSummary, now: number) {
+	return {
 		startDate: tagStartDate(tag),
 		deadline: tag.deadline,
 		deadlineTime: tag.deadlineTime,
 		dailyWindow: tag.dailyWindow,
 		now,
 		fractionComplete: tag.progress.percent / 100,
-	});
+	};
 }
 
 export const Route = createFileRoute("/tags/")({
@@ -80,7 +81,9 @@ function TagsPage() {
 	const now = useNow();
 	const ordered =
 		isBehindFirst && now !== null
-			? [...tags].sort((a, b) => lag(b, now) - lag(a, now))
+			? [...tags].sort((a, b) =>
+					compareBehind(standing(a, now), standing(b, now)),
+				)
 			: tags;
 
 	return (

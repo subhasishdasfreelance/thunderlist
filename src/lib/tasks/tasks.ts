@@ -7,7 +7,12 @@
  */
 
 import type { ChecklistProgress } from "#/schemas/checklist";
-import { PRIORITY_RANKS, priorityRank, type Task } from "#/schemas/task";
+import {
+	PRIORITY_RANKS,
+	priorityRank,
+	type SORT_ORDERS,
+	type Task,
+} from "#/schemas/task";
 
 /**
  * Newest first, then by id.
@@ -36,8 +41,6 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 }
 
 /** How a list is ordered. More will follow; these are the two that exist. */
-const SORT_ORDERS = ["newest", "priority"] as const;
-
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
 export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
@@ -74,6 +77,23 @@ export function orderTasks(
 	return sortTasksBy(tasks, order, compareTasks);
 }
 
+/** The same, for rows that carry a task rather than being one: a tag's. */
+export function orderByTask<T>(
+	items: ReadonlyArray<T>,
+	order: SortOrder,
+	taskOf: (item: T) => Task,
+): Array<T> {
+	return sortTasksBy(
+		items.map((item) => ({
+			item,
+			urgent: taskOf(item).urgent,
+			important: taskOf(item).important,
+		})),
+		order,
+		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),
+	).map((row) => row.item);
+}
+
 /**
  * A list's open tasks and its finished ones, read separately, as one list.
  *
@@ -87,6 +107,29 @@ export function mergeReads<T>(
 ): Array<T> {
 	const seen = new Set(open.map(idOf));
 	return [...open, ...finished.filter((item) => !seen.has(idOf(item)))];
+}
+
+/** Part of a list read from the server: the rows sent, and how many there are. */
+export type Page<T> = { items: Array<T>; total: number };
+
+/**
+ * The part of an ordered list a screen asked for: the first `limit` rows, or
+ * as far as the row it wants to reveal, whichever is further.
+ */
+export function pageOf<T>(
+	ordered: ReadonlyArray<T>,
+	view: { limit: number; reveal?: string },
+	idOf: (item: T) => string,
+): Page<T> {
+	const revealAt =
+		view.reveal === undefined
+			? -1
+			: ordered.findIndex((item) => idOf(item) === view.reveal);
+
+	return {
+		items: ordered.slice(0, Math.max(view.limit, revealAt + 1)),
+		total: ordered.length,
+	};
 }
 
 /**

@@ -388,7 +388,7 @@ export function TagTextField({
 			{isOpen ? (
 				// Not a listbox: the field keeps focus and the caret throughout, so
 				// this is a hint about what is being typed rather than a control.
-				<ul className="thunderlist-suggestions absolute top-full left-0 z-30 mt-1 max-h-60 w-max min-w-40 max-w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg">
+				<ul className="thunderlist-suggestions absolute top-full left-0 z-30 mt-1 max-h-60 w-max min-w-40 max-w-full overflow-y-auto rounded-lg border border-border py-1 shadow-lg">
 					{suggestions.map((suggestion, position) => (
 						<li key={`${suggestion.kind}:${suggestion.name}`}>
 							<button

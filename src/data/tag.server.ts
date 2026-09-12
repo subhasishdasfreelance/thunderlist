@@ -31,7 +31,12 @@ import {
 	renameInlineTag,
 	withInlineTag,
 } from "#/lib/tags/inline-tags";
-import { calculateChecklistProgress } from "#/lib/tasks/tasks";
+import {
+	calculateChecklistProgress,
+	orderByTask,
+	type Page,
+	pageOf,
+} from "#/lib/tasks/tasks";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
 import {
 	SPECIAL_TAGS,
@@ -42,7 +47,7 @@ import {
 	type TagSummary,
 	type TagTaskEntry,
 } from "#/schemas/tag";
-import type { Task } from "#/schemas/task";
+import type { Task, TaskPageView } from "#/schemas/task";
 import { removeTagFromTasks, withTrackedCompletion } from "./checklist.server";
 import { summarise as summariseTracker } from "./tracker.server";
 
@@ -390,10 +395,11 @@ async function readTagEntries(
 }
 
 /**
- * One tag: its progress, its trackers and the open tasks carrying it.
+ * One tag: its progress and its trackers.
  *
- * Every task is counted, but only the open ones come back: the finished ones
- * are read on their own once the screen has settled; see `getTagCompleted`.
+ * Every task carrying it is counted, but none comes back: the open ones are
+ * read a page at a time, and the finished ones only once their section is
+ * opened; see `getTagOpenTasks` and `getTagCompleted`.
  */
 export async function getTag(
 	userId: string,
@@ -407,8 +413,22 @@ export async function getTag(
 		.find({ userId, tagIds: tagId }, { projection: DOMAIN_FIELDS })
 		.toArray();
 
-	const [entries, trackers, readings] = await Promise.all([
-		readTagEntries(current, userId, tagId),
+	const [tasks, trackers, readings] = await Promise.all([
+		current.tasks
+			.find(
+				{ userId, tagIds: tagId },
+				{
+					projection: {
+						_id: 0,
+						completed: 1,
+						trackerId: 1,
+						linkedChecklistId: 1,
+					},
+				},
+			)
+			.toArray()
+			// Finished by its tracker counts as finished; see `withTrackedCompletion`.
+			.then((stored) => withTrackedCompletion(current, userId, stored)),
 		trackersRead,
 		// Only for the day each tracker reached its target, which the chart needs.
 		trackersRead.then((found) =>
@@ -437,22 +457,41 @@ export async function getTag(
 
 	return {
 		...summarise(tag, [
-			...entries.map((entry) => entry.task),
+			...tasks,
 			// A tracker counts as one more thing to finish, done at its target.
 			...trackerEntries.map((entry) => ({
 				completed: entry.tracker.progress.percent >= 100,
 			})),
 		]),
-		tasks: entries.filter((entry) => !entry.task.completed),
 		trackers: trackerEntries,
 	};
 }
 
 /**
- * The finished tasks carrying a tag, read after the rest of its screen.
- *
- * They are the long tail of a tag and nobody is waiting on them, so they are
- * not part of `getTag`; see `useWhenIdle`.
+ * A page of the open tasks carrying a tag, in the order its screen shows them.
+ * Every one is still read, as for a checklist; see `getChecklistOpenTasks`.
+ */
+export async function getTagOpenTasks(
+	userId: string,
+	tagIdOrKind: string,
+	view: TaskPageView,
+): Promise<Page<TagTaskEntry>> {
+	const current = await collections();
+	const tag = await findTag(current, userId, tagIdOrKind);
+
+	const entries = await readTagEntries(current, userId, tag.tagId);
+	const open = entries.filter((entry) => !entry.task.completed);
+
+	return pageOf(
+		orderByTask(open, view.sort, (entry) => entry.task),
+		view,
+		(entry) => entry.task.taskId,
+	);
+}
+
+/**
+ * The finished tasks carrying a tag, read once its Completed section is
+ * opened. Read whole, as a checklist's are; see `getChecklistCompleted`.
  */
 export async function getTagCompleted(
 	userId: string,

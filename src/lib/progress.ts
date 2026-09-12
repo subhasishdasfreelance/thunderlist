@@ -12,14 +12,13 @@ import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
 
 /**
  * How far actual progress may drift from elapsed time before it stops counting
- * as "on track": five percentage points either way.
+ * as "on track": one percentage point either way.
  *
- * Narrow on purpose. At ten, a ten-day checklist could be a whole day adrift,
- * or a thirty-task one three tasks short, and still call itself on track. Today
- * reads its pace against the same figure, so "Behind" means the same thing on
- * every screen.
+ * Narrow on purpose: anything further adrift than that is worth hearing about,
+ * in either direction. Today reads its pace against the same figure, so
+ * "Behind" means the same thing on every screen.
  */
-export const PACE_TOLERANCE = 0.05;
+export const PACE_TOLERANCE = 0.01;
 
 const MS_PER_DAY = 86_400_000;
 
@@ -418,4 +417,42 @@ export function lagFraction(
 	if (expected === null) return 0;
 
 	return expected - input.fractionComplete;
+}
+
+/**
+ * Whether something is past its deadline with work still left.
+ *
+ * For something paced daily, that is today's window having closed on an
+ * unfinished list. Nothing without a deadline is ever overdue.
+ */
+export function isOverdue(
+	input: PaceInput & {
+		/** Progress so far, 0 to 1. */
+		fractionComplete: number;
+	},
+): boolean {
+	if (input.fractionComplete >= 1) return false;
+
+	const now = input.now ?? Date.now();
+	const window = paceWindow(input, now);
+	return window !== null && now >= window.end;
+}
+
+/**
+ * Most behind first, for ordering a screen of cards.
+ *
+ * Anything overdue leads, then the rest by how much of the work is owed; see
+ * `lagFraction`. Overdue has to be its own step: something due yesterday and
+ * nine-tenths done owes less of the whole than something halfway through its
+ * time and untouched, but only one of them has already missed its date. Within
+ * each group, the one owing the most comes first.
+ */
+export function compareBehind(
+	a: PaceInput & { fractionComplete: number },
+	b: PaceInput & { fractionComplete: number },
+): number {
+	return (
+		Number(isOverdue(b)) - Number(isOverdue(a)) ||
+		lagFraction(b) - lagFraction(a)
+	);
 }

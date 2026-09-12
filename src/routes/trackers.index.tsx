@@ -54,8 +54,9 @@ export const Route = createFileRoute("/trackers/")({
 function TrackersPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isCreating, setIsCreating] = useState(false);
 	const [isBehindFirst, setIsBehindFirst] = useState(false);
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackersQuery(),
@@ -81,10 +82,24 @@ function TrackersPage() {
 			? [...trackers].sort((a, b) => lag(b, now) - lag(a, now))
 			: trackers;
 
-	function create(values: TrackerValues) {
-		const trackerId = createTracker(apply, values);
-		setIsFormOpen(false);
-		void navigate({ to: "/trackers/$trackerId", params: { trackerId } });
+	/*
+	 * Into the new tracker once the server has it, not before: going in sooner
+	 * had its screen ask for a tracker that did not exist yet, which it could
+	 * show as an error.
+	 */
+	async function create(values: TrackerValues) {
+		if (isCreating) return;
+		setIsCreating(true);
+
+		try {
+			const trackerId = await createTracker(applyAsync, values);
+			setIsFormOpen(false);
+			void navigate({ to: "/trackers/$trackerId", params: { trackerId } });
+		} catch {
+			// Already reported by `useApplyChange`; the form stays open to retry.
+		} finally {
+			setIsCreating(false);
+		}
 	}
 
 	return (
@@ -112,7 +127,7 @@ function TrackersPage() {
 				<VStack gap={3}>
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<Text type="label" weight="semibold">
-							Your Trackers
+							{trackers.length} {trackers.length === 1 ? "tracker" : "trackers"}
 						</Text>
 						<OrderToggle
 							isSorted={isBehindFirst}
@@ -136,7 +151,8 @@ function TrackersPage() {
 				onOpenChange={setIsFormOpen}
 				tags={tags}
 				resolveTags={(names) => names.map(createTagResolver(apply, tags))}
-				onSubmit={create}
+				isSaving={isCreating}
+				onSubmit={(values) => void create(values)}
 			/>
 		</VStack>
 	);

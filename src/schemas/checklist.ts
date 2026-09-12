@@ -8,7 +8,6 @@ import {
 	timeOfDaySchema,
 	titleSchema,
 } from "./common";
-import type { Task } from "./task";
 
 const PACE_STATUSES = ["ahead", "on_track", "behind"] as const;
 
@@ -72,14 +71,6 @@ export type ChecklistProgress = {
  */
 export type ChecklistSummary = Checklist & {
 	progress: ChecklistProgress;
-};
-
-export type ChecklistDetail = ChecklistSummary & {
-	/**
-	 * The open tasks. The finished ones are read separately and later, though
-	 * `progress` counts them all; see `getChecklistCompleted`.
-	 */
-	tasks: Array<Task>;
 };
 
 export const createChecklistInputSchema = v.object({

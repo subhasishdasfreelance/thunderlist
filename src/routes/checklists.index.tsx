@@ -18,7 +18,7 @@ import {
 	createTagResolver,
 	useApplyChange,
 } from "#/lib/changes";
-import { lagFraction } from "#/lib/progress";
+import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -26,20 +26,21 @@ import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
 /**
- * How far behind a checklist is, worst first.
+ * Where a checklist stands against its schedule, for ordering the most behind
+ * first; see `compareBehind`.
  *
  * The same measure the pace label on the card is drawn from, so the order
  * agrees with what each card says about itself.
  */
-function lag(checklist: ChecklistSummary, now: number): number {
-	return lagFraction({
+function standing(checklist: ChecklistSummary, now: number) {
+	return {
 		startDate: checklist.startDate,
 		deadline: checklist.deadline,
 		deadlineTime: checklist.deadlineTime,
 		dailyWindow: checklist.dailyWindow,
 		now,
 		fractionComplete: checklist.progress.percent / 100,
-	});
+	};
 }
 
 export const Route = createFileRoute("/checklists/")({
@@ -55,8 +56,9 @@ export const Route = createFileRoute("/checklists/")({
 function ChecklistsPage() {
 	const navigate = useNavigate();
 	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isCreating, setIsCreating] = useState(false);
 	const [isBehindFirst, setIsBehindFirst] = useState(false);
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
@@ -78,18 +80,33 @@ function ChecklistsPage() {
 	const now = useNow();
 	const ordered =
 		isBehindFirst && now !== null
-			? [...checklists].sort((a, b) => lag(b, now) - lag(a, now))
+			? [...checklists].sort((a, b) =>
+					compareBehind(standing(a, now), standing(b, now)),
+				)
 			: checklists;
 
-	function create(values: ChecklistValues) {
-		const checklistId = createChecklist(apply, values);
-		setIsFormOpen(false);
-		// Drop straight into the new checklist so tasks can be added.
-		void navigate({
-			to: "/checklists/$checklistId",
-			params: { checklistId },
-			search: { task: undefined },
-		});
+	/*
+	 * Into the new checklist so tasks can be added — but only once the server
+	 * has it. Going in sooner had the new screen ask for a checklist that did
+	 * not exist yet, which it could show as an error.
+	 */
+	async function create(values: ChecklistValues) {
+		if (isCreating) return;
+		setIsCreating(true);
+
+		try {
+			const checklistId = await createChecklist(applyAsync, values);
+			setIsFormOpen(false);
+			void navigate({
+				to: "/checklists/$checklistId",
+				params: { checklistId },
+				search: { task: undefined },
+			});
+		} catch {
+			// Already reported by `useApplyChange`; the form stays open to retry.
+		} finally {
+			setIsCreating(false);
+		}
 	}
 
 	return (
@@ -138,7 +155,8 @@ function ChecklistsPage() {
 				onOpenChange={setIsFormOpen}
 				tags={tags}
 				resolveTags={(names) => names.map(createTagResolver(apply, tags))}
-				onSubmit={create}
+				isSaving={isCreating}
+				onSubmit={(values) => void create(values)}
 			/>
 		</VStack>
 	);

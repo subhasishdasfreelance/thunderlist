@@ -109,6 +109,22 @@ export function priorityRank(
 	return "none";
 }
 
+/** The orders a list of tasks can be shown in; see `sortTasksBy`. */
+export const SORT_ORDERS = ["newest", "priority"] as const;
+
+/**
+ * Which part of a list of open tasks to read: the first `limit` of them in one
+ * order, and as far past that as it takes to include `reveal` — the task a
+ * `?task=` link names, which has to be on screen to be scrolled to.
+ */
+export const taskPageSchema = v.object({
+	sort: v.picklist(SORT_ORDERS),
+	limit: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10_000)),
+	reveal: v.optional(idSchema),
+});
+
+export type TaskPageView = v.InferOutput<typeof taskPageSchema>;
+
 /**
  * Adding a task is meant to be quick, so the only thing required is a title.
  * The id and the timestamp are decided by the client, because a queued task
@@ -161,3 +177,9 @@ export const updateTaskInputSchema = v.object({
 });
 
 export const deleteTaskInputSchema = v.object({ taskId: idSchema });
+
+/** Moving a task into another checklist; see `moveTask`. */
+export const moveTaskInputSchema = v.object({
+	taskId: idSchema,
+	checklistId: idSchema,
+});

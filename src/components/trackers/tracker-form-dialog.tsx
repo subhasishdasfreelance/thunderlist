@@ -33,6 +33,7 @@ export function TrackerFormDialog({
 	tracker,
 	tags,
 	resolveTags,
+	isSaving = false,
 	onSubmit,
 }: {
 	isOpen: boolean;
@@ -42,6 +43,8 @@ export function TrackerFormDialog({
 	tags: ReadonlyArray<Tag>;
 	/** Tag names to ids, making a tag for any name that does not exist yet. */
 	resolveTags: (names: Array<string>) => Array<string>;
+	/** The save is on its way; the button waits with it. */
+	isSaving?: boolean;
 	onSubmit: (values: TrackerValues) => void;
 }) {
 	const [title, setTitle] = useState("");
@@ -141,6 +144,7 @@ export function TrackerFormDialog({
 						type="submit"
 						form={formId}
 						isDisabled={!isValid}
+						isLoading={isSaving}
 					/>
 				</HStack>
 			)}

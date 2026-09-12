@@ -2,9 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import {
 	getTagCompletedFn,
 	getTagFn,
+	getTagOpenTasksFn,
 	listTagSummariesFn,
 	listTagsFn,
 } from "#/functions/tag.functions";
+import type { TaskPageView } from "#/schemas/task";
 import { queryKeys } from "./keys";
 
 export const tagsQuery = () =>
@@ -28,7 +30,15 @@ export const tagQuery = (tagId: string) =>
 		retry: false,
 	});
 
-/** The finished tasks, which the screen asks for once it has settled. */
+/** One page of the open tasks carrying a tag; see `getTagOpenTasks`. */
+export const tagOpenQuery = (tagId: string, view: TaskPageView) =>
+	queryOptions({
+		queryKey: queryKeys.tagOpenPage(tagId, view),
+		queryFn: () => getTagOpenTasksFn({ data: { tagId, ...view } }),
+		retry: false,
+	});
+
+/** The finished tasks, which the screen asks for once they are opened. */
 export const tagCompletedQuery = (tagId: string) =>
 	queryOptions({
 		queryKey: queryKeys.tagCompleted(tagId),

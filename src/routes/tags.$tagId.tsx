@@ -7,7 +7,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useIsFetching, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -51,20 +51,19 @@ import {
 } from "#/lib/format-date";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import { type ParsedTitle, withInlineTag } from "#/lib/tags/inline-tags";
-import {
-	compareTasks,
-	mergeReads,
-	type SortOrder,
-	sortTasksBy,
-} from "#/lib/tasks/tasks";
+import { mergeReads, orderByTask, type SortOrder } from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
-import { useShowMore } from "#/lib/use-show-more";
-import { useWhenIdle } from "#/lib/use-when-idle";
+import { firstPage, PAGE_SIZE, useShowMore } from "#/lib/use-show-more";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { tagCompletedQuery, tagQuery, tagsQuery } from "#/queries/tags";
+import {
+	tagCompletedQuery,
+	tagOpenQuery,
+	tagQuery,
+	tagsQuery,
+} from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
 import { todayDateOnly } from "#/schemas/common";
 import { type TagTaskEntry, tagStartDate } from "#/schemas/tag";
@@ -75,7 +74,8 @@ export const Route = createFileRoute("/tags/$tagId")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		task: typeof search.task === "string" ? search.task : undefined,
 	}),
-	loader: ({ context, params }) => {
+	loaderDeps: ({ search }) => ({ task: search.task }),
+	loader: async ({ context, params, deps }) => {
 		// Every tag, for the highlights in the titles, Today's bolt and the name
 		// check when editing; the trackers and checklists, for a `&` line typed
 		// into quick-add. None of them is waited for.
@@ -83,7 +83,14 @@ export const Route = createFileRoute("/tags/$tagId")({
 		deferQuery(context.queryClient, trackersQuery());
 		deferQuery(context.queryClient, checklistsQuery());
 
-		return primeQuery(context.queryClient, tagQuery(params.tagId));
+		// The tag and the first page of what is left to do are the screen.
+		await Promise.all([
+			primeQuery(context.queryClient, tagQuery(params.tagId)),
+			primeQuery(
+				context.queryClient,
+				tagOpenQuery(params.tagId, firstPage(deps.task)),
+			),
+		]);
 	},
 	component: TagDetailPage,
 });
@@ -112,20 +119,24 @@ function TagDetailPage() {
 	const [isDeletingTag, setIsDeletingTag] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
+	const [openLimit, setOpenLimit] = useState(PAGE_SIZE);
 	const [wantsCompleted, setWantsCompleted] = useState(false);
 
 	const { data, isError, error, refetch } = useQuery(tagQuery(tagId));
 
 	/*
-	 * The finished tasks are read last: once everything else on the screen has
-	 * arrived and the browser has a moment to spare — or straight away, if the
-	 * Completed section is opened before then.
+	 * What is still to do, a page at a time, as on a checklist's screen: each
+	 * "Show more" reads the next page then, not before.
 	 */
-	const fetching = useIsFetching();
-	const isSettled = useWhenIdle(data !== undefined && fetching === 0);
+	const openResult = useQuery({
+		...tagOpenQuery(tagId, { sort, limit: openLimit, reveal: focusTaskId }),
+		placeholderData: keepPreviousData,
+	});
+
+	// The finished tasks are read once their section is opened, and not before.
 	const completedResult = useQuery({
 		...tagCompletedQuery(tagId),
-		enabled: isSettled || wantsCompleted,
+		enabled: wantsCompleted,
 	});
 	const tagsResult = useQuery(tagsQuery());
 	const trackersResult = useQuery(trackersQuery());
@@ -133,29 +144,20 @@ function TagDetailPage() {
 
 	const detail = data ?? null;
 
-	// The open tasks come with the tag and the finished ones after it; the screen
-	// sorts the two together.
+	// The open tasks and the finished ones are read apart; the screen sorts the
+	// two together.
 	const allEntries = useMemo(
 		() =>
 			mergeReads(
-				detail?.tasks ?? [],
+				openResult.data?.items ?? [],
 				completedResult.data ?? [],
 				(entry) => entry.task.taskId,
 			),
-		[detail, completedResult.data],
+		[openResult.data, completedResult.data],
 	);
 
 	const rows = useMemo(
-		() =>
-			sortTasksBy(
-				allEntries.map((entry) => ({
-					entry,
-					urgent: entry.task.urgent,
-					important: entry.task.important,
-				})),
-				sort,
-				(a, b) => compareTasks(a.entry.task, b.entry.task),
-			).map((row) => row.entry),
+		() => orderByTask(allEntries, sort, (entry) => entry.task),
 		[allEntries, sort],
 	);
 
@@ -169,11 +171,20 @@ function TagDetailPage() {
 		[rows],
 	);
 
+	// Open tasks still on the server, past the ones read so far.
+	const openHidden =
+		openResult.data === undefined
+			? 0
+			: openResult.data.total - openResult.data.items.length;
+	const openCount = open.length + openHidden;
+
+	function showMoreOpen() {
+		setOpenLimit(
+			Math.max(openLimit, openResult.data?.items.length ?? 0) + PAGE_SIZE,
+		);
+	}
+
 	// Twenty rows at a time, but never hiding the row a `?task=` link was sent to.
-	const openPaging = useShowMore(
-		open,
-		open.findIndex((entry) => entry.task.taskId === focusTaskId),
-	);
 	const completedPaging = useShowMore(
 		completed,
 		completed.findIndex((entry) => entry.task.taskId === focusTaskId),
@@ -445,16 +456,17 @@ function TagDetailPage() {
 				onAdd={addTasks}
 			/>
 
-			{open.length === 0 ? null : (
+			{openCount === 0 ? null : (
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<Text type="label" weight="semibold" color="secondary">
-						{open.length} to do
+						{openCount} to do
 					</Text>
 					<SortToggle order={sort} onChange={setSort} />
 				</HStack>
 			)}
 
-			{rows.length === 0 ? (
+			{/* Its progress counts its trackers too; this is no task carrying it. */}
+			{progress.total === detail.trackers.length ? (
 				detail.trackers.length === 0 ? (
 					<EmptyState
 						title="Nothing carries this tag yet."
@@ -465,7 +477,16 @@ function TagDetailPage() {
 						}
 					/>
 				) : null
-			) : open.length === 0 ? (
+			) : openResult.data === undefined ? (
+				openResult.isError ? (
+					<ErrorNotice
+						error={openResult.error}
+						onRetry={() => void openResult.refetch()}
+					/>
+				) : (
+					<SectionSpinner label="Loading tasks…" />
+				)
+			) : openCount === 0 ? (
 				<EmptyState
 					title="All done."
 					description="Every task with this tag is complete."
@@ -473,7 +494,7 @@ function TagDetailPage() {
 			) : (
 				<Card padding={0}>
 					<VStack gap={0} paddingBlock={2}>
-						{openPaging.shown.map((entry, index) => (
+						{open.map((entry, index) => (
 							<div
 								key={entry.task.taskId}
 								className="thunderlist-row thunderlist-task-row"
@@ -485,8 +506,9 @@ function TagDetailPage() {
 							</div>
 						))}
 						<ShowMore
-							hidden={openPaging.hidden}
-							onShowMore={openPaging.showMore}
+							hidden={openHidden}
+							isLoading={openResult.isPlaceholderData}
+							onShowMore={showMoreOpen}
 						/>
 					</VStack>
 				</Card>

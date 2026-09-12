@@ -35,10 +35,7 @@ export function CompletedSection({
 	clearLabel: string;
 	/** Left out while the finished tasks have not been read, so none are shown. */
 	onClear?: () => void;
-	/**
-	 * Opened for the first time: the finished tasks are read then if they have
-	 * not been already; see `useWhenIdle`.
-	 */
+	/** Opened for the first time: the finished tasks are read then, not before. */
 	onOpen?: () => void;
 	/** The same history as a graph. Without one there is nothing to toggle. */
 	chart?: ReactNode;
