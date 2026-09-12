@@ -488,7 +488,10 @@ Screen** (Safari) or **Install app** (Chrome); the manifest and icons are in
 
 `public/sw.js` answers the hashed files under `/assets/` from the browser's
 cache. Pages always come from the network, so every open gets the latest
-version; the last copy of Today is kept only so the app can open offline. A new
+version; the last copy of Today is kept only so the app can open offline. A page
+that cannot be fetched and has no kept copy opens onto `public/offline.html`,
+the app's own offline page, rather than the browser's error; bump `FALLBACK` in
+the worker when that page changes, or installed copies keep the old one. A new
 worker reloads the page when it takes over, so a change to it lands on the same
 open. The worker is registered in production builds only.
 

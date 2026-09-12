@@ -16,6 +16,11 @@
  *    one is fetched behind it for next time. It is also what the app opens on
  *    without a connection.
  *
+ * 4. No connection. A page that cannot be fetched, and has no kept copy, opens
+ *    onto `offline.html` — the app's own page, with its mark and a way to try
+ *    again — rather than the browser's error, which in the installed app reads
+ *    as the app itself being broken.
+ *
  * Nothing else is touched. Server functions, sign-in and anything from another
  * origin go to the network exactly as if this file did not exist.
  */
@@ -29,14 +34,36 @@ const PAGES = "thunderlist-pages-v1";
 const OFFLINE_PAGES = new Set(["/tags/today"]);
 
 /*
+ * The page shown when a page cannot be fetched. It holds nothing of anyone's,
+ * so it has a cache of its own, which sign-out leaves alone.
+ *
+ * It is fetched when this worker installs, and a worker is only installed when
+ * this file changes — so a change to `offline.html` needs the version here
+ * bumped before it reaches anyone.
+ */
+const FALLBACK = "thunderlist-fallback-v1";
+const FALLBACK_PAGE = "/offline.html";
+
+/*
  * Every deploy brings a new set of hashed files and leaves the old ones behind,
  * so the cache is capped and trimmed oldest first. Anything trimmed that is
  * still in use is simply fetched and cached again.
  */
 const MAX_ENTRIES = 200;
 
-self.addEventListener("install", () => {
-	// Nothing is precached, so there is nothing for a new version to wait for.
+self.addEventListener("install", (event) => {
+	// The fallback page is fetched ahead of time, since it is needed exactly
+	// when nothing can be fetched. Past the HTTP cache, so a new worker never
+	// keeps an old copy.
+	event.waitUntil(
+		caches
+			.open(FALLBACK)
+			.then((cache) =>
+				cache.add(new Request(FALLBACK_PAGE, { cache: "reload" })),
+			),
+	);
+	// The fallback page loads nothing else, and nothing else is precached, so
+	// there is nothing for a new version to wait for.
 	self.skipWaiting();
 });
 
@@ -50,7 +77,9 @@ self.addEventListener("activate", (event) => {
 			const names = await caches.keys();
 			await Promise.all(
 				names
-					.filter((name) => name !== ASSETS && name !== PAGES)
+					.filter(
+						(name) => name !== ASSETS && name !== PAGES && name !== FALLBACK,
+					)
 					.map((name) => caches.delete(name)),
 			);
 
@@ -66,11 +95,11 @@ self.addEventListener("fetch", (event) => {
 	const url = new URL(request.url);
 
 	if (request.mode === "navigate") {
-		event.respondWith(
+		const page =
 			OFFLINE_PAGES.has(url.pathname) && url.search === ""
 				? fromCacheRefreshing(event)
-				: fromNetwork(event),
-		);
+				: fromNetwork(event);
+		event.respondWith(page.catch(fallbackPage));
 		return;
 	}
 
@@ -86,6 +115,17 @@ self.addEventListener("fetch", (event) => {
 async function fromNetwork(event) {
 	const preloaded = await event.preloadResponse;
 	return preloaded ?? fetch(event.request);
+}
+
+/**
+ * A page that got no answer at all: the app's offline page. A page the server
+ * did answer, even with an error, is shown as it came and never lands here.
+ *
+ * Should the copy have gone, it is the browser's own error, as it was before.
+ */
+async function fallbackPage() {
+	const page = await (await caches.open(FALLBACK)).match(FALLBACK_PAGE);
+	return page ?? Response.error();
 }
 
 /**

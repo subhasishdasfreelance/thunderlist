@@ -1,0 +1,300 @@
+<!doctype html>
+<!--
+	Thunderlist's offline page.
+
+	`public/sw.js` keeps a copy of this file and answers with it when a page
+	cannot be fetched and has no kept copy of its own, so the installed app says
+	it is offline in its own words instead of showing the browser's error. It is
+	served at the address of the page that failed, so trying again is simply
+	loading that address afresh.
+
+	It is shown exactly when nothing can be loaded, so it loads nothing: the
+	styles, the script and the bolt are all inline. The bolt is `public/logo.svg`
+	and the colours are the theme's, from `src/theme/thunderlist.css`; the layout
+	follows the login page. If any of those change, change them here too.
+
+	After changing this file, bump `FALLBACK` in `public/sw.js`, or installed
+	copies keep showing the old one.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover"
+		/>
+		<title>Offline · Thunderlist</title>
+		<!-- The phone's status bar, dark in both schemes, as in the app. -->
+		<meta name="theme-color" content="#0F1018" />
+		<link
+			rel="icon"
+			type="image/svg+xml"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 280.027 280.027'%3E%3Cpath fill='%23EFC75E' d='M249.399,96.583h-83.404L216.382,0H88.419L30.628,166.161h79.712L71.906,280.027L249.399,96.583z'/%3E%3C/svg%3E"
+		/>
+		<script>
+			// The scheme chosen in the app, set before the first paint, read from
+			// the key `src/lib/theme.ts` keeps it under.
+			try {
+				var scheme = localStorage.getItem("thunderlist.theme.v1");
+				if (scheme === "light" || scheme === "dark") {
+					document.documentElement.setAttribute("data-theme", scheme);
+				}
+			} catch (error) {}
+		</script>
+		<style>
+			/*
+			 * The theme's values, as light and dark pairs. `color-scheme` picks one:
+			 * the system's, unless a scheme was chosen in the app.
+			 */
+			:root {
+				color-scheme: light dark;
+				--body: light-dark(#f1f0f9, #0f1018);
+				--surface: light-dark(#fcfcff, #1a1b22);
+				--text-primary: light-dark(#1c1b21, #e1e2ec);
+				--text-secondary: light-dark(#474552, #a8aab9);
+				--border: light-dark(#1c1b211a, #eff0fa1a);
+				--accent: light-dark(#1d4ed8, #2563eb);
+				--on-accent: #ffffff;
+				--ease: cubic-bezier(0.24, 1, 0.4, 1);
+			}
+
+			:root[data-theme="light"] {
+				color-scheme: light;
+			}
+
+			:root[data-theme="dark"] {
+				color-scheme: dark;
+			}
+
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+			}
+
+			body {
+				display: grid;
+				place-items: center;
+				min-height: 100vh;
+				min-height: 100dvh;
+				margin: 0;
+				padding: max(2.5rem, env(safe-area-inset-top))
+					max(1rem, env(safe-area-inset-right))
+					max(2.5rem, env(safe-area-inset-bottom))
+					max(1rem, env(safe-area-inset-left));
+				background-color: var(--body);
+				color: var(--text-primary);
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+					Arial, sans-serif;
+				font-size: 0.875rem;
+				line-height: 1.4286;
+				-webkit-font-smoothing: antialiased;
+			}
+
+			main {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 1rem;
+				width: 100%;
+				max-width: 22rem;
+				text-align: center;
+				animation: arrive 200ms var(--ease) backwards;
+			}
+
+			.mark {
+				width: 3.5rem;
+				height: 3.5rem;
+			}
+
+			h1,
+			h2,
+			p {
+				margin: 0;
+			}
+
+			h1 {
+				font-size: 1.5rem;
+				font-weight: 600;
+				line-height: 1.3333;
+			}
+
+			/* Astryx's card: 20px to its outer edge, the border included. */
+			.card {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 0.75rem;
+				width: 100%;
+				padding: calc(1.25rem - 1px);
+				border: 1px solid var(--border);
+				border-radius: 18px;
+				background-color: var(--surface);
+			}
+
+			/* The dropped connection, drawn inset in the card like a hole in it. */
+			.card-icon {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 2.75rem;
+				height: 2.75rem;
+				border-radius: 9999px;
+				background-color: var(--body);
+				color: var(--text-secondary);
+			}
+
+			.card-text {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25rem;
+			}
+
+			h2 {
+				font-size: 1.0625rem;
+				font-weight: 600;
+				line-height: 1.4118;
+			}
+
+			p {
+				color: var(--text-secondary);
+			}
+
+			/* Astryx's primary button, at its default size. */
+			button {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				gap: 0.5rem;
+				height: 2rem;
+				padding-inline: 0.75rem;
+				border: 0;
+				border-radius: 12px;
+				background-color: var(--accent);
+				color: var(--on-accent);
+				font: inherit;
+				font-weight: 500;
+				cursor: pointer;
+				transition:
+					background-color 100ms var(--ease),
+					transform 100ms var(--ease);
+			}
+
+			button:hover {
+				background-color: color-mix(in srgb, var(--accent) 88%, black);
+			}
+
+			button:active {
+				transform: scale(0.96);
+			}
+
+			button:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+			}
+
+			.hint {
+				font-size: 0.75rem;
+				line-height: 1.6667;
+			}
+
+			@keyframes arrive {
+				from {
+					opacity: 0;
+					transform: translateY(0.5rem);
+				}
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				main {
+					animation: none;
+				}
+
+				button:active {
+					transform: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<svg class="mark" viewBox="0 0 280.027 280.027" aria-hidden="true">
+				<path
+					fill="#EFC75E"
+					d="M249.399,96.583h-83.404L216.382,0H88.419L30.628,166.161h79.712L71.906,280.027L249.399,96.583z"
+				/>
+				<path
+					fill="#F5DD9D"
+					d="M101.046,17.598h78.364l-70.584,17.537l-43.168,78.758C65.658,113.892,101.046,17.598,101.046,17.598z"
+				/>
+			</svg>
+
+			<h1>Thunderlist</h1>
+
+			<section class="card" aria-labelledby="offline-title">
+				<span class="card-icon" aria-hidden="true">
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M12 20h.01" />
+						<path d="M8.5 16.429a5 5 0 0 1 7 0" />
+						<path d="M5 12.859a10 10 0 0 1 5.17-2.69" />
+						<path d="M19 12.859a10 10 0 0 0-2.007-1.523" />
+						<path d="M2 8.82a15 15 0 0 1 4.177-2.643" />
+						<path d="M22 8.82a15 15 0 0 0-11.288-3.764" />
+						<path d="m2 2 20 20" />
+					</svg>
+				</span>
+
+				<div class="card-text">
+					<h2 id="offline-title">You’re offline</h2>
+					<p>
+						Thunderlist could not load this page. Check your Wi-Fi or mobile
+						data, then try again.
+					</p>
+				</div>
+
+				<button type="button" id="retry">
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+						<path d="M21 3v5h-5" />
+					</svg>
+					Try again
+				</button>
+
+				<p class="hint">It reloads on its own once you’re back online.</p>
+			</section>
+		</main>
+
+		<script>
+			// This page stands in for the one that failed, at its address, so
+			// loading the address again is trying that page again.
+			document.getElementById("retry").addEventListener("click", function () {
+				location.reload();
+			});
+
+			// And it is tried unasked the moment the device is back online.
+			window.addEventListener("online", function () {
+				location.reload();
+			});
+		</script>
+	</body>
+</html>
