@@ -19,9 +19,11 @@
  */
 
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { SearchIndex } from "#/data/search.server";
 import { unwrittenTags } from "#/lib/tags/inline-tags";
 import type { Page } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
+import type { TaggedTask } from "#/queries/system";
 import type { Change } from "#/schemas/change";
 import type { ChecklistProgress, ChecklistSummary } from "#/schemas/checklist";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
@@ -199,6 +201,29 @@ function patchTags(
 	}
 }
 
+/**
+ * The same, in the search index, which the Priority screen lists from. `next`
+ * returns `null` to take the task out.
+ */
+function patchSearchIndex(
+	client: QueryClient,
+	taskId: string,
+	next: (task: TaggedTask) => TaggedTask | null,
+): void {
+	client.setQueryData<SearchIndex>(queryKeys.searchIndex, (index) =>
+		index
+			? {
+					...index,
+					tasks: index.tasks.flatMap((task) => {
+						if (task.taskId !== taskId) return [task];
+						const after = next(task);
+						return after === null ? [] : [after];
+					}),
+				}
+			: index,
+	);
+}
+
 /** Change one task wherever it is shown. */
 function patchTask(
 	client: QueryClient,
@@ -214,11 +239,14 @@ function patchTask(
 		const next = change(task);
 		return next.tagIds.includes(tagId) ? next : null;
 	});
+
+	patchSearchIndex(client, taskId, (task) => ({ ...task, ...change(task) }));
 }
 
 function dropTask(client: QueryClient, taskId: string): void {
 	patchChecklists(client, taskId, () => null);
 	patchTags(client, taskId, () => null);
+	patchSearchIndex(client, taskId, () => null);
 }
 
 /**

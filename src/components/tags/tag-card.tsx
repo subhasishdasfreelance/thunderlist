@@ -28,14 +28,16 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 	);
 
 	const summary =
-		progress.total === 0
+		progress.total === 0 || pace.now === null
 			? null
 			: velocitySummary(
 					computeVelocity({
 						startDate,
 						deadline: tag.deadline,
+						deadlineTime: tag.deadlineTime,
 						current: progress.completed,
 						target: progress.total,
+						now: pace.now,
 					}),
 					"tasks",
 					progress.completed >= progress.total,

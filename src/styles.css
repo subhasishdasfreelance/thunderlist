@@ -717,13 +717,13 @@ body {
 
 	.astryx-dialog:not([open]) {
 		opacity: 0;
-		transform: translateY(-0.75rem) scale(0.98);
+		transform: translateY(-0.75rem);
 	}
 
 	@starting-style {
 		.astryx-dialog[open] {
 			opacity: 0;
-			transform: translateY(-1.25rem) scale(0.98);
+			transform: translateY(-1.5rem);
 		}
 	}
 
@@ -748,12 +748,14 @@ body {
 	/*
 	 * Menus, pickers and tooltips, which are native popovers underneath.
 	 *
-	 * Quicker than a dialog. A menu belongs to the button that opened it, so it
-	 * unfolds out of that edge — scaled from its top rather than its middle —
-	 * and folds back into it faster than it came.
+	 * The same motion as a dialog, only quicker: down from above into place,
+	 * and back up faster than it came. Nothing scales. Astryx's own entrance
+	 * grows a menu out of the button that opened it, and from a button in the
+	 * corner of the bar that reads as the menu coming out of the corner — so it
+	 * is switched off and this is the only motion.
 	 */
 	[popover] {
-		transform-origin: top center;
+		animation: none;
 		transition:
 			opacity var(--duration-fast-min) var(--ease-standard),
 			transform var(--duration-fast-min) var(--ease-standard),
@@ -767,13 +769,13 @@ body {
 
 	[popover]:not(:popover-open) {
 		opacity: 0;
-		transform: translateY(-0.25rem) scale(0.97);
+		transform: translateY(-0.25rem);
 	}
 
 	@starting-style {
 		[popover]:popover-open {
 			opacity: 0;
-			transform: translateY(-0.375rem) scale(0.95);
+			transform: translateY(-0.5rem);
 		}
 	}
 

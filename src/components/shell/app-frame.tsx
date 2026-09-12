@@ -229,7 +229,8 @@ export function AppFrame({
 					</div>
 				</AppShell>
 
-				<BottomNav />
+				{/* Like the side nav, only with an account to navigate. */}
+				{user === null ? null : <BottomNav />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 			</LinkProvider>

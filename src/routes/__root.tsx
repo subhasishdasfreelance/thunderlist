@@ -10,7 +10,10 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
+import { OfflineScreen } from "#/components/shell/offline-screen";
+import { reloadForCurrentVersion } from "#/lib/chunk-reload";
 import { THEME_INIT_SCRIPT } from "#/lib/theme";
+import { useIsOnline } from "#/lib/use-online";
 import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
@@ -113,33 +116,48 @@ function RootComponent() {
 		// Not registering only costs the cache; the app works the same without it.
 		serviceWorker.register("/sw.js").catch(() => {});
 
-		const reload = () => window.location.reload();
-
-		// A page left open across a deploy can ask for a chunk the server no
-		// longer has. Loading afresh picks up the new version instead.
-		window.addEventListener("vite:preloadError", reload);
-
 		// A new worker taking over during a visit is a new version of the app,
 		// so it is loaded there and then rather than on the next open. Not on a
 		// first visit, where there was no worker before this one.
 		const hadWorker = serviceWorker.controller !== null;
 		const onNewWorker = () => {
-			if (hadWorker) reload();
+			if (hadWorker) window.location.reload();
 		};
 		serviceWorker.addEventListener("controllerchange", onNewWorker);
 
 		return () => {
-			window.removeEventListener("vite:preloadError", reload);
 			serviceWorker.removeEventListener("controllerchange", onNewWorker);
 		};
 	}, []);
 
+	/*
+	 * A page left open across a deploy can ask for a chunk the server no longer
+	 * has. Loading afresh picks up the new version instead. Kept apart from the
+	 * worker: it happens in development, and wherever a worker cannot be
+	 * registered, just the same. The error still reaches the screen, which says
+	 * so should the reload not help; see `RouteError`.
+	 */
+	useEffect(() => {
+		const onPreloadError = () => {
+			reloadForCurrentVersion();
+		};
+		window.addEventListener("vite:preloadError", onPreloadError);
+		return () =>
+			window.removeEventListener("vite:preloadError", onPreloadError);
+	}, []);
+
+	const isOnline = useIsOnline();
+
 	// The frame is rendered signed out too — it drops everything that needs an
 	// account and keeps the bar, so the login page is recognisably this app
 	// rather than a page from somewhere else.
+	//
+	// Offline it is drawn the same way, around the offline screen rather than
+	// the page: nothing that needs the server is left to be pressed, so no change
+	// is made only to fail. The page comes back with the connection.
 	return (
-		<AppFrame user={user ?? null}>
-			<Outlet />
+		<AppFrame user={isOnline ? (user ?? null) : null}>
+			{isOnline ? <Outlet /> : <OfflineScreen />}
 		</AppFrame>
 	);
 }

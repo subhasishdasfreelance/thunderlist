@@ -16,6 +16,7 @@ import { applyChangeFn } from "#/functions/change.functions";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
+import { playChangeSound } from "#/lib/sounds";
 import {
 	sameTagName,
 	sameTrackerName,
@@ -102,6 +103,13 @@ export function useApplyChange() {
 		mutationFn: send,
 
 		/*
+		 * A change that failed because the connection went is not rolled back and
+		 * reported: it is tried again, and with no connection the retry waits for
+		 * one. Every change carries its own ids, so sending one twice is safe.
+		 */
+		retry: () => !navigator.onLine,
+
+		/*
 		 * Draw it first, ask afterwards.
 		 *
 		 * In-flight refetches are cancelled before patching, or one already on its
@@ -147,14 +155,21 @@ export function useApplyChange() {
 		},
 	});
 
+	// Heard the moment it is made, as it is drawn; the save follows behind.
 	const apply = useCallback(
-		(change: Change) => mutation.mutate(change),
+		(change: Change) => {
+			playChangeSound(change);
+			mutation.mutate(change);
+		},
 		[mutation.mutate],
 	);
 
 	/** For a caller that needs one change to land before it makes the next. */
 	const applyAsync = useCallback(
-		(change: Change) => mutation.mutateAsync(change),
+		(change: Change) => {
+			playChangeSound(change);
+			return mutation.mutateAsync(change);
+		},
 		[mutation.mutateAsync],
 	);
 

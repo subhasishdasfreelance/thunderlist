@@ -15,7 +15,6 @@ import {
 	type EntryDoc,
 } from "#/lib/mongo/client.server";
 import {
-	computeVelocity,
 	deriveCurrentValue,
 	trackerProgress,
 	withDeltas,
@@ -123,18 +122,8 @@ export async function getTracker(
 ): Promise<TrackerDetail> {
 	const current = await collections();
 	const tracker = await requireTracker(current, userId, trackerId);
-	const summary = summarise(tracker);
 
-	return {
-		...summary,
-		velocity: computeVelocity({
-			startDate: summary.startDate,
-			deadline: summary.deadline,
-			current: summary.currentValue,
-			target: summary.targetValue,
-			start: summary.startValue,
-		}),
-	};
+	return summarise(tracker);
 }
 
 /** The history on its own, oldest first. */

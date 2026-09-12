@@ -5,7 +5,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity } from "#/lib/progress";
+import { computeVelocity, trackerFraction } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
 import { type Tag, tagsFor } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
@@ -52,20 +52,27 @@ export function TrackerCard({
 
 	const pace = usePace(
 		tracker,
-		progress.target > 0 ? progress.percent / 100 : null,
+		progress.target > 0
+			? trackerFraction(progress.current, progress.target, tracker.startValue)
+			: null,
 	);
 
-	const summary = velocitySummary(
-		computeVelocity({
-			startDate: tracker.startDate,
-			deadline: tracker.deadline,
-			current: progress.current,
-			target: progress.target,
-			start: tracker.startValue,
-		}),
-		tracker.unit,
-		progress.current >= progress.target && progress.target > 0,
-	);
+	const summary =
+		pace.now === null
+			? null
+			: velocitySummary(
+					computeVelocity({
+						startDate: tracker.startDate,
+						deadline: tracker.deadline,
+						deadlineTime: tracker.deadlineTime,
+						current: progress.current,
+						target: progress.target,
+						start: tracker.startValue,
+						now: pace.now,
+					}),
+					tracker.unit,
+					progress.current >= progress.target && progress.target > 0,
+				);
 
 	return (
 		<ClickableCard

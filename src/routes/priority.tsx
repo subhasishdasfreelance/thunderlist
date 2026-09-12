@@ -1,21 +1,30 @@
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Card } from "@astryxdesign/core/Card";
+import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CircleAlert, CircleDashed, Flame, Star } from "lucide-react";
 import { useMemo, useState } from "react";
+import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
+import { TaskRow } from "#/components/checklists/task-row";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { LoadingState } from "#/components/common/loading-state";
 import { ShowMore } from "#/components/common/show-more";
 import { ErrorNotice } from "#/components/common/states";
-import { TaggedTaskRow } from "#/components/tags/tagged-task-row";
+import {
+	createTagResolver,
+	setSpecialTag,
+	updateTask,
+	useApplyChange,
+} from "#/lib/changes";
 import { useShowMore } from "#/lib/use-show-more";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { searchIndexQuery } from "#/queries/system";
+import { searchIndexQuery, type TaggedTask } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
 import {
 	PRIORITY_LABELS,
@@ -26,7 +35,8 @@ import {
 
 export const Route = createFileRoute("/priority")({
 	loader: ({ context }) => {
-		// Tags only colour the rows; the rows themselves are the screen.
+		// Tags only colour the rows and light their Today and Backlog buttons;
+		// the rows themselves are the screen.
 		deferQuery(context.queryClient, tagsQuery());
 
 		return primeQuery(context.queryClient, searchIndexQuery());
@@ -62,11 +72,19 @@ const BAND_HINTS: Record<PriorityRank, string> = {
  * ignores the lists to do it, because a task being urgent has nothing to do
  * with which list somebody filed it under.
  *
- * Completed work is left out: this is for deciding what to do next.
+ * Each task is the row a tag's page shows — its box, its flags, and the
+ * checklist it lives in under the title — so it can be ticked or re-flagged
+ * right here. Completed work is left out: this is for deciding what to do next,
+ * so a task ticked here leaves the list.
  */
 function PriorityPage() {
+	const navigate = useNavigate();
+	const { apply } = useApplyChange();
 	const index = useQuery(searchIndexQuery());
 	const tagsResult = useQuery(tagsQuery());
+
+	const [renaming, setRenaming] = useState<TaggedTask | null>(null);
+	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
 
 	const tags = tagsResult.data ?? [];
 
@@ -111,6 +129,43 @@ function PriorityPage() {
 		done: 0,
 	}));
 
+	/** One task, as a tag's page draws it. */
+	const taskRow = (task: TaggedTask) => {
+		const { checklistId } = task;
+
+		return (
+			<TaskRow
+				task={task}
+				tags={tags}
+				checklist={
+					checklistId === null
+						? null
+						: {
+								title: task.checklistTitle,
+								// Straight to the task, not just the checklist it lives in.
+								onOpen: () =>
+									void navigate({
+										to: "/checklists/$checklistId",
+										params: { checklistId },
+										search: { task: task.taskId },
+									}),
+							}
+				}
+				actions={{
+					onToggle: (completed) =>
+						updateTask(apply, task.taskId, { completed }),
+					onSetSpecial: (kind, isOn) =>
+						setSpecialTag(apply, task, kind, isOn, tags),
+					onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
+					onSetImportant: (important) =>
+						updateTask(apply, task.taskId, { important }),
+					onRename: () => setRenaming(task),
+					onDelete: () => setPendingDelete(task),
+				}}
+			/>
+		);
+	};
+
 	return (
 		<VStack gap={4}>
 			<VStack gap={0.5}>
@@ -151,12 +206,13 @@ function PriorityPage() {
 							<Card padding={0}>
 								<VStack gap={0} paddingBlock={2}>
 									{paging.shown.map((task, position) => (
-										<TaggedTaskRow
+										<div
 											key={task.taskId}
-											task={task}
-											tags={tags}
-											hasDivider={position > 0}
-										/>
+											className="thunderlist-row thunderlist-task-row"
+										>
+											{position === 0 ? null : <Divider />}
+											{taskRow(task)}
+										</div>
 									))}
 									<ShowMore
 										hidden={paging.hidden}
@@ -168,6 +224,42 @@ function PriorityPage() {
 					</VStack>
 				</>
 			)}
+
+			<TaskRenameDialog
+				isOpen={renaming !== null}
+				onOpenChange={(open) => {
+					if (!open) setRenaming(null);
+				}}
+				task={renaming}
+				tags={tags}
+				onSubmit={(parsed, details) => {
+					if (renaming) {
+						const resolveTag = createTagResolver(apply, tags);
+						updateTask(apply, renaming.taskId, {
+							title: parsed.title,
+							tagIds: parsed.tagNames.map(resolveTag),
+							...details,
+						});
+					}
+					setRenaming(null);
+				}}
+			/>
+
+			<AlertDialog
+				isOpen={pendingDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) setPendingDelete(null);
+				}}
+				title={`Delete "${pendingDelete?.title ?? ""}"?`}
+				description="This task will be deleted."
+				actionLabel="Delete"
+				onAction={() => {
+					if (pendingDelete) {
+						apply({ kind: "task.delete", taskId: pendingDelete.taskId });
+					}
+					setPendingDelete(null);
+				}}
+			/>
 		</VStack>
 	);
 }

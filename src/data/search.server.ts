@@ -10,6 +10,7 @@
  */
 
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
+import type { Task } from "#/schemas/task";
 import type { TrackerType } from "#/schemas/tracker";
 
 export type SearchIndex = {
@@ -24,21 +25,20 @@ export type SearchIndex = {
 		type: TrackerType;
 		author: string | null;
 	}>;
-	tasks: Array<{
-		taskId: string;
-		/** `null` for a task that belongs to no checklist. */
-		checklistId: string | null;
-		checklistTitle: string | null;
-		title: string;
-		completed: boolean;
-		/** Ids into the tags collection; the Tags screen groups on these. */
-		tagIds: Array<string>;
-		/** The Priority screen groups on these; see `priorityRank`. */
-		urgent: boolean;
-		important: boolean;
-		/** Drawn under the title on the Tags and Priority screens. */
-		caption: string;
-	}>;
+	/**
+	 * Every task, whole, with the checklist it lives in: the Priority screen
+	 * draws each with the row a checklist uses, and edits it with the same
+	 * dialog, notes and all.
+	 */
+	tasks: Array<
+		Task & {
+			/** `null` for a task that belongs to no checklist. */
+			checklistId: string | null;
+			checklistTitle: string | null;
+			/** Drawn under the title on the Tags and Priority screens. */
+			caption: string;
+		}
+	>;
 };
 
 export async function getSearchIndex(userId: string): Promise<SearchIndex> {
@@ -68,16 +68,12 @@ export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 		checklists,
 		trackers,
 		tasks: tasks.map((task) => ({
-			taskId: task.taskId,
-			checklistId: task.checklistId,
+			...task,
 			// A task in no checklist has no title to show, which is not a fault.
 			checklistTitle:
 				task.checklistId === null
 					? null
 					: (titles.get(task.checklistId) ?? null),
-			title: task.title,
-			completed: task.completed,
-			tagIds: task.tagIds,
 			urgent: task.urgent ?? false,
 			important: task.important ?? false,
 			caption: task.caption ?? "",

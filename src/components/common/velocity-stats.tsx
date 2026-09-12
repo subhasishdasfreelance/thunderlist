@@ -7,8 +7,21 @@ function rate(value: number, unit: string): string {
 	return `${Math.round(value * 10) / 10} ${unit}/day`;
 }
 
-function days(count: number): string {
-	return `${count} ${Math.abs(count) === 1 ? "day" : "days"}`;
+/**
+ * A stretch of time, to the grain worth reading: "26d 4h", "5h 20m", "18m".
+ *
+ * The figures behind it are worked out to the minute, but minutes on top of
+ * whole days are not something anyone plans by, so they are left off then.
+ */
+function duration(minutes: number): string {
+	const whole = Math.round(minutes);
+	const days = Math.floor(whole / 1440);
+	const hours = Math.floor((whole % 1440) / 60);
+	const rest = whole % 60;
+
+	if (days > 0) return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
+	if (hours > 0) return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+	return `${rest}m`;
 }
 
 /**
@@ -45,9 +58,9 @@ function velocityStats(
 		expectedPerDay,
 		requiredPerDay,
 		projectedFinish,
-		daysElapsed,
-		daysRemaining,
-		totalDays,
+		minutesElapsed,
+		minutesRemaining,
+		totalMinutes,
 	} = velocity;
 
 	const perDayIn = (value: number) => rate(value, unit);
@@ -58,15 +71,21 @@ function velocityStats(
 		// comes first: without it the speeds are numbers with no window.
 		{ label: "Started", value: formatDate(startDate) },
 		// The time, then the speeds: on a wide screen that is a row of each.
-		figure("Planned time", totalDays, days, noDeadline),
-		{ label: "Time passed", value: days(daysElapsed) },
+		figure("Planned time", totalMinutes, duration, noDeadline),
+		{ label: "Time passed", value: duration(minutesElapsed) },
 		figure(
 			"Time left",
-			daysRemaining,
-			(value) => (value < 0 ? `${days(-value)} over` : days(value)),
+			minutesRemaining,
+			(value) => (value < 0 ? `${duration(-value)} over` : duration(value)),
 			noDeadline,
 		),
-		figure("Current speed", perDay, perDayIn, "—", `over ${days(daysElapsed)}`),
+		figure(
+			"Current speed",
+			perDay,
+			perDayIn,
+			"—",
+			`over ${duration(minutesElapsed)}`,
+		),
 		figure("Expected speed", expectedPerDay, perDayIn, noDeadline),
 		isComplete
 			? { label: "Needed from now", value: "Done" }
@@ -108,12 +127,18 @@ export function VelocityStats({
 	isComplete,
 	startDate,
 }: {
-	velocity: Velocity;
+	/**
+	 * Worked out on the viewer's own clock, so `null` until the browser has it
+	 * — and nothing is drawn until then; see `useNow`.
+	 */
+	velocity: Velocity | null;
 	unit: string;
 	isComplete: boolean;
 	/** The day the work began; every other figure is measured from it. */
 	startDate: string;
 }) {
+	if (velocity === null) return null;
+
 	return (
 		<StatGrid stats={velocityStats(velocity, unit, isComplete, startDate)} />
 	);

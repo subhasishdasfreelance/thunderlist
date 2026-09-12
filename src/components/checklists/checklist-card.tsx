@@ -26,14 +26,16 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 	// Tasks are the unit here, so the same maths a tracker uses for pages
 	// answers "how fast am I getting through this list".
 	const summary =
-		progress.total === 0
+		progress.total === 0 || pace.now === null
 			? null
 			: velocitySummary(
 					computeVelocity({
 						startDate: checklist.startDate,
 						deadline: checklist.deadline,
+						deadlineTime: checklist.deadlineTime,
 						current: progress.completed,
 						target: progress.total,
+						now: pace.now,
 					}),
 					"tasks",
 					progress.completed >= progress.total,

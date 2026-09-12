@@ -9,7 +9,6 @@ import {
 	timeOfDaySchema,
 	titleSchema,
 } from "./common";
-import type { Velocity } from "./progress";
 
 export const TRACKER_TYPES = [
 	"book",
@@ -155,10 +154,11 @@ export type ProgressEntry = v.InferOutput<typeof progressEntrySchema>;
  * The history is deliberately not here. It is the long part of the read and the
  * part nobody is waiting for — the figures answer "how is this going", and they
  * can be on screen while the entries are still coming.
+ *
+ * Its speeds are not here either: they are worked out to the minute on the
+ * viewer's own clock, which the server does not know; see `computeVelocity`.
  */
-export type TrackerDetail = TrackerSummary & {
-	velocity: Velocity;
-};
+export type TrackerDetail = TrackerSummary;
 
 export const createTrackerInputSchema = v.object({
 	trackerId: idSchema,

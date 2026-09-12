@@ -36,7 +36,7 @@ import {
 } from "#/lib/changes";
 import { dayStart } from "#/lib/chart-points";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
-import { localMoment } from "#/lib/progress";
+import { computeVelocity, localMoment, trackerFraction } from "#/lib/progress";
 import { withInlineTag } from "#/lib/tags/inline-tags";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
@@ -129,9 +129,24 @@ function TrackerDetailPage() {
 	const { progress } = detail;
 	const pace = paceAt(
 		detail,
-		detail.targetValue > 0 ? progress.percent / 100 : null,
+		detail.targetValue > 0
+			? trackerFraction(progress.current, progress.target, detail.startValue)
+			: null,
 		now,
 	);
+	// To the minute on the viewer's clock, like the pace above.
+	const velocity =
+		now === null
+			? null
+			: computeVelocity({
+					startDate: detail.startDate,
+					deadline: detail.deadline,
+					deadlineTime: detail.deadlineTime,
+					current: progress.current,
+					target: progress.target,
+					start: detail.startValue,
+					now,
+				});
 	const scheduleNote = formatSchedule(detail);
 
 	/**
@@ -264,7 +279,7 @@ function TrackerDetailPage() {
 
 			<VelocityStats
 				startDate={detail.startDate}
-				velocity={detail.velocity}
+				velocity={velocity}
 				unit={detail.unit}
 				isComplete={progress.target > 0 && progress.current >= progress.target}
 			/>

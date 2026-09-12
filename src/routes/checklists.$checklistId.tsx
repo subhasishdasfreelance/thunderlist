@@ -269,12 +269,17 @@ function ChecklistDetailPage() {
 	const todays =
 		daily === null || now === null ? null : todayWindow(daily, now);
 
-	const velocity = computeVelocity({
-		startDate: detail.startDate,
-		deadline: detail.deadline,
-		current: progress.completed,
-		target: progress.total,
-	});
+	const velocity =
+		now === null
+			? null
+			: computeVelocity({
+					startDate: detail.startDate,
+					deadline: detail.deadline,
+					deadlineTime: detail.deadlineTime,
+					current: progress.completed,
+					target: progress.total,
+					now,
+				});
 
 	return (
 		<VStack gap={4}>

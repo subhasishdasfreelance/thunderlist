@@ -7,8 +7,8 @@ import { type Tag, tagParam, tagsFor } from "#/schemas/tag";
 import { TaggedTitle } from "./tagged-title";
 
 /**
- * A task as the Tags and Priority screens list it: what it is, where it lives,
- * and the tags it carries.
+ * A task as the Tags screens list it: what it is, where it lives, and the tags
+ * it carries.
  *
  * Read-only, like every task row. Pressing it opens the task where it lives,
  * with the task ringed: its checklist, or for a task in no checklist, the page

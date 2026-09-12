@@ -1,17 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import type { ProgressEntry } from "#/schemas/tracker";
 import {
-	addDays,
 	clampPercent,
 	compareBehind,
 	computeVelocity,
-	daysBetween,
 	deriveCurrentValue,
 	elapsedFraction,
 	isOverdue,
 	paceStatus,
 	reachedTargetOn,
 	sortEntriesOldestFirst,
+	trackerFraction,
 	trackerProgress,
 	withDeltas,
 } from "./progress";
@@ -37,41 +36,6 @@ describe("clampPercent", () => {
 	it("treats non-finite input as zero", () => {
 		expect(clampPercent(Number.NaN)).toBe(0);
 		expect(clampPercent(Number.POSITIVE_INFINITY)).toBe(0);
-	});
-});
-
-describe("daysBetween", () => {
-	it("counts whole calendar days", () => {
-		expect(daysBetween("2026-09-01", "2026-09-11")).toBe(10);
-		expect(daysBetween("2026-09-01", "2026-09-01")).toBe(0);
-	});
-
-	it("is negative when the second day is earlier", () => {
-		expect(daysBetween("2026-09-11", "2026-09-01")).toBe(-10);
-	});
-
-	it("crosses a daylight-saving boundary without drifting", () => {
-		// The UK clocks go back on 2026-10-25.
-		expect(daysBetween("2026-10-24", "2026-10-26")).toBe(2);
-	});
-
-	it("is null for anything that is not a date", () => {
-		expect(daysBetween("", "2026-09-01")).toBeNull();
-		expect(daysBetween("2026-09-01", "not-a-date")).toBeNull();
-	});
-});
-
-describe("addDays", () => {
-	it("moves a calendar day forwards", () => {
-		expect(addDays("2026-09-01", 10)).toBe("2026-09-11");
-	});
-
-	it("rolls over a month boundary", () => {
-		expect(addDays("2026-09-28", 5)).toBe("2026-10-03");
-	});
-
-	it("is null for an unparseable day", () => {
-		expect(addDays("nope", 1)).toBeNull();
 	});
 });
 
@@ -535,28 +499,59 @@ describe("paceStatus", () => {
 });
 
 describe("computeVelocity", () => {
+	// On the local clock, which is what the app paces by. September, so that no
+	// daylight-saving change falls inside any window here.
+	const at = (month: number, day: number, hours = 0, minutes = 0) =>
+		new Date(2026, month - 1, day, hours, minutes).getTime();
+
 	it("reports the pace achieved so far", () => {
 		const velocity = computeVelocity({
 			startDate: "2026-09-01",
 			deadline: "2026-09-21",
 			current: 100,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
-		expect(velocity.daysElapsed).toBe(10);
+		expect(velocity.minutesElapsed).toBe(10 * 1440);
 		expect(velocity.perDay).toBe(10);
 	});
 
+	it("measures by the minute rather than in whole days", () => {
+		// Thirty in the first twelve hours is sixty a day, not thirty.
+		expect(
+			computeVelocity({
+				startDate: "2026-09-01",
+				deadline: null,
+				current: 30,
+				target: 400,
+				now: at(9, 1, 12),
+			}).perDay,
+		).toBe(60);
+	});
+
+	it("has no speed in the first quarter hour", () => {
+		const velocity = computeVelocity({
+			startDate: "2026-09-01",
+			deadline: null,
+			current: 30,
+			target: 400,
+			now: at(9, 1, 0, 10),
+		});
+
+		expect(velocity.perDay).toBeNull();
+		expect(velocity.projectedFinish).toBeNull();
+	});
+
 	it("projects when the target is reached at that pace", () => {
-		// 300 left at 10/day lands 30 days after today.
+		// 300 left at 10/day lands 30 days after now.
 		expect(
 			computeVelocity({
 				startDate: "2026-09-01",
 				deadline: null,
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).projectedFinish,
 		).toBe("2026-10-11");
 	});
@@ -569,22 +564,47 @@ describe("computeVelocity", () => {
 				deadline: "2026-09-21",
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).requiredPerDay,
 		).toBe(30);
 	});
 
-	it("counts day one as a whole day rather than dividing by zero", () => {
+	it("counts the deadline's time as part of the window", () => {
+		// Ten and a half days for 210: twenty a day, not twenty-one.
 		const velocity = computeVelocity({
 			startDate: "2026-09-01",
-			deadline: null,
-			current: 30,
-			target: 400,
-			today: "2026-09-01",
+			deadline: "2026-09-11",
+			deadlineTime: "12:00",
+			current: 0,
+			target: 210,
+			now: at(9, 1),
 		});
 
-		expect(velocity.daysElapsed).toBe(0);
-		expect(velocity.perDay).toBe(30);
+		expect(velocity.totalMinutes).toBe(10.5 * 1440);
+		expect(velocity.expectedPerDay).toBe(20);
+	});
+
+	it("asks for more than the planned speed once behind", () => {
+		// Page 59 to 528 by 23:59 on 8 Oct, at page 67 by 8 pm on day one. In
+		// whole days, today was all still "left", the deadline's last day was
+		// lost, and the speed needed came out below the one planned.
+		const plan = {
+			startDate: "2026-09-12",
+			deadline: "2026-10-08",
+			deadlineTime: "23:59",
+			start: 59,
+			current: 67,
+			target: 528,
+			now: at(9, 12, 20),
+		};
+		const { expectedPerDay, requiredPerDay } = computeVelocity(plan);
+
+		expect(
+			paceStatus({ ...plan, fractionComplete: trackerFraction(67, 528, 59) }),
+		).toBe("behind");
+		expect(requiredPerDay).not.toBeNull();
+		expect(expectedPerDay).not.toBeNull();
+		expect(requiredPerDay ?? 0).toBeGreaterThan(expectedPerDay ?? 0);
 	});
 
 	it("does not project a finish for something that is not moving", () => {
@@ -594,7 +614,7 @@ describe("computeVelocity", () => {
 				deadline: null,
 				current: 0,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).projectedFinish,
 		).toBeNull();
 	});
@@ -605,21 +625,21 @@ describe("computeVelocity", () => {
 			deadline: "2026-09-21",
 			current: 400,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
 		expect(velocity.requiredPerDay).toBe(0);
 		expect(velocity.projectedFinish).toBeNull();
 	});
 
-	it("collapses a passed deadline onto today rather than dividing by zero", () => {
+	it("asks the rest of a single day once the deadline has passed", () => {
 		expect(
 			computeVelocity({
 				startDate: "2026-09-01",
 				deadline: "2026-09-05",
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).requiredPerDay,
 		).toBe(300);
 	});
@@ -630,11 +650,11 @@ describe("computeVelocity", () => {
 			deadline: null,
 			current: 100,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
 		expect(velocity.requiredPerDay).toBeNull();
-		expect(velocity.daysRemaining).toBeNull();
+		expect(velocity.minutesRemaining).toBeNull();
 	});
 });
 
@@ -681,7 +701,7 @@ describe("computeVelocity with a starting value", () => {
 		const velocity = computeVelocity({
 			...plan,
 			current: 40,
-			today: "2026-01-01",
+			now: new Date(2026, 0, 1).getTime(),
 		});
 
 		expect(velocity.expectedPerDay).toBe(8);
@@ -691,7 +711,7 @@ describe("computeVelocity with a starting value", () => {
 		const velocity = computeVelocity({
 			...plan,
 			current: 49,
-			today: "2026-01-02",
+			now: new Date(2026, 0, 2).getTime(),
 		});
 
 		// Nine pages in one day, not forty-nine.

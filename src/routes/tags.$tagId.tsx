@@ -229,12 +229,17 @@ function TagDetailPage() {
 	const todays =
 		daily === null || now === null ? null : todayWindow(daily, now);
 
-	const velocity = computeVelocity({
-		startDate,
-		deadline: detail.deadline,
-		current: progress.completed,
-		target: progress.total,
-	});
+	const velocity =
+		now === null
+			? null
+			: computeVelocity({
+					startDate,
+					deadline: detail.deadline,
+					deadlineTime: detail.deadlineTime,
+					current: progress.completed,
+					target: progress.total,
+					now,
+				});
 
 	const Mark =
 		detail.special === null ? null : SPECIAL_TAG_ICONS[detail.special];
