@@ -573,13 +573,18 @@ function TagDetailPage() {
 					)
 				}
 			>
+				{/* The card has no padding of its own; each row brings its own. */}
 				{completedResult.isError ? (
-					<ErrorNotice
-						error={completedResult.error}
-						onRetry={() => void completedResult.refetch()}
-					/>
+					<div className="thunderlist-row">
+						<ErrorNotice
+							error={completedResult.error}
+							onRetry={() => void completedResult.refetch()}
+						/>
+					</div>
 				) : completedResult.data === undefined ? (
-					<SectionSpinner label="Loading completed tasks…" />
+					<div className="thunderlist-row">
+						<SectionSpinner label="Loading completed tasks…" />
+					</div>
 				) : (
 					<>
 						{completedPaging.shown.map((entry, index) => (
