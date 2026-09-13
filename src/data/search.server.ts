@@ -10,8 +10,11 @@
  */
 
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import type { TaskListName } from "#/schemas/task-list";
+import { checklistStages, stageOf } from "#/schemas/checklist";
+import type { Task } from "#/schemas/task";
 import type { TrackerType } from "#/schemas/tracker";
+import { ensureInbox } from "./checklist.server";
+import { type Hidden, isTaskVisible } from "./visibility.server";
 
 export type SearchIndex = {
 	checklists: Array<{
@@ -25,35 +28,43 @@ export type SearchIndex = {
 		type: TrackerType;
 		author: string | null;
 	}>;
-	tasks: Array<{
-		taskId: string;
-		/** `null` for a task that belongs to no checklist. */
-		checklistId: string | null;
-		checklistTitle: string | null;
-		/**
-		 * Where to go to see a task that has no checklist: search has to send the
-		 * reader somewhere, and a loose task exists only on one of the lists.
-		 * `null` when the task has a checklist, which is the page for it.
-		 */
-		list: TaskListName | null;
-		title: string;
-		completed: boolean;
-		/** Ids into the tags collection; the Tags screen groups on these. */
-		tagIds: Array<string>;
-		/** The Priority screen groups on these; see `priorityRank`. */
-		urgent: boolean;
-		important: boolean;
-	}>;
+	/**
+	 * Every task, whole, with the checklist it lives in: the Priority screen
+	 * draws each with the row a checklist uses, and edits it with the same
+	 * dialog, notes and all.
+	 */
+	tasks: Array<
+		Task & {
+			/** `null` only for a task written before every task had a checklist. */
+			checklistId: string | null;
+			checklistTitle: string | null;
+			/** Drawn under the title on the Tags and Priority screens. */
+			caption: string;
+		}
+	>;
 };
 
-export async function getSearchIndex(userId: string): Promise<SearchIndex> {
+export async function getSearchIndex(
+	userId: string,
+	hidden: Hidden,
+): Promise<SearchIndex> {
+	// Anything still in no checklist moves into the Inbox before it is listed.
+	await ensureInbox(userId);
 	const current = await collections();
 
-	const [checklists, trackers, tasks, refs] = await Promise.all([
+	const [checklists, trackers, tasks] = await Promise.all([
 		current.checklists
 			.find(
 				{ userId },
-				{ projection: { _id: 0, checklistId: 1, title: 1, description: 1 } },
+				{
+					projection: {
+						_id: 0,
+						checklistId: 1,
+						title: 1,
+						description: 1,
+						stages: 1,
+					},
+				},
 			)
 			.toArray(),
 		current.trackers
@@ -63,42 +74,40 @@ export async function getSearchIndex(userId: string): Promise<SearchIndex> {
 			)
 			.toArray(),
 		current.tasks.find({ userId }, { projection: DOMAIN_FIELDS }).toArray(),
-		// Only for the tasks with no checklist below, but reading the refs whole
-		// is one query where a filtered one would need the task ids first.
-		current.taskRefs
-			.find({ userId }, { projection: { _id: 0, taskId: 1, list: 1 } })
-			.toArray(),
 	]);
 
-	const titles = new Map(
-		checklists.map((checklist) => [checklist.checklistId, checklist.title]),
+	// Anything kept from this person in their team is left out, as everywhere.
+	const visible = checklists.filter(
+		(checklist) => !hidden.checklistIds.has(checklist.checklistId),
+	);
+	const byId = new Map(
+		visible.map((checklist) => [checklist.checklistId, checklist]),
 	);
 
-	// A task can be on both lists; Today is the one worth being sent to.
-	const lists = new Map<string, TaskListName>();
-	for (const ref of refs) {
-		if (ref.list === "today" || lists.get(ref.taskId) === undefined) {
-			lists.set(ref.taskId, ref.list);
-		}
-	}
-
 	return {
-		checklists,
-		trackers,
-		tasks: tasks.map((task) => ({
-			taskId: task.taskId,
-			checklistId: task.checklistId,
-			// A task in no checklist has no title to show, which is not a fault.
-			checklistTitle:
-				task.checklistId === null
-					? null
-					: (titles.get(task.checklistId) ?? null),
-			list: task.checklistId === null ? (lists.get(task.taskId) ?? null) : null,
-			title: task.title,
-			completed: task.completed,
-			tagIds: task.tagIds,
-			urgent: task.urgent ?? false,
-			important: task.important ?? false,
+		checklists: visible.map(({ checklistId, title, description }) => ({
+			checklistId,
+			title,
+			description,
 		})),
+		trackers: trackers.filter(
+			(tracker) => !hidden.trackerIds.has(tracker.trackerId),
+		),
+		tasks: tasks
+			.filter((task) => isTaskVisible(task, hidden))
+			.map((task) => {
+				const checklist =
+					task.checklistId === null ? undefined : byId.get(task.checklistId);
+
+				return {
+					...task,
+					checklistTitle: checklist?.title ?? null,
+					// The stage it is at, as its checklist's own page has it.
+					stageId: stageOf(task, checklistStages(checklist ?? {})),
+					urgent: task.urgent ?? false,
+					important: task.important ?? false,
+					caption: task.caption ?? "",
+				};
+			}),
 	};
 }

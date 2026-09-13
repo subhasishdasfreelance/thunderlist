@@ -15,12 +15,14 @@ import {
 	MongoParseError,
 	MongoServerError,
 	MongoServerSelectionError,
+	type ObjectId,
 } from "mongodb";
 import { AppError } from "#/lib/errors";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
-import type { TaskListName, TaskRef } from "#/schemas/task-list";
+import type { TaskType } from "#/schemas/task-type";
+import type { TeamRole } from "#/schemas/team";
 import type { ProgressEntry, Tracker } from "#/schemas/tracker";
 
 if (typeof window !== "undefined") {
@@ -44,6 +46,10 @@ const DB_NAME = "thunderlist";
  * comes from the browser at all. It is read from the session on the server and
  * threaded down as the first argument of every function in `src/data`, which
  * makes leaving it out a type error rather than a leak.
+ *
+ * The owner is a person's own id, or a team's id for a team's rows. Which team
+ * a request works in is the browser's to ask for, but never to decide: it is
+ * checked against the team's members on every call; see `requireScope`.
  */
 export type Owned = { userId: string };
 
@@ -64,7 +70,53 @@ export type EntryDoc = Omit<ProgressEntry, "delta"> &
 		trackerId: string;
 	};
 
-export type TaskRefDoc = TaskRef & Owned & { list: TaskListName };
+/**
+ * An entry from the old Today and Backlog lists, which are tags now. Read only
+ * so an account that still has some can have them moved onto its tasks; see
+ * `moveListsIntoTags`.
+ */
+export type TaskRefDoc = Owned & {
+	itemId: string;
+	taskId: string;
+	list: "today" | "backlog";
+	sortOrder: number;
+	addedAt: string;
+};
+
+/**
+ * A team: a space several people work in. Its checklists, tasks, tags and
+ * trackers are stored like anyone's, owned by `teamId`; see `Owned`.
+ */
+export type TeamDoc = { teamId: string; name: string; createdAt: string };
+
+/**
+ * What a space has chosen for itself, one document per owner — for now, its
+ * task types. No document is the defaults; see `DEFAULT_TASK_TYPES`.
+ */
+export type SettingsDoc = Owned & {
+	taskTypes: Array<TaskType>;
+	updatedAt: string;
+};
+
+/** Someone in a team, by the address their Google account signs in with. */
+export type MemberDoc = {
+	teamId: string;
+	email: string;
+	role: TeamRole;
+	addedAt: string;
+};
+
+/**
+ * An account as Better Auth stores it. Read, never written, and only for what
+ * it says about its person: the name and picture a team shows, and the id that
+ * owns their rows — Better Auth's `_id`, as hex.
+ */
+export type AuthUserDoc = {
+	_id: ObjectId;
+	email: string;
+	name: string;
+	image?: string | null;
+};
 
 export type Collections = {
 	checklists: Collection<ChecklistDoc>;
@@ -73,6 +125,10 @@ export type Collections = {
 	entries: Collection<EntryDoc>;
 	taskRefs: Collection<TaskRefDoc>;
 	tags: Collection<TagDoc>;
+	settings: Collection<SettingsDoc>;
+	teams: Collection<TeamDoc>;
+	members: Collection<MemberDoc>;
+	users: Collection<AuthUserDoc>;
 };
 
 /**
@@ -113,6 +169,11 @@ function collectionsOf(database: Db): Collections {
 		entries: database.collection<EntryDoc>("entries"),
 		taskRefs: database.collection<TaskRefDoc>("taskRefs"),
 		tags: database.collection<TagDoc>("tags"),
+		settings: database.collection<SettingsDoc>("settings"),
+		teams: database.collection<TeamDoc>("teams"),
+		members: database.collection<MemberDoc>("members"),
+		// Better Auth's own name for its accounts; see `authDatabase`.
+		users: database.collection<AuthUserDoc>("user"),
 	};
 }
 
@@ -128,10 +189,29 @@ async function ensureIndexes(current: Collections): Promise<void> {
 	await Promise.all([
 		current.checklists.createIndex({ checklistId: 1 }, { unique: true }),
 		current.checklists.createIndex({ userId: 1 }),
+		// One Inbox per space, however many requests race to make it; see
+		// `ensureInbox`.
+		current.checklists.createIndex(
+			{ userId: 1, special: 1 },
+			{
+				unique: true,
+				partialFilterExpression: { special: { $type: "string" } },
+			},
+		),
+		current.settings.createIndex({ userId: 1 }, { unique: true }),
 		current.trackers.createIndex({ trackerId: 1 }, { unique: true }),
 		current.trackers.createIndex({ userId: 1 }),
 		current.tags.createIndex({ tagId: 1 }, { unique: true }),
 		current.tags.createIndex({ userId: 1 }),
+		// One of each special tag per account, however many requests race to
+		// make it; see `ensureSpecialTags`.
+		current.tags.createIndex(
+			{ userId: 1, special: 1 },
+			{
+				unique: true,
+				partialFilterExpression: { special: { $type: "string" } },
+			},
+		),
 		current.tasks.createIndex({ taskId: 1 }, { unique: true }),
 		current.tasks.createIndex({ userId: 1, checklistId: 1 }),
 		current.entries.createIndex({ entryId: 1 }, { unique: true }),
@@ -139,6 +219,11 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.taskRefs.createIndex({ itemId: 1 }, { unique: true }),
 		current.taskRefs.createIndex({ userId: 1, taskId: 1 }),
 		current.taskRefs.createIndex({ userId: 1, list: 1, sortOrder: 1 }),
+		current.teams.createIndex({ teamId: 1 }, { unique: true }),
+		// One membership per person per team, however many requests race to
+		// add them.
+		current.members.createIndex({ teamId: 1, email: 1 }, { unique: true }),
+		current.members.createIndex({ email: 1 }),
 	]);
 }
 

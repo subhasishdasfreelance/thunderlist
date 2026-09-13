@@ -1,10 +1,14 @@
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Token } from "@astryxdesign/core/Token";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity, elapsedFraction } from "#/lib/progress";
+import { Assignees } from "#/components/teams/assignees";
+import { computeVelocity, trackerFraction } from "#/lib/progress";
+import { usePace } from "#/lib/use-pace";
+import { type Tag, tagsFor } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 /**
@@ -19,25 +23,57 @@ export function formatProgress(
 	return `${current} / ${target} ${unit}`.trim();
 }
 
-export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
+/**
+ * Where the reading should be by now, in the tracker's own unit: "13 videos".
+ *
+ * Measured across the same distance as the percentage, so a book opened at page
+ * 40 and due to reach page 80 should be on page 60 halfway through the window.
+ * One decimal place, as with speeds: "2.5 km" matters, "2.4871 km" does not.
+ */
+export function formatExpectedReading(
+	elapsed: number,
+	start: number,
+	target: number,
+	unit: string,
+): string {
+	const reading = start + elapsed * (target - start);
+	return `${Math.round(reading * 10) / 10} ${unit}`.trim();
+}
+
+export function TrackerCard({
+	tracker,
+	tags,
+}: {
+	tracker: TrackerSummary;
+	/** Every tag that exists, for drawing the ones this tracker carries. */
+	tags: ReadonlyArray<Tag>;
+}) {
 	const { progress } = tracker;
+	const carried = tagsFor(tracker.tagIds ?? [], tags);
 
-	const elapsed = elapsedFraction({
-		startDate: tracker.startDate,
-		deadline: tracker.deadline,
-	});
-
-	const summary = velocitySummary(
-		computeVelocity({
-			startDate: tracker.startDate,
-			deadline: tracker.deadline,
-			current: progress.current,
-			target: progress.target,
-			start: tracker.startValue,
-		}),
-		tracker.unit,
-		progress.current >= progress.target && progress.target > 0,
+	const pace = usePace(
+		tracker,
+		progress.target > 0
+			? trackerFraction(progress.current, progress.target, tracker.startValue)
+			: null,
 	);
+
+	const summary =
+		pace.now === null
+			? null
+			: velocitySummary(
+					computeVelocity({
+						startDate: tracker.startDate,
+						deadline: tracker.deadline,
+						deadlineTime: tracker.deadlineTime,
+						current: progress.current,
+						target: progress.target,
+						start: tracker.startValue,
+						now: pace.now,
+					}),
+					tracker.unit,
+					progress.current >= progress.target && progress.target > 0,
+				);
 
 	return (
 		<ClickableCard
@@ -63,13 +99,39 @@ export function TrackerCard({ tracker }: { tracker: TrackerSummary }) {
 								({progress.percent}%)
 							</Text>
 						</Text>
-						<PaceLabel status={tracker.status} />
+						<HStack gap={2} vAlign="center">
+							<Assignees emails={tracker.assignees ?? []} />
+							<PaceLabel status={pace.status} />
+						</HStack>
 					</HStack>
+
+					{carried.length === 0 ? null : (
+						<HStack gap={1} wrap="wrap">
+							{carried.map((tag) => (
+								<Token
+									key={tag.tagId}
+									size="sm"
+									color={tag.color}
+									label={tag.name}
+								/>
+							))}
+						</HStack>
+					)}
 
 					<ProgressMeter
 						label={`${tracker.title} progress`}
 						percent={progress.percent}
-						expectedPercent={elapsed === null ? null : elapsed * 100}
+						elapsed={pace.elapsed}
+						expectedReading={
+							pace.elapsed == null
+								? undefined
+								: formatExpectedReading(
+										pace.elapsed,
+										tracker.startValue,
+										progress.target,
+										tracker.unit,
+									)
+						}
 						footnote={formatProgress(
 							progress.current,
 							progress.target,

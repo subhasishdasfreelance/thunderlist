@@ -16,12 +16,77 @@ import { applyChangeFn } from "#/functions/change.functions";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
-import { sameTagName } from "#/lib/tags/inline-tags";
+import { playChangeSound } from "#/lib/sounds";
+import {
+	sameTagName,
+	sameTrackerName,
+	withInlineTag,
+	withoutInlineTag,
+} from "#/lib/tags/inline-tags";
+import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
-import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
-import type { TaskPatch } from "#/schemas/task";
-import type { TaskListName } from "#/schemas/task-list";
-import type { Tracker } from "#/schemas/tracker";
+import type { Stage } from "#/schemas/checklist";
+import type { DailyWindow } from "#/schemas/common";
+import {
+	type SpecialTag,
+	specialTag,
+	TAG_COLORS,
+	type Tag,
+	type TagColor,
+} from "#/schemas/tag";
+import type { Task, TaskPatch } from "#/schemas/task";
+import type { Tracker, TrackerSummary } from "#/schemas/tracker";
+
+/**
+ * Checklists this tab has asked for and the server has not yet confirmed.
+ *
+ * The app goes straight into a new checklist, drawn before it is written, so a
+ * task can be typed into it while its own write is still on the way — and two
+ * requests are not guaranteed to arrive in the order they were sent. Anything
+ * naming a checklist waits for that checklist to exist first, rather than
+ * being refused for naming one that does not.
+ */
+const creatingChecklists = new Map<string, Promise<unknown>>();
+
+/** The checklist a change needs to find already written, if any. */
+function checklistNeeded(change: Change): string | null {
+	switch (change.kind) {
+		case "checklist.update":
+		case "checklist.delete":
+		case "task.create":
+		case "task.move":
+			return change.checklistId;
+		default:
+			return null;
+	}
+}
+
+/** Send one change, once any checklist it depends on has been written. */
+async function send(change: Change): Promise<void> {
+	const needed = checklistNeeded(change);
+	if (needed !== null) await creatingChecklists.get(needed);
+
+	const request = applyChangeFn({ data: { change } });
+
+	if (change.kind === "checklist.create") {
+		const { checklistId } = change;
+		// A failed creation reports itself; anything waiting on it then goes
+		// ahead and fails on its own terms, which is the honest answer.
+		creatingChecklists.set(
+			checklistId,
+			request.catch(() => {}),
+		);
+
+		try {
+			await request;
+		} finally {
+			creatingChecklists.delete(checklistId);
+		}
+		return;
+	}
+
+	await request;
+}
 
 /**
  * Apply a change: on screen at once, on the server behind it.
@@ -36,7 +101,14 @@ export function useApplyChange() {
 	const toast = useToast();
 
 	const mutation = useMutation({
-		mutationFn: (change: Change) => applyChangeFn({ data: { change } }),
+		mutationFn: send,
+
+		/*
+		 * A change that failed because the connection went is not rolled back and
+		 * reported: it is tried again, and with no connection the retry waits for
+		 * one. Every change carries its own ids, so sending one twice is safe.
+		 */
+		retry: () => !navigator.onLine,
 
 		/*
 		 * Draw it first, ask afterwards.
@@ -54,24 +126,51 @@ export function useApplyChange() {
 
 		// The guess was wrong. Put back exactly what was there rather than trying
 		// to reverse each patch, which is where this kind of code usually breaks.
-		onError: (error, _change, context) => {
+		onError: (error, change, context) => {
 			if (context?.previous) restore(queryClient, context.previous);
+
+			// A checklist that was only ever drawn has no earlier state to put
+			// back, so it is emptied instead: the screen showing it asks again and
+			// hears that it does not exist, rather than showing it as if saved.
+			if (change.kind === "checklist.create") {
+				void queryClient.resetQueries({
+					queryKey: queryKeys.checklist(change.checklistId),
+					exact: true,
+				});
+			}
+
 			toast({ body: errorMessage(error), type: "error", uniqueID: "change" });
 		},
 
-		// Settled, not success: a failure has just rolled the screen back to a
-		// state that may itself be stale, so both paths want the server's answer.
-		onSettled: () => queryClient.invalidateQueries(),
+		/*
+		 * Settled, not success: a failure has just rolled the screen back to a
+		 * state that may itself be stale, so both paths want the server's answer.
+		 *
+		 * Only once nothing else is still saving, though. A refetch sent while
+		 * another change is on its way comes back without it, and whatever was
+		 * just added blinks out until that change lands too. This change still
+		 * counts as saving while it settles, hence one.
+		 */
+		onSettled: async () => {
+			if (queryClient.isMutating() === 1) await queryClient.invalidateQueries();
+		},
 	});
 
+	// Heard the moment it is made, as it is drawn; the save follows behind.
 	const apply = useCallback(
-		(change: Change) => mutation.mutate(change),
+		(change: Change) => {
+			playChangeSound(change);
+			mutation.mutate(change);
+		},
 		[mutation.mutate],
 	);
 
 	/** For a caller that needs one change to land before it makes the next. */
 	const applyAsync = useCallback(
-		(change: Change) => mutation.mutateAsync(change),
+		(change: Change) => {
+			playChangeSound(change);
+			return mutation.mutateAsync(change);
+		},
 		[mutation.mutateAsync],
 	);
 
@@ -79,6 +178,9 @@ export function useApplyChange() {
 }
 
 export type ApplyChange = (change: Change) => void;
+
+/** `applyAsync`: settles once the server has the change, or has refused it. */
+export type ApplyChangeAsync = (change: Change) => Promise<void>;
 
 /* -------------------------------------------------------------------------- */
 /* Builders                                                                   */
@@ -95,15 +197,31 @@ export type ChecklistValues = {
 	description: string;
 	startDate: string;
 	deadline: string | null;
+	/** `HH:MM` on the deadline day; see `Checklist.deadlineTime`. */
+	deadlineTime: string | null;
+	/** Paced to the same hours every day instead; see `Checklist.dailyWindow`. */
+	dailyWindow: DailyWindow | null;
+	/** Carried by every task in the checklist; see `Checklist.tagIds`. */
+	tagIds: Array<string>;
+	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
+	visibleTo: Array<string> | null;
+	/**
+	 * The steps its tasks go through; see `Checklist.stages`. Only when they
+	 * change, so saving anything else never moves a task.
+	 */
+	stages?: Array<Stage>;
 };
 
-/** Returns the new id so the caller can navigate straight into it. */
-export function createChecklist(
-	apply: ApplyChange,
+/**
+ * Resolves with the new id once the server has written it, so the caller can
+ * go into it knowing it is there; rejects if it was refused.
+ */
+export async function createChecklist(
+	applyAsync: ApplyChangeAsync,
 	values: ChecklistValues,
-): string {
+): Promise<string> {
 	const checklistId = createId(ID_PREFIX.checklist);
-	apply({ kind: "checklist.create", checklistId, ...values });
+	await applyAsync({ kind: "checklist.create", checklistId, ...values });
 	return checklistId;
 }
 
@@ -115,12 +233,14 @@ export function createTask(
 		tagIds: Array<string>;
 		/** A tracker this task should follow rather than be ticked. */
 		trackerId?: string | null;
-		/** A list to put it on at the same time, for a task typed into one. */
-		onList?: { list: TaskListName; sortOrder: number };
+		/** Another checklist this task stands for, done when that one is. */
+		linkedChecklistId?: string | null;
+		/** Typed as `-u`, `-i` or `-ui` at the end of the line. */
+		urgent?: boolean;
+		important?: boolean;
 	},
 ): string {
 	const taskId = createId(ID_PREFIX.task);
-	const { onList, ...rest } = input;
 
 	apply({
 		kind: "task.create",
@@ -129,11 +249,8 @@ export function createTask(
 		urgent: false,
 		important: false,
 		trackerId: null,
-		place:
-			onList === undefined
-				? null
-				: { ...onList, itemId: createId(ID_PREFIX.listItem) },
-		...rest,
+		linkedChecklistId: null,
+		...input,
 	});
 
 	return taskId;
@@ -147,19 +264,71 @@ export function updateTask(
 	apply({ kind: "task.update", taskId, patch });
 }
 
-export function addTaskRef(
+/**
+ * Put one person on a task, or take them off it — Space on a row, for the
+ * person pressing it. Anyone else already on it stays.
+ */
+export function toggleAssignee(
 	apply: ApplyChange,
-	input: { list: TaskListName; taskId: string; sortOrder: number },
+	task: Pick<Task, "taskId" | "assignees">,
+	email: string,
 ): void {
-	apply({ kind: "ref.add", itemId: createId(ID_PREFIX.listItem), ...input });
+	const current = task.assignees ?? [];
+	updateTask(apply, task.taskId, {
+		assignees: current.includes(email)
+			? current.filter((each) => each !== email)
+			: [...current, email],
+	});
 }
 
-export function createTracker(
+/**
+ * Put a task on one of the special tags, or take it off.
+ *
+ * The tag is written into the title the way the user would have typed it — at
+ * the end — and taken off by removing it wherever it was written, the middle
+ * of the sentence included. Today and the Backlog exclude each other, as the
+ * lists they replaced did: a task is planned or parked, never both, so putting
+ * it on one takes it off the other.
+ *
+ * Nothing happens until the tags have loaded, since until then there is no
+ * telling what the tag is called.
+ */
+export function setSpecialTag(
 	apply: ApplyChange,
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	kind: SpecialTag,
+	isOn: boolean,
+	tags: ReadonlyArray<Tag>,
+): void {
+	const tag = specialTag(tags, kind);
+	if (tag === null) return;
+
+	if (!isOn) {
+		updateTask(apply, task.taskId, {
+			title: withoutInlineTag(task.title, tag.name),
+			tagIds: task.tagIds.filter((tagId) => tagId !== tag.tagId),
+		});
+		return;
+	}
+
+	const other = specialTag(tags, kind === "today" ? "backlog" : "today");
+	const title =
+		other === null ? task.title : withoutInlineTag(task.title, other.name);
+	const kept = task.tagIds.filter((tagId) => tagId !== other?.tagId);
+
+	updateTask(apply, task.taskId, {
+		title: withInlineTag(title, tag.name),
+		tagIds: [...new Set([...kept, tag.tagId])],
+	});
+}
+
+/** Resolves once the server has written it; see `createChecklist`. */
+export async function createTracker(
+	applyAsync: ApplyChangeAsync,
 	values: Omit<TrackerValues, never>,
-): string {
+): Promise<string> {
 	const trackerId = createId(ID_PREFIX.tracker);
-	apply({ kind: "tracker.create", trackerId, ...values });
+	await applyAsync({ kind: "tracker.create", trackerId, ...values });
 	return trackerId;
 }
 
@@ -172,9 +341,16 @@ export type TrackerValues = {
 	startValue: number;
 	startDate: string;
 	deadline: string | null;
+	deadlineTime: string | null;
 	description: string;
 	coverUrl: string | null;
 	author: string;
+	/** Under each, the tracker counts towards that tag's progress. */
+	tagIds: Array<string>;
+	/** In a team, who it is for; see `Tracker.assignees`. */
+	assignees: Array<string>;
+	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
+	visibleTo: Array<string> | null;
 };
 
 export type EntryValues = { value: number; recordedAt: string; note: string };
@@ -189,10 +365,19 @@ export function createEntry(
 	return entryId;
 }
 
-export function createTag(
-	apply: ApplyChange,
-	values: { name: string; color: TagColor },
-): string {
+export type TagValues = {
+	name: string;
+	color: TagColor;
+	description: string;
+	startDate: string | null;
+	deadline: string | null;
+	deadlineTime: string | null;
+	dailyWindow: DailyWindow | null;
+	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
+	visibleTo: Array<string> | null;
+};
+
+export function createTag(apply: ApplyChange, values: TagValues): string {
 	const tagId = createId(ID_PREFIX.tag);
 	apply({ kind: "tag.create", tagId, ...values });
 	return tagId;
@@ -210,11 +395,16 @@ function randomTagColor(): TagColor {
  * The Tags screen is the master list, but a tag typed into a task still has to
  * become one or the task would silently lose it. A resolver rather than one
  * call per name, so a name used on three pasted lines is created once.
+ *
+ * Someone whose role cannot make tags — a collaborator, in a team — gets
+ * `null` for a name that is not a tag yet: it stays in the title as they wrote
+ * it, as plain words, rather than the whole task being refused.
  */
 export function createTagResolver(
 	apply: ApplyChange,
 	existing: ReadonlyArray<Tag>,
-): (name: string) => string {
+	canCreate = true,
+): (name: string) => string | null {
 	const minted = new Map<string, string>();
 
 	return (name) => {
@@ -225,9 +415,63 @@ export function createTagResolver(
 
 		const already = minted.get(key);
 		if (already) return already;
+		if (!canCreate) return null;
 
-		const tagId = createTag(apply, { name, color: randomTagColor() });
+		const tagId = createTag(apply, {
+			name,
+			color: randomTagColor(),
+			description: "",
+			startDate: null,
+			deadline: null,
+			deadlineTime: null,
+			dailyWindow: null,
+			visibleTo: null,
+		});
 		minted.set(key, tagId);
 		return tagId;
 	};
+}
+
+/** Every name a resolver has an id for; see `createTagResolver`. */
+export function resolveTags(
+	resolve: (name: string) => string | null,
+	names: ReadonlyArray<string>,
+): Array<string> {
+	return names.flatMap((name) => resolve(name) ?? []);
+}
+
+/**
+ * Turn the tracker name written on a line into the tracker it names.
+ *
+ * Nothing is created here, unlike the tag resolver: a tracker needs a target, a
+ * unit and a deadline, none of which fit on the line. A name matching nothing
+ * comes back `null` and the line stays an ordinary task, which is the same
+ * outcome as never having typed the `&`.
+ */
+export function resolveTrackerName(
+	trackers: ReadonlyArray<TrackerSummary>,
+	name: string | null,
+): TrackerSummary | null {
+	if (name === null) return null;
+
+	return (
+		trackers.find((tracker) => sameTrackerName(tracker.title, name)) ?? null
+	);
+}
+
+/**
+ * The checklist a `&` line names, for a task that stands for it.
+ *
+ * Asked only once no tracker answers to the name: `&` names either, and when a
+ * tracker and a checklist share a title, the tracker wins.
+ */
+export function resolveChecklistName<
+	T extends { checklistId: string; title: string },
+>(checklists: ReadonlyArray<T>, name: string | null): T | null {
+	if (name === null) return null;
+
+	return (
+		checklists.find((checklist) => sameTrackerName(checklist.title, name)) ??
+		null
+	);
 }

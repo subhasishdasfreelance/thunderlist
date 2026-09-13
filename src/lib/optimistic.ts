@@ -7,9 +7,11 @@
  * and the request goes out behind it.
  *
  * Only the changes made *while reading a list* are patched here: ticking,
- * flagging, adding, removing, moving between lists. The rest — creating a
- * checklist, editing a tracker — happen in a dialog that closes anyway, where a
- * moment's wait costs nothing and a second copy of the write logic would.
+ * flagging, tagging, moving along the stages, adding and removing. The rest —
+ * editing a checklist, creating a tracker — happen in a dialog that closes
+ * anyway, where a moment's wait costs nothing and a second copy of the write
+ * logic would. Creating a checklist is the exception, because the app goes
+ * straight into the new one; see below.
  *
  * Every patch is a guess. It is replaced by the server's answer on the next
  * refetch, and thrown away if the request fails, so a wrong guess is visible
@@ -17,58 +19,271 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
+import type { SearchIndex } from "#/data/search.server";
+import { unwrittenTags } from "#/lib/tags/inline-tags";
+import { matchesFilter, type Page, type StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
+import type { TaggedTask } from "#/queries/system";
 import type { Change } from "#/schemas/change";
-import type { ChecklistDetail } from "#/schemas/checklist";
-import type { Task } from "#/schemas/task";
-import type { TaskListName, TaskRefEntry } from "#/schemas/task-list";
+import {
+	type ChecklistProgress,
+	type ChecklistSummary,
+	checklistStages,
+	DEFAULT_STAGES,
+	type Stage,
+	stageOf,
+} from "#/schemas/checklist";
+import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
+import type { Task, TaskPageView, TaskPatch } from "#/schemas/task";
 
-type TaskLists = Record<TaskListName, Array<TaskRefEntry>>;
-
-/** Recount a checklist's progress after its tasks changed underneath it. */
-function recount(detail: ChecklistDetail): ChecklistDetail {
-	const total = detail.tasks.length;
-	const completed = detail.tasks.filter((task) => task.completed).length;
+/**
+ * A list's counts, moved by one task arriving, leaving or being ticked.
+ *
+ * Moved rather than recounted: a page holds a page of its tasks, not the whole
+ * list to count. `null` is a task not there — before it arrived, after it
+ * left.
+ */
+function shift(
+	progress: ChecklistProgress,
+	before: Pick<Task, "completed"> | null,
+	after: Pick<Task, "completed"> | null,
+): ChecklistProgress {
+	const total = Math.max(
+		0,
+		progress.total + (after ? 1 : 0) - (before ? 1 : 0),
+	);
+	const completed = Math.min(
+		total,
+		Math.max(
+			0,
+			progress.completed +
+				(after?.completed ? 1 : 0) -
+				(before?.completed ? 1 : 0),
+		),
+	);
 
 	return {
-		...detail,
-		progress: {
-			total,
-			completed,
-			percent: total === 0 ? 0 : Math.round((completed / total) * 100),
-		},
+		total,
+		completed,
+		percent: total === 0 ? 0 : Math.round((completed / total) * 100),
 	};
 }
 
+/** `items` with the one matching swapped for `next`, or taken out for `null`. */
+function swap<T>(
+	items: ReadonlyArray<T>,
+	matches: (item: T) => boolean,
+	next: T | null,
+): Array<T> {
+	return items.flatMap((item) =>
+		!matches(item) ? [item] : next === null ? [] : [next],
+	);
+}
+
 /**
- * Apply `patch` to every checklist detail currently in the cache.
+ * A page of a list with the one matching swapped for `next`, or taken out for
+ * `null`. A row taken out comes off the count too, so the page numbers do not
+ * promise one that is no longer there.
+ */
+function swapInPage<T, P extends Page<T>>(
+	page: P,
+	matches: (item: T) => boolean,
+	next: T | null,
+): P {
+	const items = swap(page.items, matches, next);
+	return {
+		...page,
+		items,
+		total: page.total - (page.items.length - items.length),
+	};
+}
+
+/** The screen's view a page was read with: the last segment of its key. */
+function viewOf(key: ReadonlyArray<unknown>): TaskPageView {
+	return key[key.length - 1] as TaskPageView;
+}
+
+/** A checklist's stages, from whichever of its caches this browser holds. */
+function stagesOf(
+	client: QueryClient,
+	checklistId: string | null,
+): ReadonlyArray<Stage> {
+	if (checklistId === null) return DEFAULT_STAGES;
+
+	const checklist =
+		client.getQueryData<ChecklistSummary>(queryKeys.checklist(checklistId)) ??
+		client
+			.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+			?.find((each) => each.checklistId === checklistId);
+
+	return checklistStages(checklist ?? {});
+}
+
+/**
+ * A task after an edit, with its stage and its tick agreeing: reaching the
+ * last stage is finishing it, and a tick moves it there; see `updateTask`.
+ */
+function settle(
+	task: Task,
+	patch: TaskPatch,
+	stages: ReadonlyArray<Stage>,
+): Task {
+	const last = stages[stages.length - 1].stageId;
+
+	if (patch.stageId !== undefined) {
+		return {
+			...task,
+			stageId: patch.stageId,
+			completed: patch.stageId === last,
+		};
+	}
+	if (patch.completed !== undefined) {
+		return {
+			...task,
+			stageId: patch.completed ? last : stages[0].stageId,
+		};
+	}
+	return task;
+}
+
+/**
+ * Change one task on every checklist page in the cache.
+ *
+ * A checklist's screen is several caches: the checklist, with the counts; its
+ * tasks, a stage and a page at a time, each with how many tasks are at every
+ * stage; and its finished tasks, read whole for the chart. The task is changed
+ * wherever it is held and the counts move with it. One that has moved to
+ * another stage — or out of a page's filter — leaves that page at once.
  *
  * The keys are walked rather than matched as a prefix: `["checklists"]` is both
- * the summary list's own key and the first segment of every detail key, so a
- * prefix match hands back the summaries — an array, with no `tasks` on it —
- * along with the details this means. A detail key is the two-segment one.
+ * the summary list's own key and the first segment of every other checklist
+ * key, so a prefix match hands back the summaries — an array, with no
+ * `progress` on it — and every page of tasks along with the checklists this
+ * means. A checklist's own key is the two-segment one.
+ *
+ * `next` returns `null` to take the task off the page.
  */
-function eachChecklist(
+function patchChecklists(
 	client: QueryClient,
-	patch: (detail: ChecklistDetail) => ChecklistDetail,
+	taskId: string,
+	next: (task: Task, checklistId: string) => Task | null,
 ): void {
+	const matches = (task: Task) => task.taskId === taskId;
+
 	for (const [key] of client.getQueriesData({
 		queryKey: queryKeys.checklists,
 	})) {
 		if (key.length !== 2) continue;
 
-		client.setQueryData<ChecklistDetail>(key, (detail) =>
-			detail ? recount(patch(detail)) : detail,
-		);
+		const checklistId = String(key[1]);
+		const checklist = client.getQueryData<ChecklistSummary>(key);
+		const pages = client.getQueriesData<StagePage>({
+			queryKey: queryKeys.checklistPages(checklistId),
+		});
+		const doneKey = queryKeys.checklistCompleted(checklistId);
+		const done = client.getQueryData<Array<Task>>(doneKey);
+
+		const before =
+			pages.flatMap(([, page]) => page?.items ?? []).find(matches) ??
+			done?.find(matches);
+		if (!checklist || !before) continue;
+
+		const stages = checklistStages(checklist);
+		const after = next(before, checklistId);
+		const from = stageOf(before, stages);
+		const to = after === null ? null : stageOf(after, stages);
+
+		client.setQueryData<ChecklistSummary>(key, {
+			...checklist,
+			progress: shift(checklist.progress, before, after),
+		});
+
+		for (const [pageKey, page] of pages) {
+			if (!page) continue;
+			const view = viewOf(pageKey);
+
+			const counts = { ...page.counts };
+			if (matchesFilter(before, view)) {
+				counts[from] = Math.max(0, (counts[from] ?? 0) - 1);
+			}
+			if (after !== null && to !== null && matchesFilter(after, view)) {
+				counts[to] = (counts[to] ?? 0) + 1;
+			}
+
+			const stays =
+				after !== null && to === page.stageId && matchesFilter(after, view);
+			client.setQueryData<StagePage>(pageKey, {
+				...swapInPage(page, matches, stays ? after : null),
+				counts,
+			});
+		}
+
+		if (done) client.setQueryData(doneKey, swap(done, matches, after));
 	}
 }
 
-function eachTaskList(
+/**
+ * The same, for every tag page in the cache — walked by key for the same
+ * reason, since `["tags"]` is the tag list's own key too. `next` is told which
+ * tag the page is for.
+ */
+function patchTags(
 	client: QueryClient,
-	patch: (lists: TaskLists) => TaskLists,
+	taskId: string,
+	next: (task: Task, tagId: string, checklistId: string | null) => Task | null,
 ): void {
-	client.setQueryData<TaskLists>(queryKeys.taskLists, (lists) =>
-		lists ? patch(lists) : lists,
+	const matches = (entry: TagTaskEntry) => entry.task.taskId === taskId;
+
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+
+		// The page's address, which for Today is `today` rather than its id.
+		const address = String(key[1]);
+		const detail = client.getQueryData<TagDetail>(key);
+		const pages = client.getQueriesData<Page<TagTaskEntry>>({
+			queryKey: queryKeys.tagOpen(address),
+		});
+		const doneKey = queryKeys.tagCompleted(address);
+		const done = client.getQueryData<Array<TagTaskEntry>>(doneKey);
+
+		const before =
+			pages.flatMap(([, page]) => page?.items ?? []).find(matches) ??
+			done?.find(matches);
+		if (!detail || !before) continue;
+
+		const task = next(before.task, detail.tagId, before.checklistId);
+		const after = task === null ? null : { ...before, task };
+		client.setQueryData<TagDetail>(key, {
+			...detail,
+			progress: shift(detail.progress, before.task, task),
+		});
+		for (const [pageKey, page] of pages) {
+			if (page) client.setQueryData(pageKey, swapInPage(page, matches, after));
+		}
+		if (done) client.setQueryData(doneKey, swap(done, matches, after));
+	}
+}
+
+/**
+ * The same, in the search index, which the Priority screen lists from. `next`
+ * returns `null` to take the task out.
+ */
+function patchSearchIndex(
+	client: QueryClient,
+	taskId: string,
+	next: (task: TaggedTask) => TaggedTask | null,
+): void {
+	client.setQueryData<SearchIndex>(queryKeys.searchIndex, (index) =>
+		index
+			? {
+					...index,
+					tasks: index.tasks.flatMap((task) => {
+						if (task.taskId !== taskId) return [task];
+						const after = next(task);
+						return after === null ? [] : [after];
+					}),
+				}
+			: index,
 	);
 }
 
@@ -76,46 +291,77 @@ function eachTaskList(
 function patchTask(
 	client: QueryClient,
 	taskId: string,
-	change: (task: Task) => Task,
+	change: (task: Task, checklistId: string | null) => Task,
 ): void {
-	eachChecklist(client, (detail) => ({
-		...detail,
-		tasks: detail.tasks.map((task) =>
-			task.taskId === taskId ? change(task) : task,
-		),
-	}));
+	patchChecklists(client, taskId, change);
 
-	eachTaskList(client, (lists) => ({
-		today: lists.today.map((entry) =>
-			entry.item.taskId === taskId && entry.task
-				? { ...entry, task: change(entry.task) }
-				: entry,
-		),
-		backlog: lists.backlog.map((entry) =>
-			entry.item.taskId === taskId && entry.task
-				? { ...entry, task: change(entry.task) }
-				: entry,
-		),
+	// A tag's page shows the tasks carrying it, so one that has just lost the
+	// tag — taken off Today with the bolt — leaves the page now, not on the
+	// refetch.
+	patchTags(client, taskId, (task, tagId, checklistId) => {
+		const next = change(task, checklistId);
+		return next.tagIds.includes(tagId) ? next : null;
+	});
+
+	patchSearchIndex(client, taskId, (task) => ({
+		...task,
+		...change(task, task.checklistId),
 	}));
 }
 
 function dropTask(client: QueryClient, taskId: string): void {
-	eachChecklist(client, (detail) => ({
-		...detail,
-		tasks: detail.tasks.filter((task) => task.taskId !== taskId),
-	}));
-
-	eachTaskList(client, (lists) => ({
-		today: lists.today.filter((entry) => entry.item.taskId !== taskId),
-		backlog: lists.backlog.filter((entry) => entry.item.taskId !== taskId),
-	}));
+	patchChecklists(client, taskId, () => null);
+	patchTags(client, taskId, () => null);
+	patchSearchIndex(client, taskId, () => null);
 }
 
-function dropRef(client: QueryClient, itemId: string): void {
-	eachTaskList(client, (lists) => ({
-		today: lists.today.filter((entry) => entry.item.itemId !== itemId),
-		backlog: lists.backlog.filter((entry) => entry.item.itemId !== itemId),
-	}));
+/**
+ * A task arriving in a checklist: at its first stage, on the first page, where
+ * a newest-first list puts it — and counted on every page whose filter it
+ * passes. Where it sits among the rows is the screen's order to decide.
+ */
+function addToChecklistPages(
+	client: QueryClient,
+	checklistId: string,
+	task: Task,
+): void {
+	const first = stagesOf(client, checklistId)[0].stageId;
+
+	for (const [key, page] of client.getQueriesData<StagePage>({
+		queryKey: queryKeys.checklistPages(checklistId),
+	})) {
+		if (!page || !matchesFilter(task, viewOf(key))) continue;
+
+		const isHere = page.stageId === first;
+		client.setQueryData<StagePage>(key, {
+			...page,
+			counts: { ...page.counts, [first]: (page.counts[first] ?? 0) + 1 },
+			items: isHere && page.page === 1 ? [...page.items, task] : page.items,
+			total: isHere ? page.total + 1 : page.total,
+		});
+	}
+}
+
+/**
+ * A task arriving on a tag's page. A page of one person's tasks is left alone,
+ * in a team: a task just added is nobody's yet, so it does not belong there.
+ */
+function addToTagPages(
+	client: QueryClient,
+	address: string,
+	entry: TagTaskEntry,
+): void {
+	for (const [key, page] of client.getQueriesData<Page<TagTaskEntry>>({
+		queryKey: queryKeys.tagOpen(address),
+	})) {
+		if (!page || viewOf(key).assignee !== undefined) continue;
+
+		client.setQueryData<Page<TagTaskEntry>>(key, {
+			...page,
+			items: page.page === 1 ? [...page.items, entry] : page.items,
+			total: page.total + 1,
+		});
+	}
 }
 
 /**
@@ -127,84 +373,155 @@ function dropRef(client: QueryClient, itemId: string): void {
  */
 export function applyOptimistically(client: QueryClient, change: Change): void {
 	switch (change.kind) {
-		case "task.update":
-			patchTask(client, change.taskId, (task) => ({
-				...task,
-				...change.patch,
-				// The server stamps this one; guessing it here keeps the completed
-				// section and the chart from re-sorting when the answer lands.
-				completedAt:
-					change.patch.completed === undefined
-						? task.completedAt
-						: change.patch.completed
-							? new Date().toISOString()
-							: null,
-			}));
+		case "task.update": {
+			const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
+			const { patch } = change;
+
+			patchTask(client, change.taskId, (task, checklistId) =>
+				settle(
+					{
+						...task,
+						...patch,
+						// The server adds a task's checklist tags back to whatever an
+						// edit sends. Keeping the ones its title never wrote does the
+						// same here, so their chips do not blink off until the answer
+						// lands.
+						tagIds:
+							patch.tagIds === undefined
+								? task.tagIds
+								: [
+										...new Set([
+											...patch.tagIds,
+											...unwrittenTags(task.title, task.tagIds, tags).map(
+												(tag) => tag.tagId,
+											),
+										]),
+									],
+					},
+					patch,
+					stagesOf(client, checklistId),
+				),
+			);
+
+			// The server stamps the moment it was finished; guessing it here keeps
+			// the chart from re-drawing when the answer lands.
+			patchTask(client, change.taskId, (task) =>
+				task.completedAt === null && task.completed
+					? { ...task, completedAt: new Date().toISOString() }
+					: !task.completed && task.completedAt !== null
+						? { ...task, completedAt: null }
+						: task,
+			);
 			return;
+		}
 
 		case "task.delete":
 			dropTask(client, change.taskId);
 			return;
 
+		// Gone from the checklist it left at once. The one it joined shows it on
+		// its next read, with the tags the server works out for it there.
+		case "task.move":
+			patchChecklists(client, change.taskId, () => null);
+			return;
+
 		case "task.create": {
+			// A task added to a checklist carries its tags as well, just as the
+			// server will store it; see `createTask`.
+			const inherited =
+				change.checklistId === null
+					? []
+					: (client.getQueryData<ChecklistSummary>(
+							queryKeys.checklist(change.checklistId),
+						)?.tagIds ?? []);
+
 			const task: Task = {
 				taskId: change.taskId,
 				title: change.title,
 				completed: false,
 				completedAt: null,
 				trackerId: change.trackerId,
+				linkedChecklistId: change.linkedChecklistId,
 				addedAt: change.addedAt,
-				tagIds: change.tagIds,
+				tagIds: [...new Set([...change.tagIds, ...inherited])],
 				urgent: change.urgent,
 				important: change.important,
+				stageId: stagesOf(client, change.checklistId)[0].stageId,
 			};
 
 			if (change.checklistId !== null) {
-				const key = queryKeys.checklist(change.checklistId);
-				client.setQueryData<ChecklistDetail>(key, (detail) =>
-					detail
-						? recount({ ...detail, tasks: [...detail.tasks, task] })
-						: detail,
+				client.setQueryData<ChecklistSummary>(
+					queryKeys.checklist(change.checklistId),
+					(checklist) =>
+						checklist
+							? {
+									...checklist,
+									progress: shift(checklist.progress, null, task),
+								}
+							: checklist,
 				);
+				addToChecklistPages(client, change.checklistId, task);
 			}
 
-			// A task typed straight into a list names that list here, so the row is
-			// drawn where it was typed instead of waiting for a refetch to reveal
-			// it. Newest first, which is how the lists read.
-			if (change.place !== null) {
-				const place = change.place;
-				const entry: TaskRefEntry = {
-					item: {
-						itemId: place.itemId,
-						taskId: task.taskId,
-						sortOrder: place.sortOrder,
-						addedAt: task.addedAt,
-					},
-					list: place.list,
+			// A task typed on a tag's page is drawn there at once instead of
+			// waiting for a refetch to reveal it.
+			for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+				if (key.length !== 2) continue;
+
+				const detail = client.getQueryData<TagDetail>(key);
+				if (!detail || !task.tagIds.includes(detail.tagId)) continue;
+
+				client.setQueryData<TagDetail>(key, {
+					...detail,
+					progress: shift(detail.progress, null, task),
+				});
+				addToTagPages(client, String(key[1]), {
+					task,
 					checklistId: change.checklistId,
 					// Left to the refetch: a title for a checklist this browser may
-					// not have loaded is not something to guess at.
+					// not have loaded — or the Inbox it lands in — is not something
+					// to guess.
 					checklistTitle: null,
-					task,
-				};
-
-				eachTaskList(client, (lists) => ({
-					...lists,
-					[place.list]: [entry, ...lists[place.list]],
-				}));
+				});
 			}
 
 			return;
 		}
 
-		case "ref.remove":
-			dropRef(client, change.itemId);
-			return;
+		case "checklist.create": {
+			/*
+			 * The new card is on the Checklists screen while it saves, and the
+			 * checklist's own screen — which the app goes into once the server
+			 * has it — finds it in the cache and draws at once. The refetch after
+			 * the write swaps in the server's copy.
+			 */
+			const createdAt = new Date().toISOString();
+			const summary: ChecklistSummary = {
+				checklistId: change.checklistId,
+				title: change.title,
+				description: change.description,
+				startDate: change.startDate,
+				deadline: change.deadline,
+				deadlineTime: change.deadlineTime,
+				dailyWindow: change.dailyWindow,
+				tagIds: change.tagIds,
+				visibleTo: change.visibleTo,
+				stages: change.stages,
+				createdAt,
+				updatedAt: createdAt,
+				progress: { total: 0, completed: 0, percent: 0 },
+			};
 
-		case "ref.move":
-			// Positions are swapped server-side from values this does not hold; the
-			// refetch settles it, and the row is already where the eye expects.
+			client.setQueryData<ChecklistSummary>(
+				queryKeys.checklist(change.checklistId),
+				summary,
+			);
+			client.setQueryData<Array<ChecklistSummary>>(
+				queryKeys.checklists,
+				(list) => (list ? [...list, summary] : list),
+			);
 			return;
+		}
 
 		default:
 			// Everything else happens behind a dialog, where the refetch is the

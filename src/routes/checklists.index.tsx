@@ -3,8 +3,12 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	createFileRoute,
+	useNavigate,
+	useRouter,
+} from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
@@ -15,43 +19,65 @@ import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
 	createChecklist,
+	createTagResolver,
+	resolveTags,
 	useApplyChange,
 } from "#/lib/changes";
-import { lagFraction } from "#/lib/progress";
-import { checklistsQuery } from "#/queries/checklists";
-import { primeQuery } from "#/queries/prime";
+import { compareBehind } from "#/lib/progress";
+import { useNow } from "#/lib/use-now";
+import { firstPage } from "#/lib/use-pages";
+import { usePermissions } from "#/lib/use-team";
+import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
+import { deferQuery, primeQuery } from "#/queries/prime";
+import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
 /**
- * How far behind a checklist is, worst first.
+ * Where a checklist stands against its schedule, for ordering the most behind
+ * first; see `compareBehind`.
  *
  * The same measure the pace label on the card is drawn from, so the order
  * agrees with what each card says about itself.
  */
-function lag(checklist: ChecklistSummary): number {
-	return lagFraction({
+function standing(checklist: ChecklistSummary, now: number) {
+	return {
 		startDate: checklist.startDate,
 		deadline: checklist.deadline,
+		deadlineTime: checklist.deadlineTime,
+		dailyWindow: checklist.dailyWindow,
+		now,
 		fractionComplete: checklist.progress.percent / 100,
-	});
+	};
 }
 
 export const Route = createFileRoute("/checklists/")({
-	loader: ({ context }) => primeQuery(context.queryClient, checklistsQuery()),
+	loader: ({ context }) => {
+		// Only the new-checklist form needs the tags, and not on the first frame.
+		deferQuery(context.queryClient, tagsQuery());
+
+		return primeQuery(context.queryClient, checklistsQuery());
+	},
 	component: ChecklistsPage,
 });
 
 function ChecklistsPage() {
 	const navigate = useNavigate();
+	const router = useRouter();
+	const queryClient = useQueryClient();
 	const [isFormOpen, setIsFormOpen] = useState(false);
+	const [isCreating, setIsCreating] = useState(false);
+	const [isOpening, setIsOpening] = useState(false);
 	const [isBehindFirst, setIsBehindFirst] = useState(false);
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
+	const { canManageContent } = usePermissions();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
 	);
+	const tagsResult = useQuery(tagsQuery());
 
 	const checklists = data ?? [];
+	const tags = tagsResult.data ?? [];
 
 	/*
 	 * Behind first, or the order they were made in.
@@ -61,31 +87,64 @@ function ChecklistsPage() {
 	 * "which of these needs me", and that is an ordering of the cards already on
 	 * the screen rather than a row of figures above them.
 	 */
-	const ordered = isBehindFirst
-		? [...checklists].sort((a, b) => lag(b) - lag(a))
-		: checklists;
+	// Judged on the viewer's clock, so sorted only once the browser has it.
+	const now = useNow();
+	const ordered =
+		isBehindFirst && now !== null
+			? [...checklists].sort((a, b) =>
+					compareBehind(standing(a, now), standing(b, now)),
+				)
+			: checklists;
 
-	function create(values: ChecklistValues) {
-		const checklistId = createChecklist(apply, values);
-		setIsFormOpen(false);
-		// Drop straight into the new checklist so tasks can be added.
-		void navigate({
-			to: "/checklists/$checklistId",
-			params: { checklistId },
-			search: { task: undefined },
-		});
+	/*
+	 * Into the new checklist so tasks can be added — but only once the server
+	 * has it, and only once its screen is ready to draw. Going in sooner had the
+	 * new screen ask for a checklist that did not exist yet, or fetch its own
+	 * code on arrival — after a deploy, from a server that no longer has it —
+	 * and either could show as an error. The loading screen stands in between.
+	 */
+	async function create(values: ChecklistValues) {
+		if (isCreating) return;
+		setIsCreating(true);
+
+		try {
+			const checklistId = await createChecklist(applyAsync, values);
+			setIsFormOpen(false);
+			setIsOpening(true);
+
+			const destination = {
+				to: "/checklists/$checklistId",
+				params: { checklistId },
+				search: { task: undefined },
+			} as const;
+			// Its code and its first page of tasks. Anything that still fails is
+			// the new screen's to deal with, and it does.
+			await Promise.all([
+				router.preloadRoute(destination).catch(() => undefined),
+				queryClient.prefetchQuery(checklistPageQuery(checklistId, firstPage())),
+			]);
+			void navigate(destination);
+		} catch {
+			// Already reported by `useApplyChange`; the form stays open to retry.
+		} finally {
+			setIsCreating(false);
+		}
 	}
+
+	if (isOpening) return <LoadingState label="Opening your new checklist…" />;
 
 	return (
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<Heading level={1}>Checklists</Heading>
-				<Button
-					label="New checklist"
-					variant="primary"
-					icon={<Plus aria-hidden />}
-					onClick={() => setIsFormOpen(true)}
-				/>
+				{canManageContent ? (
+					<Button
+						label="New checklist"
+						variant="primary"
+						icon={<Plus aria-hidden />}
+						onClick={() => setIsFormOpen(true)}
+					/>
+				) : null}
 			</HStack>
 
 			{isError ? (
@@ -101,7 +160,8 @@ function ChecklistsPage() {
 				<VStack gap={3}>
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<Text type="label" weight="semibold">
-							Your Checklists
+							{checklists.length}{" "}
+							{checklists.length === 1 ? "checklist" : "checklists"}
 						</Text>
 						<OrderToggle
 							isSorted={isBehindFirst}
@@ -119,7 +179,12 @@ function ChecklistsPage() {
 			<ChecklistFormDialog
 				isOpen={isFormOpen}
 				onOpenChange={setIsFormOpen}
-				onSubmit={create}
+				tags={tags}
+				resolveTags={(names) =>
+					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+				}
+				isSaving={isCreating}
+				onSubmit={(values) => void create(values)}
 			/>
 		</VStack>
 	);

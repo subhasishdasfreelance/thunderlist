@@ -5,8 +5,15 @@ import type {
 } from "@tanstack/react-query";
 
 /**
- * Warm the query cache from a route loader without letting a failed read take
- * the whole route down.
+ * Warm the query cache from a route loader without holding up navigation, and
+ * without letting a failed read take the whole route down.
+ *
+ * On the server the read is waited for, so the first page arrives with its
+ * content already in it. In the browser it is not: waiting there kept the old
+ * screen up for a whole round trip after every click, which reads as a click
+ * that missed. The new screen renders at once instead, draws its own loading
+ * state where the data goes, and fills in when the read lands. Anything the
+ * cache already holds is drawn straight away and refreshed behind it.
  *
  * The database can be unreachable, unconfigured, or simply having a bad
  * minute. When that happens the failure stays in the query cache and the route's
@@ -22,11 +29,10 @@ export async function primeQuery<
 	queryClient: QueryClient,
 	options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): Promise<void> {
-	try {
-		await queryClient.ensureQueryData(options);
-	} catch {
-		// Deliberately swallowed; the component reads the error from the cache.
-	}
+	// Deliberately swallowed; the component reads the error from the cache.
+	const read = queryClient.ensureQueryData(options).catch(() => {});
+
+	if (typeof window === "undefined") await read;
 }
 
 /**

@@ -1,14 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import type { ProgressEntry } from "#/schemas/tracker";
 import {
-	addDays,
 	clampPercent,
+	compareBehind,
 	computeVelocity,
-	daysBetween,
 	deriveCurrentValue,
 	elapsedFraction,
+	isOverdue,
 	paceStatus,
+	reachedTargetOn,
 	sortEntriesOldestFirst,
+	trackerFraction,
 	trackerProgress,
 	withDeltas,
 } from "./progress";
@@ -34,41 +36,6 @@ describe("clampPercent", () => {
 	it("treats non-finite input as zero", () => {
 		expect(clampPercent(Number.NaN)).toBe(0);
 		expect(clampPercent(Number.POSITIVE_INFINITY)).toBe(0);
-	});
-});
-
-describe("daysBetween", () => {
-	it("counts whole calendar days", () => {
-		expect(daysBetween("2026-09-01", "2026-09-11")).toBe(10);
-		expect(daysBetween("2026-09-01", "2026-09-01")).toBe(0);
-	});
-
-	it("is negative when the second day is earlier", () => {
-		expect(daysBetween("2026-09-11", "2026-09-01")).toBe(-10);
-	});
-
-	it("crosses a daylight-saving boundary without drifting", () => {
-		// The UK clocks go back on 2026-10-25.
-		expect(daysBetween("2026-10-24", "2026-10-26")).toBe(2);
-	});
-
-	it("is null for anything that is not a date", () => {
-		expect(daysBetween("", "2026-09-01")).toBeNull();
-		expect(daysBetween("2026-09-01", "not-a-date")).toBeNull();
-	});
-});
-
-describe("addDays", () => {
-	it("moves a calendar day forwards", () => {
-		expect(addDays("2026-09-01", 10)).toBe("2026-09-11");
-	});
-
-	it("rolls over a month boundary", () => {
-		expect(addDays("2026-09-28", 5)).toBe("2026-10-03");
-	});
-
-	it("is null for an unparseable day", () => {
-		expect(addDays("nope", 1)).toBeNull();
 	});
 });
 
@@ -196,6 +163,37 @@ describe("deriveCurrentValue", () => {
 	});
 });
 
+describe("reachedTargetOn", () => {
+	it("is null until a reading reaches the target", () => {
+		const entries = [
+			entry({ entryId: "ent_a", recordedAt: "2026-09-01", value: 50 }),
+			entry({ entryId: "ent_b", recordedAt: "2026-09-03", value: 99 }),
+		];
+
+		expect(reachedTargetOn(entries, 100)).toBeNull();
+	});
+
+	it("is the day the target was reached", () => {
+		const entries = [
+			entry({ entryId: "ent_c", recordedAt: "2026-09-05", value: 120 }),
+			entry({ entryId: "ent_a", recordedAt: "2026-09-01", value: 50 }),
+			entry({ entryId: "ent_b", recordedAt: "2026-09-03", value: 100 }),
+		];
+
+		expect(reachedTargetOn(entries, 100)).toBe("2026-09-03");
+	});
+
+	it("starts again after slipping back below it", () => {
+		const entries = [
+			entry({ entryId: "ent_a", recordedAt: "2026-09-01", value: 100 }),
+			entry({ entryId: "ent_b", recordedAt: "2026-09-02", value: 80 }),
+			entry({ entryId: "ent_c", recordedAt: "2026-09-04", value: 100 }),
+		];
+
+		expect(reachedTargetOn(entries, 100)).toBe("2026-09-04");
+	});
+});
+
 describe("sortEntriesOldestFirst", () => {
 	it("does not mutate its input", () => {
 		const entries = [
@@ -210,22 +208,87 @@ describe("sortEntriesOldestFirst", () => {
 });
 
 describe("elapsedFraction", () => {
+	// On the local clock, which is what the app paces by. July, so that no
+	// daylight-saving change falls inside any window here.
+	const at = (day: number, hours = 0, minutes = 0) =>
+		new Date(2026, 6, day, hours, minutes).getTime();
+	const daily = { from: "06:00", to: "22:00" };
+
 	it("is the share of the window that has gone", () => {
 		expect(
 			elapsedFraction({
-				startDate: "2026-09-01",
-				deadline: "2026-09-11",
-				today: "2026-09-06",
+				startDate: "2026-07-01",
+				deadline: "2026-07-11",
+				now: at(6),
 			}),
 		).toBe(0.5);
+	});
+
+	it("moves through the day rather than once at midnight", () => {
+		// Five and a half days of ten.
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				deadline: "2026-07-11",
+				now: at(6, 12),
+			}),
+		).toBe(0.55);
+	});
+
+	it("counts fractional hours rather than whole ones", () => {
+		// Four and a half hours of a nine-hour window: half, not four ninths.
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-06",
+				deadline: "2026-07-06",
+				deadlineTime: "09:00",
+				now: at(6, 4, 30),
+			}),
+		).toBe(0.5);
+	});
+
+	it("runs to the deadline's time when it has one", () => {
+		// Ten and a half days, of which five days and six hours have gone.
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				deadline: "2026-07-11",
+				deadlineTime: "12:00",
+				now: at(6, 6),
+			}),
+		).toBe(0.5);
+	});
+
+	it("measures something paced daily against today's hours", () => {
+		// 06:00 to 22:00 is sixteen hours, and by two in the afternoon eight have
+		// gone — whatever the start date.
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				deadline: null,
+				dailyWindow: daily,
+				now: at(6, 14),
+			}),
+		).toBe(0.5);
+	});
+
+	it("starts the daily window afresh each day", () => {
+		const input = {
+			startDate: "2026-07-01",
+			deadline: null,
+			dailyWindow: daily,
+		};
+
+		expect(elapsedFraction({ ...input, now: at(7, 5) })).toBe(0);
+		expect(elapsedFraction({ ...input, now: at(7, 23) })).toBe(1);
 	});
 
 	it("clamps once the deadline has passed", () => {
 		expect(
 			elapsedFraction({
-				startDate: "2026-09-01",
-				deadline: "2026-09-11",
-				today: "2026-10-01",
+				startDate: "2026-07-01",
+				deadline: "2026-07-11",
+				now: at(31),
 			}),
 		).toBe(1);
 	});
@@ -233,18 +296,63 @@ describe("elapsedFraction", () => {
 	it("is null without a deadline to measure against", () => {
 		expect(
 			elapsedFraction({
-				startDate: "2026-09-01",
+				startDate: "2026-07-01",
 				deadline: null,
-				today: "2026-09-06",
+				now: at(6),
 			}),
 		).toBeNull();
+	});
+
+	it("is null for a daily window that does not end after it starts", () => {
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				deadline: null,
+				dailyWindow: { from: "22:00", to: "06:00" },
+				now: at(6, 12),
+			}),
+		).toBeNull();
+	});
+});
+
+describe("compareBehind", () => {
+	// On the local clock, which is what the app paces by.
+	const now = new Date(2026, 8, 6).getTime();
+	const due = (deadline: string, fractionComplete: number) => ({
+		startDate: "2026-09-01",
+		deadline,
+		now,
+		fractionComplete,
+	});
+
+	it("puts anything overdue first, even when it owes less of the whole", () => {
+		const overdue = due("2026-09-05", 0.9);
+		const untouched = due("2026-09-11", 0);
+
+		expect([untouched, overdue].sort(compareBehind)).toEqual([
+			overdue,
+			untouched,
+		]);
+	});
+
+	it("orders the rest by how much of the work is owed", () => {
+		const behind = due("2026-09-11", 0.1);
+		const ahead = due("2026-09-11", 0.9);
+
+		expect([ahead, behind].sort(compareBehind)).toEqual([behind, ahead]);
+	});
+
+	it("never counts finished work as overdue", () => {
+		expect(isOverdue(due("2026-09-05", 1))).toBe(false);
+		expect(isOverdue(due("2026-09-05", 0.5))).toBe(true);
 	});
 });
 
 describe("paceStatus", () => {
 	const startDate = "2026-09-01";
 	const deadline = "2026-09-11"; // a ten day window
-	const halfway = "2026-09-06";
+	// On the local clock, which is what the app paces by.
+	const halfway = new Date(2026, 8, 6).getTime();
 
 	it("is on track when progress matches elapsed time", () => {
 		expect(
@@ -252,7 +360,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("on_track");
 	});
@@ -263,7 +371,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.9,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("ahead");
 	});
@@ -274,20 +382,50 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.1,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBe("behind");
 	});
 
-	it("tolerates small drift rather than flickering", () => {
+	it("tolerates a drift of up to one point either way", () => {
 		expect(
 			paceStatus({
 				startDate,
 				deadline,
-				fractionComplete: 0.56,
-				today: halfway,
+				fractionComplete: 0.505,
+				now: halfway,
 			}),
 		).toBe("on_track");
+
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.495,
+				now: halfway,
+			}),
+		).toBe("on_track");
+	});
+
+	it("stops calling it on track past one point either way", () => {
+		// Two points out, which at the old five-point tolerance read as on track.
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.52,
+				now: halfway,
+			}),
+		).toBe("ahead");
+
+		expect(
+			paceStatus({
+				startDate,
+				deadline,
+				fractionComplete: 0.48,
+				now: halfway,
+			}),
+		).toBe("behind");
 	});
 
 	it("paces from a back-dated start rather than from today", () => {
@@ -297,7 +435,7 @@ describe("paceStatus", () => {
 				startDate: "2026-08-01",
 				deadline: "2026-10-01",
 				fractionComplete: 0.5,
-				today: "2026-09-01",
+				now: new Date(2026, 8, 1).getTime(),
 			}),
 		).toBe("on_track");
 	});
@@ -308,7 +446,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: null,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 	});
@@ -319,7 +457,7 @@ describe("paceStatus", () => {
 				startDate: "",
 				deadline,
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 
@@ -328,7 +466,7 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: "2026-08-01",
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 
@@ -337,14 +475,14 @@ describe("paceStatus", () => {
 				startDate,
 				deadline: "not-a-date",
 				fractionComplete: 0.5,
-				today: halfway,
+				now: halfway,
 			}),
 		).toBeNull();
 	});
 
 	it("counts finished work as ahead when the deadline has not arrived", () => {
 		expect(
-			paceStatus({ startDate, deadline, fractionComplete: 1, today: halfway }),
+			paceStatus({ startDate, deadline, fractionComplete: 1, now: halfway }),
 		).toBe("ahead");
 	});
 
@@ -354,35 +492,66 @@ describe("paceStatus", () => {
 				startDate,
 				deadline,
 				fractionComplete: 0.4,
-				today: "2026-10-01",
+				now: new Date(2026, 9, 1).getTime(),
 			}),
 		).toBe("behind");
 	});
 });
 
 describe("computeVelocity", () => {
+	// On the local clock, which is what the app paces by. September, so that no
+	// daylight-saving change falls inside any window here.
+	const at = (month: number, day: number, hours = 0, minutes = 0) =>
+		new Date(2026, month - 1, day, hours, minutes).getTime();
+
 	it("reports the pace achieved so far", () => {
 		const velocity = computeVelocity({
 			startDate: "2026-09-01",
 			deadline: "2026-09-21",
 			current: 100,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
-		expect(velocity.daysElapsed).toBe(10);
+		expect(velocity.minutesElapsed).toBe(10 * 1440);
 		expect(velocity.perDay).toBe(10);
 	});
 
+	it("measures by the minute rather than in whole days", () => {
+		// Thirty in the first twelve hours is sixty a day, not thirty.
+		expect(
+			computeVelocity({
+				startDate: "2026-09-01",
+				deadline: null,
+				current: 30,
+				target: 400,
+				now: at(9, 1, 12),
+			}).perDay,
+		).toBe(60);
+	});
+
+	it("has no speed in the first quarter hour", () => {
+		const velocity = computeVelocity({
+			startDate: "2026-09-01",
+			deadline: null,
+			current: 30,
+			target: 400,
+			now: at(9, 1, 0, 10),
+		});
+
+		expect(velocity.perDay).toBeNull();
+		expect(velocity.projectedFinish).toBeNull();
+	});
+
 	it("projects when the target is reached at that pace", () => {
-		// 300 left at 10/day lands 30 days after today.
+		// 300 left at 10/day lands 30 days after now.
 		expect(
 			computeVelocity({
 				startDate: "2026-09-01",
 				deadline: null,
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).projectedFinish,
 		).toBe("2026-10-11");
 	});
@@ -395,22 +564,47 @@ describe("computeVelocity", () => {
 				deadline: "2026-09-21",
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).requiredPerDay,
 		).toBe(30);
 	});
 
-	it("counts day one as a whole day rather than dividing by zero", () => {
+	it("counts the deadline's time as part of the window", () => {
+		// Ten and a half days for 210: twenty a day, not twenty-one.
 		const velocity = computeVelocity({
 			startDate: "2026-09-01",
-			deadline: null,
-			current: 30,
-			target: 400,
-			today: "2026-09-01",
+			deadline: "2026-09-11",
+			deadlineTime: "12:00",
+			current: 0,
+			target: 210,
+			now: at(9, 1),
 		});
 
-		expect(velocity.daysElapsed).toBe(0);
-		expect(velocity.perDay).toBe(30);
+		expect(velocity.totalMinutes).toBe(10.5 * 1440);
+		expect(velocity.expectedPerDay).toBe(20);
+	});
+
+	it("asks for more than the planned speed once behind", () => {
+		// Page 59 to 528 by 23:59 on 8 Oct, at page 67 by 8 pm on day one. In
+		// whole days, today was all still "left", the deadline's last day was
+		// lost, and the speed needed came out below the one planned.
+		const plan = {
+			startDate: "2026-09-12",
+			deadline: "2026-10-08",
+			deadlineTime: "23:59",
+			start: 59,
+			current: 67,
+			target: 528,
+			now: at(9, 12, 20),
+		};
+		const { expectedPerDay, requiredPerDay } = computeVelocity(plan);
+
+		expect(
+			paceStatus({ ...plan, fractionComplete: trackerFraction(67, 528, 59) }),
+		).toBe("behind");
+		expect(requiredPerDay).not.toBeNull();
+		expect(expectedPerDay).not.toBeNull();
+		expect(requiredPerDay ?? 0).toBeGreaterThan(expectedPerDay ?? 0);
 	});
 
 	it("does not project a finish for something that is not moving", () => {
@@ -420,7 +614,7 @@ describe("computeVelocity", () => {
 				deadline: null,
 				current: 0,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).projectedFinish,
 		).toBeNull();
 	});
@@ -431,21 +625,21 @@ describe("computeVelocity", () => {
 			deadline: "2026-09-21",
 			current: 400,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
 		expect(velocity.requiredPerDay).toBe(0);
 		expect(velocity.projectedFinish).toBeNull();
 	});
 
-	it("collapses a passed deadline onto today rather than dividing by zero", () => {
+	it("asks the rest of a single day once the deadline has passed", () => {
 		expect(
 			computeVelocity({
 				startDate: "2026-09-01",
 				deadline: "2026-09-05",
 				current: 100,
 				target: 400,
-				today: "2026-09-11",
+				now: at(9, 11),
 			}).requiredPerDay,
 		).toBe(300);
 	});
@@ -456,11 +650,11 @@ describe("computeVelocity", () => {
 			deadline: null,
 			current: 100,
 			target: 400,
-			today: "2026-09-11",
+			now: at(9, 11),
 		});
 
 		expect(velocity.requiredPerDay).toBeNull();
-		expect(velocity.daysRemaining).toBeNull();
+		expect(velocity.minutesRemaining).toBeNull();
 	});
 });
 
@@ -507,7 +701,7 @@ describe("computeVelocity with a starting value", () => {
 		const velocity = computeVelocity({
 			...plan,
 			current: 40,
-			today: "2026-01-01",
+			now: new Date(2026, 0, 1).getTime(),
 		});
 
 		expect(velocity.expectedPerDay).toBe(8);
@@ -517,7 +711,7 @@ describe("computeVelocity with a starting value", () => {
 		const velocity = computeVelocity({
 			...plan,
 			current: 49,
-			today: "2026-01-02",
+			now: new Date(2026, 0, 2).getTime(),
 		});
 
 		// Nine pages in one day, not forty-nine.

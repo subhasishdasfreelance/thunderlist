@@ -7,7 +7,13 @@
  */
 
 import type { ChecklistProgress } from "#/schemas/checklist";
-import { PRIORITY_RANKS, priorityRank, type Task } from "#/schemas/task";
+import {
+	PRIORITY_RANKS,
+	priorityRank,
+	type SORT_ORDERS,
+	type Task,
+	type TaskFilter,
+} from "#/schemas/task";
 
 /**
  * Newest first, then by id.
@@ -30,14 +36,34 @@ export function compareTasks(a: Task, b: Task): number {
 	return a.taskId > b.taskId ? -1 : 1;
 }
 
+/**
+ * Whether something is assigned to one person in a team — or, with nobody
+ * picked, whether it is anything at all, which it always is.
+ */
+export function isAssignedTo(
+	item: { assignees?: ReadonlyArray<string> },
+	email: string | undefined,
+): boolean {
+	return email === undefined || (item.assignees ?? []).includes(email);
+}
+
+/** Whether a task is one a screen's filter lets through; see `TaskFilter`. */
+export function matchesFilter(
+	task: { assignees?: ReadonlyArray<string>; tagIds: ReadonlyArray<string> },
+	filter: TaskFilter,
+): boolean {
+	return (
+		isAssignedTo(task, filter.assignee) &&
+		(filter.tag === undefined || task.tagIds.includes(filter.tag))
+	);
+}
+
 /** The order tasks are rendered in. Does not mutate its input. */
 export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 	return [...tasks].sort(compareTasks);
 }
 
 /** How a list is ordered. More will follow; these are the two that exist. */
-const SORT_ORDERS = ["newest", "priority"] as const;
-
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
 export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
@@ -72,6 +98,81 @@ export function orderTasks(
 	order: SortOrder,
 ): Array<Task> {
 	return sortTasksBy(tasks, order, compareTasks);
+}
+
+/** The same, for rows that carry a task rather than being one: a tag's. */
+export function orderByTask<T>(
+	items: ReadonlyArray<T>,
+	order: SortOrder,
+	taskOf: (item: T) => Task,
+): Array<T> {
+	return sortTasksBy(
+		items.map((item) => ({
+			item,
+			urgent: taskOf(item).urgent,
+			important: taskOf(item).important,
+		})),
+		order,
+		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),
+	).map((row) => row.item);
+}
+
+/**
+ * A list's open tasks and its finished ones, read separately, as one list.
+ *
+ * For a moment a task can be in both — ticked on screen before either read has
+ * caught up with it — and it is kept once, as `open` has it.
+ */
+export function mergeReads<T>(
+	open: ReadonlyArray<T>,
+	finished: ReadonlyArray<T>,
+	idOf: (item: T) => string,
+): Array<T> {
+	const seen = new Set(open.map(idOf));
+	return [...open, ...finished.filter((item) => !seen.has(idOf(item)))];
+}
+
+/**
+ * One page of a list read from the server: its rows, how many there are in
+ * all, and which page this is — numbered from 1.
+ */
+export type Page<T> = { items: Array<T>; total: number; page: number };
+
+/**
+ * A page of one stage of a checklist, with how many tasks are at each stage —
+ * the same filter applied to all of them — for the switch between stages.
+ */
+export type StagePage = Page<Task> & {
+	stageId: string;
+	counts: Record<string, number>;
+};
+
+/**
+ * The page of an ordered list a screen asked for, `limit` rows long.
+ *
+ * With no page named it is the one holding the row to reveal, or the first. A
+ * page past the end — the list got shorter under it — is the last one there
+ * is, so a screen never lands on an empty page of a list that is not empty.
+ */
+export function pageOf<T>(
+	ordered: ReadonlyArray<T>,
+	view: { limit: number; page?: number; reveal?: string },
+	idOf: (item: T) => string,
+): Page<T> {
+	const pageCount = Math.max(1, Math.ceil(ordered.length / view.limit));
+	const revealAt =
+		view.reveal === undefined
+			? -1
+			: ordered.findIndex((item) => idOf(item) === view.reveal);
+	const wanted =
+		view.page ?? (revealAt === -1 ? 1 : Math.floor(revealAt / view.limit) + 1);
+	const page = Math.min(Math.max(wanted, 1), pageCount);
+
+	return {
+		items: ordered.slice((page - 1) * view.limit, page * view.limit),
+		total: ordered.length,
+		page,
+	};
 }
 
 /**

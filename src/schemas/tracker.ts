@@ -1,14 +1,16 @@
 import * as v from "valibot";
-import type { PaceStatus } from "./checklist";
 import {
+	assigneesSchema,
 	dateOnlySchema,
 	descriptionSchema,
 	idSchema,
 	noteSchema,
 	optionalUrlSchema,
+	tagIdsSchema,
+	timeOfDaySchema,
 	titleSchema,
+	visibleToSchema,
 } from "./common";
-import type { Velocity } from "./progress";
 
 export const TRACKER_TYPES = [
 	"book",
@@ -101,6 +103,23 @@ const trackerSchema = v.object({
 	startDate: dateOnlySchema,
 	/** The day the target should be reached. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
+	/** The time on the deadline day it is due by; see `Checklist.deadlineTime`. */
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+	/**
+	 * Tags the tracker carries. Under each one it counts as a single thing to
+	 * finish, done once it reaches its target.
+	 *
+	 * Absent on trackers made before they could be tagged, which is the same as
+	 * none.
+	 */
+	tagIds: v.optional(v.array(idSchema)),
+	/** In a team, who it is for, by address; absent or empty for nobody. */
+	assignees: v.optional(v.array(v.string())),
+	/**
+	 * In a team, the people who can see it and its history, by address; absent
+	 * or `null` for everyone. See `visibleToSchema`.
+	 */
+	visibleTo: v.optional(v.nullable(v.array(v.string()))),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -114,9 +133,9 @@ export type TrackerProgress = {
 	percent: number;
 };
 
+/** A tracker with its progress; its pace is judged in the browser, see `usePace`. */
 export type TrackerSummary = Tracker & {
 	progress: TrackerProgress;
-	status: PaceStatus | null;
 };
 
 /**
@@ -144,10 +163,11 @@ export type ProgressEntry = v.InferOutput<typeof progressEntrySchema>;
  * The history is deliberately not here. It is the long part of the read and the
  * part nobody is waiting for — the figures answer "how is this going", and they
  * can be on screen while the entries are still coming.
+ *
+ * Its speeds are not here either: they are worked out to the minute on the
+ * viewer's own clock, which the server does not know; see `computeVelocity`.
  */
-export type TrackerDetail = TrackerSummary & {
-	velocity: Velocity;
-};
+export type TrackerDetail = TrackerSummary;
 
 export const createTrackerInputSchema = v.object({
 	trackerId: idSchema,
@@ -158,9 +178,13 @@ export const createTrackerInputSchema = v.object({
 	startValue: v.optional(progressValueSchema, 0),
 	startDate: dateOnlySchema,
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	description: v.optional(descriptionSchema, ""),
 	coverUrl: v.optional(optionalUrlSchema, null),
 	author: v.optional(authorSchema, ""),
+	tagIds: v.optional(tagIdsSchema, []),
+	assignees: v.optional(assigneesSchema, []),
+	visibleTo: v.optional(visibleToSchema, null),
 });
 
 export const updateTrackerInputSchema = v.object({
@@ -174,9 +198,13 @@ export const updateTrackerInputSchema = v.object({
 			startValue: v.optional(progressValueSchema),
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
+			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			description: v.optional(descriptionSchema),
 			coverUrl: v.optional(optionalUrlSchema),
 			author: v.optional(authorSchema),
+			tagIds: v.optional(tagIdsSchema),
+			assignees: v.optional(assigneesSchema),
+			visibleTo: v.optional(visibleToSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

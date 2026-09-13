@@ -20,7 +20,7 @@ export function BackButton({ to, label }: { to: string; label: string }) {
 		<HStack hAlign="start">
 			<Button
 				label={label}
-				variant="ghost"
+				variant="secondary"
 				size="sm"
 				icon={<ChevronLeft aria-hidden />}
 				onClick={() => void navigate({ to })}

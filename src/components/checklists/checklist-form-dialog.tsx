@@ -7,9 +7,34 @@ import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
+import {
+	draftTagIds,
+	EMPTY_TAGS_DRAFT,
+	TagsField,
+	tagsDraft,
+} from "#/components/tags/tags-field";
+import { VisibilityField } from "#/components/teams/visibility-field";
 import type { ChecklistValues } from "#/lib/changes";
-import type { Checklist } from "#/schemas/checklist";
-import { todayDateOnly } from "#/schemas/common";
+import {
+	type Checklist,
+	checklistStages,
+	DEFAULT_STAGES,
+	type Stage,
+} from "#/schemas/checklist";
+import { type DailyWindow, todayDateOnly } from "#/schemas/common";
+import type { Tag } from "#/schemas/tag";
+import { StagesField, stagesProblem } from "./stages-field";
+
+/** Whether two sets of stages are the same stages, named alike, in order. */
+function sameStages(a: ReadonlyArray<Stage>, b: ReadonlyArray<Stage>): boolean {
+	return (
+		a.length === b.length &&
+		a.every(
+			(stage, at) =>
+				stage.stageId === b[at].stageId && stage.name.trim() === b[at].name,
+		)
+	);
+}
 
 /**
  * Create or edit a checklist.
@@ -21,11 +46,20 @@ export function ChecklistFormDialog({
 	isOpen,
 	onOpenChange,
 	checklist,
+	tags,
+	resolveTags,
+	isSaving = false,
 	onSubmit,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	checklist?: Checklist;
+	/** Every tag that exists, for the tags field. */
+	tags: ReadonlyArray<Tag>;
+	/** Tag names to ids, making a tag for any name that does not exist yet. */
+	resolveTags: (names: Array<string>) => Array<string>;
+	/** The save is on its way; the button waits with it. */
+	isSaving?: boolean;
 	onSubmit: (values: ChecklistValues) => void;
 }) {
 	const [title, setTitle] = useState("");
@@ -36,8 +70,16 @@ export function ChecklistFormDialog({
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
+	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
+	const [tagDraft, setTagDraft] = useState(EMPTY_TAGS_DRAFT);
+	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
+	const [stages, setStages] = useState<Array<Stage>>([...DEFAULT_STAGES]);
 
 	// Reset to the current values every time the dialog opens.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
 	useEffect(() => {
 		if (!isOpen) return;
 		setTitle(checklist?.title ?? "");
@@ -47,21 +89,50 @@ export function ChecklistFormDialog({
 				(todayDateOnly() as ISODateString),
 		);
 		setDeadline((checklist?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(checklist?.deadlineTime ?? undefined);
+		setDailyWindow(checklist?.dailyWindow ?? null);
+		setTagDraft(tagsDraft(checklist?.tagIds ?? [], tags));
+		setVisibleTo(checklist?.visibleTo ?? null);
+		setStages([...checklistStages(checklist ?? {})]);
 	}, [isOpen, checklist]);
 
 	const trimmedTitle = title.trim();
-	const isValid = trimmedTitle !== "" && startDate !== undefined;
+	const isValid =
+		trimmedTitle !== "" &&
+		startDate !== undefined &&
+		(dailyWindow === null || dailyWindow.to > dailyWindow.from) &&
+		stagesProblem(stages) === null;
 
-	function submit(event: FormEvent) {
-		event.preventDefault();
+	function save() {
 		if (!isValid || startDate === undefined) return;
+
+		// Sent only when they changed: saving a title must not move a single task.
+		const original = checklistStages(checklist ?? {});
+		const named = stages.map((stage) => ({
+			...stage,
+			name: stage.name.trim(),
+		}));
 
 		onSubmit({
 			title: trimmedTitle,
 			description: description.trim(),
 			startDate,
-			deadline: deadline ?? null,
+			// Repeating daily takes the deadline's place; see `ScheduleFields`.
+			deadline: dailyWindow === null ? (deadline ?? null) : null,
+			deadlineTime:
+				dailyWindow === null && deadline !== undefined
+					? (deadlineTime ?? null)
+					: null,
+			dailyWindow,
+			tagIds: draftTagIds(tagDraft, resolveTags),
+			visibleTo,
+			...(sameStages(named, original) ? {} : { stages: named }),
 		});
+	}
+
+	function submit(event: FormEvent) {
+		event.preventDefault();
+		save();
 	}
 
 	return (
@@ -85,6 +156,7 @@ export function ChecklistFormDialog({
 						type="submit"
 						form={formId}
 						isDisabled={!isValid}
+						isLoading={isSaving}
 					/>
 				</HStack>
 			)}
@@ -108,9 +180,26 @@ export function ChecklistFormDialog({
 				<ScheduleFields
 					startDate={startDate}
 					deadline={deadline}
+					deadlineTime={deadlineTime}
+					dailyWindow={dailyWindow}
 					onStartDateChange={setStartDate}
 					onDeadlineChange={setDeadline}
+					onDeadlineTimeChange={setDeadlineTime}
+					onDailyWindowChange={setDailyWindow}
 				/>
+				<StagesField value={stages} onChange={setStages} />
+				<TagsField
+					label="Tags"
+					description="Every task in this checklist carries these, done or not, and so will any added later."
+					tags={tags}
+					draft={tagDraft}
+					onChange={setTagDraft}
+					onSubmit={save}
+				/>
+				{/* The Inbox is everyone's, in a team as anywhere. */}
+				{checklist?.special === "inbox" ? null : (
+					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
+				)}
 			</VStack>
 		</FormDialog>
 	);

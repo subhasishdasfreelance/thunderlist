@@ -1,11 +1,21 @@
 import { Avatar } from "@astryxdesign/core/Avatar";
-import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import {
+	DropdownMenu,
+	DropdownMenuDivider,
+	DropdownMenuItem,
+} from "@astryxdesign/core/DropdownMenu";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
+import { Token } from "@astryxdesign/core/Token";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
-import { LogOut } from "lucide-react";
+import { useNavigate, useRouter } from "@tanstack/react-router";
+import { LogOut, MessageSquare, Settings, Users } from "lucide-react";
 import { useState } from "react";
+import { RoleToken } from "#/components/teams/role-token";
 import type { SignedInUser } from "#/lib/auth.server";
 import { authClient } from "#/lib/auth-client";
+import { useSpace } from "#/lib/use-team";
+import { FeedbackDialog } from "./feedback-dialog";
 
 /**
  * Who you are signed in as, and the way out.
@@ -14,14 +24,26 @@ import { authClient } from "#/lib/auth-client";
  * is this" at a glance — which matters on a machine where more than one person
  * signs in. Initials stand in while it loads or if the account has no picture.
  *
+ * Opened, the menu leads with the account itself — a large face, the name, the
+ * address, and what you are where you are working — on a wash of the accent,
+ * so it reads as the menu's heading rather than as something to press. Below
+ * it, Settings and feedback, then signing out on its own, where it is not
+ * pressed by accident. Moving between spaces, and everything about teams, is
+ * in Settings.
+ *
  * Signing out clears the cached queries as well as the session. They hold the
  * previous account's checklists, and the next person to sign in on this browser
  * must not be handed them from memory.
  */
 export function UserMenu({ user }: { user: SignedInUser }) {
 	const router = useRouter();
+	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const space = useSpace();
 	const [isSigningOut, setIsSigningOut] = useState(false);
+	const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+
+	const team = space?.team ?? null;
 
 	async function signOut() {
 		setIsSigningOut(true);
@@ -30,6 +52,9 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 			await authClient.signOut();
 		} finally {
 			queryClient.clear();
+			// The installed app keeps a copy of Today to open on, and that copy is
+			// this account's; see `public/sw.js`.
+			if ("caches" in window) void caches.delete("thunderlist-pages-v1");
 			// A router invalidation re-runs the root guard, which sees no session
 			// and sends this browser to the login page.
 			await router.invalidate();
@@ -37,56 +62,101 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 	}
 
 	return (
-		<DropdownMenu
-			placement="below"
-			alignment="end"
-			hasChevron={false}
-			button={{
-				label: `Account: ${user.name}`,
-				variant: "ghost",
-				size: "sm",
-				isIconOnly: true,
-				icon: (
+		<>
+			{/*
+			 * Which team this is, in the bar, so work is never put in the wrong
+			 * one by mistake. Not on a phone, whose bar has no room for it; the
+			 * menu still says.
+			 */}
+			{team === null ? null : (
+				<span className="hidden sm:inline-flex">
+					<Token size="sm" label={team.name} icon={<Users aria-hidden />} />
+				</span>
+			)}
+
+			<DropdownMenu
+				placement="below"
+				alignment="end"
+				hasChevron={false}
+				menuWidth={300}
+				button={{
+					label: `Account: ${user.name}`,
+					variant: "ghost",
+					size: "md",
+					isIconOnly: true,
+					/*
+					 * `xsm`, 20px, not the 26 of the icons beside it: a solid disc reads
+					 * larger than a line drawing of the same size, so at 20 it sits level
+					 * with the 22px help ring.
+					 */
+					icon: (
+						<Avatar
+							size="xsm"
+							name={user.name}
+							src={user.image ?? undefined}
+							tooltip={false}
+						/>
+					),
+				}}
+			>
+				<div className="thunderlist-account-card">
 					<Avatar
-						size="sm"
+						size="lg"
 						name={user.name}
 						src={user.image ?? undefined}
 						tooltip={false}
 					/>
-				),
-			}}
-			/*
-			 * The account is a heading, not two disabled actions.
-			 *
-			 * Disabled is how a menu says "you cannot do this", and it is drawn that
-			 * way — greyed almost into the background. Which account you are signed
-			 * in as is not a thing you might have done, so as items the name and
-			 * address were both mislabelled and nearly unreadable.
-			 *
-			 * Two sections instead: a title says what the section is about and is
-			 * drawn to be read. Two of them keeps the name and the address on their
-			 * own lines, which also keeps the menu the width of an address rather
-			 * than the width of both at once.
-			 */
-			menuWidth={240}
-			items={[
-				{ type: "section" as const, title: user.name, items: [] },
-				{
-					type: "section" as const,
-					title: user.email,
-					items: [
-						{
-							label: isSigningOut ? "Signing out…" : "Sign out",
-							icon: <LogOut aria-hidden />,
-							variant: "destructive" as const,
-							isDisabled: isSigningOut,
-							onClick: () => {
-								void signOut();
-							},
-						},
-					],
-				},
-			]}
-		/>
+					<VStack gap={0.5}>
+						<VStack gap={0}>
+							<Text weight="semibold" maxLines={1}>
+								{user.name}
+							</Text>
+							<Text type="supporting" maxLines={1}>
+								{user.email}
+							</Text>
+						</VStack>
+						{/* What they are where they are working, so it is never guessed. */}
+						<HStack gap={1.5} vAlign="center">
+							{team === null ? (
+								<Token size="sm" label="Personal" />
+							) : (
+								<>
+									<RoleToken role={team.role} />
+									<Text type="supporting" color="secondary" maxLines={1}>
+										in {team.name}
+									</Text>
+								</>
+							)}
+						</HStack>
+					</VStack>
+				</div>
+
+				<DropdownMenuItem
+					icon={<Settings aria-hidden />}
+					label="Settings"
+					description="Your account, and where you work"
+					onClick={() => void navigate({ to: "/settings" })}
+				/>
+				<DropdownMenuItem
+					icon={<MessageSquare aria-hidden />}
+					label="Send feedback…"
+					onClick={() => setIsFeedbackOpen(true)}
+				/>
+
+				<DropdownMenuDivider />
+				<DropdownMenuItem
+					icon={<LogOut aria-hidden />}
+					label={isSigningOut ? "Signing out…" : "Sign out"}
+					variant="destructive"
+					isDisabled={isSigningOut}
+					onClick={() => void signOut()}
+				/>
+			</DropdownMenu>
+
+			<FeedbackDialog
+				isOpen={isFeedbackOpen}
+				onOpenChange={setIsFeedbackOpen}
+			/>
+		</>
 	);
 }

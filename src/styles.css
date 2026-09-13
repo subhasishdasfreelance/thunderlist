@@ -47,47 +47,147 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Glass navigation                                                           */
+/* Glass                                                                      */
 /* -------------------------------------------------------------------------- */
 
 /*
- * The top bar and the phone's bottom bar float over the content rather than
- * sitting behind a solid block, so a page reads as one surface that continues
- * underneath them.
+ * The top bar, the phone's bottom bar and everything that opens over the page
+ * — dialogs, menus, pickers, the tag suggestions — are glass rather than solid
+ * blocks, so a page reads as one surface that continues underneath them.
  *
- * The alpha is a balance: translucency costs contrast, and these bars carry the
- * app's navigation, so the blur is asked to do most of the separating and the
- * wash only has to be thin enough to see through. `color-mix` keeps the colour
- * tied to the surface token instead of hardcoding one, so it still tracks the
- * palette.
+ * The top bar only turns to glass once the page has scrolled. At the top there
+ * is nothing underneath it to separate from, so it stays clear and reads as the
+ * top of the page rather than a strip laid over it. `AppFrame` sets
+ * `data-scrolled`.
+ *
+ * The alpha is a balance: translucency costs contrast, so the blur is asked to
+ * do the separating and the wash only has to be thin enough to see through. A
+ * blur this heavy is what lets the wash be this thin: what passes underneath
+ * arrives as colour, never as a ghost of its text behind the glass's own, and
+ * the saturation keeps that colour from turning muddy. `color-mix` keeps each
+ * wash tied to its surface token instead of hardcoding one, so it still tracks
+ * the palette.
  */
 @layer components {
-	.astryx-app-shell-header,
-	.thunderlist-glass {
-		background-color: color-mix(
-			in srgb,
-			var(--color-background-surface) 72%,
-			transparent
-		);
-		-webkit-backdrop-filter: saturate(180%) blur(16px);
-		backdrop-filter: saturate(180%) blur(16px);
+	.astryx-app-shell-header {
+		background-color: transparent;
+		transition:
+			background-color var(--duration-fast) var(--ease-standard),
+			backdrop-filter var(--duration-fast) var(--ease-standard),
+			box-shadow var(--duration-fast) var(--ease-standard);
 	}
 
 	/*
-	 * Without backdrop-filter there is no blur to separate the bar from what is
-	 * behind it, and a flat wash of translucent white over arbitrary content is
-	 * exactly the unreadable case. Those browsers get the opaque surface.
+	 * How much of its surface each kind of glass keeps. The bars carry short
+	 * labels and icons, and are the thinnest. Dialogs, menus and pickers carry
+	 * text to be read over whatever is under them — a menu has no scrim — so
+	 * they keep more.
+	 */
+	:root {
+		--thunderlist-bar-wash: 42%;
+		--thunderlist-overlay-wash: 64%;
+	}
+
+	[data-scrolled="true"] .astryx-app-shell-header,
+	.thunderlist-glass {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-surface) var(--thunderlist-bar-wash),
+			transparent
+		);
+		-webkit-backdrop-filter: saturate(180%) blur(36px);
+		backdrop-filter: saturate(180%) blur(36px);
+	}
+
+	/*
+	 * Everything that opens over the page: dialogs, the menus and pickers
+	 * Astryx opens as popovers, and the tag suggestions, drawn the same way.
+	 * Tooltips are not popover surfaces and stay solid and inverted, which is
+	 * the whole point of a tooltip.
+	 */
+	.astryx-dialog {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-surface) var(--thunderlist-overlay-wash),
+			transparent
+		);
+	}
+
+	.astryx-popover-surface,
+	.thunderlist-suggestions {
+		background-color: color-mix(
+			in srgb,
+			var(--color-background-popover) var(--thunderlist-overlay-wash),
+			transparent
+		);
+	}
+
+	.astryx-dialog,
+	.astryx-popover-surface,
+	.thunderlist-suggestions {
+		-webkit-backdrop-filter: saturate(180%) blur(40px);
+		backdrop-filter: saturate(180%) blur(40px);
+	}
+
+	/*
+	 * An edge rather than a slab: a hairline where the glass meets the page, a
+	 * lit rim just inside it, and a shadow soft enough to read as depth rather
+	 * than as a border. The rim is near-invisible in the dark, where a bright
+	 * line would be the loudest thing on the screen.
+	 */
+	[data-scrolled="true"] .astryx-app-shell-header {
+		box-shadow:
+			inset 0 -1px 0 var(--color-border),
+			0 10px 30px -20px var(--color-shadow);
+	}
+
+	.thunderlist-glass {
+		box-shadow:
+			inset 0 1px 0
+				light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.06)),
+			0 -10px 30px -20px var(--color-shadow);
+	}
+
+	/*
+	 * Without backdrop-filter there is no blur to separate the glass from what
+	 * is behind it, and a thin wash over arbitrary content is exactly the
+	 * unreadable case — as it is for anyone who has asked their system for less
+	 * transparency or more contrast. All of them get the solid surface.
 	 */
 	@supports not (backdrop-filter: blur(1px)) {
-		.astryx-app-shell-header,
-		.thunderlist-glass {
-			background-color: var(--color-background-surface);
+		:root {
+			--thunderlist-bar-wash: 100%;
+			--thunderlist-overlay-wash: 100%;
+		}
+	}
+
+	@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+		:root {
+			--thunderlist-bar-wash: 100%;
+			--thunderlist-overlay-wash: 100%;
 		}
 	}
 
 	/* The nav sits on the glass, so it must not paint its own background over it. */
 	.astryx-app-shell-header .astryx-top-nav {
 		background-color: transparent;
+	}
+}
+
+/*
+ * No side nav on a phone, from the first paint.
+ *
+ * AppShell chooses between its side nav and the phone layout with a media
+ * query run in JavaScript, and the server has no screen to ask, so it sends the
+ * desktop layout. A phone drew the side nav and then dropped it once the page
+ * had hydrated. The same breakpoint in CSS keeps it from being drawn at all.
+ * 768px is AppShell's own cut-off, not Tailwind's `md`.
+ */
+@layer components {
+	@media (max-width: 768px) {
+		.astryx-app-shell-sidenav {
+			display: none;
+		}
 	}
 }
 
@@ -262,11 +362,6 @@ body {
 		caret-color: var(--color-text-primary);
 	}
 
-	/* The placeholder is the field's own, so it must stay visible. */
-	.thunderlist-field :is(textarea, input)::placeholder {
-		color: var(--color-text-secondary);
-	}
-
 	.thunderlist-field :is(textarea, input)::selection {
 		background-color: var(--color-accent-muted);
 	}
@@ -294,6 +389,23 @@ body {
 	}
 	.thunderlist-flag[data-flag="important"][data-on="true"] svg {
 		color: var(--color-icon-purple);
+	}
+
+	/*
+	 * The bolt that puts a task on Today, lit in the gold of the app's own bolt:
+	 * it is the one flag about the day rather than about the task.
+	 */
+	.thunderlist-flag[data-flag="today"][data-on="true"] button {
+		background-color: var(--color-background-yellow);
+		color: var(--color-text-yellow);
+	}
+	.thunderlist-flag[data-flag="today"][data-on="true"] svg {
+		color: var(--color-icon-yellow);
+	}
+
+	/* Switching a flag on is confirmed with the same small bump as a tick. */
+	.thunderlist-flag[data-on="true"] svg {
+		animation: thunderlist-check var(--duration-fast-max) var(--ease-standard);
 	}
 
 	/*
@@ -419,10 +531,14 @@ body {
 		opacity: 1;
 	}
 
-	/* The bolt, breathing while it waits. */
+	/*
+	 * The bolt, breathing while it waits, in the gold of `public/logo.svg`. It is
+	 * the brand's colour rather than a theme token, so like the bolt in the bar
+	 * it stays the same in both schemes.
+	 */
 	.thunderlist-loading-mark {
 		display: inline-flex;
-		color: var(--color-icon-accent);
+		color: #efc75e;
 		animation: thunderlist-breathe var(--duration-slow-max) var(--ease-standard)
 			infinite;
 	}
@@ -438,16 +554,40 @@ body {
 		display: inline-flex;
 	}
 
-	.thunderlist-sort-icon[data-off="true"]::after {
+	/*
+	 * Drawn on and wiped off rather than switched, so pressing the toggle shows
+	 * the stroke arriving or leaving — the change is the thing being confirmed.
+	 */
+	.thunderlist-sort-icon::after {
 		content: "";
 		position: absolute;
 		inset-block: -1px;
 		inset-inline-start: 50%;
 		width: 1.5px;
 		background-color: currentColor;
-		transform: rotate(45deg);
+		transform: rotate(45deg) scaleY(0);
 		transform-origin: center;
 		border-radius: 1px;
+		transition: transform var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-sort-icon[data-off="true"]::after {
+		transform: rotate(45deg) scaleY(1);
+	}
+
+	/*
+	 * A segment gives under the finger the way a button does. Astryx's own
+	 * colour transitions are restated alongside, since naming `transform` here
+	 * replaces its list rather than adding to it.
+	 */
+	.astryx-segmented-control-item {
+		transition-property: color, background-color, box-shadow, transform;
+		transition-duration: var(--duration-fast);
+		transition-timing-function: var(--ease-standard);
+	}
+
+	.astryx-segmented-control-item:active {
+		transform: scale(0.96);
 	}
 
 	/*
@@ -489,7 +629,7 @@ body {
 	}
 
 	.thunderlist-brand-name {
-		font-size: 1.0625rem;
+		font-size: 1.125rem;
 		font-weight: 800;
 		letter-spacing: -0.02em;
 		color: var(--color-text-primary);
@@ -528,6 +668,103 @@ body {
 	}
 
 	/*
+	 * The account, at the top of its menu: a face and a name big enough to
+	 * answer "whose is this" from across the desk, on a wash of the accent so
+	 * it reads as the menu's heading rather than its first item.
+	 */
+	.thunderlist-account-card {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin: 0.25rem 0.25rem 0.375rem;
+		padding: 0.75rem;
+		border-radius: var(--radius-element, 0.5rem);
+		background-color: color-mix(in srgb, var(--color-accent) 10%, transparent);
+	}
+
+	/* A group's name inside a menu, above the items it heads. */
+	.thunderlist-menu-heading {
+		padding-block: 0.375rem 0.125rem;
+		padding-inline: 0.75rem;
+	}
+
+	/*
+	 * Who can see a list: a row of faces beside the way back, drawn to the
+	 * same size and weight as that button so the two read as a pair.
+	 */
+	.thunderlist-people-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 2rem;
+		padding-block: 0.25rem;
+		padding-inline: 0.5rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-element, 0.5rem);
+		background-color: var(--color-background-surface);
+		color: var(--color-text-primary);
+		font-size: var(--text-supporting-size, 0.8125rem);
+		font-weight: 500;
+		cursor: pointer;
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-people-button:hover {
+		box-shadow: inset 0 0 0 999px var(--color-overlay-hover);
+	}
+
+	.thunderlist-people-button:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	/*
+	 * What each role in a team can do, on the Settings screen. A tick is the
+	 * accent, and a dash is left quiet, so the eye runs down what a role can do
+	 * rather than what it cannot.
+	 */
+	.thunderlist-roles {
+		width: 100%;
+		min-width: 34rem;
+		border-collapse: collapse;
+		font-size: var(--text-supporting-size, 0.8125rem);
+	}
+
+	.thunderlist-roles th,
+	.thunderlist-roles td {
+		padding-block: 0.5rem;
+		padding-inline: 0.5rem;
+		border-block-end: 1px solid var(--color-border);
+		text-align: center;
+	}
+
+	.thunderlist-roles thead th {
+		color: var(--color-text-secondary);
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.thunderlist-roles tbody th {
+		color: var(--color-text-primary);
+		font-weight: 400;
+		text-align: start;
+	}
+
+	.thunderlist-roles td svg {
+		display: inline-block;
+		color: var(--color-text-disabled);
+	}
+
+	.thunderlist-roles td[data-can="true"] svg {
+		color: var(--color-icon-accent);
+	}
+
+	/* A list turned to another page comes back into view below the top bar. */
+	:has(> .thunderlist-pagination) {
+		scroll-margin-top: 5rem;
+	}
+
+	/*
 	 * A completed row reads as settled rather than gone: the text loses weight
 	 * and colour, and the change is eased so ticking one is not a flicker.
 	 */
@@ -553,24 +790,37 @@ body {
  * The movement is small on purpose. A dialog that flies in from the edge is a
  * transition the reader has to wait through; one that settles a few pixels is
  * one they would only notice the absence of.
+ *
+ * A dialog comes down from above and goes back up the way it came. Astryx's
+ * own entrance travels from whatever opened the dialog towards the middle of
+ * the screen, which from a button near a corner reads as the dialog flying in
+ * from that corner — so it is switched off and this is the only motion.
+ * Leaving is quicker than arriving: arriving is something to see, leaving is
+ * getting out of the way.
  */
 @layer components {
 	.astryx-dialog {
+		animation: none;
 		transition:
-			opacity var(--duration-medium) var(--ease-standard),
-			transform var(--duration-medium) var(--ease-standard),
-			overlay var(--duration-medium) allow-discrete,
-			display var(--duration-medium) allow-discrete;
+			opacity var(--duration-fast) var(--ease-standard),
+			transform var(--duration-fast) var(--ease-standard),
+			overlay var(--duration-fast) allow-discrete,
+			display var(--duration-fast) allow-discrete;
+	}
+
+	.astryx-dialog[open] {
+		transition-duration: var(--duration-medium-min);
 	}
 
 	.astryx-dialog:not([open]) {
-		transform: translateY(0.75rem) scale(0.96);
+		opacity: 0;
+		transform: translateY(-0.75rem);
 	}
 
 	@starting-style {
 		.astryx-dialog[open] {
 			opacity: 0;
-			transform: translateY(0.75rem) scale(0.96);
+			transform: translateY(-1.5rem);
 		}
 	}
 
@@ -593,28 +843,36 @@ body {
 	}
 
 	/*
-	 * Menus and tooltips, which are native popovers underneath.
+	 * Menus, pickers and tooltips, which are native popovers underneath.
 	 *
-	 * Quicker than a dialog, and moving the other way: a menu belongs to the
-	 * button that opened it, so it grows down out of it rather than rising.
+	 * The same motion as a dialog, only quicker: down from above into place,
+	 * and back up faster than it came. Nothing scales. Astryx's own entrance
+	 * grows a menu out of the button that opened it, and from a button in the
+	 * corner of the bar that reads as the menu coming out of the corner — so it
+	 * is switched off and this is the only motion.
 	 */
 	[popover] {
+		animation: none;
 		transition:
-			opacity var(--duration-fast) var(--ease-standard),
-			transform var(--duration-fast) var(--ease-standard),
-			overlay var(--duration-fast) allow-discrete,
-			display var(--duration-fast) allow-discrete;
+			opacity var(--duration-fast-min) var(--ease-standard),
+			transform var(--duration-fast-min) var(--ease-standard),
+			overlay var(--duration-fast-min) allow-discrete,
+			display var(--duration-fast-min) allow-discrete;
+	}
+
+	[popover]:popover-open {
+		transition-duration: var(--duration-fast-max);
 	}
 
 	[popover]:not(:popover-open) {
 		opacity: 0;
-		transform: translateY(-0.25rem) scale(0.97);
+		transform: translateY(-0.25rem);
 	}
 
 	@starting-style {
 		[popover]:popover-open {
 			opacity: 0;
-			transform: translateY(-0.25rem) scale(0.97);
+			transform: translateY(-0.5rem);
 		}
 	}
 
@@ -698,30 +956,114 @@ body {
 	}
 
 	/*
-	 * A row that has just moved to a new place in its list.
+	 * A section folding open and shut; see `CompletedSection`.
 	 *
-	 * The distance it travelled is measured and handed here as a custom property,
-	 * so the row slides from where it was instead of appearing where it ended up.
-	 * See `useReorderAnimation`.
+	 * The height moves through the grid row rather than `height`, which cannot
+	 * animate to or from `auto`: a `0fr` track holds the content at nothing, a
+	 * `1fr` track at its own height, and the two interpolate. The gap above the
+	 * content lives inside the clipped box, so a folded section takes no room.
+	 *
+	 * The clipped box is a little wider than the content, and there is room
+	 * under it, so a card's shadow is not shaved off at the edges.
 	 */
-	.thunderlist-row[data-moved] {
-		animation: thunderlist-settle var(--duration-medium) var(--ease-standard);
+	.thunderlist-collapse {
+		display: grid;
+		grid-template-rows: 0fr;
+		opacity: 0;
+		transition:
+			grid-template-rows var(--duration-medium-min) var(--ease-standard),
+			opacity var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-collapse[data-open="true"] {
+		grid-template-rows: 1fr;
+		opacity: 1;
+	}
+
+	.thunderlist-collapse > div {
+		min-height: 0;
+		overflow: hidden;
+		margin-inline: -0.25rem;
+		padding-inline: 0.25rem;
+	}
+
+	.thunderlist-collapse-body {
+		padding-block: 0.5rem 0.25rem;
+	}
+
+	/* The heading that folds it: the chevron turns to point at what it opened. */
+	.thunderlist-disclosure {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-inline-start: -0.375rem;
+		padding-block: 0.25rem;
+		padding-inline: 0.25rem 0.5rem;
+		border-radius: var(--radius-element, 0.5rem);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-disclosure:hover {
+		background-color: var(--color-overlay-hover);
+	}
+
+	.thunderlist-disclosure-chevron {
+		transition: transform var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-disclosure[aria-expanded="true"] .thunderlist-disclosure-chevron {
+		transform: rotate(90deg);
+	}
+
+	/*
+	 * The pace target: the bolt from `public/logo.svg`, standing on the bar.
+	 *
+	 * Its lowest point is the mark, so that point — not the icon's corner — is
+	 * what lands on the value. In the artwork it is 71.906 of 280.027 units from
+	 * the left (25.68% of the way across) and at the very bottom. `bottom: 4px`
+	 * is half of Astryx's 8px track, so the point sits on the bar's centre line.
+	 * The bar is given the bolt's height above it, rather than the bolt reaching
+	 * up into the row overhead.
+	 */
+	.thunderlist-meter {
+		position: relative;
+	}
+
+	.thunderlist-meter[data-has-target="true"] {
+		padding-block-start: 0.625rem;
+	}
+
+	.thunderlist-meter-target {
+		position: absolute;
+		inset-block-end: 4px;
+		left: calc(var(--thunderlist-target-at) - 0.2568 * 0.875rem);
+		width: 0.875rem;
+		height: 0.875rem;
+		max-width: none;
+		filter: drop-shadow(0 1px 1px var(--color-shadow));
+	}
+
+	/* The same bolt beside the words, as the key to the mark. */
+	.thunderlist-meter-key {
+		filter: drop-shadow(0 1px 1px var(--color-shadow));
 	}
 
 	/*
 	 * Placeholders read as a prompt, not as content.
 	 *
 	 * At the secondary text colour they are as dark as a real value and get read
-	 * as one, so an empty field looks filled in. Mixing that colour towards the
-	 * field's own background lightens it without dropping it to the disabled
-	 * level, where it would stop being legible at a glance.
+	 * as one, so an empty field looks filled in — and mixed two-thirds of the way
+	 * there, they still did. The colour is faded rather than mixed towards one
+	 * background, so it stays equally quiet on whatever the field sits on, in
+	 * either scheme.
+	 *
+	 * It is set explicitly, which is also what keeps it visible in a tag field,
+	 * where the field's own text is transparent; see `.thunderlist-field`.
 	 */
 	::placeholder {
-		color: color-mix(
-			in srgb,
-			var(--color-text-secondary) 62%,
-			var(--color-background-surface)
-		);
+		color: color-mix(in srgb, var(--color-text-secondary) 45%, transparent);
 		opacity: 1;
 	}
 
@@ -869,6 +1211,11 @@ body {
 		.thunderlist-stats {
 			grid-template-columns: repeat(6, minmax(0, 1fr));
 		}
+
+		/* Eight figures read as two rows of four, not a row of six and a stray two. */
+		.thunderlist-stats:has(> :nth-child(7)) {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
 	}
 }
 
@@ -971,11 +1318,33 @@ body {
 	}
 }
 
-@keyframes thunderlist-settle {
-	from {
-		transform: translateY(var(--thunderlist-moved-by, 0));
-	}
-	to {
-		transform: none;
+/*
+ * With reduced motion asked for, overlays fade without travelling and the rest
+ * of the small motions above simply happen.
+ */
+@layer components {
+	@media (prefers-reduced-motion: reduce) {
+		.astryx-dialog:not([open]),
+		[popover]:not(:popover-open) {
+			transform: none;
+		}
+
+		@starting-style {
+			.astryx-dialog[open],
+			[popover]:popover-open {
+				transform: none;
+			}
+		}
+
+		.thunderlist-collapse,
+		.thunderlist-disclosure-chevron,
+		.thunderlist-sort-icon::after,
+		.astryx-segmented-control-item {
+			transition: none;
+		}
+
+		.thunderlist-flag[data-on="true"] svg {
+			animation: none;
+		}
 	}
 }

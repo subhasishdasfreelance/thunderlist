@@ -1,10 +1,16 @@
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Inbox } from "lucide-react";
 import { PaceLabel } from "#/components/common/pace-label";
-import { ProgressMeter } from "#/components/common/progress-meter";
+import {
+	formatExpectedTasks,
+	ProgressMeter,
+} from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { computeVelocity, elapsedFraction } from "#/lib/progress";
+import { computeVelocity } from "#/lib/progress";
+import { usePace } from "#/lib/use-pace";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
 /**
@@ -14,22 +20,24 @@ import type { ChecklistSummary } from "#/schemas/checklist";
 export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 	const { progress } = checklist;
 
-	const elapsed = elapsedFraction({
-		startDate: checklist.startDate,
-		deadline: checklist.deadline,
-	});
+	const pace = usePace(
+		checklist,
+		progress.total === 0 ? null : progress.completed / progress.total,
+	);
 
 	// Tasks are the unit here, so the same maths a tracker uses for pages
 	// answers "how fast am I getting through this list".
 	const summary =
-		progress.total === 0
+		progress.total === 0 || pace.now === null
 			? null
 			: velocitySummary(
 					computeVelocity({
 						startDate: checklist.startDate,
 						deadline: checklist.deadline,
+						deadlineTime: checklist.deadlineTime,
 						current: progress.completed,
 						target: progress.total,
+						now: pace.now,
 					}),
 					"tasks",
 					progress.completed >= progress.total,
@@ -43,19 +51,30 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 		>
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
-					<Text weight="medium" maxLines={1}>
-						{checklist.title}{" "}
-						<Text color="secondary" weight="normal">
-							({progress.percent}%)
+					<HStack gap={1.5} vAlign="center">
+						{/* Where tasks with no other home land; see `ensureInbox`. */}
+						{checklist.special === "inbox" ? (
+							<Icon icon={Inbox} size="sm" color="secondary" />
+						) : null}
+						<Text weight="medium" maxLines={1}>
+							{checklist.title}{" "}
+							<Text color="secondary" weight="normal">
+								({progress.percent}%)
+							</Text>
 						</Text>
-					</Text>
-					<PaceLabel status={checklist.status} />
+					</HStack>
+					<PaceLabel status={pace.status} />
 				</HStack>
 
 				<ProgressMeter
 					label={`${checklist.title} progress`}
 					percent={progress.percent}
-					expectedPercent={elapsed === null ? null : elapsed * 100}
+					elapsed={pace.elapsed}
+					expectedReading={
+						pace.elapsed == null
+							? undefined
+							: formatExpectedTasks(pace.elapsed, progress.total)
+					}
 					footnote={`${progress.completed} / ${progress.total} ${
 						progress.total === 1 ? "task" : "tasks"
 					}`}

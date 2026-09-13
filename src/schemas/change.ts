@@ -6,19 +6,16 @@ import {
 } from "./checklist";
 import {
 	createTagInputSchema,
-	deleteTagInputSchema,
+	tagIdInputSchema,
 	updateTagInputSchema,
 } from "./tag";
 import {
 	createTaskInputSchema,
 	deleteTaskInputSchema,
+	moveTaskInputSchema,
 	updateTaskInputSchema,
 } from "./task";
-import {
-	addTaskRefInputSchema,
-	moveTaskRefInputSchema,
-	removeTaskRefInputSchema,
-} from "./task-list";
+import { taskTypesInputSchema } from "./task-type";
 import {
 	createProgressEntryInputSchema,
 	createTrackerInputSchema,
@@ -66,6 +63,10 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("task.delete"),
 		...deleteTaskInputSchema.entries,
 	}),
+	v.object({
+		kind: v.literal("task.move"),
+		...moveTaskInputSchema.entries,
+	}),
 
 	v.object({
 		kind: v.literal("tracker.create"),
@@ -93,16 +94,14 @@ const changeSchema = v.variant("kind", [
 		...deleteProgressEntryInputSchema.entries,
 	}),
 
-	v.object({ kind: v.literal("ref.add"), ...addTaskRefInputSchema.entries }),
-	v.object({
-		kind: v.literal("ref.remove"),
-		...removeTaskRefInputSchema.entries,
-	}),
-	v.object({ kind: v.literal("ref.move"), ...moveTaskRefInputSchema.entries }),
-
 	v.object({ kind: v.literal("tag.create"), ...createTagInputSchema.entries }),
 	v.object({ kind: v.literal("tag.update"), ...updateTagInputSchema.entries }),
-	v.object({ kind: v.literal("tag.delete"), ...deleteTagInputSchema.entries }),
+	v.object({ kind: v.literal("tag.delete"), ...tagIdInputSchema.entries }),
+
+	v.object({
+		kind: v.literal("taskTypes.set"),
+		...taskTypesInputSchema.entries,
+	}),
 ]);
 
 export type Change = v.InferOutput<typeof changeSchema>;

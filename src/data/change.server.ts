@@ -9,31 +9,31 @@
  * it, deleting something already gone is a no-op — so a retry after a dropped
  * connection cannot double up.
  *
- * The owner comes in as an argument and every branch passes it on. The ids in
+ * The owner comes in with the scope and every branch passes it on. The ids in
  * a change are the browser's, and therefore anybody's; the owner is the
  * server's, read from the session, and it is what makes a change naming
- * someone else's row a no-op rather than an edit.
+ * someone else's row a no-op rather than an edit. In a team the scope also
+ * says what this person is in it and what is kept from them, and a change is
+ * refused before it can reach anything their role may not change or they may
+ * not see; see `assertAllowed`.
  */
 
 import { AppError } from "#/lib/errors";
+import { collections } from "#/lib/mongo/client.server";
 import type { Change } from "#/schemas/change";
+import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
 	createChecklist,
 	createTask,
 	deleteChecklist,
 	deleteTask,
-	readChecklistTaskIds,
-	removeTagFromTasks,
+	moveTask,
 	updateChecklist,
 	updateTask,
 } from "./checklist.server";
+import { setTaskTypes } from "./settings.server";
 import { createTag, deleteTag, updateTag } from "./tag.server";
-import {
-	addTaskRef,
-	moveTaskRef,
-	removeTaskRef,
-	removeTaskRefsFor,
-} from "./task-list.server";
+import type { Scope } from "./team.server";
 import {
 	createProgressEntry,
 	createTracker,
@@ -42,6 +42,12 @@ import {
 	updateProgressEntry,
 	updateTracker,
 } from "./tracker.server";
+import {
+	assertChecklistVisible,
+	assertTagVisible,
+	assertTrackerVisible,
+	isTaskVisible,
+} from "./visibility.server";
 
 async function run(userId: string, change: Change): Promise<void> {
 	switch (change.kind) {
@@ -53,28 +59,13 @@ async function run(userId: string, change: Change): Promise<void> {
 			await updateChecklist(userId, change.checklistId, change.patch);
 			return;
 
-		case "checklist.delete": {
-			// Clear the references first: if this fails nothing has been destroyed
-			// yet, and the checklist is still there to try again.
-			const taskIds = await readChecklistTaskIds(userId, change.checklistId);
-			await removeTaskRefsFor(userId, taskIds);
+		case "checklist.delete":
 			await deleteChecklist(userId, change.checklistId);
 			return;
-		}
 
-		case "task.create": {
+		case "task.create":
 			await createTask(userId, change);
-
-			// Only once the task exists. Both writes happen inside this one
-			// request, so they are ordered — which is exactly what two separate
-			// requests could not guarantee, and why placing a task on a list is
-			// one change rather than two.
-			if (change.place) {
-				await addTaskRef(userId, { ...change.place, taskId: change.taskId });
-			}
-
 			return;
-		}
 
 		case "task.update":
 			await updateTask(userId, change.taskId, change.patch);
@@ -82,7 +73,10 @@ async function run(userId: string, change: Change): Promise<void> {
 
 		case "task.delete":
 			await deleteTask(userId, change.taskId);
-			await removeTaskRefsFor(userId, [change.taskId]);
+			return;
+
+		case "task.move":
+			await moveTask(userId, change.taskId, change.checklistId);
 			return;
 
 		case "tracker.create":
@@ -114,18 +108,6 @@ async function run(userId: string, change: Change): Promise<void> {
 			await deleteProgressEntry(userId, change.trackerId, change.entryId);
 			return;
 
-		case "ref.add":
-			await addTaskRef(userId, change);
-			return;
-
-		case "ref.remove":
-			await removeTaskRef(userId, change.list, change.itemId);
-			return;
-
-		case "ref.move":
-			await moveTaskRef(userId, change.list, change.itemId, change.direction);
-			return;
-
 		case "tag.create":
 			await createTag(userId, change);
 			return;
@@ -135,19 +117,213 @@ async function run(userId: string, change: Change): Promise<void> {
 			return;
 
 		case "tag.delete":
-			await removeTagFromTasks(userId, change.tagId);
+			// It takes the tag off everything carrying it first; see `deleteTag`.
 			await deleteTag(userId, change.tagId);
+			return;
+
+		case "taskTypes.set":
+			await setTaskTypes(userId, change.types);
 			return;
 	}
 }
 
+/**
+ * What a role needs to be allowed a change; see `Capability`.
+ *
+ * Moving work along — ticking a task, sending it to its next stage, editing
+ * it, taking it on, recording a tracker's reading — is updating what exists.
+ * Everything else — adding or deleting anything, moving a task to another
+ * checklist, and checklists, trackers, tags and task types themselves, who can
+ * see them included — is shaping the work, which is a project manager's.
+ */
+function capabilityFor(change: Change): Capability {
+	switch (change.kind) {
+		case "task.update":
+		case "entry.create":
+		case "entry.update":
+			return "updateTasks";
+		default:
+			return "manageContent";
+	}
+}
+
+/**
+ * Refuse a change this person may not make where they are working.
+ *
+ * In your own space there is nobody else, and everything is allowed. In a team,
+ * their role has to allow it; everyone a change names — to assign something
+ * to, or to let see something — has to be in the team; and a change cannot
+ * reach anything kept from this person, which to them does not exist.
+ */
+async function assertAllowed(scope: Scope, change: Change): Promise<void> {
+	const { team, hidden } = scope;
+	if (team === null) return;
+
+	const needed = capabilityFor(change);
+	if (!roleCan(team.role, needed)) {
+		throw new AppError(
+			"invalid_data",
+			roleCan(team.role, "updateTasks")
+				? `${ROLE_LABELS[team.role]}s can update tasks, but not add, delete or move them, or change checklists, trackers, tags or task types.`
+				: `${ROLE_LABELS[team.role]}s can't change anything in this team.`,
+		);
+	}
+
+	const outsider = namedPeople(change).find(
+		(email) => !team.emails.includes(email),
+	);
+	if (outsider !== undefined) {
+		throw new AppError("invalid_data", `${outsider} is not in this team.`);
+	}
+
+	switch (change.kind) {
+		case "checklist.update":
+		case "checklist.delete":
+			assertChecklistVisible(hidden, change.checklistId);
+			return;
+
+		case "task.create":
+			if (change.checklistId !== null) {
+				assertChecklistVisible(hidden, change.checklistId);
+			}
+			if (change.linkedChecklistId != null) {
+				assertChecklistVisible(hidden, change.linkedChecklistId);
+			}
+			if (change.trackerId != null) {
+				assertTrackerVisible(hidden, change.trackerId);
+			}
+			return;
+
+		case "tracker.update":
+		case "tracker.delete":
+		case "entry.create":
+		case "entry.update":
+		case "entry.delete":
+			assertTrackerVisible(hidden, change.trackerId);
+			return;
+
+		case "task.move":
+			assertChecklistVisible(hidden, change.checklistId);
+			await assertTaskVisible(scope, change.taskId);
+			return;
+
+		case "task.update":
+		case "task.delete":
+			await assertTaskVisible(scope, change.taskId);
+			return;
+
+		case "tag.update":
+		case "tag.delete":
+			assertTagVisible(hidden, change.tagId);
+			return;
+
+		default:
+			return;
+	}
+}
+
+/** Everyone a change assigns something to, or lets see something. */
+function namedPeople(change: Change): ReadonlyArray<string> {
+	switch (change.kind) {
+		case "checklist.create":
+		case "tag.create":
+			return change.visibleTo ?? [];
+		case "checklist.update":
+		case "tag.update":
+			return change.patch.visibleTo ?? [];
+		case "task.update":
+			return change.patch.assignees ?? [];
+		case "tracker.create":
+			return [...change.assignees, ...(change.visibleTo ?? [])];
+		case "tracker.update":
+			return [
+				...(change.patch.assignees ?? []),
+				...(change.patch.visibleTo ?? []),
+			];
+		default:
+			return [];
+	}
+}
+
+/** A task is seen by whoever can see where it lives; see `isTaskVisible`. */
+async function assertTaskVisible(scope: Scope, taskId: string): Promise<void> {
+	const { hidden } = scope;
+	if (hidden.checklistIds.size === 0 && hidden.tagIds.size === 0) return;
+
+	const current = await collections();
+	const task = await current.tasks.findOne(
+		{ taskId, userId: scope.ownerId },
+		{ projection: { _id: 0, checklistId: 1, tagIds: 1 } },
+	);
+
+	if (task && !isTaskVisible(task, hidden)) {
+		throw new AppError("not_found", "That task no longer exists.");
+	}
+}
+
+/**
+ * Whoever keeps a checklist, a tag or a tracker to a few people is one of
+ * them, so the list they choose never locks them out of what they are working
+ * on.
+ */
+function includingActor(scope: Scope, change: Change): Change {
+	if (scope.team === null) return change;
+
+	const including = (people: Array<string> | null) =>
+		people === null || people.includes(scope.email)
+			? people
+			: [...people, scope.email];
+
+	switch (change.kind) {
+		case "checklist.create":
+			return { ...change, visibleTo: including(change.visibleTo) };
+
+		case "tag.create":
+			return { ...change, visibleTo: including(change.visibleTo) };
+
+		case "tracker.create":
+			return { ...change, visibleTo: including(change.visibleTo) };
+
+		case "checklist.update": {
+			const { visibleTo } = change.patch;
+			return visibleTo === undefined
+				? change
+				: {
+						...change,
+						patch: { ...change.patch, visibleTo: including(visibleTo) },
+					};
+		}
+
+		case "tracker.update": {
+			const { visibleTo } = change.patch;
+			return visibleTo === undefined
+				? change
+				: {
+						...change,
+						patch: { ...change.patch, visibleTo: including(visibleTo) },
+					};
+		}
+
+		case "tag.update": {
+			const { visibleTo } = change.patch;
+			return visibleTo === undefined
+				? change
+				: {
+						...change,
+						patch: { ...change.patch, visibleTo: including(visibleTo) },
+					};
+		}
+
+		default:
+			return change;
+	}
+}
+
 /** Log the real cause, hand back something a person can act on. */
-export async function applyChange(
-	userId: string,
-	change: Change,
-): Promise<void> {
+export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
-		await run(userId, change);
+		await assertAllowed(scope, change);
+		await run(scope.ownerId, includingActor(scope, change));
 	} catch (error) {
 		if (error instanceof AppError) {
 			console.error(

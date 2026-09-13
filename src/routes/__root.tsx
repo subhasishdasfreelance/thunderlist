@@ -8,9 +8,13 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
+import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
-import { getSessionFn } from "#/functions/session.functions";
-import { THEME_INIT_SCRIPT } from "#/lib/theme";
+import { OfflineScreen } from "#/components/shell/offline-screen";
+import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
+import { drawnColorScheme, THEME_INIT_SCRIPT } from "#/lib/theme";
+import { useIsOnline } from "#/lib/use-online";
+import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
 
@@ -33,9 +37,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	 * This decides what is *shown*. What is *readable* is decided separately, per
 	 * request, in `requireUserId` — a guard in the router protects screens, not
 	 * data, and the two are kept independent on purpose.
+	 *
+	 * That independence is what lets the answer be remembered rather than asked
+	 * for on every click, which put a round trip in front of every navigation.
+	 * The server's answer travels down with the first page, sign-out clears it
+	 * along with every other query, and once it is a minute old it is re-checked
+	 * in the background — so a session that ended elsewhere is still caught on
+	 * the next click, without that click waiting for it.
 	 */
-	beforeLoad: async ({ location }) => {
-		const user = await getSessionFn();
+	beforeLoad: async ({ context, location }) => {
+		const user = await context.queryClient.ensureQueryData({
+			...sessionQuery(),
+			revalidateIfStale: true,
+		});
 		const isLoginPage = location.pathname === "/login";
 
 		if (!user && !isLoginPage) {
@@ -43,10 +57,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		}
 
 		if (user && isLoginPage) {
-			throw redirect({ to: "/today", search: { task: undefined } });
+			throw redirect({ to: "/" });
 		}
 
-		return { user };
+		// The scheme to draw in, so the server's page is already the right one;
+		// see `drawnColorScheme`.
+		return { user, colorScheme: drawnColorScheme() };
 	},
 	head: () => ({
 		meta: [
@@ -75,7 +91,13 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			// browsers and platforms that still want a raster.
 			{ rel: "icon", type: "image/svg+xml", href: "/logo.svg" },
 			{ rel: "icon", type: "image/png", sizes: "640x640", href: "/logo.png" },
-			{ rel: "apple-touch-icon", href: "/logo.png" },
+			// Installing to a home screen. iOS fills a transparent icon with black,
+			// so its icon has the brand blue behind the bolt.
+			// `?v=2` is an address no phone has cached: an earlier build let the file
+			// be kept for a week, and a reinstall kept reading that old copy. The
+			// file is never cached now, so this should not need changing again.
+			{ rel: "manifest", href: "/manifest.webmanifest?v=2" },
+			{ rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
 		],
 	}),
 	component: RootComponent,
@@ -83,14 +105,74 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
-	const { user } = Route.useRouteContext();
+	const { user, colorScheme } = Route.useRouteContext();
+
+	/*
+	 * The service worker, which keeps the hashed bundle cached so the installed
+	 * app starts quickly; see `public/sw.js`. Production only: in development
+	 * Vite serves modules straight from source and there is nothing to keep.
+	 */
+	useEffect(() => {
+		if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+		const { serviceWorker } = navigator;
+		// Not registering only costs the cache; the app works the same without it.
+		serviceWorker.register("/sw.js").catch(() => {});
+
+		// A new worker taking over during a visit is a new version of the app,
+		// so it is loaded there and then rather than on the next open. Not on a
+		// first visit, where there was no worker before this one.
+		const hadWorker = serviceWorker.controller !== null;
+		const onNewWorker = () => {
+			if (hadWorker) window.location.reload();
+		};
+		serviceWorker.addEventListener("controllerchange", onNewWorker);
+
+		return () => {
+			serviceWorker.removeEventListener("controllerchange", onNewWorker);
+		};
+	}, []);
+
+	/*
+	 * A page left open across a deploy can ask for a chunk the server no longer
+	 * has. Loading afresh picks up the new version instead. Kept apart from the
+	 * worker: it happens in development, and wherever a worker cannot be
+	 * registered, just the same. While the page reloads the error is held back,
+	 * so it never flashes on screen first; should the reload not be allowed yet,
+	 * it reaches the screen, which waits and tries again; see `RouteError`.
+	 *
+	 * A failed import that no screen was waiting on — code fetched ahead of a
+	 * click — surfaces as an unhandled rejection instead, and is dealt with the
+	 * same way.
+	 */
+	useEffect(() => {
+		const onPreloadError = (event: Event) => {
+			if (reloadForCurrentVersion()) event.preventDefault();
+		};
+		const onUnhandled = (event: PromiseRejectionEvent) => {
+			if (isChunkLoadError(event.reason) && reloadForCurrentVersion()) {
+				event.preventDefault();
+			}
+		};
+		window.addEventListener("vite:preloadError", onPreloadError);
+		window.addEventListener("unhandledrejection", onUnhandled);
+		return () => {
+			window.removeEventListener("vite:preloadError", onPreloadError);
+			window.removeEventListener("unhandledrejection", onUnhandled);
+		};
+	}, []);
+
+	const isOnline = useIsOnline();
 
 	// The frame is rendered signed out too — it drops everything that needs an
 	// account and keeps the bar, so the login page is recognisably this app
 	// rather than a page from somewhere else.
+	//
+	// Offline it is drawn the same way, around the offline screen rather than
+	// the page: nothing that needs the server is left to be pressed, so no change
+	// is made only to fail. The page comes back with the connection.
 	return (
-		<AppFrame user={user ?? null}>
-			<Outlet />
+		<AppFrame user={isOnline ? (user ?? null) : null} colorScheme={colorScheme}>
+			{isOnline ? <Outlet /> : <OfflineScreen />}
 		</AppFrame>
 	);
 }
@@ -111,6 +193,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
+				{/*
+				 * The phone's status bar: the app's dark background in both schemes.
+				 * The installed app on Android takes a single colour, `theme_color`
+				 * in `public/manifest.webmanifest`, so that one is dark. This tag
+				 * matches it, so Android picks white text for the bar everywhere
+				 * and a browser tab looks the same as the installed app.
+				 */}
+				<meta name="theme-color" content="#0F1018" />
 				{/*
 				 * Sets the colour scheme before the first paint. Anything later —
 				 * an effect, a hydration pass — renders the default scheme first,

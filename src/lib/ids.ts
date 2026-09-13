@@ -14,8 +14,13 @@ export const ID_PREFIX = {
 	tracker: "trk",
 	task: "tsk",
 	entry: "ent",
-	listItem: "itm",
 	tag: "tag",
+	/** One of a checklist's stages; see `Checklist.stages`. */
+	stage: "stg",
+	/** One of a space's task types; see `TaskType`. */
+	taskType: "typ",
+	/** Minted on the server, which is the only place a team is made. */
+	team: "team",
 	/** Identifies a queued change in the browser; never written to the database. */
 	change: "chg",
 } as const;

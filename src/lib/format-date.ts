@@ -94,3 +94,47 @@ export function formatDateWithWeekday(value: string): string {
 
 	return `${weekday}, ${formatDate(value)}`;
 }
+
+/**
+ * `18:30` → `6:30 pm`.
+ *
+ * A time is stored the way a date is — plainly, on the viewer's own clock — and
+ * written in English the way a date is, so it reads the same on the server and
+ * in the browser.
+ */
+export function formatClock(time: string): string {
+	const match = /^(\d{2}):(\d{2})$/.exec(time);
+	if (!match) return time;
+
+	const hours = Number(match[1]);
+	const hour = hours % 12 === 0 ? 12 : hours % 12;
+
+	return `${hour}:${match[2]} ${hours < 12 ? "am" : "pm"}`;
+}
+
+/** `2026-10-08` at `18:30` → `8th Oct, 2026, 6:30 pm`; the day alone without one. */
+export function formatDeadline(date: string, time?: string | null): string {
+	return time ? `${formatDate(date)}, ${formatClock(time)}` : formatDate(date);
+}
+
+/** `06:00` to `22:00` → `6:00 am – 10:00 pm`. */
+export function formatWindow(window: { from: string; to: string }): string {
+	return `${formatClock(window.from)} – ${formatClock(window.to)}`;
+}
+
+/**
+ * What a schedule asks for, in a few words: `due 8th Oct, 2026, 6:30 pm`, or
+ * `daily 6:00 am – 10:00 pm`. `null` for one that asks for nothing.
+ */
+export function formatSchedule(schedule: {
+	deadline: string | null;
+	deadlineTime?: string | null;
+	dailyWindow?: { from: string; to: string } | null;
+}): string | null {
+	if (schedule.dailyWindow)
+		return `daily ${formatWindow(schedule.dailyWindow)}`;
+	if (schedule.deadline) {
+		return `due ${formatDeadline(schedule.deadline, schedule.deadlineTime)}`;
+	}
+	return null;
+}

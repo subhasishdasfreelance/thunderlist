@@ -12,7 +12,7 @@
 export function BrandMark() {
 	return (
 		<span className="thunderlist-brand">
-			<img src="/logo.svg" alt="" width={20} height={20} aria-hidden />
+			<img src="/logo.svg" alt="" width={22} height={22} aria-hidden />
 			<span className="thunderlist-brand-name">Thunderlist</span>
 		</span>
 	);

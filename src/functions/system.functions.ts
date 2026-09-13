@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSearchIndex } from "#/data/search.server";
-import { requireUserId } from "#/lib/auth.server";
 import { AppError } from "#/lib/errors";
 import { collections, isConfigured } from "#/lib/mongo/client.server";
 import { guard } from "./guard";
+import { requireScope } from "./scope";
 
 type SetupStatus = {
 	isConfigured: boolean;
@@ -40,5 +40,8 @@ export const getSetupStatusFn = createServerFn().handler(
 );
 
 export const getSearchIndexFn = createServerFn().handler(() =>
-	guard("getSearchIndex", async () => getSearchIndex(await requireUserId())),
+	guard("getSearchIndex", async () => {
+		const scope = await requireScope();
+		return getSearchIndex(scope.ownerId, scope.hidden);
+	}),
 );

@@ -9,7 +9,8 @@ import { useRouterState } from "@tanstack/react-router";
 import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SignedInUser } from "#/lib/auth.server";
-import { useColorScheme } from "#/lib/theme";
+import { type ColorScheme, useColorScheme } from "#/lib/theme";
+import { useTaskCopy } from "#/lib/use-task-copy";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
@@ -33,10 +34,12 @@ import { UserMenu } from "./user-menu";
  * There is no `Theme` wrapper: the app uses Astryx's own palette, whose accent
  * is a strong blue with a neutral set designed around it. The `wash` variant
  * puts the page on a tinted ground so the white cards above it have an edge;
- * the bars themselves are made translucent in `styles.css`.
+ * the bars themselves are made translucent in `styles.css` — the top one only
+ * once the page has scrolled.
  */
 export function AppFrame({
 	user,
+	colorScheme,
 	children,
 }: {
 	/**
@@ -49,11 +52,14 @@ export function AppFrame({
 	 * anything to act on yet.
 	 */
 	user: SignedInUser | null;
+	/** The scheme the server drew the page in; see `drawnColorScheme`. */
+	colorScheme: ColorScheme;
 	children: ReactNode;
 }) {
-	const scheme = useColorScheme();
+	const scheme = useColorScheme(colorScheme);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
+	useTaskCopy();
 
 	/*
 	 * Two keys that work from anywhere.
@@ -96,6 +102,25 @@ export function AppFrame({
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
 	}, []);
+
+	/*
+	 * Whether the page has moved off the top.
+	 *
+	 * The top bar is clear at the top of the page and turns to glass once there
+	 * is content passing under it; see "Glass navigation" in `styles.css`. Read
+	 * once on mount too, because a reload can land part-way down the page.
+	 */
+	const [isScrolled, setIsScrolled] = useState(false);
+
+	useEffect(() => {
+		function update() {
+			setIsScrolled(window.scrollY > 0);
+		}
+
+		update();
+		window.addEventListener("scroll", update, { passive: true });
+		return () => window.removeEventListener("scroll", update);
+	}, []);
 	/*
 	 * Two different "where are we".
 	 *
@@ -125,6 +150,7 @@ export function AppFrame({
 			<RouteProgress />
 			<LinkProvider component={RouterLink}>
 				<AppShell
+					data-scrolled={isScrolled}
 					height="auto"
 					variant="wash"
 					contentPadding={0}
@@ -144,21 +170,32 @@ export function AppFrame({
 												label="Search"
 												tooltip="Search (Ctrl+K)"
 												variant="ghost"
-												size="sm"
-												icon={<Search aria-hidden />}
+												size="md"
+												icon={
+													<Search aria-hidden size={26} absoluteStrokeWidth />
+												}
 												onClick={() => setIsSearchOpen(true)}
 											/>
+											{/* A closed ring reads larger than the open magnifier
+											   beside it, so it is drawn at 22 rather than 26; the
+											   stroke stays 2px so it does not look thinner. */}
 											<IconButton
 												label="Shortcuts and help"
 												tooltip="Shortcuts (?)"
 												variant="ghost"
-												size="sm"
-												icon={<CircleQuestionMark aria-hidden />}
+												size="md"
+												icon={
+													<CircleQuestionMark
+														aria-hidden
+														size={22}
+														absoluteStrokeWidth
+													/>
+												}
 												onClick={() => setIsHelpOpen(true)}
 											/>
 										</>
 									)}
-									<ThemeToggle />
+									<ThemeToggle scheme={scheme} />
 									{user === null ? null : <UserMenu user={user} />}
 								</HStack>
 							}
@@ -195,7 +232,8 @@ export function AppFrame({
 					</div>
 				</AppShell>
 
-				<BottomNav />
+				{/* Like the side nav, only with an account to navigate. */}
+				{user === null ? null : <BottomNav />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 			</LinkProvider>

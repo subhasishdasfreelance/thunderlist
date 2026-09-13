@@ -5,8 +5,10 @@ import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal } from "lucide-react";
+import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { formatDate } from "#/lib/format-date";
+import { usePages } from "#/lib/use-pages";
 import type { ProgressEntry } from "#/schemas/tracker";
 
 /**
@@ -24,6 +26,8 @@ export function ProgressHistory({
 	entries,
 	unit,
 	isPending,
+	canEdit = true,
+	canDelete = true,
 	onEdit,
 	onDelete,
 }: {
@@ -32,10 +36,15 @@ export function ProgressHistory({
 	unit: string;
 	/** The entries are still on their way. */
 	isPending: boolean;
+	/** Whether a reading can be corrected — in a team, anyone who updates work. */
+	canEdit?: boolean;
+	/** Whether a reading can be deleted — in a team, a project manager's call. */
+	canDelete?: boolean;
 	onEdit: (entry: ProgressEntry) => void;
 	onDelete: (entry: ProgressEntry) => void;
 }) {
 	const history = [...entries].reverse();
+	const paging = usePages(history);
 
 	return (
 		<VStack gap={2}>
@@ -50,7 +59,7 @@ export function ProgressHistory({
 			) : (
 				<Card padding={0}>
 					<List hasDividers>
-						{history.map((entry) => (
+						{paging.shown.map((entry) => (
 							<ListItem
 								key={entry.entryId}
 								label={`${entry.value} ${unit}`}
@@ -64,31 +73,50 @@ export function ProgressHistory({
 										<Text type="supporting" color="secondary">
 											{entry.delta >= 0 ? `+${entry.delta}` : entry.delta}
 										</Text>
-										<DropdownMenu
-											hasChevron={false}
-											placement="below"
-											alignment="end"
-											button={{
-												label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
-												variant: "ghost",
-												size: "sm",
-												isIconOnly: true,
-												icon: <MoreHorizontal aria-hidden />,
-											}}
-											items={[
-												{ label: "Edit entry", onClick: () => onEdit(entry) },
-												{
-													label: "Delete entry",
-													variant: "destructive" as const,
-													onClick: () => onDelete(entry),
-												},
-											]}
-										/>
+										{/* No menu at all rather than one with nothing in it. */}
+										{canEdit || canDelete ? (
+											<DropdownMenu
+												hasChevron={false}
+												placement="below"
+												alignment="end"
+												button={{
+													label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
+													variant: "ghost",
+													size: "sm",
+													isIconOnly: true,
+													icon: <MoreHorizontal aria-hidden />,
+												}}
+												items={[
+													...(canEdit
+														? [
+																{
+																	label: "Edit entry",
+																	onClick: () => onEdit(entry),
+																},
+															]
+														: []),
+													...(canDelete
+														? [
+																{
+																	label: "Delete entry",
+																	variant: "destructive" as const,
+																	onClick: () => onDelete(entry),
+																},
+															]
+														: []),
+												]}
+											/>
+										) : null}
 									</HStack>
 								}
 							/>
 						))}
 					</List>
+					<ListPagination
+						page={paging.page}
+						total={paging.total}
+						onChange={paging.setPage}
+					/>
 				</Card>
 			)}
 		</VStack>

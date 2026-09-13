@@ -15,9 +15,7 @@ import {
 	type EntryDoc,
 } from "#/lib/mongo/client.server";
 import {
-	computeVelocity,
 	deriveCurrentValue,
-	paceStatus,
 	trackerProgress,
 	withDeltas,
 } from "#/lib/progress";
@@ -29,6 +27,7 @@ import type {
 	TrackerType,
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
+import type { Hidden } from "./visibility.server";
 
 /** An entry document holds the link to its tracker; a reading does not. */
 const ENTRY_FIELDS = { _id: 0, trackerId: 0 } as const;
@@ -84,37 +83,37 @@ async function requireEntry(
 	return entry;
 }
 
-function summarise(tracker: Tracker): TrackerSummary {
-	const progress = trackerProgress(
-		tracker.currentValue,
-		tracker.targetValue,
-		tracker.startValue,
-	);
-
+/**
+ * A tracker with its progress. Its pace is judged in the browser, on the
+ * viewer's own clock, which this server does not know; see `usePace`.
+ */
+export function summarise(tracker: Tracker): TrackerSummary {
 	return {
 		...tracker,
-		progress,
-		status:
-			tracker.targetValue > 0
-				? paceStatus({
-						startDate: tracker.startDate,
-						deadline: tracker.deadline,
-						fractionComplete: tracker.currentValue / tracker.targetValue,
-					})
-				: null,
+		progress: trackerProgress(
+			tracker.currentValue,
+			tracker.targetValue,
+			tracker.startValue,
+		),
 	};
 }
 
 /** One read: no history is touched. */
 export async function listTrackers(
 	userId: string,
+	hidden: Hidden,
 ): Promise<Array<TrackerSummary>> {
 	const current = await collections();
 	const trackers = await current.trackers
 		.find({ userId }, { projection: DOMAIN_FIELDS })
 		.toArray();
 
-	return trackers.map(summarise);
+	return (
+		trackers
+			// Kept from this person in their team: to them it does not exist.
+			.filter((tracker) => !hidden.trackerIds.has(tracker.trackerId))
+			.map(summarise)
+	);
 }
 
 /** Full history is only read when a tracker is opened. */
@@ -130,18 +129,8 @@ export async function getTracker(
 ): Promise<TrackerDetail> {
 	const current = await collections();
 	const tracker = await requireTracker(current, userId, trackerId);
-	const summary = summarise(tracker);
 
-	return {
-		...summary,
-		velocity: computeVelocity({
-			startDate: summary.startDate,
-			deadline: summary.deadline,
-			current: summary.currentValue,
-			target: summary.targetValue,
-			start: summary.startValue,
-		}),
-	};
+	return summarise(tracker);
 }
 
 /** The history on its own, oldest first. */
@@ -170,9 +159,13 @@ export async function createTracker(
 		startValue: number;
 		startDate: string;
 		deadline: string | null;
+		deadlineTime: string | null;
 		description: string;
 		coverUrl: string | null;
 		author: string;
+		tagIds: Array<string>;
+		assignees: Array<string>;
+		visibleTo: Array<string> | null;
 	},
 ): Promise<Tracker> {
 	const current = await collections();
@@ -202,6 +195,10 @@ export async function createTracker(
 		author: input.author === "" ? null : input.author,
 		startDate: input.startDate,
 		deadline: input.deadline,
+		deadlineTime: input.deadlineTime,
+		tagIds: input.tagIds,
+		assignees: input.assignees,
+		visibleTo: input.visibleTo,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -222,9 +219,13 @@ export async function updateTracker(
 		startValue?: number;
 		startDate?: string;
 		deadline?: string | null;
+		deadlineTime?: string | null;
 		description?: string;
 		coverUrl?: string | null;
 		author?: string;
+		tagIds?: Array<string>;
+		assignees?: Array<string>;
+		visibleTo?: Array<string> | null;
 	},
 ): Promise<Tracker> {
 	const current = await collections();

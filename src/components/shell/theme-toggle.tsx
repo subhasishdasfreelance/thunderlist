@@ -1,22 +1,25 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Monitor, Moon, SunMedium } from "lucide-react";
-import { type ColorScheme, setColorScheme, useColorScheme } from "#/lib/theme";
+import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { type ColorScheme, setColorScheme } from "#/lib/theme";
 
 const OPTIONS: Array<{
 	scheme: ColorScheme;
 	label: string;
-	icon: typeof SunMedium;
+	icon: typeof Sun;
+	/** Drawn size in the bar, in px. */
+	size: number;
 }> = [
 	/*
-	 * `SunMedium`, not `Sun`: the full sun's rays run to the edge of its box, so
-	 * beside a magnifier and a circled question mark — both of which sit well
-	 * inside theirs — it reads a size larger than everything else in the bar
-	 * even though every icon is drawn at 24. The shorter rays match the rest.
+	 * Sized by eye against the search magnifier, not all at 26 — icons drawn at
+	 * the same size do not look the same size. A closed outline like the monitor
+	 * reads larger than an open glyph, so it is drawn smaller; the sun and moon
+	 * are mostly empty space and sit between the two. The full sun, not
+	 * `SunMedium`: its short rays made it the smallest thing in the bar.
 	 */
-	{ scheme: "light", label: "Light", icon: SunMedium },
-	{ scheme: "dark", label: "Dark", icon: Moon },
-	{ scheme: "system", label: "Match system", icon: Monitor },
+	{ scheme: "light", label: "Light", icon: Sun, size: 24 },
+	{ scheme: "dark", label: "Dark", icon: Moon, size: 24 },
+	{ scheme: "system", label: "Match system", icon: Monitor, size: 22 },
 ];
 
 /**
@@ -27,10 +30,10 @@ const OPTIONS: Array<{
  * right now: a laptop that goes dark at sunset should take the app with it.
  *
  * The icon shows what is in force, so the control reads as state rather than
- * as an action.
+ * as an action. The frame hands the scheme down, so the page and this icon are
+ * read from one place and never disagree for a frame.
  */
-export function ThemeToggle() {
-	const scheme = useColorScheme();
+export function ThemeToggle({ scheme }: { scheme: ColorScheme }) {
 	const active =
 		OPTIONS.find((option) => option.scheme === scheme) ?? OPTIONS[2];
 	const ActiveIcon = active.icon;
@@ -44,12 +47,12 @@ export function ThemeToggle() {
 				label: `Theme: ${active.label}`,
 				tooltip: "Theme",
 				variant: "ghost",
-				size: "sm",
+				size: "md",
 				isIconOnly: true,
 				// Keyed so the icon re-mounts and cross-fades when the scheme changes.
 				icon: (
 					<span key={scheme} className="thunderlist-swap">
-						<ActiveIcon aria-hidden />
+						<ActiveIcon aria-hidden size={active.size} absoluteStrokeWidth />
 					</span>
 				),
 			}}

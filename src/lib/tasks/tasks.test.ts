@@ -3,7 +3,10 @@ import type { Task } from "#/schemas/task";
 import {
 	calculateChecklistProgress,
 	compareTasks,
+	mergeReads,
+	orderByTask,
 	orderTasks,
+	pageOf,
 	sortTasks,
 } from "./tasks";
 
@@ -20,6 +23,69 @@ function task(partial: Partial<Task> & { taskId: string }): Task {
 		...partial,
 	};
 }
+
+describe("pageOf", () => {
+	const ids = ["a", "b", "c", "d", "e"];
+	const idOf = (id: string) => id;
+
+	it("sends the first page and says how many there are", () => {
+		expect(pageOf(ids, { limit: 2 }, idOf)).toEqual({
+			items: ["a", "b"],
+			total: 5,
+			page: 1,
+		});
+	});
+
+	it("sends the page asked for, however far in", () => {
+		expect(pageOf(ids, { limit: 2, page: 3 }, idOf)).toEqual({
+			items: ["e"],
+			total: 5,
+			page: 3,
+		});
+	});
+
+	it("opens on the page holding the row to reveal", () => {
+		expect(pageOf(ids, { limit: 2, reveal: "d" }, idOf)).toEqual({
+			items: ["c", "d"],
+			total: 5,
+			page: 2,
+		});
+	});
+
+	it("ignores a row to reveal that is not in the list", () => {
+		expect(pageOf(ids, { limit: 2, reveal: "z" }, idOf).page).toBe(1);
+	});
+
+	it("lands on the last page when the one asked for is past the end", () => {
+		expect(pageOf(ids, { limit: 2, page: 9 }, idOf).page).toBe(3);
+		expect(pageOf([], { limit: 2, page: 4 }, idOf)).toEqual({
+			items: [],
+			total: 0,
+			page: 1,
+		});
+	});
+});
+
+describe("orderByTask", () => {
+	it("orders rows by the task they carry, as `orderTasks` orders tasks", () => {
+		const rows = [
+			{ task: task({ taskId: "tsk_1", addedAt: "2026-01-01T00:00:00.000Z" }) },
+			{
+				task: task({
+					taskId: "tsk_2",
+					addedAt: "2026-01-02T00:00:00.000Z",
+					urgent: true,
+				}),
+			},
+			{ task: task({ taskId: "tsk_3", addedAt: "2026-01-03T00:00:00.000Z" }) },
+		];
+		const idsIn = (order: "newest" | "priority") =>
+			orderByTask(rows, order, (row) => row.task).map((row) => row.task.taskId);
+
+		expect(idsIn("newest")).toEqual(["tsk_3", "tsk_2", "tsk_1"]);
+		expect(idsIn("priority")).toEqual(["tsk_2", "tsk_3", "tsk_1"]);
+	});
+});
 
 describe("sortTasks", () => {
 	it("puts the newest first", () => {
@@ -169,5 +235,27 @@ describe("orderTasks by priority", () => {
 		orderTasks(tasks, "priority");
 
 		expect(tasks.map((row) => row.taskId)).toEqual(["a", "b"]);
+	});
+});
+
+describe("mergeReads", () => {
+	const id = (row: { id: string }) => row.id;
+
+	it("puts the open tasks and the finished ones together", () => {
+		expect(mergeReads([{ id: "a" }], [{ id: "b" }], id)).toEqual([
+			{ id: "a" },
+			{ id: "b" },
+		]);
+	});
+
+	it("keeps a task in both reads once, as the open read has it", () => {
+		// Ticked on screen: the open read has the change, the other is stale.
+		const merged = mergeReads(
+			[{ id: "a", done: true }],
+			[{ id: "a", done: false }],
+			id,
+		);
+
+		expect(merged).toEqual([{ id: "a", done: true }]);
 	});
 });

@@ -1,22 +1,33 @@
 # Thunderlist
 
-A personal productivity app with five sections — **Today**, **Backlog**,
-**Checklists**, **Trackers** and **Tags** — stored in MongoDB.
+A productivity app for one person or a team — **Checklists**, **Trackers**,
+**Tags** and **Priority** — stored in MongoDB. **Today** and the **Backlog** are
+two special tags, and the **Inbox** is the checklist for everything that belongs
+to no other.
 
 Built with TanStack Start, React 19 and the [Astryx](https://astryx.atmeta.com)
 design system, with Tailwind utilities layered on top of Astryx's design tokens.
 
-- **Today** — what you plan to do today. It stores *references* to tasks, never
-  copies of them, and opens as the app's home screen.
-- **Backlog** — parked work, out of the way of today. Same shape as Today; a
-  task is on one list or the other, never both.
-- **Checklists** — flat task lists with progress, a start date and a deadline.
+- **Today** — a special tag for what you plan to do today, and the app's home
+  screen (`/tags/today`). The bolt on any task writes `#today` at the end of its
+  title; pressing it again takes the tag out wherever it was written. Paced
+  from 06:00 to 22:00 every day.
+- **Backlog** — a special tag for parked work. A task is on Today or in the
+  Backlog, never both. Both can be renamed on the Tags screen, never deleted.
+- **Inbox** — the checklist a task goes into when it is written somewhere that
+  is not a checklist: onto Today, or any tag's page. Every space has one, and it
+  cannot be deleted.
+- **Checklists** — tasks with progress, a start date and a deadline, moving
+  through stages: "To do" and "Done", or as many as the work has.
 - **Trackers** — progress towards any measurable goal: a book, a course, a
   fitness target, a project.
 - **Tags** — labels that group tasks across every checklist.
+- **Priority** — every open task, sorted by whether it is urgent and important.
+- **Teams** — a space shared with other people, each with a role that decides
+  what they can change, and lists that can be kept to some of them.
 
-Edits do not go straight to the database. They collect in the browser and are
-written as one reviewed batch. See [Pending changes](#pending-changes).
+Every change is drawn on screen at once and saved straight away. See
+[Making a change](#making-a-change).
 
 ---
 
@@ -37,8 +48,9 @@ One `thunderlist` database
 ```
 
 The browser never sees the connection string or a driver response. Every read
-and write goes through a TanStack Start server function, which validates its
-input with Valibot and calls a server-only repository module.
+and write goes through a TanStack Start server function, which works out who is
+asking and in which space, validates its input with Valibot, and calls a
+server-only repository module.
 
 `src/lib/mongo/client.server.ts` throws at import time if it is ever pulled into
 a browser bundle, so a layering mistake fails loudly instead of leaking secrets.
@@ -47,99 +59,137 @@ a browser bundle, so a layering mistake fails loudly instead of leaking secrets.
 
 | Path | Responsibility |
 |---|---|
-| `src/schemas/` | Valibot schemas and domain types. Shared by client and server. |
-| `src/lib/tasks/`, `src/lib/progress.ts` | Pure logic: task ordering, progress, pace, velocity. No I/O. |
-| `src/lib/pending/` | The edit queue, the projections that render it, and batch scheduling. |
+| `src/schemas/` | Valibot schemas and domain types, roles and what each may do. Shared by client and server. |
+| `src/lib/tasks/`, `src/lib/progress.ts` | Pure logic: task ordering, paging, filters, progress, pace, velocity. No I/O. |
+| `src/lib/changes.ts`, `src/lib/optimistic.ts` | Making a change, and drawing it before the server confirms it. |
 | `src/lib/mongo/` | The connection, the collections and their indexes. Server only. |
-| `src/data/` | Repositories: checklists, trackers, lists, tags, search. Server only. |
-| `src/functions/` | Server functions: validate input, call a repository, sanitise errors. |
+| `src/data/` | Repositories: checklists, trackers, tags, teams, who sees what, settings, search. Server only. |
+| `src/functions/` | Server functions: resolve the space, validate input, call a repository, sanitise errors. |
 | `src/queries/` | TanStack Query option factories and query keys. |
 | `src/components/` | UI, built from Astryx components. No data access. |
 | `src/routes/` | File-based routes; loaders prime the query cache. |
 
-Server functions are **reads plus one write**. Because every mutation is queued
-in the browser, there is a single write endpoint — `applyChangesFn` — rather
-than one per operation.
+Server functions are **reads plus one write**. Every mutation is a `Change`, so
+there is a single write endpoint — `applyChangeFn` — rather than one per
+operation, and one place that decides whether it is allowed.
 
 ---
 
-## Pending changes
+## Making a change
 
-Edits are collected rather than written one keystroke at a time, so nothing is
-saved until it has been looked at.
+1. Every action builds one `Change` (`src/lib/changes.ts`): "add this task",
+   "move that one to Review", "keep this checklist to these three people".
+2. It is drawn at once: the caches every screen reads from are patched
+   (`src/lib/optimistic.ts`) and the request goes out behind it.
+3. The server works out who is asking and where, refuses anything their role
+   may not do or that is kept from them, and writes it
+   (`src/data/change.server.ts`).
+4. If it is refused, the screen is put back exactly as it was and says why.
+   Either way, the screens read afresh once nothing else is still saving.
 
-1. Every action queues a change in `localStorage` (`src/lib/pending/store.ts`).
-2. Screens render what the server returned with the queue laid over the top, so
-   a queued edit looks exactly like a saved one (`src/lib/pending/overlay-*.ts`).
-3. The top bar shows how many changes are waiting. Opening it lists them in
-   plain words — "Add task Book flights", "Complete Draft the brief" — and each
-   can be discarded on its own.
-4. Confirming replays them against the database, in the order they were made.
+Every id is minted in the browser, so a change can be drawn in the right place
+before the server has it, and sending the same change twice is the same change
+rather than two. That is what makes a retry safe: a change that failed because
+the connection went is tried again when it comes back. MongoDB's own `_id` is
+never used as an identity, and every read projects it away.
 
-Every id is minted in the browser so that a queued change can be shown in the
-right place, referred to by later changes, and replayed on the server without
-ever being renumbered. MongoDB's own `_id` is never used as an identity, and
-every read projects it away.
+Every operation is **idempotent** — creating something that already exists
+returns it, deleting something already gone is a no-op — and one that takes
+several writes is ordered so the safest failure wins; see
+[Notes and limitations](#notes-and-limitations).
 
-### Ordering, and where it can be dropped
+---
 
-Order matters, but not everywhere. A change can depend on one before it — a task
-added to a checklist created moments earlier — while twenty tasks pasted into
-that checklist have nothing to serialise at all. Applying them one at a time
-costs a network round trip each, which is the whole cost of a save.
+## Teams and permissions
 
-`planRuns()` (`src/lib/pending/plan.ts`) works out which is which. Each change
-declares the keys it *writes*, and whether it needs each to itself:
+Everyone has a space of their own. A **team** is another space, shared: its
+checklists, tasks, tags and trackers are stored exactly like anyone's, owned by
+the team's id instead of a person's, so nothing of one space can be read from
+another. The Settings screen lists them — each team's name, what you are in it
+and how many people it has — and moves between them. Which one a browser is in
+is a cookie, but only ever a request: membership is checked against it on every
+call (`requireScope`), and someone asking for a team they are not in works in
+their own space instead.
 
-| Change | Claims |
-|---|---|
-| A checklist created, edited or deleted | Its checklist, **exclusively** |
-| A task created, edited or deleted | Its checklist, *shared*; its own id, exclusively |
-| A tracker created, edited or deleted | Its tracker, **exclusively** |
-| A reading | Its tracker, *shared*; that tracker's total, **exclusively** |
-| A Today/Backlog reference | The task it points at; its list |
-| A reference moved | That whole list, **exclusively** |
-| A tag created or renamed | Every tag, since the name must be unique |
-| A tag deleted | **Everything** — it rewrites every task carrying it |
+### Roles
 
-The shared/exclusive split is the point. Creating a checklist and writing a task
-into it both concern that checklist, but twenty tasks in the same checklist do
-not concern *each other* — so a container's lifecycle claims it exclusively
-while the things inside it claim it shared, and the twenty inserts go out
-together.
+Whoever makes a team is its **admin**, and there is only ever one: making
+someone else the admin hands the team over, and the old admin becomes a project
+manager. The admin opens the team from the Settings screen and adds people by
+the address their Google account signs in with — before they have ever opened
+the app, if need be — gives each a role, and can change it at any time. The
+same popup lists who is in the team and has the table below.
 
-A run grows for as long as no two changes in it write to the same place. Runs go
-out concurrently, at most 25 at a time. Runs themselves stay in order and no
-change ever moves past one it might depend on, so the batch replays exactly as
-it was built.
+| | Admin | Project manager | Collaborator | Viewer |
+|---|:-:|:-:|:-:|:-:|
+| See everything, whoever it is kept to | ✓ | | | ✓ |
+| See what is shared with them | ✓ | ✓ | ✓ | ✓ |
+| Tick tasks, move them through stages, edit, flag and take them on; record tracker progress | ✓ | ✓ | ✓ | |
+| Add and delete tasks, and move them between checklists | ✓ | ✓ | | |
+| Make, change and delete checklists, trackers, tags and task types | ✓ | ✓ | | |
+| Choose who can see a checklist, a tag or a tracker | ✓ | ✓ | | |
+| Add and remove people, change their roles, delete the team | ✓ | | | |
 
-Pasting 25 lines into Today is 51 changes. Sequentially that was 7.0 s; as two
-runs behind the checklist that creates them, it is about 1.8 s.
+The roles are defined once, in `src/schemas/team.ts` (`roleCan`), and the
+server holds every change to them. The screens only hide what a role cannot do
+(`usePermissions`), so a missing button is a convenience, never the protection.
+The account menu says what you are in the space you are working in, and the
+Settings screen what you are in each team.
 
-### Stopping part way
+A collaborator who writes a `#tag` that does not exist yet keeps it in the title
+as plain words, since making tags is not theirs to do. Teams made before the
+roles were split had "members", who could do everything but run the team; they
+are read as project managers.
 
-A batch is a replay, not a transaction, so it stops at the first failure.
+### Who can see what
 
-The server reports how many went in as a **prefix**: the browser drops exactly
-those and keeps the rest queued. Changes after the failure *within the same run*
-may already have gone through, so they are replayed on the next attempt. That is
-safe because every operation is **idempotent** — creating something that already
-exists returns it, deleting something already gone is a no-op.
+A checklist, a tag or a tracker in a team can be kept to some of its people:
+the row of faces beside **Back** on its page says who, and pressing it opens a
+searchable picker to change it. Whoever keeps it to a few people is always one
+of them, and the admin and viewers see everything whatever it says.
+
+What something holds goes with it: a task in a checklist is seen by whoever can
+see the checklist, and a task in the Inbox — which belongs to no checklist of
+its own — by whoever can see one of its tags. Today, the Backlog and the Inbox
+are everyone's.
+
+To anyone else, something kept from them does not exist: it is left out of
+every list, count and search, and naming it by id is answered as for something
+deleted (`src/data/visibility.server.ts`).
+
+### Working together
+
+A task can be assigned to one person or several, and shows their faces. With
+the pointer on a task, **Space** assigns it to you or takes you off it;
+**Assign people…** in its menu picks anyone.
+
+A checklist has a filter row: one person's tasks, one tag's, or both. Everything
+on the screen follows it — the progress, the speed figures, the chart, the
+counts on each stage and the list — so the numbers are always about the rows
+under them. A tag's page has the same person filter.
 
 ---
 
 ## Data model
 
-One database, `thunderlist`, with six collections:
+One database, `thunderlist`:
 
 ```
 checklists   one document per checklist
 tasks        one document per task, linked by checklistId
 trackers     one document per tracker
 entries      one reading per document, linked by trackerId
-taskRefs     Today and Backlog, told apart by `list`
-tags         tag names and colours
+tags         tag names, colours and schedules
+teams        one document per team
+members      one document per person per team, with their role
+settings     what a space has chosen for itself: its task types
+taskRefs     the old Today and Backlog lists, moved onto tags on first read
 ```
+
+Better Auth keeps its own `user`, `session` and `account` collections alongside,
+under its own names. Every other document carries `userId` — a person's own id,
+or a team's — and every query, read and write alike, filters on it. It is read
+from the session on the server, never from the browser.
 
 Nothing is nested. A task is edited, moved between lists and searched for on its
 own, and a document per task keeps every one of those a single targeted write
@@ -147,26 +197,40 @@ rather than a rewrite of the whole checklist.
 
 ### `checklists`
 
-`checklistId`, `title`, `description`, `startDate`, `deadline`, `createdAt`,
-`updatedAt`.
+`checklistId`, `title`, `description`, `startDate`, `deadline`,
+`deadlineTime`, `dailyWindow`, `tagIds`, `stages`, `visibleTo`, `special`,
+`createdAt`, `updatedAt`.
+
+`special` is `"inbox"` for the Inbox and absent for every other checklist.
+`stages` is absent until a checklist is given stages of its own; see
+[Stages](#stages). `tagIds` are carried by every task in the checklist, added
+later or not. `visibleTo` is who in a team can see it, or absent for everyone.
 
 ### `tasks`
 
-`taskId`, `checklistId`, `title`, `completed`, `addedAt`, `tagIds`.
+`taskId`, `checklistId`, `title`, `completed`, `completedAt`, `addedAt`,
+`tagIds`, `stageId`, `typeId`, `urgent`, `important`, `assignees`,
+`trackerId`, `linkedChecklistId`, `caption`, `notes`.
 
-A task is a title, when it was added, and its tags — and every field earns its
-place. There is deliberately no due date, no notes, no sub-tasks and no stored
-position: adding a task should cost one line of typing, and a form with four
-optional fields is what stops people writing anything down.
+A task is written in one line — a title, with its tags and flags typed into it —
+because that is all adding a task should cost. Everything else is optional and
+written elsewhere: the caption, notes and type from its edit dialog, the people
+from its menu, the stage by moving it along. `completedAt` is stamped by the
+server, so a chart drawn from it runs off one clock.
 
-There is no `updatedAt` either. Nothing in the app reads it, and a field nobody
-reads is a field that quietly goes stale.
+A task with a `trackerId` or a `linkedChecklistId` stands for a tracker or
+another checklist and is done when that is. Its tick is worked out on every
+read and cannot be set by hand, so the task and the thing it stands for can
+never disagree.
+
+There is no stored position and no `updatedAt`. Nothing in the app reads
+either, and a field nobody reads is a field that quietly goes stale.
 
 ### `trackers`
 
-`trackerId`, `title`, `type`, `unit`, `targetValue`, `currentValue`,
-`description`, `coverUrl`, `author`, `startDate`, `deadline`, `createdAt`,
-`updatedAt`.
+`trackerId`, `title`, `type`, `unit`, `targetValue`, `startValue`,
+`currentValue`, `description`, `coverUrl`, `author`, `startDate`, `deadline`,
+`deadlineTime`, `tagIds`, `assignees`, `visibleTo`, `createdAt`, `updatedAt`.
 
 ### `entries`
 
@@ -174,21 +238,20 @@ reads is a field that quietly goes stale.
 
 No `delta` is stored — see [tracker progress](#how-tracker-progress-is-stored).
 
-### `taskRefs`
-
-`itemId`, `list`, `checklistId`, `taskId`, `sortOrder`, `addedAt`.
-
-Both lists are one collection because they are one thing: a task belongs to at
-most one of them. Neither has a `completed` field, by design. See below.
-
 ### `tags`
 
-`tagId`, `name`, `color`, `createdAt`, `updatedAt`.
+`tagId`, `name`, `color`, `special`, `description`, `startDate`, `deadline`,
+`deadlineTime`, `dailyWindow`, `visibleTo`, `createdAt`, `updatedAt`.
 
-Tasks reference a tag by **id**, never by name. That is what makes renaming a
-tag a single document write however many tasks carry it, and why a task can
-never show a stale copy of a name. Deleting a tag strips its id from every task
-that carried it, in one `updateMany`.
+Tasks reference a tag by **id**, and also write it into the title by name.
+Renaming a tag rewrites that `#name` in the titles of the tasks carrying it, so
+an edit never reads an old name back as a new tag. Deleting a tag strips its id
+from every task, checklist and tracker that carried it.
+
+Two tags are **special**: `today` and `backlog`. Every space has them, made on
+the first read of its tags (a unique index on `userId, special` settles two
+first requests at once); they can be renamed and recoloured but not deleted,
+and a special tag's page is addressed by its kind, `/tags/today`.
 
 Tags are **written into the task, not picked from a menu**: "buy milk
 #shopping". The `#name` is markup rather than content, so it is lifted out of
@@ -203,8 +266,32 @@ only starts a tag at the beginning of a word, so "learn C# properly" keeps its
 title.
 
 A tag written on several pasted lines is created **once**: the resolver that
-turns names into ids remembers what it has already queued, because the first two
-uses exist only in the queue where the server's tag list cannot see them.
+turns names into ids remembers what it has already made, because the first
+uses exist only on screen, where the server's tag list cannot see them yet.
+
+### `teams` and `members`
+
+`teamId`, `name`, `createdAt` — and for each person in it, `teamId`, `email`,
+`role`, `addedAt`.
+
+People are known by the lower-cased address they sign in with, which is how
+someone can be added before they have an account. Their name and picture are
+read from Better Auth's `user` once there is one.
+
+### `settings`
+
+`userId`, `taskTypes`, `updatedAt`: one document per space, absent until it
+changes anything. Each type is a `typeId`, a `name` and a `color`; with no
+document a space has Bug, Feature, Story and Chore. Taking a type off the list
+takes it off every task that had it.
+
+### `taskRefs`
+
+`itemId`, `list`, `taskId`, `sortOrder`, `addedAt`.
+
+Legacy. Today and the Backlog used to be lists of references; they are tags
+now. The first time a space's tags are read, anything still in here is written
+onto its task as `#today` or `#backlog` and deleted.
 
 ### Indexes
 
@@ -213,60 +300,95 @@ app-minted id is unique; the rest are the lookups every screen makes.
 
 | Collection | Index |
 |---|---|
-| `checklists`, `trackers`, `tags` | its id, unique |
-| `tasks` | `taskId` unique; `checklistId` |
-| `entries` | `entryId` unique; `trackerId, recordedAt` |
-| `taskRefs` | `itemId` unique; `list, sortOrder` |
+| `checklists`, `trackers`, `tags` | its id, unique; `userId` |
+| `checklists` | `userId, special`, unique where set — one Inbox per space |
+| `tags` | `userId, special`, unique where set — one Today and one Backlog |
+| `tasks` | `taskId` unique; `userId, checklistId` |
+| `entries` | `entryId` unique; `userId, trackerId, recordedAt` |
+| `teams` | `teamId` unique |
+| `members` | `teamId, email` unique; `email` |
+| `settings` | `userId` unique |
+| `taskRefs` | `itemId` unique; `userId, taskId`; `userId, list, sortOrder` |
+
+---
+
+## Stages
+
+A checklist's tasks go through its stages in order: "To do" and "Done" to begin
+with, or as many as the work needs — To do, Review, UAT, Done. They are set,
+renamed and reordered in the checklist's edit dialog, and the last one is always
+done: a task reaching it is complete, and ticking a task moves it there.
+Unticking moves it back to the first.
+
+A checklist's page shows one stage at a time, opening on the first, with how
+many tasks are at each. **Move to…** in a task's menu sends it to the next
+stage, or to any of them. Taking a stage away moves its tasks back to the
+nearest stage before it that is left.
+
+A stage has an id of its own, so renaming one keeps its tasks. A task stores the
+id of the stage it is at; one from before stages, or from a stage since taken
+away, is at the first stage while open and the last once done (`stageOf`).
+Everything that counts progress still counts `completed`, which the server
+keeps in step with the stage.
+
+## The Inbox
+
+Every task is in a checklist. One written where there is no checklist to put it
+in — typed onto Today or any tag's page, or put on Today from a tracker — goes
+into the space's Inbox, so it can always be found and always be moved into a
+proper list with **Move to checklist…**. The Inbox is made the first time a
+space is read, and any older task that belonged to no checklist is moved into
+it then (`ensureInbox`).
+
+## Task types
+
+A task can say what kind of work it is — a bug, a feature, a chore — shown as a
+coloured label in front of its title. Press **K** with the pointer on a task, or
+set it in its edit dialog. Each space keeps its own list, managed from the same
+picker (**Manage types**): types are about tasks, so they live beside them
+rather than in Settings, which is about you.
 
 ---
 
 ## How tasks are ordered
 
-By `addedAt`, and nothing else.
+By `addedAt`, newest first — or by priority: urgent and important first, and
+the newest first within each band.
 
 A stored position would be a second source of truth to keep in step, and it
 bought nothing a timestamp does not already give: the order you added things in
 *is* the order you want to see them in. Ties break on `taskId`, which is
 time-sortable, so the order is total and stable.
 
+### A page at a time
+
+Every list is shown twenty rows a page, with the pages numbered, so any page is
+a click away. The long ones — a checklist's stages, a tag's open tasks — are
+read from the server a page at a time. A link to a task (`?task=`) opens on the
+page, and the stage, it is on, and rings it.
+
 ---
 
-## How Today and Backlog reference canonical tasks
+## How Today and the Backlog work
 
-Both hold `(checklistId, taskId)` pairs. When a list is rendered:
+They are tags, so a task on Today is a task carrying `#today`, in whichever
+checklist it lives — the Inbox, for one typed onto Today. Today's page is that
+tag's page. There is nothing to keep in step: completion lives on the task, as
+it always did.
 
-1. the entries of **both** lists are read, already sorted
-2. the checklists and tasks they point at are read in one query each
-3. each reference is resolved to its canonical task
-
-Reading them together is deliberate: they draw on the same checklists, so one
-task read serves both, and the checklist screen needs both to know which icon to
-light up on a task.
-
-Ticking a checkbox on Today writes to the task in **its own checklist**. Neither
-list has completion state of its own, so there is exactly one source of truth
-and no way for the views to disagree.
-
-A task is on Today **or** in the Backlog, never both: putting it on one takes it
-off the other.
-
-A reference whose task or checklist has been deleted is shown as "This task no
-longer exists" with a control to clear it, rather than being silently dropped.
-
-### The Inbox
-
-A task typed straight into Today or the Backlog still needs a checklist to live
-in, because those lists hold references only. The first such task creates an
-ordinary checklist called **Inbox** and the rest join it. It can be opened,
-renamed, tidied or deleted like any other checklist.
+The bolt on a row writes the tag at the end of the title and takes it out again
+from wherever it was written; the row's menu does the same for the Backlog. A
+task is on Today **or** in the Backlog, never both: putting it on one takes it
+off the other. Taken off both, it stays in its checklist.
 
 ### Completed work
 
-Completed tasks move to a **Completed** section at the bottom of the list rather
-than staying in place, with one control to clear it. What clearing means follows
-what the screen holds: in a checklist it deletes the tasks (behind a
-confirmation), while on Today and the Backlog — which hold references only — it
-takes them off the list and leaves the tasks where they live.
+On a checklist, finished tasks are its last stage, which can be shown as a list
+or as a chart of how the work was finished against the plan. On a tag's page
+they sit in a folded **Completed** section at the bottom, read only once it is
+opened. What clearing them means follows the screen: on a checklist or an
+ordinary tag it deletes the tasks, while on Today and the Backlog it only takes
+the tag off.
 
 ### Adding several tasks at once
 
@@ -302,15 +424,22 @@ just a tracker `type`; nothing in the generic logic knows about pages.
 
 ### Pace and velocity
 
-Every checklist and tracker has a **start date** (defaulting to today, but
+Every checklist, tag and tracker has a **start date** (defaulting to today, but
 editable, so something begun last month is paced from when it really began) and
-an optional **deadline**.
+an optional **deadline**, which can carry a time: due at 18:30, not just due on
+Friday. A checklist or a tag can instead **repeat daily** — the same hours every
+day, 06:00 to 22:00 to begin with — and is then paced against today's stretch
+of them. Today starts that way.
 
 **Pace** (`Ahead` / `On track` / `Behind`) compares how much is done against how
-much of the time between those two dates has passed, with a 10-point tolerance.
-With no deadline there is no status — the app never invents one. The same figure
-draws the target mark on each progress bar and the "62% expected by now" line
-underneath it, so the bar and the words always agree.
+much of that window has passed, with a 5-point tolerance. The time is measured
+to the minute in fractional hours — four and a half hours of a nine-hour window
+is exactly half — on the viewer's own clock, so it is worked out in the
+browser: the server knows neither the clock nor the time zone, and draws no
+figure it would have to take back. With no deadline there is no status — the
+app never invents one. The same figure places the bolt on each progress bar and
+writes the "62% expected by now" line under it, so the bar and the words always
+agree. The speeds are counted in days, or in hours for a daily window.
 
 ### Stats
 
@@ -352,14 +481,21 @@ browser injects at hydration, which is a flash of the wrong colours on every
 first paint. `bun run build` recompiles it first, so the two cannot drift;
 `bun run theme:check` fails if they have.
 
+Light, dark or match the system is chosen from the bar and kept per browser, in
+local storage and in a cookie. The server reads the cookie and draws the page in
+the chosen scheme, so a full load — after a deploy, or when a new service worker
+takes over — never shows the other scheme first; a script in the head sets the
+page's own background before the first paint.
+
 The page sits on the body wash rather than on white, so the cards and rows above
 it have an edge to be seen by. The top bar and the phone's bottom bar are
 translucent and blurred, so a page reads as one surface continuing underneath
 them.
 
 Translucency costs contrast, and those bars carry the navigation, so the blur
-does most of the separating and the wash is 72% opaque over it. Browsers without
-`backdrop-filter` get the opaque surface instead, because a flat wash of
+does most of the separating and the wash is thin over it. Browsers without
+`backdrop-filter`, and anyone who has asked their system for less transparency
+or more contrast, get the opaque surface instead, because a flat wash of
 translucent white over arbitrary content is exactly the unreadable case.
 
 Dates are written one way everywhere — `8th Oct, 2026` — including inside the
@@ -379,13 +515,17 @@ cheap by shape instead:
 - the tracker list is **one query** — the denormalised `currentValue` is what
   the cards show
 - a tracker's full history is read only when you open it
-- the search index doubles as the task source for the Tags screen and the "add
-  from a checklist" picker, so neither costs an extra read
-- mutations write **one document**, never a collection
+- a checklist's page is sent one page of one stage; a tag's page one page of
+  its open tasks, and its finished ones only once their section is opened
+- the search index doubles as the task source for the Tags and Priority
+  screens, so neither costs an extra read
+- most changes write **one document**; the few that reach further — deleting a
+  tag, changing a checklist's tags or stages — write the tasks they affect in
+  one bulk write
 
-TanStack Query caches on the client. Because the same database can be changed
-from another device or tab, the avatar menu has **Refresh**, which refetches
-everything.
+TanStack Query caches on the client, and every screen reads again after each
+change and when the window comes back into focus. Moving to another space
+empties the whole cache, and every screen reads afresh from the new one.
 
 ---
 
@@ -412,7 +552,17 @@ mongodb+srv://<user>:<password>@<cluster>.mongodb.net/
 
 If the password contains any of `: / ? # [ ] @ %` it must be percent-encoded.
 
-### 2. Environment
+### 2. Google sign-in
+
+Google is the only way in — there are no passwords. In the Google Cloud console,
+create an **OAuth client ID** of type *Web application* and add this authorised
+redirect URI (the same with your deployed origin, for production):
+
+```
+http://localhost:4000/api/auth/callback/google
+```
+
+### 3. Environment
 
 ```bash
 cp .env.example .env.local
@@ -422,14 +572,16 @@ cp .env.example .env.local
 |---|---|
 | `MONGO_CONN_STR` | The connection string above |
 | `BETTER_AUTH_SECRET` | Any long random string |
-| `BETTER_AUTH_URL` | `http://localhost:4000` in development |
+| `BETTER_AUTH_URL` | `http://localhost:4000` in development — the exact origin, port included |
+| `GOOGLE_CLIENT_ID` | From the OAuth client above |
+| `GOOGLE_CLIENT_SECRET` | From the OAuth client above |
 
 The database is always `thunderlist`; a database named in the connection string
 is ignored.
 
 Never commit `.env.local`. It is gitignored.
 
-### 3. Run
+### 4. Run
 
 ```bash
 bun install
@@ -452,10 +604,11 @@ bun test                 # unit tests for the pure logic
 bun run check            # Biome lint + format
 ```
 
-Tests cover the parts worth pinning down: task ordering, checklist progress,
-tracker percentages, delta derivation and re-spacing, pace, velocity, calendar
-arithmetic, date formatting, inline `#tag` parsing, and which queued changes may
-be applied together.
+Tests cover the parts worth pinning down: task ordering, paging, checklist
+progress, tracker percentages, delta derivation and re-spacing, pace, velocity,
+calendar arithmetic, date formatting, inline `#tag` parsing, who in a team can
+see which task, and how a change is drawn before the server confirms it —
+stages, counts and pages included.
 
 ---
 
@@ -467,27 +620,58 @@ The project targets Vercel (`vercel.json` sets the framework to
 1. Push to GitHub, GitLab or Bitbucket.
 2. In Vercel choose **Add New → Project** and import the repo.
 3. Under **Settings → Environment Variables** add `MONGO_CONN_STR`,
-   `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`.
-4. On Atlas, allow Vercel's egress under **Network Access**.
-5. Deploy.
+   `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`, with `BETTER_AUTH_URL` set to the deployed origin.
+4. Add the deployed origin's redirect URI to the Google OAuth client.
+5. On Atlas, allow Vercel's egress under **Network Access**.
+6. Deploy.
 
 Only variables prefixed `VITE_` reach the browser bundle. Keep every secret
 unprefixed.
+
+### Installing on a phone
+
+Thunderlist is a PWA. Open it in the phone's browser and choose **Add to Home
+Screen** (Safari) or **Install app** (Chrome); the manifest and icons are in
+`public/`.
+
+`public/sw.js` answers the hashed files under `/assets/` from the browser's
+cache. Pages always come from the network, so every open gets the latest
+version; the last copy of Today is kept only so the app can open offline. A page
+that cannot be fetched and has no kept copy opens onto `public/offline.html`,
+the app's own offline page, rather than the browser's error; bump `FALLBACK` in
+the worker when that page changes, or installed copies keep the old one. A new
+worker reloads the page when it takes over, so a change to it lands on the same
+open. The worker is registered in production builds only.
+
+A page left open across a deploy can ask for a screen's code the server no
+longer has. The app shows its loading screen instead of the browser's error and
+reloads to pick up the current version (`src/lib/chunk-reload.ts`), holding off
+if that was just tried or the connection is down, and trying again until it
+works.
+
+The splash and status bar colours, icon and name come from the manifest, which
+Chrome builds into the installed app. The manifest is never cached, and Chrome
+checks it when the app is opened and updates the installed app on its own —
+usually within a day, with no reinstall.
 
 ---
 
 ## Notes and limitations
 
-- **Single user.** Authentication is Better Auth in stateless mode and every
-  document is shared. There is no per-user data separation.
-- **The queue is per browser.** Unsaved changes live in that browser's
-  `localStorage`. They survive a reload, but another device will not see them
-  until they are saved.
-- **Not transactional.** A batch is replayed change by change rather than
-  committed at once. Multi-step operations are ordered so the safest failure
-  wins — deleting a checklist clears the references pointing at it before the
-  checklist goes, so a failure leaves recoverable data rather than a dangling
-  pointer. Every operation is idempotent, so a stopped batch is simply retried.
+- **Google sign-in only.** Better Auth with Google as the one provider; there
+  is no password to phish, reset or store.
+- **Not transactional.** A change is one write, or a few, not a transaction.
+  Those that take several are ordered so the safest failure wins — deleting a
+  checklist deletes its tasks before the checklist, and changing a checklist's
+  tags or stages rewrites its tasks before the checklist itself — so a failure
+  leaves recoverable data, and trying again works out the same difference and
+  finishes the job. Every operation is idempotent, so a retry is always safe.
+- **Other devices catch up on focus.** A change made on another device shows
+  when this window next comes into focus, or after the next change made here.
+- **Roles are checked on the server, visibility on every read.** A role changed
+  or a person removed takes effect on their very next request, whatever their
+  screen still shows.
 - **`mongodb` is pinned to v6.** The v7 driver's BSON package calls
   `v8.startupSnapshot.isBuildingSnapshot()` at import time, which Bun does not
   implement, so v7 crashes the dev server on this runtime.

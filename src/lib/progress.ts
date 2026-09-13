@@ -6,53 +6,35 @@
  */
 
 import type { PaceStatus } from "#/schemas/checklist";
-import { todayDateOnly } from "#/schemas/common";
+import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import type { Velocity } from "#/schemas/progress";
 import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
 
 /**
  * How far actual progress may drift from elapsed time before it stops counting
- * as "on track". Ten percentage points keeps the label from flickering.
+ * as "on track": one percentage point either way.
+ *
+ * Narrow on purpose: anything further adrift than that is worth hearing about,
+ * in either direction. Today reads its pace against the same figure, so
+ * "Behind" means the same thing on every screen.
  */
-const PACE_TOLERANCE = 0.1;
+export const PACE_TOLERANCE = 0.01;
 
-const MS_PER_DAY = 86_400_000;
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_DAY = 1440;
+
+/**
+ * How long something has to have been running before its speed means anything:
+ * a rate over its first few minutes is noise rather than information.
+ */
+const MIN_MINUTES_FOR_SPEED = 15;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export function clampPercent(value: number): number {
 	if (!Number.isFinite(value)) return 0;
 	return Math.min(100, Math.max(0, Math.round(value)));
-}
-
-/* -------------------------------------------------------------------------- */
-/* Calendar arithmetic                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** Midnight UTC for a `YYYY-MM-DD` string, or `null` if unparseable. */
-function parseDateOnly(value: string | null): number | null {
-	if (!value || !DATE_ONLY.test(value)) return null;
-	const time = Date.parse(`${value}T00:00:00Z`);
-	return Number.isNaN(time) ? null : time;
-}
-
-/**
- * Whole days from `from` to `to`. Negative when `to` is earlier. Both are
- * calendar days, so this never drifts by an hour across a daylight-saving
- * boundary the way a timestamp subtraction would.
- */
-export function daysBetween(from: string, to: string): number | null {
-	const start = parseDateOnly(from);
-	const end = parseDateOnly(to);
-	if (start === null || end === null) return null;
-	return Math.round((end - start) / MS_PER_DAY);
-}
-
-/** `YYYY-MM-DD` a whole number of days after `date`. */
-export function addDays(date: string, days: number): string | null {
-	const start = parseDateOnly(date);
-	if (start === null || !Number.isFinite(days)) return null;
-	return new Date(start + days * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -90,6 +72,22 @@ export function trackerProgress(
 				? clampPercent(((safeCurrent - safeStart) / distance) * 100)
 				: 0,
 	};
+}
+
+/**
+ * How far a tracker has come across its distance, 0-1, unrounded.
+ *
+ * Its pace is judged on this rather than on the rounded `percent`: judged on
+ * that, 1.7% counted as 2%, and the label could disagree with the speeds
+ * worked out from the real readings.
+ */
+export function trackerFraction(
+	current: number,
+	target: number,
+	start = 0,
+): number {
+	const fraction = (current - start) / (target - start);
+	return Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
 }
 
 /**
@@ -153,6 +151,30 @@ export function deriveCurrentValue(
 	return latest ? latest.value : start;
 }
 
+/**
+ * The day a tracker reached its target and has stayed there since, or `null`
+ * while it has not.
+ *
+ * A tag counts a tracker as done from this day, the way it counts a task from
+ * the moment it was ticked. A reading that slipped back below the target starts
+ * the count again, so this is the start of the current run at the target, not
+ * the first time it ever got there.
+ */
+export function reachedTargetOn(
+	entries: ReadonlyArray<EntryReading>,
+	target: number,
+	start = 0,
+): string | null {
+	let since: string | null = null;
+
+	for (const entry of sortEntriesOldestFirst(entries)) {
+		const reached = trackerProgress(entry.value, target, start).percent >= 100;
+		since = reached ? (since ?? entry.recordedAt) : null;
+	}
+
+	return since;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Pace                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -162,26 +184,110 @@ export type PaceInput = {
 	startDate: string;
 	/** `YYYY-MM-DD` it should be finished by, or `null` when none was set. */
 	deadline: string | null;
-	/** Today, as `YYYY-MM-DD`. Injectable so the maths stays testable. */
-	today?: string;
+	/** `HH:MM` on the deadline day it is due by; without one, that day's start. */
+	deadlineTime?: string | null;
+	/**
+	 * The hours of every day it is paced across instead of a deadline, for
+	 * something that repeats daily; see `DailyWindow`.
+	 */
+	dailyWindow?: DailyWindow | null;
+	/**
+	 * This moment, as a timestamp: how much of the time has gone, and how fast
+	 * things are moving. Injectable so the maths stays testable.
+	 */
+	now?: number;
 };
+
+/** A `YYYY-MM-DD` day — at an `HH:MM` on it, if given — on the viewer's clock. */
+export function localMoment(
+	date: string | null,
+	time?: string | null,
+): number | null {
+	if (!date || !DATE_ONLY.test(date)) return null;
+
+	const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+	const [hours = 0, minutes = 0] =
+		time && TIME_OF_DAY.test(time) ? time.split(":").map(Number) : [];
+	const moment = new Date(year, month - 1, day, hours, minutes).getTime();
+
+	return Number.isNaN(moment) ? null : moment;
+}
+
+/** Today's stretch of a daily window, as two moments on the viewer's clock. */
+export function todayWindow(
+	window: DailyWindow,
+	now: number,
+): { start: number; end: number } | null {
+	const day = new Date(now);
+	const at = (time: string) => {
+		if (!TIME_OF_DAY.test(time)) return null;
+		const [hours = 0, minutes = 0] = time.split(":").map(Number);
+		return new Date(
+			day.getFullYear(),
+			day.getMonth(),
+			day.getDate(),
+			hours,
+			minutes,
+		).getTime();
+	};
+
+	const start = at(window.from);
+	const end = at(window.to);
+
+	return start === null || end === null || end <= start ? null : { start, end };
+}
+
+/**
+ * The stretch of time something is paced across, as two moments.
+ *
+ * With a daily window it is today's part of it — 06:00 to 22:00 today,
+ * whichever day that is. Otherwise it runs from the start of the start date to
+ * the deadline: at its time if it has one, or the start of that day.
+ *
+ * Both are read on the viewer's own clock, because "due at 18:00" and "from six
+ * in the morning" mean the clock on the wall where the viewer is. That is also
+ * why nothing worked out from this is drawn by the server, which does not know
+ * that clock; see `useNow`.
+ *
+ * `null` when there is nothing to measure against: no deadline, a date that
+ * does not parse, or a window with no length.
+ */
+export function paceWindow(
+	input: PaceInput,
+	now: number,
+): { start: number; end: number } | null {
+	if (input.dailyWindow) return todayWindow(input.dailyWindow, now);
+
+	const start = localMoment(input.startDate);
+	const end = localMoment(input.deadline, input.deadlineTime);
+
+	// The deadline must be after the start for "elapsed" to mean anything.
+	return start === null || end === null || end <= start ? null : { start, end };
+}
 
 /**
  * How much of the available time has gone, 0-1.
  *
- * `null` when there is not enough information: no deadline, an unparseable
- * start, or a window with no length. Also drives the target mark drawn on
- * progress bars, so the bar and the label always agree.
+ * Measured to the moment, in fractional hours: four and a half hours into a
+ * nine-hour window is exactly half. Counted in whole days the mark stood still
+ * from midnight to midnight and then jumped; in whole hours it still jumped on
+ * the hour. It is where the mark sits and what "ahead" and "behind" are judged
+ * against, and the speeds are measured over the same stretch the same way; see
+ * `computeVelocity`.
+ *
+ * `null` when there is not enough information; see `paceWindow`. Also drives
+ * the target mark drawn on progress bars, so the bar and the label always
+ * agree.
  */
 export function elapsedFraction(input: PaceInput): number | null {
-	const today = input.today ?? todayDateOnly();
-	const window = daysBetween(input.startDate, input.deadline ?? "");
-	const gone = daysBetween(input.startDate, today);
+	const now = input.now ?? Date.now();
+	const window = paceWindow(input, now);
+	if (window === null) return null;
 
-	// The deadline must be after the start for "elapsed" to mean anything.
-	if (window === null || gone === null || window <= 0) return null;
-
-	return Math.min(1, Math.max(0, gone / window));
+	return Math.min(
+		1,
+		Math.max(0, (now - window.start) / (window.end - window.start)),
+	);
 }
 
 /**
@@ -215,22 +321,29 @@ export function paceStatus(
  * checklist counting tasks and a tracker counting pages get the same figures
  * from the same code.
  *
- * Day one counts as a whole day, so something started today reports the pace it
- * actually achieved rather than dividing by zero and reporting nothing.
+ * Measured to the minute over the stretch the pace mark is drawn across — from
+ * the start of the start date to the deadline, at its time if it has one — and
+ * given per day, because "18 pages a day" is what anyone plans by. Counted in
+ * whole days instead, all of today was still "left" at ten at night and a
+ * deadline at 23:59 lost its last day, so something marked behind could be
+ * told it needed less than the planned speed to catch up.
  */
 export function computeVelocity(
 	input: PaceInput & { current: number; target: number; start?: number },
 ): Velocity {
-	const today = input.today ?? todayDateOnly();
-	const elapsed = daysBetween(input.startDate, today);
-	const daysElapsed = elapsed === null ? 0 : Math.max(0, elapsed);
-
-	const daysRemaining =
-		input.deadline === null ? null : daysBetween(today, input.deadline);
-	const totalDays =
+	const now = input.now ?? Date.now();
+	const startsAt = localMoment(input.startDate);
+	const endsAt =
 		input.deadline === null
 			? null
-			: daysBetween(input.startDate, input.deadline);
+			: localMoment(input.deadline, input.deadlineTime);
+	const minutesFrom = (from: number, to: number) => (to - from) / MS_PER_MINUTE;
+
+	const minutesElapsed =
+		startsAt === null ? 0 : Math.max(0, minutesFrom(startsAt, now));
+	const minutesRemaining = endsAt === null ? null : minutesFrom(now, endsAt);
+	const totalMinutes =
+		startsAt === null || endsAt === null ? null : minutesFrom(startsAt, endsAt);
 
 	/*
 	 * Distances, not readings.
@@ -244,31 +357,47 @@ export function computeVelocity(
 	const outstanding = Math.max(0, input.target - input.current);
 	const distance = Math.max(0, input.target - start);
 
-	const perDay = covered / Math.max(daysElapsed, 1);
+	/** So many units over so many minutes, as the units per day that makes. */
+	const perDayOver = (units: number, minutes: number) =>
+		(units * MINUTES_PER_DAY) / minutes;
 
-	// What the deadline asked for on day one, which is the bar the current pace
-	// is really being measured against.
+	const perDay =
+		minutesElapsed < MIN_MINUTES_FOR_SPEED
+			? null
+			: perDayOver(covered, minutesElapsed);
+
+	// What the deadline asked for from the start, which is the bar the current
+	// pace is really being measured against.
 	const expectedPerDay =
-		totalDays === null || totalDays <= 0 ? null : distance / totalDays;
+		totalMinutes === null || totalMinutes <= 0
+			? null
+			: perDayOver(distance, totalMinutes);
 
-	// A deadline already past cannot be spread over days that do not exist, so
-	// the requirement collapses onto today rather than dividing by zero.
+	// A deadline already past has no time left to spread the rest over, so the
+	// rest is asked of a single day rather than divided by nothing.
 	const requiredPerDay =
-		daysRemaining === null
+		minutesRemaining === null
 			? null
 			: outstanding === 0
 				? 0
-				: outstanding / Math.max(daysRemaining, 1);
+				: perDayOver(
+						outstanding,
+						minutesRemaining > 0 ? minutesRemaining : MINUTES_PER_DAY,
+					);
 
 	const projectedFinish =
-		outstanding === 0 || perDay <= 0
+		outstanding === 0 || perDay === null || perDay <= 0
 			? null
-			: addDays(today, Math.ceil(outstanding / perDay));
+			: todayDateOnly(
+					new Date(
+						now + (outstanding / perDay) * MINUTES_PER_DAY * MS_PER_MINUTE,
+					),
+				);
 
 	return {
-		daysElapsed,
-		daysRemaining,
-		totalDays,
+		minutesElapsed,
+		minutesRemaining,
+		totalMinutes,
 		perDay,
 		expectedPerDay,
 		requiredPerDay,
@@ -288,16 +417,54 @@ export function computeVelocity(
  * A degree rather than a band, so a list sorted by it reads worst-first all the
  * way down instead of grouping everything unfinished together.
  */
-export function lagFraction(input: {
-	startDate: string;
-	deadline: string | null;
-	/** Progress so far, 0 to 1. */
-	fractionComplete: number;
-}): number {
+export function lagFraction(
+	input: PaceInput & {
+		/** Progress so far, 0 to 1. */
+		fractionComplete: number;
+	},
+): number {
 	if (input.fractionComplete >= 1) return 0;
 
 	const expected = elapsedFraction(input);
 	if (expected === null) return 0;
 
 	return expected - input.fractionComplete;
+}
+
+/**
+ * Whether something is past its deadline with work still left.
+ *
+ * For something paced daily, that is today's window having closed on an
+ * unfinished list. Nothing without a deadline is ever overdue.
+ */
+export function isOverdue(
+	input: PaceInput & {
+		/** Progress so far, 0 to 1. */
+		fractionComplete: number;
+	},
+): boolean {
+	if (input.fractionComplete >= 1) return false;
+
+	const now = input.now ?? Date.now();
+	const window = paceWindow(input, now);
+	return window !== null && now >= window.end;
+}
+
+/**
+ * Most behind first, for ordering a screen of cards.
+ *
+ * Anything overdue leads, then the rest by how much of the work is owed; see
+ * `lagFraction`. Overdue has to be its own step: something due yesterday and
+ * nine-tenths done owes less of the whole than something halfway through its
+ * time and untouched, but only one of them has already missed its date. Within
+ * each group, the one owing the most comes first.
+ */
+export function compareBehind(
+	a: PaceInput & { fractionComplete: number },
+	b: PaceInput & { fractionComplete: number },
+): number {
+	return (
+		Number(isOverdue(b)) - Number(isOverdue(a)) ||
+		lagFraction(b) - lagFraction(a)
+	);
 }

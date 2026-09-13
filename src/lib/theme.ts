@@ -10,8 +10,17 @@
  *
  * The choice is per browser rather than per account: it is a property of the
  * screen you are looking at, not of the data.
+ *
+ * It is kept twice: in local storage, which the script before the first paint
+ * reads, and in a cookie, which the server reads so it can draw the page in
+ * the chosen scheme. Without the cookie the server drew every page in the
+ * machine's scheme, and the chosen one only arrived after hydration — a flash
+ * of the other scheme on every full load, which a reload after a deploy or a
+ * new service worker made look like it happened on changing screens.
  */
 
+import { createIsomorphicFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 import { useSyncExternalStore } from "react";
 
 const COLOR_SCHEMES = ["system", "light", "dark"] as const;
@@ -20,9 +29,45 @@ export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 const STORAGE_KEY = "thunderlist.theme.v1";
 
+/** Read by the server; see the top of this file. */
+const COOKIE_NAME = "thunderlist-theme";
+
 function isColorScheme(value: unknown): value is ColorScheme {
 	return (COLOR_SCHEMES as ReadonlyArray<unknown>).includes(value);
 }
+
+function writeCookie(scheme: ColorScheme): void {
+	// biome-ignore lint/suspicious/noDocumentCookie: one short-lived preference; the Cookie Store API is not in every browser this supports.
+	document.cookie = `${COOKIE_NAME}=${scheme}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function readCookie(): string | undefined {
+	return document.cookie
+		.split("; ")
+		.find((pair) => pair.startsWith(`${COOKIE_NAME}=`))
+		?.slice(COOKIE_NAME.length + 1);
+}
+
+/**
+ * The scheme the page is drawn in by the server, which hydration has to agree
+ * with.
+ *
+ * On the server that is the cookie. In the browser it is read back off the
+ * markup the server sent rather than off the cookie, because the installed app
+ * can open on a kept copy of a page drawn before the choice last changed — and
+ * hydration must match the markup it finds, not the choice.
+ */
+export const drawnColorScheme = createIsomorphicFn()
+	.server((): ColorScheme => {
+		const stored = getCookie(COOKIE_NAME);
+		return isColorScheme(stored) ? stored : "system";
+	})
+	.client((): ColorScheme => {
+		const drawn = document
+			.querySelector("[data-astryx-theme]")
+			?.getAttribute("data-theme");
+		return isColorScheme(drawn) ? drawn : "system";
+	});
 
 /**
  * The script that runs before the first paint.
@@ -57,6 +102,9 @@ function hydrate(): void {
 	if (isHydrated) return;
 	isHydrated = true;
 	current = read();
+
+	// A choice made before the cookie existed reaches the server from now on.
+	if (current !== "system" && readCookie() !== current) writeCookie(current);
 }
 
 /** How long the whole page is allowed to cross-fade between schemes. */
@@ -92,6 +140,7 @@ export function setColorScheme(scheme: ColorScheme): void {
 	} catch {
 		// Not being able to remember it is not a reason to refuse to switch.
 	}
+	writeCookie(scheme);
 
 	emit();
 }
@@ -103,14 +152,17 @@ function subscribe(listener: () => void): () => void {
 }
 
 /**
- * The chosen scheme. `"system"` on the server and on the very first client
- * render, so the markup the server sent and the markup React first builds
- * agree; the stored choice arrives immediately afterwards.
+ * The chosen scheme.
+ *
+ * `drawnIn` is the scheme the server drew the page in — see
+ * `drawnColorScheme` — which the server renders and hydration starts from, so
+ * the two agree. It is the stored choice in all but the rarest case, so
+ * nothing changes once the stored choice is read after hydration.
  */
-export function useColorScheme(): ColorScheme {
+export function useColorScheme(drawnIn: ColorScheme): ColorScheme {
 	return useSyncExternalStore(
 		subscribe,
-		() => current,
-		() => "system" as const,
+		() => (isHydrated ? current : drawnIn),
+		() => drawnIn,
 	);
 }

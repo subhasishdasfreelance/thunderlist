@@ -1,9 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import {
 	activeTagQuery,
+	activeTrackerQuery,
 	applyTagSuggestion,
+	applyTrackerSuggestion,
+	isInlineTagName,
 	parseInlineTags,
+	renameInlineTag,
 	splitTitleTags,
+	unwrittenTags,
+	withInlineTag,
+	withoutInlineTag,
 } from "./inline-tags";
 
 describe("parseInlineTags", () => {
@@ -11,6 +18,9 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("Hello #me hi")).toEqual({
 			title: "Hello #me hi",
 			tagNames: ["me"],
+			trackerName: null,
+			urgent: false,
+			important: false,
 		});
 	});
 
@@ -20,6 +30,9 @@ describe("parseInlineTags", () => {
 		).toEqual({
 			title: "bring coffee from market #shopping and pour it #chore",
 			tagNames: ["shopping", "chore"],
+			trackerName: null,
+			urgent: false,
+			important: false,
 		});
 	});
 
@@ -27,6 +40,9 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("just a task")).toEqual({
 			title: "just a task",
 			tagNames: [],
+			trackerName: null,
+			urgent: false,
+			important: false,
 		});
 	});
 
@@ -35,6 +51,9 @@ describe("parseInlineTags", () => {
 		expect(parseInlineTags("learn C# properly")).toEqual({
 			title: "learn C# properly",
 			tagNames: [],
+			trackerName: null,
+			urgent: false,
+			important: false,
 		});
 		expect(parseInlineTags("read docs#section").tagNames).toEqual([]);
 	});
@@ -47,6 +66,58 @@ describe("parseInlineTags", () => {
 
 	it("ignores a bare hash", () => {
 		expect(parseInlineTags("nothing to see # here").tagNames).toEqual([]);
+	});
+});
+
+describe("a priority at the end of a line", () => {
+	it("reads -u, -i and -ui, and takes them off the title", () => {
+		expect(parseInlineTags("fix the login -u")).toMatchObject({
+			title: "fix the login",
+			urgent: true,
+			important: false,
+		});
+		expect(parseInlineTags("write the plan -i")).toMatchObject({
+			title: "write the plan",
+			urgent: false,
+			important: true,
+		});
+		expect(parseInlineTags("ship it #work -ui")).toEqual({
+			title: "ship it #work",
+			tagNames: ["work"],
+			trackerName: null,
+			urgent: true,
+			important: true,
+		});
+	});
+
+	it("reads it whatever its case", () => {
+		expect(parseInlineTags("call back -UI")).toMatchObject({
+			title: "call back",
+			urgent: true,
+			important: true,
+		});
+	});
+
+	it("leaves words and flags that only look like one", () => {
+		expect(parseInlineTags("fix sign-in")).toMatchObject({
+			title: "fix sign-in",
+			urgent: false,
+		});
+		expect(parseInlineTags("try -u first")).toMatchObject({
+			title: "try -u first",
+			urgent: false,
+		});
+	});
+
+	it("never leaves a task without a title", () => {
+		expect(parseInlineTags("-u")).toMatchObject({ title: "-u", urgent: false });
+	});
+
+	it("works on a tracker line too", () => {
+		expect(parseInlineTags("&Dune -u")).toMatchObject({
+			trackerName: "Dune",
+			urgent: true,
+		});
 	});
 });
 
@@ -138,5 +209,151 @@ describe("applyTagSuggestion", () => {
 		expect(applyTagSuggestion(text, active, "milk").text).toBe(
 			"buy #milk  later",
 		);
+	});
+});
+
+describe("tracker lines", () => {
+	it("reads a whole line as one tracker, spaces and all", () => {
+		expect(parseInlineTags("&Dune Part Two")).toEqual({
+			title: "&Dune Part Two",
+			tagNames: [],
+			trackerName: "Dune Part Two",
+			urgent: false,
+			important: false,
+		});
+	});
+
+	it("only counts an ampersand at the start", () => {
+		expect(parseInlineTags("Tom & Jerry").trackerName).toBeNull();
+	});
+
+	it("takes no tags off a tracker line: its title is the tracker's", () => {
+		expect(parseInlineTags("&Dune #reading").tagNames).toEqual([]);
+	});
+
+	it("draws the whole line as one tracker run", () => {
+		expect(splitTitleTags("&Dune Part Two")).toEqual([
+			{ kind: "tracker", at: 0, name: "Dune Part Two" },
+		]);
+	});
+
+	it("suggests from the moment the ampersand is typed", () => {
+		expect(activeTrackerQuery("&", 1)).toEqual({ query: "", start: 0 });
+		expect(activeTrackerQuery("&Du", 3)).toEqual({ query: "Du", start: 0 });
+	});
+
+	it("suggests on any line of a pasted list, not just the first", () => {
+		const text = "buy milk\n&Du";
+		expect(activeTrackerQuery(text, text.length)).toEqual({
+			query: "Du",
+			start: 9,
+		});
+	});
+
+	it("suggests nothing on a line that does not start with one", () => {
+		expect(activeTrackerQuery("buy milk", 8)).toBeNull();
+		expect(activeTrackerQuery("Tom & Je", 8)).toBeNull();
+	});
+
+	it("replaces the line it is on and leaves the others alone", () => {
+		const text = "buy milk\n&Du\nwalk";
+		const active = activeTrackerQuery(text, 12);
+		if (active === null) throw new Error("expected a query");
+
+		expect(applyTrackerSuggestion(text, active, "Dune")).toEqual({
+			text: "buy milk\n&Dune\nwalk",
+			caret: 14,
+		});
+	});
+});
+
+describe("isInlineTagName", () => {
+	it("accepts a name that reads back the same", () => {
+		expect(isInlineTagName("shopping")).toBe(true);
+		expect(isInlineTagName("q3-launch")).toBe(true);
+	});
+
+	it("refuses one that would be cut short or lost", () => {
+		// Written inline, these read back as "Q3" and as nothing at all.
+		expect(isInlineTagName("Q3 launch")).toBe(false);
+		expect(isInlineTagName("-draft")).toBe(false);
+	});
+});
+
+describe("withInlineTag", () => {
+	it("writes the tag at the end, the way the bolt adds it", () => {
+		expect(withInlineTag("call mum", "today")).toBe("call mum #today");
+	});
+
+	it("leaves a title that already writes it, anywhere and in any case", () => {
+		expect(withInlineTag("call #Today mum", "today")).toBe("call #Today mum");
+	});
+
+	it("does not mistake a longer tag for it", () => {
+		expect(withInlineTag("plan #todays-list", "today")).toBe(
+			"plan #todays-list #today",
+		);
+	});
+});
+
+describe("withoutInlineTag", () => {
+	it("takes it off the end", () => {
+		expect(withoutInlineTag("call mum #today", "today")).toBe("call mum");
+	});
+
+	it("takes it out of the middle and closes the gap", () => {
+		expect(withoutInlineTag("call #today mum", "today")).toBe("call mum");
+	});
+
+	it("takes it off the start", () => {
+		expect(withoutInlineTag("#today call mum", "today")).toBe("call mum");
+	});
+
+	it("takes every mention, whatever the case, and nothing else", () => {
+		expect(withoutInlineTag("#Today call #home #TODAY", "today")).toBe(
+			"call #home",
+		);
+		expect(withoutInlineTag("plan #todays-list", "today")).toBe(
+			"plan #todays-list",
+		);
+	});
+
+	it("keeps the word when the tag was the whole title", () => {
+		expect(withoutInlineTag("#today", "today")).toBe("today");
+	});
+});
+
+describe("renameInlineTag", () => {
+	it("rewrites each mention in place", () => {
+		expect(renameInlineTag("call #today mum #Today", "today", "doing")).toBe(
+			"call #doing mum #doing",
+		);
+	});
+
+	it("leaves other tags and look-alikes alone", () => {
+		expect(renameInlineTag("C# #todays #home", "today", "doing")).toBe(
+			"C# #todays #home",
+		);
+	});
+});
+
+describe("unwrittenTags", () => {
+	const tags = [
+		{ tagId: "tag_shop", name: "shopping" },
+		{ tagId: "tag_home", name: "Home" },
+	];
+
+	it("returns the tags the title does not write, in the task's order", () => {
+		expect(
+			unwrittenTags("buy milk #shopping", ["tag_home", "tag_shop"], tags),
+		).toEqual([{ tagId: "tag_home", name: "Home" }]);
+	});
+
+	it("counts a written tag whatever its case", () => {
+		expect(unwrittenTags("tidy #home", ["tag_home"], tags)).toEqual([]);
+	});
+
+	it("skips an id with no tag behind it", () => {
+		expect(unwrittenTags("anything", ["tag_gone"], tags)).toEqual([]);
 	});
 });

@@ -4,27 +4,35 @@ import {
 	getTrackerEntries,
 	listTrackers,
 } from "#/data/tracker.server";
-import { requireUserId } from "#/lib/auth.server";
+import { assertTrackerVisible } from "#/data/visibility.server";
 import { trackerIdInputSchema } from "#/schemas/tracker";
 import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
+import { requireScope } from "./scope";
 
 export const listTrackersFn = createServerFn().handler(() =>
-	guard("listTrackers", async () => listTrackers(await requireUserId())),
+	guard("listTrackers", async () => {
+		const scope = await requireScope();
+		return listTrackers(scope.ownerId, scope.hidden);
+	}),
 );
 
 export const getTrackerFn = createServerFn()
 	.validator(validator(trackerIdInputSchema))
 	.handler(({ data }) =>
-		guard("getTracker", async () =>
-			getTracker(await requireUserId(), data.trackerId),
-		),
+		guard("getTracker", async () => {
+			const scope = await requireScope();
+			assertTrackerVisible(scope.hidden, data.trackerId);
+			return getTracker(scope.ownerId, data.trackerId);
+		}),
 	);
 
 export const getTrackerEntriesFn = createServerFn()
 	.validator(validator(trackerIdInputSchema))
 	.handler(({ data }) =>
-		guard("getTrackerEntries", async () =>
-			getTrackerEntries(await requireUserId(), data.trackerId),
-		),
+		guard("getTrackerEntries", async () => {
+			const scope = await requireScope();
+			assertTrackerVisible(scope.hidden, data.trackerId);
+			return getTrackerEntries(scope.ownerId, data.trackerId);
+		}),
 	);

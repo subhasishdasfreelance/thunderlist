@@ -1,23 +1,34 @@
 import { Button } from "@astryxdesign/core/Button";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { ScheduleFields } from "#/components/common/schedule-fields";
+import { VisibilityField } from "#/components/teams/visibility-field";
+import type { TagValues } from "#/lib/changes";
+import { isInlineTagName } from "#/lib/tags/inline-tags";
+import type { DailyWindow } from "#/schemas/common";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 
-const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
+/** The Token palette as options to pick from; task types use it too. */
+export const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
 	value: color,
 	label: `${color.charAt(0).toUpperCase()}${color.slice(1)}`,
 }));
 
 /**
- * Create or rename a tag.
+ * Create or edit a tag.
  *
  * Renaming here is enough to rename it everywhere: tasks reference a tag by id,
  * so the name lives in exactly one place.
+ *
+ * The description and dates are a checklist's, and all of them are optional: a
+ * tag without dates still counts its tasks, it just has no pace to keep.
  */
 export function TagFormDialog({
 	isOpen,
@@ -31,15 +42,33 @@ export function TagFormDialog({
 	tag?: Tag;
 	/** Every other tag name, so a duplicate is caught before it is queued. */
 	existingNames: ReadonlyArray<string>;
-	onSubmit: (values: { name: string; color: TagColor }) => void;
+	onSubmit: (values: TagValues) => void;
 }) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<TagColor>("blue");
+	const [description, setDescription] = useState("");
+	const [startDate, setStartDate] = useState<ISODateString | undefined>(
+		undefined,
+	);
+	const [deadline, setDeadline] = useState<ISODateString | undefined>(
+		undefined,
+	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
+	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
+	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
 
 	useEffect(() => {
 		if (!isOpen) return;
 		setName(tag?.name ?? "");
 		setColor(tag?.color ?? "blue");
+		setDescription(tag?.description ?? "");
+		setStartDate((tag?.startDate as ISODateString | null) ?? undefined);
+		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(tag?.deadlineTime ?? undefined);
+		setDailyWindow(tag?.dailyWindow ?? null);
+		setVisibleTo(tag?.visibleTo ?? null);
 	}, [isOpen, tag]);
 
 	const trimmed = name.trim();
@@ -48,11 +77,32 @@ export function TagFormDialog({
 			existing.toLowerCase() === trimmed.toLowerCase() &&
 			existing.toLowerCase() !== tag?.name.toLowerCase(),
 	);
-	const isValid = trimmed !== "" && !isDuplicate;
+	// Today and the Backlog are written into titles by the bolt and the menu, so
+	// their names have to read back as the same tag; see `isInlineTagName`.
+	const isUnwritable =
+		tag?.special != null && trimmed !== "" && !isInlineTagName(trimmed);
+	const isValid =
+		trimmed !== "" &&
+		!isDuplicate &&
+		!isUnwritable &&
+		(dailyWindow === null || dailyWindow.to > dailyWindow.from);
 
 	function save() {
 		if (!isValid) return;
-		onSubmit({ name: trimmed, color });
+		onSubmit({
+			name: trimmed,
+			color,
+			description: description.trim(),
+			startDate: startDate ?? null,
+			// Repeating daily takes the deadline's place; see `ScheduleFields`.
+			deadline: dailyWindow === null ? (deadline ?? null) : null,
+			deadlineTime:
+				dailyWindow === null && deadline !== undefined
+					? (deadlineTime ?? null)
+					: null,
+			dailyWindow,
+			visibleTo,
+		});
 	}
 
 	return (
@@ -60,7 +110,6 @@ export function TagFormDialog({
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 			title={tag ? "Edit tag" : "New tag"}
-			width={400}
 			actions={() => (
 				<HStack gap={2} hAlign="end">
 					<Button
@@ -93,7 +142,12 @@ export function TagFormDialog({
 									type: "error",
 									message: `There is already a "${trimmed}" tag.`,
 								}
-							: undefined
+							: isUnwritable
+								? {
+										type: "error",
+										message: "One word: it is written into tasks as #name.",
+									}
+								: undefined
 					}
 				/>
 
@@ -111,6 +165,32 @@ export function TagFormDialog({
 						label={trimmed === "" ? "Preview" : trimmed}
 					/>
 				</HStack>
+
+				<TextArea
+					label="Description"
+					isOptional
+					rows={3}
+					value={description}
+					onChange={setDescription}
+					placeholder="What this tag gathers"
+				/>
+
+				<ScheduleFields
+					startDate={startDate}
+					deadline={deadline}
+					deadlineTime={deadlineTime}
+					dailyWindow={dailyWindow}
+					onStartDateChange={setStartDate}
+					onDeadlineChange={setDeadline}
+					onDeadlineTimeChange={setDeadlineTime}
+					onDailyWindowChange={setDailyWindow}
+					isStartDateOptional
+				/>
+
+				{/* Today and the Backlog are everyone's, in a team as anywhere. */}
+				{tag?.special != null ? null : (
+					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
+				)}
 			</VStack>
 		</FormDialog>
 	);

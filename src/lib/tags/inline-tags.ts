@@ -1,5 +1,6 @@
 /**
- * Tags written inline in a task title, as `#shopping`.
+ * Marks written inline in a task title: `#shopping` for a tag, `&Dune` for a
+ * tracker.
  *
  * Typing is the fastest way to tag something, so the tag goes in the same
  * keystrokes as the task: "bring coffee from market #shopping".
@@ -26,11 +27,48 @@ const TRAILING_TAG = /(^|\s)#([\p{L}\p{N}_-]*)$/u;
 /** Mirrors `tagNameSchema`, so a parsed name is always one the schema accepts. */
 const MAX_TAG_NAME = 40;
 
+/**
+ * A priority written at the very end of a line: `-u` for urgent, `-i` for
+ * important, `-ui` for both.
+ *
+ * Only after a space, so "sign-in" stays a word, and never the whole line, so a
+ * task is not left without a title. It is taken off the title: it says how much
+ * the task matters rather than what it is, and the row's flags say that from
+ * then on.
+ */
+const PRIORITY_SUFFIX = /\s+-(ui|u|i)$/i;
+
+function readPriority(
+	line: string,
+): Pick<ParsedTitle, "title" | "urgent" | "important"> {
+	const match = PRIORITY_SUFFIX.exec(line);
+	if (!match) return { title: line, urgent: false, important: false };
+
+	const flags = match[1].toLowerCase();
+	return {
+		title: line.slice(0, match.index),
+		urgent: flags.includes("u"),
+		important: flags.includes("i"),
+	};
+}
+
 export type ParsedTitle = {
-	/** The text as typed, tags and all. */
+	/** The text as typed, marks and all. */
 	title: string;
 	/** Names in the order written, without duplicates. */
 	tagNames: Array<string>;
+	/**
+	 * The tracker this line names, if it is a tracker line at all.
+	 *
+	 * A name rather than an id, for the same reason tags are names here: the
+	 * title is what was typed, and the ids are derived from it at the moment it
+	 * is submitted. Nothing hidden has to be carried alongside the text.
+	 */
+	trackerName: string | null;
+	/** Written `-u` or `-ui` at the end of the line; see `readPriority`. */
+	urgent: boolean;
+	/** Written `-i` or `-ui` at the end of the line. */
+	important: boolean;
 };
 
 /**
@@ -43,6 +81,7 @@ export type ParsedTitle = {
 export type TitleSegment = { at: number } & (
 	| { kind: "text"; text: string }
 	| { kind: "tag"; name: string }
+	| { kind: "tracker"; name: string }
 );
 
 /** Tag names are matched case-insensitively; the first spelling seen wins. */
@@ -57,14 +96,101 @@ export function sameTagName(a: string, b: string): boolean {
  * title whether or not the user is using tags at all.
  */
 export function parseInlineTags(text: string): ParsedTitle {
+	const { title, urgent, important } = readPriority(text.trim());
+
+	// A tracker line is only a tracker: its title comes from the tracker itself,
+	// so there is nothing else on the line for a tag to attach to.
+	const tracker = INLINE_TRACKER.exec(title);
+	if (tracker) {
+		return {
+			title,
+			tagNames: [],
+			trackerName: tracker[1].trim(),
+			urgent,
+			important,
+		};
+	}
+
 	const tagNames: Array<string> = [];
 
-	for (const match of text.matchAll(INLINE_TAG)) {
+	for (const match of title.matchAll(INLINE_TAG)) {
 		const name = match[2].slice(0, MAX_TAG_NAME);
 		if (!tagNames.some((seen) => sameTagName(seen, name))) tagNames.push(name);
 	}
 
-	return { title: text.trim(), tagNames };
+	return { title, tagNames, trackerName: null, urgent, important };
+}
+
+/**
+ * Whether a tag's name can be written inline and read back unchanged.
+ *
+ * Not every name can: one given a space on the Tags screen — "Q3 launch" —
+ * would be read back as "Q3". A field that writes tags as `#name` has to know
+ * which ones it cannot write, or saving it would quietly rename them.
+ */
+export function isInlineTagName(name: string): boolean {
+	return parseInlineTags(`#${name}`).tagNames[0] === name;
+}
+
+/**
+ * A title with `#name` written at its end, the way the row's bolt adds a tag —
+ * or the title as it is, if it already writes that tag somewhere.
+ */
+export function withInlineTag(title: string, name: string): string {
+	const isWritten = parseInlineTags(title).tagNames.some((written) =>
+		sameTagName(written, name),
+	);
+
+	return isWritten ? title : `${title.trimEnd()} #${name}`;
+}
+
+/**
+ * A title with every `#name` of one tag taken out, wherever it was written —
+ * the end, the start or the middle of the sentence — and the gap it leaves
+ * closed up.
+ *
+ * A title that was nothing but the tag keeps the word without its `#`: a task
+ * cannot have an empty title, and the word is what the user wrote.
+ */
+export function withoutInlineTag(title: string, name: string): string {
+	const without = title
+		.replace(INLINE_TAG, (whole, before: string, written: string) =>
+			sameTagName(written, name) ? before : whole,
+		)
+		.replace(/[ \t]{2,}/g, " ")
+		.trim();
+
+	return without === "" ? name : without;
+}
+
+/** A title with each `#from` rewritten as `#to`, for a tag that was renamed. */
+export function renameInlineTag(
+	title: string,
+	from: string,
+	to: string,
+): string {
+	return title.replace(INLINE_TAG, (whole, before: string, written: string) =>
+		sameTagName(written, from) ? `${before}#${to}` : whole,
+	);
+}
+
+/**
+ * The tags a task carries that its title does not write — the ones it has from
+ * its checklist — so they can be drawn beside the title instead of in it.
+ */
+export function unwrittenTags<T extends { tagId: string; name: string }>(
+	title: string,
+	tagIds: ReadonlyArray<string>,
+	tags: ReadonlyArray<T>,
+): Array<T> {
+	const written = parseInlineTags(title).tagNames;
+
+	return tagIds.flatMap((tagId) => {
+		const tag = tags.find((candidate) => candidate.tagId === tagId);
+		return tag && !written.some((name) => sameTagName(name, tag.name))
+			? [tag]
+			: [];
+	});
 }
 
 /**
@@ -75,6 +201,9 @@ export function parseInlineTags(text: string): ParsedTitle {
  * segments gives back the original title character for character.
  */
 export function splitTitleTags(title: string): Array<TitleSegment> {
+	const tracker = INLINE_TRACKER.exec(title);
+	if (tracker) return [{ kind: "tracker", at: 0, name: tracker[1] }];
+
 	const segments: Array<TitleSegment> = [];
 	let cursor = 0;
 
@@ -136,5 +265,79 @@ export function applyTagSuggestion(
 			token +
 			text.slice(active.start + 1 + active.query.length),
 		caret,
+	};
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trackers                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A line that stands for a tracker, written `&Dune`.
+ *
+ * `&` only counts at the start of a line, and it then claims the whole line:
+ * unlike a tag, a tracker's title is its real title and titles have spaces in
+ * them. That also makes the rule easy to hold — a line either is a tracker or
+ * is not, and there is no half-way case to explain.
+ */
+const INLINE_TRACKER = /^&(.*)$/;
+
+/** The line the caret sits on, and where that line starts in the whole text. */
+function lineAtCaret(
+	text: string,
+	caret: number,
+): { line: string; start: number } {
+	const start = text.lastIndexOf("\n", Math.max(caret - 1, 0)) + 1;
+	const end = text.indexOf("\n", start);
+
+	return { line: text.slice(start, end === -1 ? undefined : end), start };
+}
+
+/** Tracker titles are matched the way tag names are: ignoring case. */
+export function sameTrackerName(a: string, b: string): boolean {
+	return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+export type TrackerQuery = {
+	/** What has been typed after the `&`, possibly empty. */
+	query: string;
+	/** Index of the `&`, so the whole line can be replaced on picking one. */
+	start: number;
+};
+
+/**
+ * The tracker being named on the line the caret is on, if any.
+ *
+ * Suggestions appear from the moment `&` is typed and stay while the title is
+ * being written, because the title may not be finished and still match.
+ */
+export function activeTrackerQuery(
+	text: string,
+	caret: number,
+): TrackerQuery | null {
+	const { line, start } = lineAtCaret(text, caret);
+	if (!line.startsWith("&")) return null;
+
+	// Only while the caret is still on that line, not once it has moved past it.
+	if (caret < start + 1 || caret > start + line.length) return null;
+
+	return { query: line.slice(1, caret - start), start };
+}
+
+/** Replace the line being typed with a chosen tracker, and place the caret. */
+export function applyTrackerSuggestion(
+	text: string,
+	active: TrackerQuery,
+	title: string,
+): { text: string; caret: number } {
+	const { line } = lineAtCaret(text, active.start + 1);
+	const token = `&${title}`;
+
+	return {
+		text:
+			text.slice(0, active.start) +
+			token +
+			text.slice(active.start + line.length),
+		caret: active.start + token.length,
 	};
 }

@@ -42,11 +42,12 @@ export async function currentUser(): Promise<SignedInUser | null> {
 /**
  * The signed-in user, or a refusal.
  *
- * Every server function that touches stored data calls this first and passes
- * the id it returns down into `src/data`. A request without a valid session
- * never reaches a query at all.
+ * Every server function that touches stored data calls this first — most of
+ * them through `requireScope`, which works out whose rows the request may
+ * reach: this user's own, or those of a team they are in. A request without a
+ * valid session never reaches a query at all.
  */
-async function requireUser(): Promise<SignedInUser> {
+export async function requireUser(): Promise<SignedInUser> {
 	const user = await currentUser();
 
 	if (!user) {
@@ -54,9 +55,4 @@ async function requireUser(): Promise<SignedInUser> {
 	}
 
 	return user;
-}
-
-/** The id alone, which is all most callers need. */
-export async function requireUserId(): Promise<string> {
-	return (await requireUser()).userId;
 }

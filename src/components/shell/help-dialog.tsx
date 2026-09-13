@@ -24,7 +24,12 @@ const GROUPS: Array<Group> = [
 			{ keys: [TASK_SHORTCUTS.urgent], what: "Urgent" },
 			{ keys: [TASK_SHORTCUTS.important], what: "Important" },
 			{ keys: [TASK_SHORTCUTS.complete], what: "Done" },
-			{ keys: [TASK_SHORTCUTS.edit], what: "Edit — in a checklist" },
+			{ keys: [TASK_SHORTCUTS.edit], what: "Edit" },
+			{
+				keys: [TASK_SHORTCUTS.type.toUpperCase()],
+				what: "Type — bug, feature…",
+			},
+			{ keys: ["Space"], what: "Assign to me, or unassign me — in a team" },
 		],
 	},
 	{
@@ -33,6 +38,10 @@ const GROUPS: Array<Group> = [
 			{ keys: ["Enter"], what: "Add. One task per line" },
 			{ keys: ["Shift", "Enter"], what: "New line" },
 			{ keys: ["#"], what: "Tag it" },
+			{
+				keys: ["-u", "-i", "-ui"],
+				what: "At the end: urgent, important, both",
+			},
 			{ keys: ["Tab"], what: "Take the suggestion" },
 		],
 	},
@@ -56,7 +65,7 @@ const GROUPS: Array<Group> = [
 const WORKFLOW: Array<{ step: string; what: string }> = [
 	{
 		step: "Park it",
-		what: "Anything you might do goes in the Backlog. Out of your head, off today.",
+		what: "Anything you might do gets #backlog, from a task's menu. Out of your head, off today.",
 	},
 	{
 		step: "Group it",
@@ -68,11 +77,54 @@ const WORKFLOW: Array<{ step: string; what: string }> = [
 	},
 	{
 		step: "Pick today",
-		what: "Each morning pull a few things onto Today. It is a plan, not a store.",
+		what: "Each morning press the bolt on a few tasks to put them on #today. It is a plan, not a store.",
 	},
 	{
 		step: "Let it tell you",
 		what: "The pace figures say what a day owes. Sort by most behind when time is short.",
+	},
+	{
+		step: "Move it along",
+		what: "Give a checklist stages — To do, Review, Done — when you edit it. Its tasks show a stage at a time; Move to… in a task's menu sends it on.",
+	},
+	{
+		step: "Narrow it down",
+		what: "The filter row above a checklist's tasks shows one tag's, or one person's. The figures and the chart follow it.",
+	},
+	{
+		step: "Say what it is",
+		what: "Press K on a task for its type: bug, feature, chore. Manage types from there.",
+	},
+];
+
+/**
+ * Working with other people, in the order it happens. A team is the one part
+ * of the app with rules someone else sets, so the rules are said here too.
+ */
+const TEAMWORK: Array<{ step: string; what: string }> = [
+	{
+		step: "Make a team",
+		what: "Settings → New team. You are its admin: the one person who adds people, gives them roles and can delete it.",
+	},
+	{
+		step: "Add people",
+		what: "Settings → open the team → Add someone, by the address they sign in with, as a project manager, collaborator or viewer.",
+	},
+	{
+		step: "Know the roles",
+		what: "Project managers add, delete and organise the work; collaborators tick, move and update the tasks; viewers see everything and change nothing. A team's popup has the full table.",
+	},
+	{
+		step: "Switch spaces",
+		what: "Settings → Work here. Personal is just you; each team is a space of its own, with its own lists.",
+	},
+	{
+		step: "Share only some of it",
+		what: "The faces beside Back on a checklist, tag or tracker are who can see it. Press them to change who.",
+	},
+	{
+		step: "Hand work out",
+		what: "Point at a task and press Space to take it on, or Assign people… from its menu. The person filter shows whose is whose.",
 	},
 ];
 
@@ -131,23 +183,38 @@ export function HelpDialog({
 					</VStack>
 				))}
 
-				<Divider />
-
-				<VStack gap={1}>
-					<Text type="label" weight="semibold" color="secondary">
-						How to work this
-					</Text>
-					{WORKFLOW.map((row) => (
-						<HStack key={row.step} gap={2} vAlign="start">
-							<Text weight="semibold">{row.step}</Text>
-							<Text type="supporting">{row.what}</Text>
-						</HStack>
-					))}
-				</VStack>
-
+				{/* With the shortcuts it is about, not after the guide. */}
 				<Text type="supporting">
 					No keyboard? Every one of these is a button on the row.
 				</Text>
+
+				<Divider />
+
+				{/*
+				 * One column: each idea named, then said. Side by side, the names
+				 * pushed the sentences into a narrow column of short ragged lines.
+				 */}
+				{[
+					{ title: "How to work this", rows: WORKFLOW },
+					{ title: "Working in a team", rows: TEAMWORK },
+				].map((guide, index) => (
+					<VStack key={guide.title} gap={3}>
+						{index === 0 ? null : <Divider />}
+						<VStack gap={2}>
+							<Text type="label" weight="semibold" color="secondary">
+								{guide.title}
+							</Text>
+							<VStack gap={3}>
+								{guide.rows.map((row) => (
+									<VStack key={row.step} gap={0.5}>
+										<Text weight="medium">{row.step}</Text>
+										<Text type="supporting">{row.what}</Text>
+									</VStack>
+								))}
+							</VStack>
+						</VStack>
+					</VStack>
+				))}
 			</VStack>
 		</FormDialog>
 	);

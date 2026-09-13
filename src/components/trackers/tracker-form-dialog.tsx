@@ -1,7 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -10,40 +9,48 @@ import { type FormEvent, useEffect, useState } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
-import type { TrackerValues } from "#/lib/changes";
-import { todayDateOnly } from "#/schemas/common";
 import {
-	TRACKER_TYPE_DEFAULT_UNITS,
-	TRACKER_TYPE_LABELS,
-	TRACKER_TYPES,
-	type Tracker,
-	type TrackerType,
-} from "#/schemas/tracker";
-
-const TYPE_OPTIONS = TRACKER_TYPES.map((type) => ({
-	value: type,
-	label: TRACKER_TYPE_LABELS[type],
-}));
+	draftTagIds,
+	EMPTY_TAGS_DRAFT,
+	TagsField,
+	tagsDraft,
+} from "#/components/tags/tags-field";
+import { PeopleField } from "#/components/teams/people-field";
+import { VisibilityField } from "#/components/teams/visibility-field";
+import type { TrackerValues } from "#/lib/changes";
+import { useTeam } from "#/lib/use-team";
+import { todayDateOnly } from "#/schemas/common";
+import type { Tag } from "#/schemas/tag";
+import { TRACKER_TYPE_DEFAULT_UNITS, type Tracker } from "#/schemas/tracker";
 
 /**
  * Create or edit a tracker.
  *
- * Type only changes defaults and which extra fields appear; the underlying
- * record is the same for a book, a course or a running goal.
+ * There is no type to pick: the unit already says what is being counted, so a
+ * new tracker is saved as "custom". One that already has a type keeps it — an
+ * existing book still shows its author field and cannot pass its last page.
  */
 export function TrackerFormDialog({
 	isOpen,
 	onOpenChange,
 	tracker,
+	tags,
+	resolveTags,
+	isSaving = false,
 	onSubmit,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	tracker?: Tracker;
+	/** Every tag that exists, for the tags field. */
+	tags: ReadonlyArray<Tag>;
+	/** Tag names to ids, making a tag for any name that does not exist yet. */
+	resolveTags: (names: Array<string>) => Array<string>;
+	/** The save is on its way; the button waits with it. */
+	isSaving?: boolean;
 	onSubmit: (values: TrackerValues) => void;
 }) {
 	const [title, setTitle] = useState("");
-	const [type, setType] = useState<TrackerType>("book");
 	const [unit, setUnit] = useState("pages");
 	const [startValue, setStartValue] = useState<number | null>(null);
 	const [targetValue, setTargetValue] = useState<number | null>(null);
@@ -53,14 +60,21 @@ export function TrackerFormDialog({
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
 	const [description, setDescription] = useState("");
 	const [coverUrl, setCoverUrl] = useState("");
 	const [author, setAuthor] = useState("");
+	const [tagDraft, setTagDraft] = useState(EMPTY_TAGS_DRAFT);
+	const [assignees, setAssignees] = useState<Array<string>>([]);
+	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
+	const team = useTeam();
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
 	useEffect(() => {
 		if (!isOpen) return;
 		setTitle(tracker?.title ?? "");
-		setType(tracker?.type ?? "book");
 		setUnit(tracker?.unit ?? TRACKER_TYPE_DEFAULT_UNITS.book);
 		setStartValue(tracker?.startValue ?? 0);
 		setTargetValue(tracker?.targetValue ?? null);
@@ -69,22 +83,14 @@ export function TrackerFormDialog({
 				(todayDateOnly() as ISODateString),
 		);
 		setDeadline((tracker?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(tracker?.deadlineTime ?? undefined);
 		setDescription(tracker?.description ?? "");
 		setCoverUrl(tracker?.coverUrl ?? "");
 		setAuthor(tracker?.author ?? "");
+		setTagDraft(tagsDraft(tracker?.tagIds ?? [], tags));
+		setAssignees(tracker?.assignees ?? []);
+		setVisibleTo(tracker?.visibleTo ?? null);
 	}, [isOpen, tracker]);
-
-	/** Switching type suggests its usual unit, but never overwrites a custom one. */
-	function changeType(next: string) {
-		const nextType = next as TrackerType;
-		setType(nextType);
-		setUnit((current) =>
-			current === "" ||
-			Object.values(TRACKER_TYPE_DEFAULT_UNITS).includes(current)
-				? TRACKER_TYPE_DEFAULT_UNITS[nextType]
-				: current,
-		);
-	}
 
 	const trimmedTitle = title.trim();
 	const from = startValue ?? 0;
@@ -101,22 +107,30 @@ export function TrackerFormDialog({
 		targetValue > from &&
 		startDate !== undefined;
 
-	function submit(event: FormEvent) {
-		event.preventDefault();
+	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
 		onSubmit({
 			title: trimmedTitle,
-			type,
+			type: tracker?.type ?? "custom",
 			unit: unit.trim(),
 			targetValue,
 			startValue: from,
 			startDate,
 			deadline: deadline ?? null,
+			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
 			description: description.trim(),
 			coverUrl: coverUrl.trim() === "" ? null : coverUrl.trim(),
 			author: author.trim(),
+			tagIds: draftTagIds(tagDraft, resolveTags),
+			assignees,
+			visibleTo,
 		});
+	}
+
+	function submit(event: FormEvent) {
+		event.preventDefault();
+		save();
 	}
 
 	return (
@@ -140,6 +154,7 @@ export function TrackerFormDialog({
 						type="submit"
 						form={formId}
 						isDisabled={!isValid}
+						isLoading={isSaving}
 					/>
 				</HStack>
 			)}
@@ -151,13 +166,6 @@ export function TrackerFormDialog({
 					value={title}
 					onChange={setTitle}
 					placeholder="Dune"
-				/>
-
-				<Selector
-					label="Type"
-					options={TYPE_OPTIONS}
-					value={type}
-					onChange={changeType}
 				/>
 
 				<FieldRow>
@@ -188,7 +196,7 @@ export function TrackerFormDialog({
 					placeholder="0"
 				/>
 
-				{type === "book" ? (
+				{tracker?.type === "book" ? (
 					<TextInput
 						label="Author"
 						isOptional
@@ -209,9 +217,32 @@ export function TrackerFormDialog({
 				<ScheduleFields
 					startDate={startDate}
 					deadline={deadline}
+					deadlineTime={deadlineTime}
 					onStartDateChange={setStartDate}
 					onDeadlineChange={setDeadline}
+					onDeadlineTimeChange={setDeadlineTime}
 				/>
+
+				<TagsField
+					label="Tags"
+					description="Under each of these tags, this tracker counts as one thing to finish."
+					tags={tags}
+					draft={tagDraft}
+					onChange={setTagDraft}
+					onSubmit={save}
+				/>
+
+				{team === null ? null : (
+					<PeopleField
+						label="Assigned to"
+						description="Who in the team this tracker is for."
+						members={team.members}
+						value={assignees}
+						onChange={setAssignees}
+					/>
+				)}
+
+				<VisibilityField value={visibleTo} onChange={setVisibleTo} />
 
 				<TextArea
 					label="Description"
