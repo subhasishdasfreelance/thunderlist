@@ -34,7 +34,7 @@ function summary(checklistId: string): ChecklistSummary {
 		deadline: null,
 		createdAt: "2026-01-01T00:00:00.000Z",
 		updatedAt: "2026-01-01T00:00:00.000Z",
-		progress: { total: 1, completed: 0, percent: 0 },
+		progress: { total: 1, completed: 0, percent: 0, byStage: { todo: 1 } },
 	};
 }
 
@@ -56,7 +56,7 @@ function tag(tagId: string): Tag {
 function tagPage(tagId: string, tasks: Array<Task>): TagDetail {
 	return {
 		...tag(tagId),
-		progress: { total: tasks.length, completed: 0, percent: 0 },
+		progress: { total: tasks.length, completed: 0, percent: 0, inProgress: 0 },
 		trackers: [],
 	};
 }
@@ -157,6 +157,7 @@ describe("applyOptimistically", () => {
 			total: 1,
 			completed: 1,
 			percent: 100,
+			byStage: { todo: 0, done: 1 },
 		});
 	});
 
@@ -221,7 +222,55 @@ describe("applyOptimistically", () => {
 		expect(tagTasks(queryClient, "tag_1")?.items[0]?.task.completed).toBe(true);
 		expect(
 			queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"))?.progress,
-		).toEqual({ total: 1, completed: 1, percent: 100 });
+		).toEqual({ total: 1, completed: 1, percent: 100, inProgress: 0 });
+	});
+
+	it("counts a task on a tag's page as under way between its first stage and done", () => {
+		const queryClient = client();
+		const tagged = task({ taskId: "tsk_1", tagIds: ["tag_1"] });
+
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
+			...summary("chk_1"),
+			stages: [
+				{ stageId: "todo", name: "To do" },
+				{ stageId: "review", name: "Review" },
+				{ stageId: "done", name: "Done" },
+			],
+		});
+		queryClient.setQueryData<TagDetail>(
+			queryKeys.tag("tag_1"),
+			tagPage("tag_1", [tagged]),
+		);
+		queryClient.setQueryData(
+			queryKeys.tagOpenPage("tag_1", VIEW),
+			page(entries([tagged])),
+		);
+		const progress = () =>
+			queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"))?.progress;
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { stageId: "review" },
+		});
+		expect(progress()).toEqual({
+			total: 1,
+			completed: 0,
+			percent: 0,
+			inProgress: 1,
+		});
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { completed: true },
+		});
+		expect(progress()).toEqual({
+			total: 1,
+			completed: 1,
+			percent: 100,
+			inProgress: 0,
+		});
 	});
 
 	/*
@@ -234,7 +283,12 @@ describe("applyOptimistically", () => {
 
 		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
 			...summary("chk_1"),
-			progress: { total: 2, completed: 1, percent: 50 },
+			progress: {
+				total: 2,
+				completed: 1,
+				percent: 50,
+				byStage: { todo: 1, done: 1 },
+			},
 		});
 		queryClient.setQueryData<Array<Task>>(
 			queryKeys.checklistCompleted("chk_1"),
@@ -256,7 +310,38 @@ describe("applyOptimistically", () => {
 			total: 2,
 			completed: 0,
 			percent: 0,
+			byStage: { todo: 2, done: 0 },
 		});
+	});
+
+	it("unticks a finished task back to the stage before done", () => {
+		const queryClient = client();
+		const done = task({ taskId: "tsk_2", completed: true, stageId: "done" });
+
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
+			...summary("chk_1"),
+			stages: [
+				{ stageId: "todo", name: "To do" },
+				{ stageId: "review", name: "Review" },
+				{ stageId: "done", name: "Done" },
+			],
+		});
+		queryClient.setQueryData<Array<Task>>(
+			queryKeys.checklistCompleted("chk_1"),
+			[done],
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_2",
+			patch: { completed: false },
+		});
+
+		expect(
+			queryClient.getQueryData<Array<Task>>(
+				queryKeys.checklistCompleted("chk_1"),
+			)?.[0]?.stageId,
+		).toBe("review");
 	});
 
 	it("takes a deleted task out of its checklist, and out of the count", () => {
@@ -286,6 +371,7 @@ describe("applyOptimistically", () => {
 			total: 0,
 			completed: 0,
 			percent: 0,
+			byStage: { todo: 0 },
 		});
 	});
 
@@ -320,7 +406,7 @@ describe("applyOptimistically", () => {
 		expect(tagTasks(queryClient, "today")?.items).toEqual([]);
 		expect(
 			queryClient.getQueryData<TagDetail>(queryKeys.tag("today"))?.progress,
-		).toEqual({ total: 0, completed: 0, percent: 0 });
+		).toEqual({ total: 0, completed: 0, percent: 0, inProgress: 0 });
 	});
 
 	it("shows a task typed on a tag's page there at once", () => {

@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import type { ChecklistProgress } from "./checklist";
+import type { ChecklistProgress, StagePart } from "./checklist";
 import {
 	dailyWindowSchema,
 	dateOnlySchema,
@@ -35,16 +35,16 @@ export type TagColor = (typeof TAG_COLORS)[number];
 const tagColorSchema = v.picklist(TAG_COLORS);
 
 /**
- * The two tags every account has and cannot lose: what you are doing today,
- * and what you have parked.
+ * The tag every account has and cannot lose: what you are doing today.
  *
- * They are tags in every other way — a name and a colour, both changeable on
- * the Tags screen — but the row's bolt writes the first into a task's title and
- * its menu writes the second, so both have to exist and neither can be
- * deleted. Each is known by its kind rather than its name, because the name is
- * the user's to change.
+ * It is a tag in every other way — a name and a colour, both changeable on the
+ * Tags screen — but the row's bolt writes it into a task's title, so it has to
+ * exist and cannot be deleted. It is known by its kind rather than its name,
+ * because the name is the user's to change.
+ *
+ * The Backlog was the other, and is a checklist now; see `ensureBacklog`.
  */
-export const SPECIAL_TAGS = ["today", "backlog"] as const;
+export const SPECIAL_TAGS = ["today"] as const;
 
 export type SpecialTag = (typeof SPECIAL_TAGS)[number];
 
@@ -86,8 +86,8 @@ const tagSchema = v.object({
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 	/**
 	 * In a team, the people who can see it and the tasks that live under it, by
-	 * address; absent or `null` for everyone. Never set on Today or the Backlog,
-	 * which are everyone's. See `visibleToSchema`.
+	 * address; absent or `null` for everyone. Never set on Today, which is
+	 * everyone's. See `visibleToSchema`.
 	 */
 	visibleTo: v.optional(v.nullable(v.array(v.string()))),
 	createdAt: v.string(),
@@ -138,10 +138,51 @@ export function tagParam(tag: Pick<Tag, "tagId" | "special">): string {
 	return tag.special ?? tag.tagId;
 }
 
+/**
+ * A tag's progress: counted as a checklist's is, and how many of its open
+ * tasks are under way — past the first stage of their checklist; see
+ * `isUnderway`.
+ */
+export type TagProgress = ChecklistProgress & { inProgress: number };
+
 /** A tag with its progress; its pace is judged in the browser, see `usePace`. */
 export type TagSummary = Tag & {
-	progress: ChecklistProgress;
+	progress: TagProgress;
 };
+
+/**
+ * A tag's bar in parts, drawn the way a checklist's is: done, then every task
+ * under way as one part, whatever its stage — review, QA — since the
+ * checklists a tag gathers from each have stages of their own. What is left of
+ * the track is the work not started. Under way is left out while nothing is,
+ * so a tag whose tasks only ever go from to do to done reads as a plain bar.
+ */
+export function tagStageParts(
+	// No `inProgress` on a summary read before it carried one: a page kept from
+	// the last version of the app draws what is done rather than breaking.
+	progress: Pick<ChecklistProgress, "completed"> & { inProgress?: number },
+): Array<StagePart> {
+	const inProgress = progress.inProgress ?? 0;
+
+	return [
+		{
+			stageId: "done",
+			name: "Done",
+			color: "green",
+			count: progress.completed,
+		},
+		...(inProgress === 0
+			? []
+			: [
+					{
+						stageId: "underway",
+						name: "In progress",
+						color: "blue" as const,
+						count: inProgress,
+					},
+				]),
+	];
+}
 
 /** A task carrying a tag, with the checklist it lives in, if any. */
 export type TagTaskEntry = {

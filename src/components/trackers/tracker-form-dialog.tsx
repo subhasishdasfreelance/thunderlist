@@ -5,7 +5,14 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
@@ -128,6 +135,14 @@ export function TrackerFormDialog({
 		});
 	}
 
+	// TagsField is memoised, and `save` is a new function on every render, so
+	// Enter there reaches the latest `save` through a callback that stays put.
+	const saveRef = useRef(save);
+	useLayoutEffect(() => {
+		saveRef.current = save;
+	});
+	const saveFromTags = useCallback(() => saveRef.current(), []);
+
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		save();
@@ -229,7 +244,7 @@ export function TrackerFormDialog({
 					tags={tags}
 					draft={tagDraft}
 					onChange={setTagDraft}
-					onSubmit={save}
+					onSubmit={saveFromTags}
 				/>
 
 				{team === null ? null : (

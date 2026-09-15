@@ -1,4 +1,5 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Icon } from "@astryxdesign/core/Icon";
 import { Check, Users } from "lucide-react";
 import { useSpace } from "#/lib/use-team";
 import { memberName, type TeamMember } from "#/schemas/team";
@@ -28,7 +29,7 @@ export function MemberFilter({
 			: memberName(member);
 	const chosen = team.members.find((member) => member.email === value);
 	const tick = (isOn: boolean) =>
-		isOn ? <Check aria-hidden size={16} /> : undefined;
+		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
 
 	return (
 		<DropdownMenu
@@ -49,16 +50,21 @@ export function MemberFilter({
 			items={[
 				{
 					label: "Everyone",
+					icon: Users,
 					endContent: tick(value === undefined),
 					onClick: () => onChange(undefined),
 				},
 				{ type: "divider" as const },
-				...team.members.map((member) => ({
-					id: member.email,
-					label: nameOf(member),
-					endContent: tick(member.email === value),
-					onClick: () => onChange(member.email),
-				})),
+				{
+					type: "section" as const,
+					title: "One person's",
+					items: team.members.map((member) => ({
+						id: member.email,
+						label: nameOf(member),
+						endContent: tick(member.email === value),
+						onClick: () => onChange(member.email),
+					})),
+				},
 			]}
 		/>
 	);

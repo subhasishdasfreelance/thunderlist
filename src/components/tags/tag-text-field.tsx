@@ -348,6 +348,15 @@ export function TagTextField({
 		return () => field.removeEventListener("scroll", sync);
 	}, []);
 
+	/*
+	 * A task is not a login or an address. Without this, a phone's autofill
+	 * offered saved passwords and addresses over the keyboard on every task
+	 * typed. Set on the element itself, which is where autofill reads it.
+	 */
+	useEffect(() => {
+		fieldRef.current?.setAttribute("autocomplete", "off");
+	}, []);
+
 	const shared = {
 		label,
 		isLabelHidden: true,

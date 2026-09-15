@@ -54,7 +54,7 @@ export async function readHidden(
 				{ projection: { _id: 0, checklistId: 1 } },
 			)
 			.toArray(),
-		// Today and the Backlog are everyone's, whatever anyone has asked for.
+		// Today is everyone's, whatever anyone has asked for.
 		current.tags
 			.find(
 				{ userId: teamId, special: null, visibleTo: keptFromThem },

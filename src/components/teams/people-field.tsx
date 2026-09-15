@@ -2,13 +2,15 @@ import {
 	CheckboxList,
 	CheckboxListItem,
 } from "@astryxdesign/core/CheckboxList";
+import { memo } from "react";
 import { memberName, type TeamMember } from "#/schemas/team";
 
 /**
  * People in the team, to tick: who a task or a tracker is for, or who can see
- * a checklist or a tag.
+ * a checklist or a tag. Memoised, so typing elsewhere in a form leaves the
+ * list alone.
  */
-export function PeopleField({
+export const PeopleField = memo(function PeopleField({
 	label,
 	description,
 	isLabelHidden = false,
@@ -43,4 +45,4 @@ export function PeopleField({
 			))}
 		</CheckboxList>
 	);
-}
+});

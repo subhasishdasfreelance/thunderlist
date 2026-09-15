@@ -8,17 +8,21 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Plus, Zap } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
-import { ProgressChart } from "#/components/common/progress-chart";
+import {
+	type ChartPoint,
+	ProgressChart,
+} from "#/components/common/progress-chart";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
+import { MemberFilter } from "#/components/teams/member-filter";
 import { VisibilityButton } from "#/components/teams/visibility-button";
 import { EntryFormDialog } from "#/components/trackers/entry-form-dialog";
 import { ProgressHistory } from "#/components/trackers/progress-history";
@@ -38,16 +42,22 @@ import {
 } from "#/lib/changes";
 import { dayStart } from "#/lib/chart-points";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
-import { computeVelocity, localMoment, trackerFraction } from "#/lib/progress";
+import {
+	computeVelocity,
+	localMoment,
+	trackerFraction,
+	trackerProgress,
+} from "#/lib/progress";
 import { withInlineTag } from "#/lib/tags/inline-tags";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
-import { usePermissions } from "#/lib/use-team";
+import { usePermissions, useSpace } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { specialTag, tagsFor } from "#/schemas/tag";
 import type { TaskPageView } from "#/schemas/task";
+import { memberName } from "#/schemas/team";
 import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
 
 /**
@@ -94,6 +104,9 @@ function TrackerDetailPage() {
 	const [pendingEntry, setPendingEntry] = useState<ProgressEntry | null>(null);
 	const [isDeletingTracker, setIsDeletingTracker] = useState(false);
 	const { canManageContent, canUpdateTasks } = usePermissions();
+	// In a team, what one person logged rather than everyone's; see `MemberFilter`.
+	const [person, setPerson] = useState<string | undefined>(undefined);
+	const team = useSpace()?.team ?? null;
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackerQuery(trackerId),
@@ -130,7 +143,29 @@ function TrackerDetailPage() {
 		);
 	}
 
-	const { progress } = detail;
+	/*
+	 * One person's share, when one is picked: the entries they logged, each
+	 * counted as the step it made, against the whole target. Every figure below
+	 * follows it. Entries from before entries were signed count as nobody's.
+	 */
+	const theirs =
+		person === undefined || history.data === undefined
+			? null
+			: entries.filter((entry) => entry.recordedBy === person);
+	const progress =
+		theirs === null
+			? detail.progress
+			: trackerProgress(
+					theirs.reduce((sum, entry) => sum + entry.delta, detail.startValue),
+					detail.targetValue,
+					detail.startValue,
+				);
+	const who = team?.members.find((member) => member.email === person);
+	const personNote =
+		person === undefined
+			? null
+			: `Counting only what ${who === undefined ? person : memberName(who)} logged.`;
+
 	const pace = paceAt(
 		detail,
 		detail.targetValue > 0
@@ -152,6 +187,18 @@ function TrackerDetailPage() {
 					now,
 				});
 	const scheduleNote = formatSchedule(detail);
+
+	// On a timeline: the tracker's own readings, or one person's steps added up.
+	const chartPoints: Array<ChartPoint> = [];
+	let reached = detail.startValue;
+	for (const entry of theirs ?? entries) {
+		reached = theirs === null ? entry.value : reached + entry.delta;
+		chartPoints.push({
+			id: entry.entryId,
+			at: dayStart(entry.recordedAt),
+			value: reached,
+		});
+	}
 
 	/**
 	 * The reading an entry is measured from. For a new entry that is where the
@@ -247,9 +294,15 @@ function TrackerDetailPage() {
 							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
-							{ label: "Edit tracker", onClick: () => setIsEditOpen(true) },
+							{
+								label: "Edit tracker",
+								icon: Pencil,
+								onClick: () => setIsEditOpen(true),
+							},
+							{ type: "divider" as const },
 							{
 								label: "Delete tracker",
+								icon: Trash2,
 								variant: "destructive" as const,
 								onClick: () => setIsDeletingTracker(true),
 							},
@@ -285,6 +338,10 @@ function TrackerDetailPage() {
 							scheduleNote === null ? "" : ` · ${scheduleNote}`
 						}`}
 					/>
+
+					{personNote === null ? null : (
+						<Text type="supporting">{personNote}</Text>
+					)}
 
 					{detail.description === "" ? null : (
 						<Text color="secondary">{detail.description}</Text>
@@ -331,11 +388,14 @@ function TrackerDetailPage() {
 					<Text type="label" weight="semibold">
 						Progress History
 					</Text>
-					<ViewToggle
-						view={view}
-						onChange={setView}
-						label="Show progress as a list or a graph"
-					/>
+					<HStack gap={1} vAlign="center">
+						<MemberFilter value={person} onChange={setPerson} />
+						<ViewToggle
+							view={view}
+							onChange={setView}
+							label="Show progress as a list or a graph"
+						/>
+					</HStack>
 				</HStack>
 
 				{view === "chart" ? (
@@ -349,25 +409,21 @@ function TrackerDetailPage() {
 								now={now}
 								target={detail.targetValue}
 								base={detail.startValue}
-								current={detail.currentValue}
-								points={entries.map((entry) => ({
-									id: entry.entryId,
-									at: dayStart(entry.recordedAt),
-									value: entry.value,
-								}))}
+								current={progress.current}
+								points={chartPoints}
 								startLabel={formatDate(detail.startDate)}
 								endLabel={
 									detail.deadline === null
 										? "No deadline"
 										: formatDeadline(detail.deadline, detail.deadlineTime)
 								}
-								summary={`${detail.currentValue} of ${detail.targetValue} ${detail.unit} since ${formatDate(detail.startDate)}`}
+								summary={`${progress.current} of ${detail.targetValue} ${detail.unit} since ${formatDate(detail.startDate)}`}
 							/>
 						)}
 					</Card>
 				) : (
 					<ProgressHistory
-						entries={entries}
+						entries={theirs ?? entries}
 						unit={detail.unit}
 						isPending={history.isPending}
 						canEdit={canUpdateTasks}

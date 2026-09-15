@@ -152,6 +152,12 @@ const progressEntrySchema = v.object({
 	value: v.number(),
 	delta: v.number(),
 	note: v.string(),
+	/**
+	 * Who logged it, lower-cased: in a team, what a person's share is counted
+	 * from. Set by the server from the session, never sent. Absent on entries
+	 * from before entries were signed, which count as nobody's.
+	 */
+	recordedBy: v.optional(v.nullable(v.string())),
 	updatedAt: v.string(),
 });
 

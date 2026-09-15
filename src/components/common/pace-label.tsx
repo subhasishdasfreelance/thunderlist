@@ -1,3 +1,4 @@
+import { Icon } from "@astryxdesign/core/Icon";
 import { Token } from "@astryxdesign/core/Token";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { PACE_STATUS_LABELS, type PaceStatus } from "#/schemas/checklist";
@@ -25,7 +26,9 @@ export function PaceLabel({ status }: { status: PaceStatus | null }) {
 		<Token
 			size="sm"
 			color={color}
-			icon={<StatusIcon aria-hidden />}
+			// A token does not size what it is handed; the smallest icon matches
+			// its small text.
+			icon={<Icon icon={StatusIcon} size="xsm" />}
 			label={PACE_STATUS_LABELS[status]}
 		/>
 	);

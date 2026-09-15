@@ -1,4 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import {
+	nextStageId,
+	type Stage,
+	stageProgress,
+	stagesByName,
+} from "#/schemas/checklist";
 import type { Task } from "#/schemas/task";
 import {
 	calculateChecklistProgress,
@@ -84,6 +90,136 @@ describe("orderByTask", () => {
 
 		expect(idsIn("newest")).toEqual(["tsk_3", "tsk_2", "tsk_1"]);
 		expect(idsIn("priority")).toEqual(["tsk_2", "tsk_3", "tsk_1"]);
+	});
+
+	it("by stage, puts every list's first stage first and done last, the stages between by how far along", () => {
+		const three: Array<Stage> = [
+			{ stageId: "todo", name: "To do" },
+			{ stageId: "review", name: "Review" },
+			{ stageId: "done", name: "Done" },
+		];
+		const four: Array<Stage> = [
+			{ stageId: "todo", name: "To do" },
+			{ stageId: "dev", name: "Dev" },
+			{ stageId: "qa", name: "QA" },
+			{ stageId: "done", name: "Done" },
+		];
+		const rows = [
+			{ stages: four, task: task({ taskId: "qa", stageId: "qa" }) },
+			{
+				stages: three,
+				task: task({ taskId: "done", stageId: "done", completed: true }),
+			},
+			{ stages: three, task: task({ taskId: "review", stageId: "review" }) },
+			{ stages: three, task: task({ taskId: "todo-3", stageId: "todo" }) },
+			{ stages: four, task: task({ taskId: "dev", stageId: "dev" }) },
+		];
+
+		expect(
+			orderByTask(
+				rows,
+				"stage",
+				(row) => row.task,
+				(row) => stageProgress(row.task, row.stages),
+			).map((row) => row.task.taskId),
+		).toEqual(["todo-3", "dev", "review", "qa", "done"]);
+	});
+});
+
+describe("nextStageId", () => {
+	const stages: Array<Stage> = [
+		{ stageId: "todo", name: "To do" },
+		{ stageId: "review", name: "Review" },
+		{ stageId: "done", name: "Done" },
+	];
+
+	it("goes on one stage, done included", () => {
+		expect(nextStageId(task({ taskId: "a", stageId: "todo" }), stages)).toBe(
+			"review",
+		);
+		expect(nextStageId(task({ taskId: "a", stageId: "review" }), stages)).toBe(
+			"done",
+		);
+	});
+
+	it("goes nowhere once done", () => {
+		expect(
+			nextStageId(
+				task({ taskId: "a", stageId: "done", completed: true }),
+				stages,
+			),
+		).toBeNull();
+	});
+
+	it("never makes a task following a tracker done by hand", () => {
+		expect(
+			nextStageId(
+				task({ taskId: "a", stageId: "review", trackerId: "trk_1" }),
+				stages,
+			),
+		).toBeNull();
+	});
+});
+
+describe("stagesByName", () => {
+	const review: Array<Stage> = [
+		{ stageId: "todo", name: "To do" },
+		{ stageId: "review", name: "Review" },
+		{ stageId: "done", name: "Done" },
+	];
+	const qa: Array<Stage> = [
+		{ stageId: "open", name: "To Do" },
+		{ stageId: "qa", name: "QA" },
+		{ stageId: "check", name: "review" },
+		{ stageId: "shipped", name: "Done" },
+	];
+	const at = (
+		taskId: string,
+		checklistId: string,
+		stageId: string | null,
+		completed = false,
+	) => ({ ...task({ taskId, stageId, completed }), checklistId });
+
+	it("groups every checklist's tasks by stage name, whatever its case, earliest stage first", () => {
+		const groups = stagesByName(
+			[
+				{ checklistId: "a", stages: review },
+				{ checklistId: "b", stages: qa },
+				{ checklistId: "c" },
+			],
+			[
+				at("1", "a", "review"),
+				at("2", "b", "check"),
+				at("3", "c", null),
+				at("4", "b", "qa"),
+				at("5", "a", null, true),
+			],
+		);
+
+		expect(
+			groups.map((group) => [
+				group.name,
+				group.tasks.map((each) => each.taskId),
+			]),
+		).toEqual([
+			["To do", ["3"]],
+			["QA", ["4"]],
+			["Review", ["1", "2"]],
+			["Done", ["5"]],
+		]);
+	});
+
+	it("keeps a stage nobody is at, and puts a task from an unknown checklist at the default stages", () => {
+		const groups = stagesByName(
+			[{ checklistId: "a", stages: review }],
+			[at("1", "gone", "whatever")],
+		);
+
+		expect(groups.map((group) => [group.name, group.tasks.length])).toEqual([
+			["To do", 1],
+			["Review", 0],
+			["Done", 0],
+		]);
 	});
 });
 

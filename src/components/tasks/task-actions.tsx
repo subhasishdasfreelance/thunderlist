@@ -1,6 +1,7 @@
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
-import { CircleAlert, Inbox, Star, Zap } from "lucide-react";
+import { CircleAlert, Star, Zap } from "lucide-react";
+import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import type { SpecialTag, Tag } from "#/schemas/tag";
 
 /**
@@ -28,10 +29,7 @@ export const TASK_SHORTCUTS = {
 } as const;
 
 export type TaskQuickActions = {
-	/**
-	 * Put the task on one of the special tags, Today or the Backlog, or take it
-	 * off; see `setSpecialTag`.
-	 */
+	/** Put the task on Today, or take it off; see `setSpecialTag`. */
 	onSetSpecial: (kind: SpecialTag, isOn: boolean) => void;
 	onSetUrgent: (urgent: boolean) => void;
 	onSetImportant: (important: boolean) => void;
@@ -133,15 +131,23 @@ export function TodayButton({
 	);
 }
 
-/** The Backlog entry for a row's overflow menu. */
-export function backlogMenuItem(
-	backlog: Tag,
-	isOn: boolean,
-	onToggle: () => void,
-) {
+/**
+ * A shortcut beside a menu entry, drawn as the key it is — the same cap the
+ * shortcuts panel draws; see `.thunderlist-key`.
+ */
+export function ShortcutKey({ label }: { label: string }) {
+	return <kbd className="thunderlist-key">{label}</kbd>;
+}
+
+/**
+ * The Backlog entry for a row's overflow menu: parking the task there. The
+ * Backlog is a checklist, named here as the user has named it.
+ */
+export function backlogMenuItem(title: string, onMove: () => void) {
 	return {
-		label: `${isOn ? "Take off" : "Move to"} #${backlog.name} (${TASK_SHORTCUTS.backlog})`,
-		icon: <Inbox aria-hidden />,
-		onClick: onToggle,
+		label: `Move to ${title}`,
+		icon: SPECIAL_CHECKLIST_ICONS.backlog,
+		endContent: <ShortcutKey label={TASK_SHORTCUTS.backlog} />,
+		onClick: onMove,
 	};
 }

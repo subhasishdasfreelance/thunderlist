@@ -4,11 +4,13 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { formatDate } from "#/lib/format-date";
 import { usePages } from "#/lib/use-pages";
+import { useTeam } from "#/lib/use-team";
+import { memberName } from "#/schemas/team";
 import type { ProgressEntry } from "#/schemas/tracker";
 
 /**
@@ -45,6 +47,14 @@ export function ProgressHistory({
 }) {
 	const history = [...entries].reverse();
 	const paging = usePages(history);
+	const team = useTeam();
+
+	/** In a team, who logged it: their name, or their address until they have one. */
+	const loggedBy = (email: string | null | undefined) => {
+		if (team === null || !email) return null;
+		const member = team.members.find((each) => each.email === email);
+		return member === undefined ? email : memberName(member);
+	};
 
 	return (
 		<VStack gap={2}>
@@ -63,11 +73,13 @@ export function ProgressHistory({
 							<ListItem
 								key={entry.entryId}
 								label={`${entry.value} ${unit}`}
-								description={
-									entry.note === ""
-										? formatDate(entry.recordedAt)
-										: `${formatDate(entry.recordedAt)} · ${entry.note}`
-								}
+								description={[
+									formatDate(entry.recordedAt),
+									loggedBy(entry.recordedBy),
+									entry.note === "" ? null : entry.note,
+								]
+									.filter((part) => part !== null)
+									.join(" · ")}
 								endContent={
 									<HStack gap={2} vAlign="center">
 										<Text type="supporting" color="secondary">
@@ -91,14 +103,20 @@ export function ProgressHistory({
 														? [
 																{
 																	label: "Edit entry",
+																	icon: Pencil,
 																	onClick: () => onEdit(entry),
 																},
 															]
+														: []),
+													// Apart from editing, when there is both.
+													...(canEdit && canDelete
+														? [{ type: "divider" as const }]
 														: []),
 													...(canDelete
 														? [
 																{
 																	label: "Delete entry",
+																	icon: <Trash2 aria-hidden />,
 																	variant: "destructive" as const,
 																	onClick: () => onDelete(entry),
 																},

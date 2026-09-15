@@ -82,11 +82,13 @@ export const thunderlistTheme = defineTheme({
 		 * A progress bar has to show two things: how far along it is, and how far
 		 * there is to go. The default track is a barely-there wash — near-invisible
 		 * on a dark card — so the second half of that goes missing and the bar
-		 * reads as a floating stripe. `--color-track` is the token meant for
-		 * exactly this and is contrast-checked in both schemes.
+		 * reads as a floating stripe. The emphasized border grey stands about 3:1
+		 * against a card in both schemes, the contrast a part of a graphic needs
+		 * to be made out; `--color-track` is 2.2:1 in the light and 1.8:1 in the
+		 * dark, which still reads as the card.
 		 */
 		"progressbar-track": {
-			base: { backgroundColor: "var(--color-track)" },
+			base: { backgroundColor: "var(--color-border-emphasized)" },
 		},
 	},
 });

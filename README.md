@@ -1,9 +1,9 @@
 # Thunderlist
 
 A productivity app for one person or a team — **Checklists**, **Trackers**,
-**Tags** and **Priority** — stored in MongoDB. **Today** and the **Backlog** are
-two special tags, and the **Inbox** is the checklist for everything that belongs
-to no other.
+**Tags**, **Priority** and **Stages** — stored in MongoDB. **Today** is a special
+tag, and the **Inbox** and the **Backlog** are the two checklists every space
+has: one for everything that belongs to no other, one for parked work.
 
 Built with TanStack Start, React 19 and the [Astryx](https://astryx.atmeta.com)
 design system, with Tailwind utilities layered on top of Astryx's design tokens.
@@ -11,9 +11,11 @@ design system, with Tailwind utilities layered on top of Astryx's design tokens.
 - **Today** — a special tag for what you plan to do today, and the app's home
   screen (`/tags/today`). The bolt on any task writes `#today` at the end of its
   title; pressing it again takes the tag out wherever it was written. Paced
-  from 06:00 to 22:00 every day.
-- **Backlog** — a special tag for parked work. A task is on Today or in the
-  Backlog, never both. Both can be renamed on the Tags screen, never deleted.
+  from 06:00 to 22:00 every day. It can be renamed on the Tags screen, never
+  deleted.
+- **Backlog** — the checklist parked work goes into: **B** on a task, or
+  **Move to Backlog** in its menu, which also takes it off Today. Every space
+  has one, and it cannot be deleted.
 - **Inbox** — the checklist a task goes into when it is written somewhere that
   is not a checklist: onto Today, or any tag's page. Every space has one, and it
   cannot be deleted.
@@ -23,6 +25,8 @@ design system, with Tailwind utilities layered on top of Astryx's design tokens.
   fitness target, a project.
 - **Tags** — labels that group tasks across every checklist.
 - **Priority** — every open task, sorted by whether it is urgent and important.
+- **Stages** — every task by the stage it is at, whichever checklist it is in:
+  everything in Review, say, across all of them.
 - **Teams** — a space shared with other people, each with a role that decides
   what they can change, and lists that can be kept to some of them.
 
@@ -201,7 +205,8 @@ rather than a rewrite of the whole checklist.
 `deadlineTime`, `dailyWindow`, `tagIds`, `stages`, `visibleTo`, `special`,
 `createdAt`, `updatedAt`.
 
-`special` is `"inbox"` for the Inbox and absent for every other checklist.
+`special` is `"inbox"` for the Inbox, `"backlog"` for the Backlog, and absent
+for every other checklist.
 `stages` is absent until a checklist is given stages of its own; see
 [Stages](#stages). `tagIds` are carried by every task in the checklist, added
 later or not. `visibleTo` is who in a team can see it, or absent for everyone.
@@ -248,10 +253,15 @@ Renaming a tag rewrites that `#name` in the titles of the tasks carrying it, so
 an edit never reads an old name back as a new tag. Deleting a tag strips its id
 from every task, checklist and tracker that carried it.
 
-Two tags are **special**: `today` and `backlog`. Every space has them, made on
-the first read of its tags (a unique index on `userId, special` settles two
-first requests at once); they can be renamed and recoloured but not deleted,
-and a special tag's page is addressed by its kind, `/tags/today`.
+One tag is **special**: `today`. Every space has it, made on the first read of
+its tags (a unique index on `userId, special` settles two first requests at
+once); it can be renamed and recoloured but not deleted, and its page is
+addressed by its kind, `/tags/today`.
+
+The Backlog was the other special tag. It is a checklist now: the first time a
+space is read, every task still carrying the old tag moves into the Backlog
+checklist with the tag taken out of its title, and the tag is deleted
+(`ensureBacklog`).
 
 Tags are **written into the task, not picked from a menu**: "buy milk
 #shopping". The `#name` is markup rather than content, so it is lifted out of
@@ -289,9 +299,10 @@ takes it off every task that had it.
 
 `itemId`, `list`, `taskId`, `sortOrder`, `addedAt`.
 
-Legacy. Today and the Backlog used to be lists of references; they are tags
-now. The first time a space's tags are read, anything still in here is written
-onto its task as `#today` or `#backlog` and deleted.
+Legacy. Today and the Backlog used to be lists of references. The first time a
+space's tags are read, anything still in here for Today is written onto its task
+as `#today`, and everything is deleted: the Backlog is a checklist now, with no
+tag for its entries to go onto.
 
 ### Indexes
 
@@ -301,8 +312,8 @@ app-minted id is unique; the rest are the lookups every screen makes.
 | Collection | Index |
 |---|---|
 | `checklists`, `trackers`, `tags` | its id, unique; `userId` |
-| `checklists` | `userId, special`, unique where set — one Inbox per space |
-| `tags` | `userId, special`, unique where set — one Today and one Backlog |
+| `checklists` | `userId, special`, unique where set — one Inbox and one Backlog per space |
+| `tags` | `userId, special`, unique where set — one Today |
 | `tasks` | `taskId` unique; `userId, checklistId` |
 | `entries` | `entryId` unique; `userId, trackerId, recordedAt` |
 | `teams` | `teamId` unique |
@@ -317,13 +328,20 @@ app-minted id is unique; the rest are the lookups every screen makes.
 A checklist's tasks go through its stages in order: "To do" and "Done" to begin
 with, or as many as the work needs — To do, Review, UAT, Done. They are set,
 renamed and reordered in the checklist's edit dialog, and the last one is always
-done: a task reaching it is complete, and ticking a task moves it there.
-Unticking moves it back to the first.
+done: a task reaching it is complete. Ticking a task — wherever it is shown —
+moves it on to the next stage, so it is done once ticked at the stage before
+the last. Unticking moves it back to the first.
 
 A checklist's page shows one stage at a time, opening on the first, with how
-many tasks are at each. **Move to…** in a task's menu sends it to the next
-stage, or to any of them. Taking a stage away moves its tasks back to the
+many tasks are at each. **Stage** in a task's menu sends it to any of them,
+straight to done included. Taking a stage away moves its tasks back to the
 nearest stage before it that is left.
+
+The **Stages** screen shows one stage across every checklist at once, twenty
+tasks a page. A stage there is a name, since that is what checklists share:
+Review is every task at a stage called Review, wherever it lives. The names run
+from the first stages to done, each placed by the earliest point any checklist
+has it (`stagesByName`).
 
 A stage has an id of its own, so renaming one keeps its tasks. A task stores the
 id of the stage it is at; one from before stages, or from a stage since taken
@@ -371,15 +389,19 @@ page, and the stage, it is on, and rings it.
 
 ## How Today and the Backlog work
 
-They are tags, so a task on Today is a task carrying `#today`, in whichever
+Today is a tag, so a task on Today is a task carrying `#today`, in whichever
 checklist it lives — the Inbox, for one typed onto Today. Today's page is that
 tag's page. There is nothing to keep in step: completion lives on the task, as
 it always did.
 
 The bolt on a row writes the tag at the end of the title and takes it out again
-from wherever it was written; the row's menu does the same for the Backlog. A
-task is on Today **or** in the Backlog, never both: putting it on one takes it
-off the other. Taken off both, it stays in its checklist.
+from wherever it was written.
+
+The Backlog is a checklist. **B** on a row, or **Move to Backlog** in its menu,
+moves the task into it as **Move to checklist…** would, taking it off Today
+first: a task is planned or parked, not both. Moving is shaping the work, so it
+is a project manager's to do. A task leaves the Backlog the way it leaves any
+checklist, and can go on Today while it is there.
 
 ### Completed work
 
@@ -387,8 +409,7 @@ On a checklist, finished tasks are its last stage, which can be shown as a list
 or as a chart of how the work was finished against the plan. On a tag's page
 they sit in a folded **Completed** section at the bottom, read only once it is
 opened. What clearing them means follows the screen: on a checklist or an
-ordinary tag it deletes the tasks, while on Today and the Backlog it only takes
-the tag off.
+ordinary tag it deletes the tasks, while on Today it only takes the tag off.
 
 ### Adding several tasks at once
 
@@ -455,8 +476,8 @@ target into the figures every screen shows:
 A checklist counts tasks and a tracker counts pages, but "am I going fast enough
 to finish by the deadline" is the same question, so both get the same figures
 from the same code. Cards carry the one-line version ("1.2 tasks/day · finishing
-3 October 2026"); detail screens carry the full grid; Today, Backlog and Tags
-carry the counts their own data supports.
+3 October 2026"); detail screens carry the full grid; Today and Tags carry the
+counts their own data supports.
 
 Each figure is omitted when the data cannot support it: no deadline, or a
 standstill that would never finish. Day one counts as a whole day, so something
@@ -517,8 +538,8 @@ cheap by shape instead:
 - a tracker's full history is read only when you open it
 - a checklist's page is sent one page of one stage; a tag's page one page of
   its open tasks, and its finished ones only once their section is opened
-- the search index doubles as the task source for the Tags and Priority
-  screens, so neither costs an extra read
+- the search index doubles as the task source for the Tags, Priority and
+  Stages screens, so none of them costs an extra read
 - most changes write **one document**; the few that reach further — deleting a
   tag, changing a checklist's tags or stages — write the tasks they affect in
   one bulk write

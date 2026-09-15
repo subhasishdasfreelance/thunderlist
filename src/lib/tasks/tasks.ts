@@ -63,33 +63,50 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 	return [...tasks].sort(compareTasks);
 }
 
-/** How a list is ordered. More will follow; these are the two that exist. */
+/**
+ * A task's title cut short, for a confirmation that names it: enough to know
+ * it by, never the whole of a long one.
+ */
+export function shortTitle(title: string, max = 48): string {
+	const trimmed = title.trim();
+	return trimmed.length <= max
+		? trimmed
+		: `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** How a list is ordered. */
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
 export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
 	newest: "Newest first",
 	priority: "Priority first",
+	stage: "Earliest stage first",
 };
 
 /**
- * Urgent and important first, then urgent, then important, then the rest.
+ * Urgent and important first, then urgent, then important, then the rest — or,
+ * by stage, the tasks still at their first stage first and the done last, the
+ * stages between in order of how far along they are; see `stageProgress`.
  *
- * Within a band the newest is still first, so sorting by priority reorders the
- * list rather than replacing one arbitrary order with another.
+ * Within a band the newest is still first, so sorting reorders the list rather
+ * than replacing one arbitrary order with another.
  */
 export function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
 	tasks: ReadonlyArray<T>,
 	order: SortOrder,
 	compare: (a: T, b: T) => number,
+	/** How far along each is, 0-1. Without it, by stage is newest first. */
+	stageProgressOf?: (task: T) => number,
 ): Array<T> {
-	if (order === "newest") return [...tasks].sort(compare);
+	const rank =
+		order === "priority"
+			? (task: T) => PRIORITY_RANKS.indexOf(priorityRank(task))
+			: order === "stage"
+				? stageProgressOf
+				: undefined;
+	if (rank === undefined) return [...tasks].sort(compare);
 
-	return [...tasks].sort((a, b) => {
-		const byRank =
-			PRIORITY_RANKS.indexOf(priorityRank(a)) -
-			PRIORITY_RANKS.indexOf(priorityRank(b));
-		return byRank === 0 ? compare(a, b) : byRank;
-	});
+	return [...tasks].sort((a, b) => rank(a) - rank(b) || compare(a, b));
 }
 
 /** The same, for the plain task lists that order by `compareTasks`. */
@@ -105,6 +122,7 @@ export function orderByTask<T>(
 	items: ReadonlyArray<T>,
 	order: SortOrder,
 	taskOf: (item: T) => Task,
+	stepsLeftOf?: (item: T) => number,
 ): Array<T> {
 	return sortTasksBy(
 		items.map((item) => ({
@@ -114,6 +132,7 @@ export function orderByTask<T>(
 		})),
 		order,
 		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),
+		stepsLeftOf === undefined ? undefined : (row) => stepsLeftOf(row.item),
 	).map((row) => row.item);
 }
 

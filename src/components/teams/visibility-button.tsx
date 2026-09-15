@@ -3,19 +3,21 @@ import {
 	AvatarGroup,
 	AvatarGroupOverflow,
 } from "@astryxdesign/core/AvatarGroup";
+import { Button } from "@astryxdesign/core/Button";
 import { Eye } from "lucide-react";
 import { useState } from "react";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { memberName, ROLE_LABELS, roleCan } from "#/schemas/team";
 import { PeoplePickerDialog } from "./people-picker-dialog";
 
-/** Faces drawn on the button; the rest are a "+N". */
-const SHOWN = 4;
+/** Faces drawn on the button; the rest are a "+N", as on a task's row. */
+const SHOWN = 3;
 
 /**
  * Who in the team can see a checklist, a tag or a tracker, at the top of its
  * page — a row of faces beside the way back, so a list only some of the team
- * can see is never taken for one everybody can.
+ * can see is never taken for one everybody can. The same kind of button as
+ * the way back, so the two read as a pair.
  *
  * Pressing it opens the same picker a task is assigned with: search the team,
  * pick people, or let everyone in. The admin and viewers see everything
@@ -57,29 +59,31 @@ export function VisibilityButton({
 
 	return (
 		<>
-			<button
-				type="button"
-				className="thunderlist-people-button"
-				aria-label={`Who can see this ${noun}: ${summary}`}
-				title={`Who can see this ${noun}`}
+			<Button
+				label={`Who can see this ${noun}: ${summary}`}
+				tooltip={`Who can see this ${noun}`}
+				variant="secondary"
+				size="sm"
+				icon={isEveryone ? <Eye aria-hidden /> : undefined}
 				onClick={() => setIsOpen(true)}
 			>
-				{isEveryone ? <Eye aria-hidden size={16} /> : null}
-				<AvatarGroup size="xsm">
-					{viewers.slice(0, SHOWN).map((member) => (
-						<Avatar
-							key={member.email}
-							name={memberName(member)}
-							src={member.image ?? undefined}
-							tooltip={false}
-						/>
-					))}
-					{viewers.length > SHOWN ? (
-						<AvatarGroupOverflow count={viewers.length - SHOWN} />
-					) : null}
-				</AvatarGroup>
-				<span>{summary}</span>
-			</button>
+				<span className="inline-flex items-center gap-2">
+					<AvatarGroup size="xsm">
+						{viewers.slice(0, SHOWN).map((member) => (
+							<Avatar
+								key={member.email}
+								name={memberName(member)}
+								src={member.image ?? undefined}
+								tooltip={false}
+							/>
+						))}
+						{viewers.length > SHOWN ? (
+							<AvatarGroupOverflow count={viewers.length - SHOWN} />
+						) : null}
+					</AvatarGroup>
+					{summary}
+				</span>
+			</Button>
 
 			<PeoplePickerDialog
 				isOpen={isOpen}

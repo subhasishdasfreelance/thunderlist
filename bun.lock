@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "flowstate",
+      "name": "thunderlist",
       "dependencies": {
         "@astryxdesign/core": "^0.5.4",
         "@stylexjs/stylex": "^0.19.0",

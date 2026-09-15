@@ -30,6 +30,7 @@ import {
 	type ChecklistSummary,
 	checklistStages,
 	DEFAULT_STAGES,
+	isUnderway,
 	type Stage,
 	stageOf,
 } from "#/schemas/checklist";
@@ -41,13 +42,14 @@ import type { Task, TaskPageView, TaskPatch } from "#/schemas/task";
  *
  * Moved rather than recounted: a page holds a page of its tasks, not the whole
  * list to count. `null` is a task not there — before it arrived, after it
- * left.
+ * left. Any other counts the progress carries are kept as they were, for the
+ * caller to move.
  */
-function shift(
-	progress: ChecklistProgress,
+function shift<P extends ChecklistProgress>(
+	progress: P,
 	before: Pick<Task, "completed"> | null,
 	after: Pick<Task, "completed"> | null,
-): ChecklistProgress {
+): P {
 	const total = Math.max(
 		0,
 		progress.total + (after ? 1 : 0) - (before ? 1 : 0),
@@ -63,10 +65,26 @@ function shift(
 	);
 
 	return {
+		...progress,
 		total,
 		completed,
 		percent: total === 0 ? 0 : Math.round((completed / total) * 100),
 	};
+}
+
+/**
+ * A checklist's counts at each stage, with one task gone from `from` and
+ * arrived at `to` — `null` for not there, before it arrived or after it left.
+ */
+function moveStage(
+	byStage: Readonly<Record<string, number>>,
+	from: string | null,
+	to: string | null,
+): Record<string, number> {
+	const next = { ...byStage };
+	if (from !== null) next[from] = Math.max(0, (next[from] ?? 0) - 1);
+	if (to !== null) next[to] = (next[to] ?? 0) + 1;
+	return next;
 }
 
 /** `items` with the one matching swapped for `next`, or taken out for `null`. */
@@ -121,7 +139,8 @@ function stagesOf(
 
 /**
  * A task after an edit, with its stage and its tick agreeing: reaching the
- * last stage is finishing it, and a tick moves it there; see `updateTask`.
+ * last stage is finishing it, a tick moves it there, and unticking moves it
+ * back to the stage before; see `updateTask`.
  */
 function settle(
 	task: Task,
@@ -140,7 +159,7 @@ function settle(
 	if (patch.completed !== undefined) {
 		return {
 			...task,
-			stageId: patch.completed ? last : stages[0].stageId,
+			stageId: patch.completed ? last : stages[stages.length - 2].stageId,
 		};
 	}
 	return task;
@@ -195,7 +214,10 @@ function patchChecklists(
 
 		client.setQueryData<ChecklistSummary>(key, {
 			...checklist,
-			progress: shift(checklist.progress, before, after),
+			progress: {
+				...shift(checklist.progress, before, after),
+				byStage: moveStage(checklist.progress.byStage, from, to),
+			},
 		});
 
 		for (const [pageKey, page] of pages) {
@@ -253,9 +275,21 @@ function patchTags(
 
 		const task = next(before.task, detail.tagId, before.checklistId);
 		const after = task === null ? null : { ...before, task };
+		// Moving along its stages moves it in and out of the part under way.
+		const stages = stagesOf(client, before.checklistId);
+		const underway = (each: Task | null) =>
+			each !== null && isUnderway(each, stages) ? 1 : 0;
 		client.setQueryData<TagDetail>(key, {
 			...detail,
-			progress: shift(detail.progress, before.task, task),
+			progress: {
+				...shift(detail.progress, before.task, task),
+				inProgress: Math.max(
+					0,
+					(detail.progress.inProgress ?? 0) +
+						underway(task) -
+						underway(before.task),
+				),
+			},
 		});
 		for (const [pageKey, page] of pages) {
 			if (page) client.setQueryData(pageKey, swapInPage(page, matches, after));
@@ -435,6 +469,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 							queryKeys.checklist(change.checklistId),
 						)?.tagIds ?? []);
 
+			const first = stagesOf(client, change.checklistId)[0].stageId;
 			const task: Task = {
 				taskId: change.taskId,
 				title: change.title,
@@ -446,7 +481,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				tagIds: [...new Set([...change.tagIds, ...inherited])],
 				urgent: change.urgent,
 				important: change.important,
-				stageId: stagesOf(client, change.checklistId)[0].stageId,
+				stageId: first,
 			};
 
 			if (change.checklistId !== null) {
@@ -456,7 +491,10 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 						checklist
 							? {
 									...checklist,
-									progress: shift(checklist.progress, null, task),
+									progress: {
+										...shift(checklist.progress, null, task),
+										byStage: moveStage(checklist.progress.byStage, null, first),
+									},
 								}
 							: checklist,
 				);
@@ -509,7 +547,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				stages: change.stages,
 				createdAt,
 				updatedAt: createdAt,
-				progress: { total: 0, completed: 0, percent: 0 },
+				progress: { total: 0, completed: 0, percent: 0, byStage: {} },
 			};
 
 			client.setQueryData<ChecklistSummary>(

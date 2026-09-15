@@ -129,7 +129,7 @@ export function priorityRank(
 }
 
 /** The orders a list of tasks can be shown in; see `sortTasksBy`. */
-export const SORT_ORDERS = ["newest", "priority"] as const;
+export const SORT_ORDERS = ["newest", "priority", "stage"] as const;
 
 /**
  * What a screen narrows its tasks to: one person's, in a team, and one tag's,

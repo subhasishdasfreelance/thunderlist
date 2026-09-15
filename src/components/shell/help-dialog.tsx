@@ -20,10 +20,10 @@ const GROUPS: Array<Group> = [
 		title: "On a task you point at",
 		rows: [
 			{ keys: [TASK_SHORTCUTS.today], what: "Today, on or off" },
-			{ keys: [TASK_SHORTCUTS.backlog], what: "Backlog, in or out" },
+			{ keys: [TASK_SHORTCUTS.backlog], what: "Move to the Backlog" },
 			{ keys: [TASK_SHORTCUTS.urgent], what: "Urgent" },
 			{ keys: [TASK_SHORTCUTS.important], what: "Important" },
-			{ keys: [TASK_SHORTCUTS.complete], what: "Done" },
+			{ keys: [TASK_SHORTCUTS.complete], what: "Tick: next stage, or done" },
 			{ keys: [TASK_SHORTCUTS.edit], what: "Edit" },
 			{
 				keys: [TASK_SHORTCUTS.type.toUpperCase()],
@@ -65,7 +65,7 @@ const GROUPS: Array<Group> = [
 const WORKFLOW: Array<{ step: string; what: string }> = [
 	{
 		step: "Park it",
-		what: "Anything you might do gets #backlog, from a task's menu. Out of your head, off today.",
+		what: "Anything you might do goes in the Backlog checklist: press B, or use a task's menu. Out of your head, off today.",
 	},
 	{
 		step: "Group it",
@@ -85,7 +85,7 @@ const WORKFLOW: Array<{ step: string; what: string }> = [
 	},
 	{
 		step: "Move it along",
-		what: "Give a checklist stages — To do, Review, Done — when you edit it. Its tasks show a stage at a time; Move to… in a task's menu sends it on.",
+		what: "Give a checklist stages — To do, Review, Done — when you edit it. Its tasks show a stage at a time; ticking one sends it to the next, and Stage in its menu to any.",
 	},
 	{
 		step: "Narrow it down",

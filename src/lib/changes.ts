@@ -286,9 +286,7 @@ export function toggleAssignee(
  *
  * The tag is written into the title the way the user would have typed it — at
  * the end — and taken off by removing it wherever it was written, the middle
- * of the sentence included. Today and the Backlog exclude each other, as the
- * lists they replaced did: a task is planned or parked, never both, so putting
- * it on one takes it off the other.
+ * of the sentence included.
  *
  * Nothing happens until the tags have loaded, since until then there is no
  * telling what the tag is called.
@@ -311,15 +309,47 @@ export function setSpecialTag(
 		return;
 	}
 
-	const other = specialTag(tags, kind === "today" ? "backlog" : "today");
-	const title =
-		other === null ? task.title : withoutInlineTag(task.title, other.name);
-	const kept = task.tagIds.filter((tagId) => tagId !== other?.tagId);
-
 	updateTask(apply, task.taskId, {
-		title: withInlineTag(title, tag.name),
-		tagIds: [...new Set([...kept, tag.tagId])],
+		title: withInlineTag(task.title, tag.name),
+		tagIds: [...new Set([...task.tagIds, tag.tagId])],
 	});
+}
+
+/**
+ * Park a task in the Backlog: off Today, since a task is planned or parked
+ * but never both, and then into the Backlog checklist.
+ *
+ * The move waits for the first change to land. Two requests can arrive in
+ * either order, and the move takes off the tags the task only had from the
+ * checklist it leaves, which an update landing after it would put back.
+ */
+export async function moveToBacklog(
+	applyAsync: ApplyChangeAsync,
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	backlogId: string,
+	tags: ReadonlyArray<Tag>,
+): Promise<void> {
+	const today = specialTag(tags, "today");
+
+	try {
+		if (today !== null && task.tagIds.includes(today.tagId)) {
+			await applyAsync({
+				kind: "task.update",
+				taskId: task.taskId,
+				patch: {
+					title: withoutInlineTag(task.title, today.name),
+					tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
+				},
+			});
+		}
+		await applyAsync({
+			kind: "task.move",
+			taskId: task.taskId,
+			checklistId: backlogId,
+		});
+	} catch {
+		// Already reported by `useApplyChange`, and nothing after it is tried.
+	}
 }
 
 /** Resolves once the server has written it; see `createChecklist`. */

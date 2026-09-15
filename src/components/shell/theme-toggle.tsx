@@ -58,7 +58,7 @@ export function ThemeToggle({ scheme }: { scheme: ColorScheme }) {
 			}}
 			items={OPTIONS.map((option) => ({
 				label: option.label,
-				icon: <option.icon aria-hidden />,
+				icon: option.icon,
 				// The tick says which one is in force; the menu is a choice, not
 				// three separate actions.
 				endContent:

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { createTeamFn } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
+import { playSound } from "#/lib/sounds";
 import { useSpaceChanged } from "#/lib/use-space-changed";
 
 /**
@@ -36,6 +37,7 @@ export function NewTeamDialog({
 	async function create() {
 		if (trimmed === "" || isSaving) return;
 		setIsSaving(true);
+		playSound("add");
 
 		try {
 			// The server moves this browser into the new team as it makes it.

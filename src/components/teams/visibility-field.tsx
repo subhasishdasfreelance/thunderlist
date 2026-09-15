@@ -1,5 +1,6 @@
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { VStack } from "@astryxdesign/core/Stack";
+import { memo } from "react";
 import { useSpace } from "#/lib/use-team";
 import { PeopleField } from "./people-field";
 
@@ -11,8 +12,11 @@ import { PeopleField } from "./people-field";
  * Whoever keeps it to a few people is always one of them, and the team's
  * admin sees everything, so nobody can lock the team out of its own work.
  * Outside a team there is nobody to keep anything from, and it draws nothing.
+ *
+ * Memoised, like the other sections of a form: a list of the team's people is
+ * not drawn again on every keystroke in the title.
  */
-export function VisibilityField({
+export const VisibilityField = memo(function VisibilityField({
 	value,
 	onChange,
 }: {
@@ -49,4 +53,4 @@ export function VisibilityField({
 			)}
 		</VStack>
 	);
-}
+});

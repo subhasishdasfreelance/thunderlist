@@ -7,7 +7,7 @@ import {
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
-import { useId } from "react";
+import { memo, useId } from "react";
 
 export type NotesView = "write" | "preview";
 
@@ -17,8 +17,11 @@ export type NotesView = "write" | "preview";
  * The edit dialog is the only place notes are ever shown, so it is where they
  * are read as well as written. That is why there is a preview at all, rather
  * than the raw text standing in for both.
+ *
+ * Memoised, so typing in the title does not draw the notes again — which, in
+ * preview, meant reading all of the Markdown again on every keystroke.
  */
-export function TaskNotesField({
+export const TaskNotesField = memo(function TaskNotesField({
 	value,
 	onChange,
 	view,
@@ -81,4 +84,4 @@ export function TaskNotesField({
 			)}
 		</VStack>
 	);
-}
+});

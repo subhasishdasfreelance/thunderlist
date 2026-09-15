@@ -3,6 +3,8 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import type { CSSProperties } from "react";
 import { clampPercent } from "#/lib/progress";
+import type { StagePart } from "#/schemas/checklist";
+import { StageDot, stageColorStyle } from "./stage-dot";
 
 /**
  * How many tasks should be done by now: "6 tasks". The `expectedReading` for
@@ -14,6 +16,61 @@ import { clampPercent } from "#/lib/progress";
 export function formatExpectedTasks(elapsed: number, total: number): string {
 	const tasks = Math.round(elapsed * total);
 	return `${tasks} ${tasks === 1 ? "task" : "tasks"}`;
+}
+
+/** "3 tasks", "1 task". */
+function countTasks(count: number): string {
+	return `${count} ${count === 1 ? "task" : "tasks"}`;
+}
+
+/**
+ * A checklist's bar in parts, a part a stage: done from the left, then each
+ * stage before it, each as wide as its share of the tasks — so where each part
+ * ends reads as "this many at least this far along". What is left of the
+ * track is the first stage, the work not started. See `.thunderlist-stage-bar`.
+ */
+function StageBar({
+	label,
+	percent,
+	parts,
+	total,
+}: {
+	label: string;
+	percent: number;
+	parts: ReadonlyArray<StagePart>;
+	total: number;
+}) {
+	const drawn = total === 0 ? [] : parts.filter((part) => part.count > 0);
+
+	return (
+		<div
+			role="progressbar"
+			aria-label={label}
+			aria-valuemin={0}
+			aria-valuemax={100}
+			aria-valuenow={percent}
+			aria-valuetext={[
+				`${percent}% done`,
+				...parts
+					.slice(1)
+					.filter((part) => part.count > 0)
+					.map((part) => `${countTasks(part.count)} at ${part.name}`),
+			].join(", ")}
+			className="thunderlist-stage-bar"
+		>
+			{drawn.map((part) => (
+				<span
+					key={part.stageId}
+					title={`${part.name}: ${countTasks(part.count)}`}
+					className="thunderlist-stage-bar-part"
+					style={{
+						...stageColorStyle(part.color),
+						flexBasis: `${(part.count / total) * 100}%`,
+					}}
+				/>
+			))}
+		</div>
+	);
 }
 
 /**
@@ -28,6 +85,9 @@ export function formatExpectedTasks(elapsed: number, total: number): string {
  *
  * With no deadline there is no target, and none is invented.
  *
+ * A checklist's bar is drawn in parts, a colour a stage, with a key under it
+ * naming each whenever there is more than the one; see `StageBar`.
+ *
  * On a phone the footnote and the target rarely fit side by side, so the target
  * drops onto a line of its own instead of both being squeezed into ragged
  * halves. The gap matches the one above, so the bar and the two lines stay
@@ -39,6 +99,7 @@ export function ProgressMeter({
 	elapsed,
 	expectedReading,
 	footnote,
+	stages,
 }: {
 	/** Accessible name for the bar; never shown. */
 	label: string;
@@ -56,6 +117,11 @@ export function ProgressMeter({
 	 */
 	expectedReading?: string;
 	footnote: string;
+	/**
+	 * A checklist's stages, done first, and how many tasks it has in all: the
+	 * bar is drawn in their colours; see `stageParts`.
+	 */
+	stages?: { parts: ReadonlyArray<StagePart>; total: number };
 }) {
 	const expectedPercent = elapsed == null ? null : elapsed * 100;
 	const expected =
@@ -66,7 +132,16 @@ export function ProgressMeter({
 		<VStack gap={1.5}>
 			{/* How the bolt's point is placed is in `.thunderlist-meter`. */}
 			<div className="thunderlist-meter" data-has-target={elapsed !== null}>
-				<ProgressBar label={label} isLabelHidden value={percent} />
+				{stages === undefined ? (
+					<ProgressBar label={label} isLabelHidden value={percent} />
+				) : (
+					<StageBar
+						label={label}
+						percent={percent}
+						parts={stages.parts}
+						total={stages.total}
+					/>
+				)}
 				{expectedPercent === null ? null : (
 					<img
 						src="/logo.svg"
@@ -83,6 +158,20 @@ export function ProgressMeter({
 					/>
 				)}
 			</div>
+
+			{/* The key: a stage's colour is never the only thing naming it. */}
+			{stages === undefined || stages.parts.length < 2 ? null : (
+				<HStack gap={3} vAlign="center" wrap="wrap">
+					{stages.parts.map((part) => (
+						<HStack key={part.stageId} gap={1} vAlign="center">
+							<StageDot color={part.color} />
+							<Text type="supporting">
+								{part.name} {part.count}
+							</Text>
+						</HStack>
+					))}
+				</HStack>
+			)}
 
 			<HStack gap={1.5} hAlign="between" vAlign="center" wrap="wrap">
 				<Text type="supporting">{footnote}</Text>

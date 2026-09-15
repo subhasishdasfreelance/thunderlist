@@ -1,13 +1,26 @@
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import { Check, MoreHorizontal } from "lucide-react";
+import {
+	Check,
+	FolderInput,
+	MoreHorizontal,
+	Pencil,
+	Shapes,
+	Trash2,
+	UserCheck,
+	UserMinus,
+	Users,
+} from "lucide-react";
 import { useMemo, useState } from "react";
+import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
 import { TaggedTitle } from "#/components/tags/tagged-title";
 import {
 	backlogMenuItem,
+	ShortcutKey,
 	TASK_SHORTCUTS,
 	TaskFlagButtons,
 	type TaskQuickActions,
@@ -17,7 +30,7 @@ import { Assignees } from "#/components/teams/assignees";
 import { useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTaskTypes } from "#/lib/use-task-types";
 import { usePermissions, useSpace } from "#/lib/use-team";
-import { type Stage, stageOf } from "#/schemas/checklist";
+import { type Stage, stageColor, stageOf } from "#/schemas/checklist";
 import { specialTag, type Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 
@@ -64,14 +77,20 @@ export function TaskRow({
 	task,
 	tags,
 	actions,
+	backlog,
 	checklist,
 	stages,
 	isStageShown = false,
 }: {
 	task: Task;
-	/** Every tag that exists: for the highlights, and for Today and the Backlog. */
+	/** Every tag that exists: for the highlights, and for Today. */
 	tags: ReadonlyArray<Tag>;
 	actions: TaskRowActions;
+	/**
+	 * The Backlog, to park the task in: its name, and moving the task there.
+	 * Left out where the task is in it already, or a screen offers no move.
+	 */
+	backlog?: { title: string; onMove: () => void };
 	/**
 	 * The checklist the task lives in, on a screen that gathers tasks from many
 	 * — a tag's. Left out on a checklist's own page, where the page is the
@@ -79,13 +98,14 @@ export function TaskRow({
 	 */
 	checklist?: { title: string | null; onOpen: () => void } | null;
 	/**
-	 * Its checklist's stages, which it can be moved along from the menu. With
-	 * only the two every checklist starts with, the checkbox is the move.
+	 * Its checklist's stages. Ticking it sends it on to the next one; the menu
+	 * sends it to any of them, done included.
 	 */
 	stages?: ReadonlyArray<Stage>;
 	/**
-	 * Say which stage it is at, on a screen that does not — a tag's. Only a
-	 * stage between the first and the last says anything the checkbox does not.
+	 * Say which of its checklist's stages it is at, on a screen that does not —
+	 * a tag's. Only for a checklist with stages of its own: with just the two it
+	 * starts with, the checkbox already says it.
 	 */
 	isStageShown?: boolean;
 }) {
@@ -103,9 +123,10 @@ export function TaskRow({
 	const isTracked = task.trackerId !== null || task.linkedChecklistId != null;
 
 	const today = specialTag(tags, "today");
-	const backlog = specialTag(tags, "backlog");
 	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
-	const isOnBacklog = backlog !== null && task.tagIds.includes(backlog.tagId);
+	// Parking it is moving it to another checklist, a project manager's to do;
+	// see `Capability`.
+	const park = canManageContent ? backlog : undefined;
 
 	// Only a checklist with stages of its own has anywhere to move a task along.
 	const movable = stages !== undefined && stages.length > 2 ? stages : null;
@@ -124,25 +145,44 @@ export function TaskRow({
 			? null
 			: (reachable.find((_, at) => at > stageIndex) ?? null);
 	const shownStage =
-		isStageShown &&
-		movable !== null &&
-		stageIndex > 0 &&
-		stageIndex < movable.length - 1
-			? movable[stageIndex]
-			: null;
+		isStageShown && movable !== null ? movable[stageIndex] : null;
+
+	/**
+	 * The colour of the stage it is at, worn by its checkbox — none at the
+	 * first, where nothing has started; see `stageColor`.
+	 */
+	const tintIndex =
+		stages === undefined
+			? -1
+			: stages.findIndex((stage) => stage.stageId === stageOf(task, stages));
+	const tint =
+		stages === undefined || tintIndex <= 0
+			? null
+			: stageColor(stages, tintIndex);
+
+	/**
+	 * Ticking it: on to the next stage while there is one before done, so a
+	 * task goes through every stage its checklist has. Unticking takes it back
+	 * one, to the stage before done; see `updateTask`.
+	 */
+	const check = (isDone: boolean) => {
+		if (isDone && nextStage !== null && actions.onSetStage !== undefined) {
+			actions.onSetStage(nextStage.stageId);
+		} else {
+			actions.onToggle(isDone);
+		}
+	};
 
 	const shortcuts = useMemo(
 		() => ({
 			[TASK_SHORTCUTS.today]: () => {
 				if (today !== null) actions.onSetSpecial("today", !isOnToday);
 			},
-			[TASK_SHORTCUTS.backlog]: () => {
-				if (backlog !== null) actions.onSetSpecial("backlog", !isOnBacklog);
-			},
+			...(park === undefined ? {} : { [TASK_SHORTCUTS.backlog]: park.onMove }),
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task.urgent),
 			[TASK_SHORTCUTS.important]: () => actions.onSetImportant(!task.important),
 			[TASK_SHORTCUTS.complete]: () => {
-				if (!isTracked) actions.onToggle(!task.completed);
+				if (!isTracked) check(!task.completed);
 			},
 			[TASK_SHORTCUTS.edit]: actions.onRename,
 			[TASK_SHORTCUTS.type]: actions.onSetType,
@@ -154,13 +194,13 @@ export function TaskRow({
 		[
 			actions,
 			today,
-			backlog,
 			isOnToday,
-			isOnBacklog,
+			park,
 			task.urgent,
 			task.important,
 			task.completed,
 			isTracked,
+			check,
 		],
 	);
 
@@ -184,7 +224,46 @@ export function TaskRow({
 	// that checklist's own.
 	const crumb = checklist?.title != null ? checklist : null;
 	const tick = (isOn: boolean) =>
-		isOn ? <Check aria-hidden size={16} /> : undefined;
+		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
+
+	/** The menu's People: in a team, taking it on or handing it to people. */
+	const people = [
+		...(actions.onToggleMine === undefined
+			? []
+			: [
+					{
+						label: isMine ? "Unassign me" : "Assign to me",
+						icon: isMine ? UserMinus : UserCheck,
+						endContent: <ShortcutKey label="Space" />,
+						onClick: actions.onToggleMine,
+					},
+				]),
+		...(actions.onAssign === undefined
+			? []
+			: [
+					{
+						label: "Assign people…",
+						icon: Users,
+						onClick: actions.onAssign,
+					},
+				]),
+	];
+
+	/** The menu's Organise: where it lives, and parking it in the Backlog. */
+	const organise = [
+		// Where it lives, and whether it exists, are a project manager's to
+		// change; see `Capability`.
+		...(actions.onMove === undefined || !canManageContent
+			? []
+			: [
+					{
+						label: "Move to checklist…",
+						icon: FolderInput,
+						onClick: actions.onMove,
+					},
+				]),
+		...(park === undefined ? [] : [backlogMenuItem(park.title, park.onMove)]),
+	];
 
 	return (
 		/*
@@ -222,22 +301,29 @@ export function TaskRow({
 				 * The box still shows the state — it is the honest answer to "is
 				 * this done" — but it cannot be the thing that changes it.
 				 */}
-				<CheckboxInput
-					label={task.title}
-					isLabelHidden
-					value={task.completed}
-					isDisabled={isTracked || !canUpdateTasks}
-					disabledMessage={
-						!canUpdateTasks
-							? "You can see this team's work but not change it."
-							: task.linkedChecklistId != null
-								? "Finishes when its checklist does."
-								: isTracked
-									? "Finishes when its tracker does."
-									: undefined
-					}
-					onChange={actions.onToggle}
-				/>
+				{/* In its stage's colour; see `.thunderlist-stage-check`. */}
+				<span
+					className="thunderlist-stage-check"
+					data-tinted={tint !== null}
+					style={tint === null ? undefined : stageColorStyle(tint)}
+				>
+					<CheckboxInput
+						label={task.title}
+						isLabelHidden
+						value={task.completed}
+						isDisabled={isTracked || !canUpdateTasks}
+						disabledMessage={
+							!canUpdateTasks
+								? "You can see this team's work but not change it."
+								: task.linkedChecklistId != null
+									? "Finishes when its checklist does."
+									: isTracked
+										? "Finishes when its tracker does."
+										: undefined
+						}
+						onChange={check}
+					/>
+				</span>
 				{crumb === null && !task.caption ? (
 					title
 				) : (
@@ -289,67 +375,87 @@ export function TaskRow({
 							isIconOnly: true,
 							icon: <MoreHorizontal aria-hidden />,
 						}}
+						/*
+						 * Grouped by what each entry is about, most used first: the
+						 * task itself, the stage it is at, who has it, and where it
+						 * lives. Deleting stands apart at the bottom, where it is not
+						 * pressed by accident. A group with nothing in it for this
+						 * task, or this role, is left out whole.
+						 */
 						items={[
 							// Editing first: it is the reason this menu gets opened.
 							{
-								label: `Edit (${TASK_SHORTCUTS.edit})`,
-								onClick: actions.onRename,
+								type: "section" as const,
+								id: "details",
+								title: "Details",
+								items: [
+									{
+										label: "Edit",
+										icon: Pencil,
+										endContent: <ShortcutKey label={TASK_SHORTCUTS.edit} />,
+										onClick: actions.onRename,
+									},
+									{
+										label: "Type",
+										icon: Shapes,
+										endContent: (
+											<ShortcutKey label={TASK_SHORTCUTS.type.toUpperCase()} />
+										),
+										onClick: actions.onSetType,
+									},
+								],
 							},
-							{
-								label: `Type… (${TASK_SHORTCUTS.type.toUpperCase()})`,
-								onClick: actions.onSetType,
-							},
-							...(actions.onToggleMine === undefined
-								? []
-								: [
-										{
-											label: `${isMine ? "Unassign me" : "Assign to me"} (Space)`,
-											onClick: actions.onToggleMine,
-										},
-									]),
-							...(actions.onAssign === undefined
-								? []
-								: [{ label: "Assign people…", onClick: actions.onAssign }]),
 							...(movable === null || actions.onSetStage === undefined
 								? []
 								: [
-										...(nextStage === null
-											? []
-											: [
-													{
-														label: `Move to ${nextStage.name}`,
-														onClick: () =>
-															actions.onSetStage?.(nextStage.stageId),
-													},
-												]),
 										{
-											label: "Stage",
-											items: reachable.map((stage) => ({
-												id: stage.stageId,
-												label: stage.name,
-												endContent: tick(stage.stageId === stageId),
-												onClick: () => actions.onSetStage?.(stage.stageId),
-											})),
+											type: "section" as const,
+											id: "stage",
+											title: "Stage",
+											items: reachable.map((stage) => {
+												const index = movable.indexOf(stage);
+												return {
+													id: stage.stageId,
+													label: stage.name,
+													icon: (
+														<StageDot
+															color={
+																index === 0 ? null : stageColor(movable, index)
+															}
+														/>
+													),
+													endContent: tick(stage.stageId === stageId),
+													onClick: () => actions.onSetStage?.(stage.stageId),
+												};
+											}),
 										},
 									]),
-							// Where it lives, and whether it exists, are a project
-							// manager's to change; see `Capability`.
-							...(actions.onMove === undefined || !canManageContent
-								? []
-								: [{ label: "Move to checklist…", onClick: actions.onMove }]),
-							...(backlog === null
+							...(people.length === 0
 								? []
 								: [
-										backlogMenuItem(
-											backlog,
-											isOnBacklog,
-											shortcuts[TASK_SHORTCUTS.backlog],
-										),
+										{
+											type: "section" as const,
+											id: "people",
+											title: "People",
+											items: people,
+										},
+									]),
+							...(organise.length === 0
+								? []
+								: [
+										{
+											type: "section" as const,
+											id: "organise",
+											title: "Organise",
+											items: organise,
+										},
 									]),
 							...(canManageContent
 								? [
+										{ type: "divider" as const },
 										{
 											label: "Delete task",
+											icon: Trash2,
 											variant: "destructive" as const,
 											onClick: actions.onDelete,
 										},

@@ -1,4 +1,5 @@
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
@@ -10,7 +11,12 @@ import {
 import { velocitySummary } from "#/components/common/velocity-stats";
 import { computeVelocity } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
-import { type TagSummary, tagParam, tagStartDate } from "#/schemas/tag";
+import {
+	type TagSummary,
+	tagParam,
+	tagStageParts,
+	tagStartDate,
+} from "#/schemas/tag";
 import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
 
 /**
@@ -43,7 +49,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 					progress.completed >= progress.total,
 				);
 
-	// Today and the Backlog carry their marks, so they read as the two they are.
+	// Today carries its mark, so it reads as what it is.
 	const Mark = tag.special === null ? null : SPECIAL_TAG_ICONS[tag.special];
 
 	return (
@@ -59,7 +65,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 							size="sm"
 							color={tag.color}
 							label={tag.name}
-							icon={Mark === null ? undefined : <Mark aria-hidden />}
+							icon={Mark === null ? undefined : <Icon icon={Mark} size="xsm" />}
 						/>
 						<Text color="secondary">({progress.percent}%)</Text>
 					</HStack>
@@ -69,6 +75,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 				<ProgressMeter
 					label={`${tag.name} progress`}
 					percent={progress.percent}
+					stages={{ parts: tagStageParts(progress), total: progress.total }}
 					elapsed={pace.elapsed}
 					expectedReading={
 						pace.elapsed == null

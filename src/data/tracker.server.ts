@@ -320,6 +320,11 @@ export async function createProgressEntry(
 		recordedAt: string;
 		note: string;
 	},
+	/**
+	 * Who logged it, lower-cased, from the session: in a team, what a person's
+	 * share is counted from; see `ProgressEntry.recordedBy`.
+	 */
+	recordedBy: string,
 ): Promise<ProgressEntry> {
 	const current = await collections();
 	const tracker = await requireTracker(current, userId, input.trackerId);
@@ -346,6 +351,7 @@ export async function createProgressEntry(
 		recordedAt: input.recordedAt,
 		value: input.value,
 		note: input.note,
+		recordedBy,
 		updatedAt: new Date().toISOString(),
 	};
 

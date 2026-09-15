@@ -8,13 +8,16 @@ import { queryKeys } from "./keys";
  * team, for assigning and filtering.
  *
  * It changes rarely, and whatever changes it reads it again, so it is left a
- * minute before being re-checked.
+ * minute before being re-checked — and it is, every minute the app is open and
+ * on coming back to it, which is how being taken out of a team from somewhere
+ * else is noticed; see `useSpaceWatch`.
  */
 export const spaceQuery = () =>
 	queryOptions({
 		queryKey: queryKeys.space,
 		queryFn: () => getSpaceFn(),
 		staleTime: 60_000,
+		refetchInterval: 60_000,
 	});
 
 /** Every team this person is in, with its people, for the Settings screen. */

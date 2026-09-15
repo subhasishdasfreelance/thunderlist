@@ -60,6 +60,8 @@ export function FormDialog({
 			<Layout
 				header={
 					<DialogHeader
+						// The subtitle is one line; see `.thunderlist-dialog-header`.
+						className="thunderlist-dialog-header"
 						title={title}
 						subtitle={subtitle}
 						onOpenChange={onOpenChange}

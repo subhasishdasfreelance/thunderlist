@@ -4,13 +4,14 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
+import type { TaskType } from "#/schemas/task-type";
 import { taskFieldRows } from "./quick-add-task";
 import { type NotesView, TaskNotesField } from "./task-notes-field";
 
@@ -135,21 +136,7 @@ export function TaskRenameDialog({
 
 				{/* A type the list no longer has still reads as none, not as blank. */}
 				{types.length === 0 && typeId === NO_TYPE ? null : (
-					<Selector
-						label="Type"
-						isOptional
-						options={[
-							{ value: NO_TYPE, label: "No type" },
-							...types.map((type) => ({
-								value: type.typeId,
-								label: type.name,
-							})),
-						]}
-						value={
-							types.some((type) => type.typeId === typeId) ? typeId : NO_TYPE
-						}
-						onChange={setTypeId}
-					/>
+					<TypeField types={types} value={typeId} onChange={setTypeId} />
 				)}
 
 				<TextInput
@@ -175,3 +162,30 @@ export function TaskRenameDialog({
 		</FormDialog>
 	);
 }
+
+/**
+ * What kind of work the task is. Memoised: the Selector is the costliest part
+ * of this dialog to draw, and nothing it shows changes as the title is typed.
+ */
+const TypeField = memo(function TypeField({
+	types,
+	value,
+	onChange,
+}: {
+	types: ReadonlyArray<TaskType>;
+	value: string;
+	onChange: (typeId: string) => void;
+}) {
+	return (
+		<Selector
+			label="Type"
+			isOptional
+			options={[
+				{ value: NO_TYPE, label: "No type" },
+				...types.map((type) => ({ value: type.typeId, label: type.name })),
+			]}
+			value={types.some((type) => type.typeId === value) ? value : NO_TYPE}
+			onChange={onChange}
+		/>
+	);
+});

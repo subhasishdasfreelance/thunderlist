@@ -2,6 +2,7 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Button } from "@astryxdesign/core/Button";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Icon } from "@astryxdesign/core/Icon";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
@@ -27,6 +28,7 @@ import {
 	setMemberRoleFn,
 } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
+import { playSound } from "#/lib/sounds";
 import { useSpaceChanged } from "#/lib/use-space-changed";
 import { queryKeys } from "#/queries/keys";
 import {
@@ -120,6 +122,7 @@ export function TeamDialog({
 		const address = email.trim();
 		if (address === "" || isBusy) return;
 
+		playSound("join");
 		const isAdded = await run(() =>
 			addMemberFn({ data: { teamId, email: address, role } }),
 		);
@@ -127,7 +130,7 @@ export function TeamDialog({
 	}
 
 	const tick = (isOn: boolean) =>
-		isOn ? <Check aria-hidden size={16} /> : undefined;
+		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
 
 	/** What someone is, and — for the admin — the menu that changes it. */
 	function roleControl(member: TeamMember) {
@@ -146,18 +149,24 @@ export function TeamDialog({
 					isDisabled: isBusy,
 				}}
 				items={[
-					...GRANTED_ROLES.map((each) => ({
-						id: each,
-						label: ROLE_LABELS[each],
-						description: ROLE_SUMMARIES[each],
-						endContent: tick(member.role === each),
-						onClick: () =>
-							void run(() =>
-								setMemberRoleFn({
-									data: { teamId, email: member.email, role: each },
-								}),
-							),
-					})),
+					{
+						type: "section" as const,
+						title: "Role",
+						items: GRANTED_ROLES.map((each) => ({
+							id: each,
+							label: ROLE_LABELS[each],
+							description: ROLE_SUMMARIES[each],
+							endContent: tick(member.role === each),
+							onClick: () => {
+								playSound("role");
+								void run(() =>
+									setMemberRoleFn({
+										data: { teamId, email: member.email, role: each },
+									}),
+								);
+							},
+						})),
+					},
 					{ type: "divider" as const },
 					...(member.role === "admin"
 						? []
@@ -165,13 +174,13 @@ export function TeamDialog({
 								{
 									label: "Make admin…",
 									description: "Hands the team over to them.",
-									icon: <Crown aria-hidden />,
+									icon: Crown,
 									onClick: () => setConfirming({ kind: "hand-over", member }),
 								},
 							]),
 					{
 						label: "Remove from team",
-						icon: <UserMinus aria-hidden />,
+						icon: UserMinus,
 						variant: "destructive" as const,
 						onClick: () => setConfirming({ kind: "remove", member }),
 					},
@@ -313,6 +322,7 @@ export function TeamDialog({
 				actionLabel="Leave"
 				onAction={() => {
 					setConfirming(null);
+					playSound("delete");
 					void run(() => removeMemberFn({ data: { teamId, email: me } }), true);
 				}}
 			/>
@@ -327,6 +337,7 @@ export function TeamDialog({
 				actionLabel="Delete"
 				onAction={() => {
 					setConfirming(null);
+					playSound("delete");
 					void run(() => deleteTeamFn({ data: { teamId } }), true);
 				}}
 			/>
@@ -347,6 +358,7 @@ export function TeamDialog({
 					if (confirming?.kind !== "remove") return;
 					const { member } = confirming;
 					setConfirming(null);
+					playSound("delete");
 					void run(() =>
 						removeMemberFn({ data: { teamId, email: member.email } }),
 					);
@@ -369,6 +381,7 @@ export function TeamDialog({
 					if (confirming?.kind !== "hand-over") return;
 					const { member } = confirming;
 					setConfirming(null);
+					playSound("role");
 					void run(() =>
 						setMemberRoleFn({
 							data: { teamId, email: member.email, role: "admin" },

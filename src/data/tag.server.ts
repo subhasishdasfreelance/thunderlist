@@ -8,9 +8,9 @@
  * carrying it, because the title is where a name is read back from; see
  * `renameInTitles`.
  *
- * Two tags are special: Today and the Backlog. Every account has them, they are
- * made the first time its tags are read, and they cannot be deleted; see
- * `SPECIAL_TAGS`.
+ * One tag is special: Today. Every account has it, it is made the first time
+ * its tags are read, and it cannot be deleted; see `SPECIAL_TAGS`. The Backlog
+ * was the other, and is a checklist now; see `ensureBacklog`.
  *
  * Every function here takes the owner first and filters on it. A tag id names
  * a row; the owner is what decides whether it is yours.
@@ -38,7 +38,13 @@ import {
 	type Page,
 	pageOf,
 } from "#/lib/tasks/tasks";
-import { checklistStages, stageOf } from "#/schemas/checklist";
+import {
+	checklistStages,
+	isUnderway,
+	type Stage,
+	stageOf,
+	stageProgress,
+} from "#/schemas/checklist";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
 import {
 	SPECIAL_TAGS,
@@ -49,8 +55,9 @@ import {
 	type TagSummary,
 	type TagTaskEntry,
 } from "#/schemas/tag";
-import type { Task, TaskPageView } from "#/schemas/task";
+import type { TaskPageView } from "#/schemas/task";
 import {
+	ensureBacklog,
 	ensureInbox,
 	removeTagFromTasks,
 	withTrackedCompletion,
@@ -62,7 +69,7 @@ function byName(a: Tag, b: Tag): number {
 	return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
-/** The special tags first, Today before the Backlog, then the rest by name. */
+/** The special tags first, then the rest by name. */
 function inOrder(a: Tag, b: Tag): number {
 	const rank = (tag: Tag) =>
 		tag.special === null
@@ -93,14 +100,64 @@ function withSchedule(tag: Tag): Tag {
 
 /**
  * A tag with its progress: the share of the tasks carrying it that are done,
- * counted exactly as a checklist's are. Its pace is judged in the browser, on
- * the viewer's own clock, which this server does not know; see `usePace`.
+ * counted exactly as a checklist's are, and how many of the rest are under
+ * way; see `isUnderway`. Its pace is judged in the browser, on the viewer's
+ * own clock, which this server does not know; see `usePace`.
  */
 function summarise(
 	tag: Tag,
-	tasks: ReadonlyArray<Pick<Task, "completed">>,
+	items: ReadonlyArray<{ completed: boolean; isUnderway?: boolean }>,
 ): TagSummary {
-	return { ...tag, progress: calculateChecklistProgress(tasks) };
+	return {
+		...tag,
+		progress: {
+			...calculateChecklistProgress(items),
+			inProgress: items.filter((item) => item.isUnderway === true).length,
+		},
+	};
+}
+
+/**
+ * Tasks with whether each is under way, which takes the stages of the
+ * checklists they live in; see `isUnderway`.
+ */
+async function withUnderway<
+	T extends Pick<TaskDoc, "checklistId" | "stageId" | "completed">,
+>(
+	current: Collections,
+	userId: string,
+	tasks: ReadonlyArray<T>,
+): Promise<Array<T & { isUnderway: boolean }>> {
+	const checklistIds = [
+		...new Set(
+			tasks.flatMap((task) =>
+				task.checklistId === null ? [] : [task.checklistId],
+			),
+		),
+	];
+	const checklists =
+		checklistIds.length === 0
+			? []
+			: await current.checklists
+					.find(
+						{ userId, checklistId: { $in: checklistIds } },
+						{ projection: { _id: 0, checklistId: 1, stages: 1 } },
+					)
+					.toArray();
+	const byId = new Map(
+		checklists.map((checklist) => [checklist.checklistId, checklist]),
+	);
+
+	return tasks.map((task) => ({
+		...task,
+		isUnderway: isUnderway(
+			task,
+			checklistStages(
+				(task.checklistId === null ? undefined : byId.get(task.checklistId)) ??
+					{},
+			),
+		),
+	}));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -109,12 +166,10 @@ function summarise(
 
 /**
  * The colour each special tag starts in. Today takes the gold of the app's
- * bolt, which is the mark that puts a task on it; the Backlog is grey, because
- * parked work should not compete for attention.
+ * bolt, which is the mark that puts a task on it.
  */
 const SPECIAL_TAG_COLORS: Record<SpecialTag, TagColor> = {
 	today: "yellow",
-	backlog: "gray",
 };
 
 /** Accounts whose special tags this server has already seen to. */
@@ -126,8 +181,8 @@ function isDuplicateKey(error: unknown): boolean {
 }
 
 /**
- * Make sure an account has both special tags, and nothing left on the lists
- * they replaced.
+ * Make sure an account has its special tags, nothing left on the lists they
+ * replaced, and no Backlog tag left from before the Backlog was a checklist.
  *
  * Called on the way into every read of the tags, so a new account has them
  * before its first screen is drawn. A tag the account already has by that name
@@ -180,6 +235,7 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 	}
 
 	await moveListsIntoTags(current, userId);
+	await ensureBacklog(userId);
 	ensured.add(userId);
 }
 
@@ -187,8 +243,9 @@ async function ensureSpecialTags(userId: string): Promise<void> {
  * Today and the Backlog used to be lists of their own, holding references to
  * tasks. They are tags now, so whatever an account still has on them is
  * written onto each task as its tag — into the title, as the bolt would write
- * it — and the references are dropped. After the first time this finds
- * nothing.
+ * it — and the references are dropped. The Backlog is a checklist now, so an
+ * entry from its list has no tag to go onto and is only dropped. After the
+ * first time this finds nothing.
  */
 async function moveListsIntoTags(
 	current: Collections,
@@ -292,6 +349,7 @@ export async function listTagSummaries(
 						completed: 1,
 						trackerId: 1,
 						linkedChecklistId: 1,
+						stageId: 1,
 					},
 				},
 			)
@@ -319,10 +377,14 @@ export async function listTagSummaries(
 
 	// Counted the way a checklist counts, so a task finished by its tracker is
 	// done here as well — and only the tasks this person can see.
-	const tasks = await withTrackedCompletion(
+	const tasks = await withUnderway(
 		current,
 		userId,
-		stored.filter((task) => isTaskVisible(task, hidden)),
+		await withTrackedCompletion(
+			current,
+			userId,
+			stored.filter((task) => isTaskVisible(task, hidden)),
+		),
 	);
 
 	// A tracker counts once under each tag it carries, done at its target.
@@ -339,7 +401,10 @@ export async function listTagSummaries(
 		})),
 	];
 
-	const byTag = new Map<string, Array<Pick<Task, "completed">>>();
+	const byTag = new Map<
+		string,
+		Array<{ completed: boolean; isUnderway?: boolean }>
+	>();
 	for (const item of items) {
 		for (const tagId of item.tagIds) {
 			const existing = byTag.get(tagId);
@@ -383,13 +448,17 @@ async function findTag(
  * Each comes with the title of the checklist it lives in, because on a tag's
  * page that is the one thing a row cannot take for granted — and with the
  * stage it is at there filled in, as its checklist's own page would have it.
+ * `stagesOf` gives each checklist's stages, for ordering by them.
  */
 async function readTagEntries(
 	current: Collections,
 	userId: string,
 	tagId: string,
 	hidden: Hidden,
-): Promise<Array<TagTaskEntry>> {
+): Promise<{
+	entries: Array<TagTaskEntry>;
+	stagesOf: (checklistId: string | null) => ReadonlyArray<Stage>;
+}> {
 	// Anything still in no checklist moves into the Inbox before it is shown.
 	await ensureInbox(userId);
 
@@ -422,18 +491,23 @@ async function readTagEntries(
 	const byId = new Map(
 		checklists.map((checklist) => [checklist.checklistId, checklist]),
 	);
+	const stagesOf = (checklistId: string | null) =>
+		checklistStages(
+			(checklistId === null ? undefined : byId.get(checklistId)) ?? {},
+		);
 
-	return tasks.map(({ checklistId, ...task }) => {
-		const checklist = checklistId === null ? undefined : byId.get(checklistId);
-		return {
-			task: {
-				...task,
-				stageId: stageOf(task, checklistStages(checklist ?? {})),
-			},
-			checklistId,
-			checklistTitle: checklist?.title ?? null,
-		};
-	});
+	return {
+		entries: tasks.map(({ checklistId, ...task }) => {
+			const checklist =
+				checklistId === null ? undefined : byId.get(checklistId);
+			return {
+				task: { ...task, stageId: stageOf(task, stagesOf(checklistId)) },
+				checklistId,
+				checklistTitle: checklist?.title ?? null,
+			};
+		}),
+		stagesOf,
+	};
 }
 
 /**
@@ -478,13 +552,14 @@ export async function getTag(
 						trackerId: 1,
 						linkedChecklistId: 1,
 						assignees: 1,
+						stageId: 1,
 					},
 				},
 			)
 			.toArray()
 			// Only what this person can see, and only whose the screen asks for;
 			// finished by its tracker counts as finished, see
-			// `withTrackedCompletion`.
+			// `withTrackedCompletion`, and whether each is under way.
 			.then((stored) =>
 				withTrackedCompletion(
 					current,
@@ -494,7 +569,8 @@ export async function getTag(
 							isTaskVisible(task, hidden) && isAssignedTo(task, assignee),
 					),
 				),
-			),
+			)
+			.then((tasks) => withUnderway(current, userId, tasks)),
 		trackersRead,
 		// Only for the day each tracker reached its target, which the chart needs.
 		trackersRead.then((found) =>
@@ -546,14 +622,24 @@ export async function getTagOpenTasks(
 	const current = await collections();
 	const tag = await findTag(current, userId, tagIdOrKind, hidden);
 
-	const entries = await readTagEntries(current, userId, tag.tagId, hidden);
+	const { entries, stagesOf } = await readTagEntries(
+		current,
+		userId,
+		tag.tagId,
+		hidden,
+	);
 	// In a team, only one person's when the screen asks for theirs.
 	const open = entries.filter(
 		(entry) => !entry.task.completed && isAssignedTo(entry.task, view.assignee),
 	);
 
 	return pageOf(
-		orderByTask(open, view.sort, (entry) => entry.task),
+		orderByTask(
+			open,
+			view.sort,
+			(entry) => entry.task,
+			(entry) => stageProgress(entry.task, stagesOf(entry.checklistId)),
+		),
 		view,
 		(entry) => entry.task.taskId,
 	);
@@ -571,7 +657,7 @@ export async function getTagCompleted(
 	const current = await collections();
 	const tag = await findTag(current, userId, tagIdOrKind, hidden);
 
-	const entries = await readTagEntries(current, userId, tag.tagId, hidden);
+	const { entries } = await readTagEntries(current, userId, tag.tagId, hidden);
 	return entries.filter((entry) => entry.task.completed);
 }
 
@@ -751,8 +837,8 @@ async function renameInTitles(
 /**
  * Delete a tag and take it off every task, checklist and tracker carrying it.
  *
- * A special tag is refused: the row's bolt and menu write it, so it has to
- * exist. The tag itself goes last: a tag still listed but stripped from its
+ * A special tag is refused: the row's bolt writes it, so it has to exist.
+ * The tag itself goes last: a tag still listed but stripped from its
  * tasks is recoverable by re-applying it, whereas tasks left pointing at a tag
  * that no longer exists would render as nothing at all.
  */

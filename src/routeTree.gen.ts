@@ -14,6 +14,7 @@ import { Route as BacklogRouteImport } from './routes/backlog'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PriorityRouteImport } from './routes/priority'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StagesRouteImport } from './routes/stages'
 import { Route as TodayRouteImport } from './routes/today'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
@@ -47,6 +48,11 @@ const PriorityRoute = PriorityRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StagesRoute = StagesRouteImport.update({
+  id: '/stages',
+  path: '/stages',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TodayRoute = TodayRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
+  '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
+  '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
+  '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/priority'
     | '/settings'
+    | '/stages'
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/priority'
     | '/settings'
+    | '/stages'
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/priority'
     | '/settings'
+    | '/stages'
     | '/today'
     | '/checklists/$checklistId'
     | '/tags/$tagId'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PriorityRoute: typeof PriorityRoute
   SettingsRoute: typeof SettingsRoute
+  StagesRoute: typeof StagesRoute
   TodayRoute: typeof TodayRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   TagsTagIdRoute: typeof TagsTagIdRoute
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stages': {
+      id: '/stages'
+      path: '/stages'
+      fullPath: '/stages'
+      preLoaderRoute: typeof StagesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/today': {
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PriorityRoute: PriorityRoute,
   SettingsRoute: SettingsRoute,
+  StagesRoute: StagesRoute,
   TodayRoute: TodayRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   TagsTagIdRoute: TagsTagIdRoute,

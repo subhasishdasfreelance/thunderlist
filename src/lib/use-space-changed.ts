@@ -1,6 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@astryxdesign/core/Toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { spaceQuery } from "#/queries/space";
 
 /**
  * Catch up with a change of space: into a team, out of one — leaving it, or it
@@ -35,4 +37,40 @@ export function useSpaceChanged(): () => Promise<void> {
 		await router.invalidate();
 		await reset;
 	}, [queryClient, router]);
+}
+
+/**
+ * Notice being taken out of the team this browser is working in — by its
+ * admin from somewhere else, or the team being deleted — and catch up as
+ * leaving it here would, saying why.
+ *
+ * The space is read again every minute and on coming back to the app; see
+ * `spaceQuery`. A switch made here resets the space before anything else, so
+ * it is never mistaken for this: with nothing read, there is nothing to
+ * compare against.
+ */
+export function useSpaceWatch(): void {
+	const space = useQuery(spaceQuery()).data;
+	const spaceChanged = useSpaceChanged();
+	const toast = useToast();
+	const seen = useRef<{ teamId: string; name: string } | null | undefined>(
+		undefined,
+	);
+
+	useEffect(() => {
+		if (space === undefined) {
+			seen.current = undefined;
+			return;
+		}
+
+		const before = seen.current;
+		seen.current =
+			space.team === null
+				? null
+				: { teamId: space.team.teamId, name: space.team.name };
+		if (before == null || before.teamId === space.team?.teamId) return;
+
+		toast({ body: `You are no longer in ${before.name}.`, uniqueID: "space" });
+		void spaceChanged();
+	}, [space, spaceChanged, toast]);
 }

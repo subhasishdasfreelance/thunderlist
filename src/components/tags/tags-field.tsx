@@ -2,7 +2,7 @@ import { FieldLabel } from "@astryxdesign/core/Field";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import { useId } from "react";
+import { memo, useId } from "react";
 import { isInlineTagName, parseInlineTags } from "#/lib/tags/inline-tags";
 import { type Tag, tagsFor } from "#/schemas/tag";
 import { TagTextField } from "./tag-text-field";
@@ -52,8 +52,11 @@ export function draftTagIds(
  * The tags on a checklist or a tracker, typed as `#name` with the same
  * completion a task's title has. A new name becomes a new tag on save, just as
  * it does in a task.
+ *
+ * Memoised, like the other sections of a form, so typing elsewhere in it does
+ * not draw this again; hand it an `onSubmit` that keeps its identity.
  */
-export function TagsField({
+export const TagsField = memo(function TagsField({
 	label,
 	description,
 	tags,
@@ -108,4 +111,4 @@ export function TagsField({
 			<Text type="supporting">{description}</Text>
 		</VStack>
 	);
-}
+});

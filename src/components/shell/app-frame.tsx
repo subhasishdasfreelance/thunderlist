@@ -10,6 +10,7 @@ import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SignedInUser } from "#/lib/auth.server";
 import { type ColorScheme, useColorScheme } from "#/lib/theme";
+import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BottomNav } from "./bottom-nav";
@@ -23,6 +24,12 @@ import { SearchDialog } from "./search-dialog";
 import { SetupNotice } from "./setup-notice";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
+
+/** Watches for being taken out of the team; see `useSpaceWatch`. */
+function SpaceWatch() {
+	useSpaceWatch();
+	return null;
+}
 
 /**
  * The application frame: top bar, navigation and the content region.
@@ -234,6 +241,8 @@ export function AppFrame({
 
 				{/* Like the side nav, only with an account to navigate. */}
 				{user === null ? null : <BottomNav />}
+				{/* Only with an account, which is what can be in a team. */}
+				{user === null ? null : <SpaceWatch />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 			</LinkProvider>

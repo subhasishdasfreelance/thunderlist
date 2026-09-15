@@ -189,8 +189,8 @@ async function ensureIndexes(current: Collections): Promise<void> {
 	await Promise.all([
 		current.checklists.createIndex({ checklistId: 1 }, { unique: true }),
 		current.checklists.createIndex({ userId: 1 }),
-		// One Inbox per space, however many requests race to make it; see
-		// `ensureInbox`.
+		// One Inbox and one Backlog per space, however many requests race to
+		// make them; see `ensureSpecialChecklist`.
 		current.checklists.createIndex(
 			{ userId: 1, special: 1 },
 			{

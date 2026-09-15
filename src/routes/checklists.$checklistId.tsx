@@ -10,18 +10,19 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Inbox, MoreHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
+import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
 import { DayStats } from "#/components/common/day-stats";
 import { ListPagination } from "#/components/common/list-pagination";
-import { LoadingState } from "#/components/common/loading-state";
+import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
 import {
@@ -34,6 +35,7 @@ import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { TagFilter } from "#/components/tags/tag-filter";
+import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
@@ -42,6 +44,7 @@ import {
 	type ChecklistValues,
 	createTagResolver,
 	createTask,
+	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
@@ -59,11 +62,17 @@ import {
 } from "#/lib/format-date";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import type { ParsedTitle } from "#/lib/tags/inline-tags";
-import { matchesFilter, orderTasks, type SortOrder } from "#/lib/tasks/tasks";
+import {
+	matchesFilter,
+	orderTasks,
+	type SortOrder,
+	shortTitle,
+} from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE } from "#/lib/use-pages";
+import { useTaskSelection } from "#/lib/use-task-selection";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import {
 	checklistCompletedQuery,
@@ -75,7 +84,13 @@ import {
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
-import { checklistStages } from "#/schemas/checklist";
+import {
+	checklistStages,
+	nextStageId,
+	specialChecklist,
+	stageOf,
+	stageParts,
+} from "#/schemas/checklist";
 import type { Task, TaskFilter } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
@@ -129,12 +144,12 @@ function ChecklistDetailPage() {
 	const { checklistId } = Route.useParams();
 	const { task: focusTaskId } = Route.useSearch();
 	const navigate = useNavigate();
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
 	const space = useSpace();
 	const team = space?.team ?? null;
 	// Adding and deleting tasks is shaping the work; updating one is the row's
 	// own business. See `Capability`.
-	const { canManageContent } = usePermissions();
+	const { canManageContent, canUpdateTasks } = usePermissions();
 
 	const [renaming, setRenaming] = useState<Task | null>(null);
 	const [moving, setMoving] = useState<Task | null>(null);
@@ -226,6 +241,8 @@ function ChecklistDetailPage() {
 
 	useFocusTask(focusTaskId);
 	const now = useNow();
+	// The rows a text selection runs across, to be moved on together.
+	const { picked, clear } = useTaskSelection();
 
 	if (detail === null) {
 		return (
@@ -240,7 +257,13 @@ function ChecklistDetailPage() {
 		);
 	}
 
-	const isInbox = detail.special === "inbox";
+	// The Inbox or the Backlog, which every space has and which are everyone's.
+	const special = detail.special ?? null;
+	// Somewhere to park a task, from any checklist but the Backlog itself.
+	const backlog =
+		special === "backlog"
+			? null
+			: specialChecklist(checklistsResult.data ?? [], "backlog");
 	// What the figures count: everything, or what the filter lets through.
 	const figures = isFiltered ? (filteredResult.data ?? detail) : detail;
 	const { progress } = figures;
@@ -259,6 +282,15 @@ function ChecklistDetailPage() {
 			task={task}
 			tags={tags}
 			stages={stages}
+			backlog={
+				backlog === null
+					? undefined
+					: {
+							title: backlog.title,
+							onMove: () =>
+								void moveToBacklog(applyAsync, task, backlog.checklistId, tags),
+						}
+			}
 			actions={{
 				onToggle: (isDone) =>
 					updateTask(apply, task.taskId, { completed: isDone }),
@@ -280,6 +312,35 @@ function ChecklistDetailPage() {
 			}}
 		/>
 	);
+
+	// Only someone who can move a task on has anything to do with a pick.
+	const pickedTasks = canUpdateTasks
+		? rows.filter((task) => picked.has(task.taskId))
+		: [];
+
+	/** Every picked task on to its next stage; see `nextStageId`. */
+	function moveOn() {
+		for (const task of pickedTasks) {
+			const next = nextStageId(task, stages);
+			if (next !== null) updateTask(apply, task.taskId, { stageId: next });
+		}
+		clear();
+	}
+
+	/**
+	 * Every picked task to one stage — all but those already there, and those
+	 * finished by a tracker or a checklist, which cannot be made done by hand.
+	 */
+	function moveTo(target: string) {
+		for (const task of pickedTasks) {
+			const isTracked =
+				task.trackerId != null || task.linkedChecklistId != null;
+			if (stageOf(task, stages) === target) continue;
+			if (isTracked && target === lastStage.stageId) continue;
+			updateTask(apply, task.taskId, { stageId: target });
+		}
+		clear();
+	}
 
 	/**
 	 * Add a pasted block of tasks, tags and all.
@@ -388,8 +449,8 @@ function ChecklistDetailPage() {
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<BackButton to="/checklists" label="Checklists" />
-				{/* The Inbox is everyone's, in a team as anywhere. */}
-				{isInbox ? null : (
+				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
+				{special !== null ? null : (
 					<VisibilityButton
 						noun="checklist"
 						visibleTo={detail.visibleTo}
@@ -407,7 +468,9 @@ function ChecklistDetailPage() {
 			<HStack gap={2} hAlign="between" vAlign="start">
 				<VStack gap={0.5}>
 					<HStack gap={2} vAlign="center">
-						{isInbox ? <Icon icon={Inbox} color="secondary" /> : null}
+						{special === null ? null : (
+							<Icon icon={SPECIAL_CHECKLIST_ICONS[special]} color="secondary" />
+						)}
 						<Heading level={1}>{detail.title}</Heading>
 					</HStack>
 					{detail.description === "" ? null : (
@@ -428,13 +491,20 @@ function ChecklistDetailPage() {
 							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
-							{ label: "Edit checklist", onClick: () => setIsEditOpen(true) },
-							// The Inbox is where tasks with nowhere else to go are put.
-							...(isInbox
+							{
+								label: "Edit checklist",
+								icon: Pencil,
+								onClick: () => setIsEditOpen(true),
+							},
+							// Every space has these two: tasks with nowhere else to go are
+							// put in the Inbox, and parked work in the Backlog.
+							...(special !== null
 								? []
 								: [
+										{ type: "divider" as const },
 										{
 											label: "Delete checklist",
+											icon: Trash2,
 											variant: "destructive" as const,
 											onClick: () => setIsDeletingChecklist(true),
 										},
@@ -453,6 +523,10 @@ function ChecklistDetailPage() {
 					<ProgressMeter
 						label={`${detail.title} progress`}
 						percent={progress.percent}
+						stages={{
+							parts: stageParts(stages, progress.byStage),
+							total: progress.total,
+						}}
 						elapsed={pace.elapsed}
 						expectedReading={
 							pace.elapsed == null
@@ -556,46 +630,71 @@ function ChecklistDetailPage() {
 						)
 					) : isDoneStage && view === "chart" && chart !== null ? (
 						<Card padding={3}>{chart}</Card>
-					) : rows.length === 0 ? (
-						<EmptyState
-							isCompact
-							title={
-								isFiltered
-									? "Nothing here for this filter."
-									: shownStage.stageId === stages[0].stageId &&
-											(counts[lastStage.stageId] ?? 0) > 0
-										? "All done."
-										: `Nothing in ${shownStage.name}.`
-							}
-							description={
-								isFiltered
-									? `No task at ${shownStage.name} matches it.`
-									: `Tasks at ${shownStage.name} show up here.`
-							}
-						/>
 					) : (
-						<Card padding={0}>
-							<VStack gap={0} paddingBlock={2}>
-								{rows.map((task, index) => (
-									<div
-										key={task.taskId}
-										className="thunderlist-row thunderlist-task-row"
-										data-task-id={task.taskId}
-										data-focused={task.taskId === focusTaskId}
-									>
-										{index === 0 ? null : <Divider />}
-										{taskRow(task)}
-									</div>
-								))}
-								<ListPagination
-									page={pageResult.data.page}
-									total={pageResult.data.total}
-									onChange={setPage}
+						<ListLoading isLoading={pageResult.isPlaceholderData}>
+							{rows.length === 0 ? (
+								<EmptyState
+									isCompact
+									title={
+										isFiltered
+											? "Nothing here for this filter."
+											: shownStage.stageId === stages[0].stageId &&
+													(counts[lastStage.stageId] ?? 0) > 0
+												? "All done."
+												: `Nothing in ${shownStage.name}.`
+									}
+									description={
+										isFiltered
+											? `No task at ${shownStage.name} matches it.`
+											: `Tasks at ${shownStage.name} show up here.`
+									}
 								/>
-							</VStack>
-						</Card>
+							) : (
+								<Card padding={0}>
+									<VStack gap={0} paddingBlock={2}>
+										{rows.map((task, index) => (
+											<div
+												key={task.taskId}
+												className="thunderlist-row thunderlist-task-row"
+												data-task-id={task.taskId}
+												data-focused={task.taskId === focusTaskId}
+												data-picked={pickedTasks.includes(task)}
+											>
+												{index === 0 ? null : <Divider />}
+												{taskRow(task)}
+											</div>
+										))}
+										<ListPagination
+											// The page asked for, while it is on its way: the one on
+											// screen until then would pull the highlight back.
+											page={
+												pageResult.isPlaceholderData
+													? (page ?? pageResult.data.page)
+													: pageResult.data.page
+											}
+											total={pageResult.data.total}
+											onChange={setPage}
+										/>
+									</VStack>
+								</Card>
+							)}
+						</ListLoading>
 					)}
 				</VStack>
+			)}
+
+			{pickedTasks.length === 0 ? null : (
+				<SelectionBar
+					count={pickedTasks.length}
+					onNextStage={
+						pickedTasks.some((task) => nextStageId(task, stages) !== null)
+							? moveOn
+							: undefined
+					}
+					stages={stages}
+					onMoveTo={moveTo}
+					onClear={clear}
+				/>
 			)}
 
 			<AssignDialog
@@ -682,7 +781,7 @@ function ChecklistDetailPage() {
 				onOpenChange={(open) => {
 					if (!open) setPendingDelete(null);
 				}}
-				title={`Delete "${pendingDelete?.title ?? ""}"?`}
+				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {

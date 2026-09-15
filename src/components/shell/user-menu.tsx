@@ -4,6 +4,7 @@ import {
 	DropdownMenuDivider,
 	DropdownMenuItem,
 } from "@astryxdesign/core/DropdownMenu";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
@@ -70,7 +71,11 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 			 */}
 			{team === null ? null : (
 				<span className="hidden sm:inline-flex">
-					<Token size="sm" label={team.name} icon={<Users aria-hidden />} />
+					<Token
+						size="sm"
+						label={team.name}
+						icon={<Icon icon={Users} size="xsm" />}
+					/>
 				</span>
 			)}
 
@@ -132,20 +137,20 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 				</div>
 
 				<DropdownMenuItem
-					icon={<Settings aria-hidden />}
+					icon={Settings}
 					label="Settings"
 					description="Your account, and where you work"
 					onClick={() => void navigate({ to: "/settings" })}
 				/>
 				<DropdownMenuItem
-					icon={<MessageSquare aria-hidden />}
+					icon={MessageSquare}
 					label="Send feedback…"
 					onClick={() => setIsFeedbackOpen(true)}
 				/>
 
 				<DropdownMenuDivider />
 				<DropdownMenuItem
-					icon={<LogOut aria-hidden />}
+					icon={LogOut}
 					label={isSigningOut ? "Signing out…" : "Sign out"}
 					variant="destructive"
 					isDisabled={isSigningOut}

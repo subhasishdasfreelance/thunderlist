@@ -77,8 +77,8 @@ export function TagFormDialog({
 			existing.toLowerCase() === trimmed.toLowerCase() &&
 			existing.toLowerCase() !== tag?.name.toLowerCase(),
 	);
-	// Today and the Backlog are written into titles by the bolt and the menu, so
-	// their names have to read back as the same tag; see `isInlineTagName`.
+	// Today is written into titles by the bolt, so its name has to read back as
+	// the same tag; see `isInlineTagName`.
 	const isUnwritable =
 		tag?.special != null && trimmed !== "" && !isInlineTagName(trimmed);
 	const isValid =
@@ -187,7 +187,7 @@ export function TagFormDialog({
 					isStartDateOptional
 				/>
 
-				{/* Today and the Backlog are everyone's, in a team as anywhere. */}
+				{/* Today is everyone's, in a team as anywhere. */}
 				{tag?.special != null ? null : (
 					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
 				)}

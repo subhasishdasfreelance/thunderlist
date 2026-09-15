@@ -13,7 +13,7 @@ import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
 import { checklistStages, stageOf } from "#/schemas/checklist";
 import type { Task } from "#/schemas/task";
 import type { TrackerType } from "#/schemas/tracker";
-import { ensureInbox } from "./checklist.server";
+import { ensureBacklog, ensureInbox } from "./checklist.server";
 import { type Hidden, isTaskVisible } from "./visibility.server";
 
 export type SearchIndex = {
@@ -48,8 +48,10 @@ export async function getSearchIndex(
 	userId: string,
 	hidden: Hidden,
 ): Promise<SearchIndex> {
-	// Anything still in no checklist moves into the Inbox before it is listed.
+	// Anything still in no checklist moves into the Inbox, and anything still
+	// tagged for the Backlog into that, before it is listed.
 	await ensureInbox(userId);
+	await ensureBacklog(userId);
 	const current = await collections();
 
 	const [checklists, trackers, tasks] = await Promise.all([

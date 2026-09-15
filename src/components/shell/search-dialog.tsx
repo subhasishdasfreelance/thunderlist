@@ -138,6 +138,9 @@ export function SearchDialog({
 				<TextInput
 					label="Search checklists, tasks and trackers"
 					isLabelHidden
+					// Opening search is asking to type: the caret is waiting in the
+					// box, however it was opened.
+					hasAutoFocus
 					placeholder="Search checklists, tasks and trackers"
 					value={query}
 					onChange={setQuery}

@@ -4,7 +4,14 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import {
@@ -20,18 +27,36 @@ import {
 	checklistStages,
 	DEFAULT_STAGES,
 	type Stage,
+	stageColor,
 } from "#/schemas/checklist";
 import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import { StagesField, stagesProblem } from "./stages-field";
 
-/** Whether two sets of stages are the same stages, named alike, in order. */
+/**
+ * Stages with the colour each is drawn in written down. A stage without one
+ * takes the colour for its place, so moving it would change it; written down,
+ * a colour stays with its stage wherever it is moved to.
+ */
+function withColors(stages: ReadonlyArray<Stage>): Array<Stage> {
+	return stages.map((stage, index) => ({
+		...stage,
+		color: stageColor(stages, index),
+	}));
+}
+
+/**
+ * Whether two sets of stages are the same stages, named and coloured alike, in
+ * order.
+ */
 function sameStages(a: ReadonlyArray<Stage>, b: ReadonlyArray<Stage>): boolean {
 	return (
 		a.length === b.length &&
 		a.every(
 			(stage, at) =>
-				stage.stageId === b[at].stageId && stage.name.trim() === b[at].name,
+				stage.stageId === b[at].stageId &&
+				stage.name.trim() === b[at].name &&
+				stage.color === b[at].color,
 		)
 	);
 }
@@ -93,7 +118,7 @@ export function ChecklistFormDialog({
 		setDailyWindow(checklist?.dailyWindow ?? null);
 		setTagDraft(tagsDraft(checklist?.tagIds ?? [], tags));
 		setVisibleTo(checklist?.visibleTo ?? null);
-		setStages([...checklistStages(checklist ?? {})]);
+		setStages(withColors(checklistStages(checklist ?? {})));
 	}, [isOpen, checklist]);
 
 	const trimmedTitle = title.trim();
@@ -107,7 +132,7 @@ export function ChecklistFormDialog({
 		if (!isValid || startDate === undefined) return;
 
 		// Sent only when they changed: saving a title must not move a single task.
-		const original = checklistStages(checklist ?? {});
+		const original = withColors(checklistStages(checklist ?? {}));
 		const named = stages.map((stage) => ({
 			...stage,
 			name: stage.name.trim(),
@@ -129,6 +154,17 @@ export function ChecklistFormDialog({
 			...(sameStages(named, original) ? {} : { stages: named }),
 		});
 	}
+
+	/*
+	 * The sections below are memoised, so a keystroke in one does not draw the
+	 * rest again; see `ScheduleFields`. Enter in the tags field saves through
+	 * this, which keeps its identity while always calling the latest `save`.
+	 */
+	const saveRef = useRef(save);
+	useLayoutEffect(() => {
+		saveRef.current = save;
+	});
+	const saveFromTags = useCallback(() => saveRef.current(), []);
 
 	function submit(event: FormEvent) {
 		event.preventDefault();
@@ -194,10 +230,10 @@ export function ChecklistFormDialog({
 					tags={tags}
 					draft={tagDraft}
 					onChange={setTagDraft}
-					onSubmit={save}
+					onSubmit={saveFromTags}
 				/>
-				{/* The Inbox is everyone's, in a team as anywhere. */}
-				{checklist?.special === "inbox" ? null : (
+				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
+				{checklist?.special != null ? null : (
 					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
 				)}
 			</VStack>

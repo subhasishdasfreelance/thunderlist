@@ -9,7 +9,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
@@ -19,7 +19,7 @@ import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
 import { DayStats } from "#/components/common/day-stats";
 import { ListPagination } from "#/components/common/list-pagination";
-import { LoadingState } from "#/components/common/loading-state";
+import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
 import {
@@ -32,6 +32,7 @@ import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
+import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
@@ -40,6 +41,7 @@ import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
 	createTagResolver,
 	createTask,
+	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
@@ -63,11 +65,13 @@ import {
 	mergeReads,
 	orderByTask,
 	type SortOrder,
+	shortTitle,
 } from "#/lib/tasks/tasks";
 import { useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE, usePages } from "#/lib/use-pages";
+import { useTaskSelection } from "#/lib/use-task-selection";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -79,9 +83,14 @@ import {
 	tagsQuery,
 } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
-import { checklistStages } from "#/schemas/checklist";
+import {
+	checklistStages,
+	nextStageId,
+	specialChecklist,
+	stageProgress,
+} from "#/schemas/checklist";
 import { todayDateOnly } from "#/schemas/common";
-import { type TagTaskEntry, tagStartDate } from "#/schemas/tag";
+import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
@@ -132,7 +141,7 @@ function TagDetailPage() {
 	const { tagId } = Route.useParams();
 	const { task: focusTaskId } = Route.useSearch();
 	const navigate = useNavigate();
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
 	const space = useSpace();
 	const team = space?.team ?? null;
 	const { canManageContent, canUpdateTasks } = usePermissions();
@@ -195,8 +204,17 @@ function TagDetailPage() {
 				openResult.data?.items ?? [],
 				sort,
 				(entry) => entry.task,
+				(entry) =>
+					stageProgress(
+						entry.task,
+						checklistStages(
+							checklistsResult.data?.find(
+								(checklist) => checklist.checklistId === entry.checklistId,
+							) ?? {},
+						),
+					),
 			).filter((entry) => !entry.task.completed),
-		[openResult.data, sort],
+		[openResult.data, sort, checklistsResult.data],
 	);
 	const completed = useMemo(
 		() =>
@@ -225,9 +243,13 @@ function TagDetailPage() {
 	const tags = tagsResult.data ?? [];
 	const trackers = trackersResult.data ?? [];
 	const checklists = checklistsResult.data ?? [];
+	// Somewhere to park a task; see `moveToBacklog`.
+	const backlog = specialChecklist(checklists, "backlog");
 
 	useFocusTask(focusTaskId);
 	const now = useNow();
+	// The rows a text selection runs across, to be moved on together.
+	const { picked, clear } = useTaskSelection();
 
 	if (detail === null) {
 		return (
@@ -287,6 +309,35 @@ function TagDetailPage() {
 				{},
 		);
 
+	// Only someone who can move a task on has anything to do with a pick; the
+	// finished ones can be picked too, once their section is open.
+	const pickedEntries = canUpdateTasks
+		? [...open, ...completedPages.shown].filter((entry) =>
+				picked.has(entry.task.taskId),
+			)
+		: [];
+	const isFinishable = (task: Task) =>
+		!task.completed && task.trackerId == null && task.linkedChecklistId == null;
+
+	/** Every picked task on to the next stage of its own checklist. */
+	function moveOn() {
+		for (const { task, checklistId } of pickedEntries) {
+			const next = nextStageId(task, stagesFor(checklistId));
+			if (next !== null) updateTask(apply, task.taskId, { stageId: next });
+		}
+		clear();
+	}
+
+	/** Every picked task done that can be made done by hand. */
+	function finish() {
+		for (const { task } of pickedEntries) {
+			if (isFinishable(task)) {
+				updateTask(apply, task.taskId, { completed: true });
+			}
+		}
+		clear();
+	}
+
 	/**
 	 * Add a pasted block of tasks, each carrying this tag.
 	 *
@@ -324,9 +375,9 @@ function TagDetailPage() {
 	}
 
 	/*
-	 * Clearing the finished tasks off Today or the Backlog only untags them:
-	 * those are plans, and each task stays in the checklist it lives in. Any
-	 * other tag's page deletes them, as a checklist's does.
+	 * Clearing the finished tasks off Today only untags them: it is a plan, and
+	 * each task stays in the checklist it lives in. Any other tag's page
+	 * deletes them, as a checklist's does.
 	 */
 	const special = detail.special;
 
@@ -350,6 +401,20 @@ function TagDetailPage() {
 				tags={tags}
 				stages={stagesFor(checklistId)}
 				isStageShown
+				backlog={
+					backlog === null || checklistId === backlog.checklistId
+						? undefined
+						: {
+								title: backlog.title,
+								onMove: () =>
+									void moveToBacklog(
+										applyAsync,
+										task,
+										backlog.checklistId,
+										tags,
+									),
+							}
+				}
 				checklist={
 					checklistId === null
 						? null
@@ -400,7 +465,7 @@ function TagDetailPage() {
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<BackButton to="/tags" label="Tags" />
-				{/* Today and the Backlog are everyone's, in a team as anywhere. */}
+				{/* Today is everyone's, in a team as anywhere. */}
 				{special === null ? (
 					<VisibilityButton
 						noun="tag"
@@ -443,13 +508,19 @@ function TagDetailPage() {
 							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
-							{ label: "Edit tag", onClick: () => setIsEditOpen(true) },
-							// Today and the Backlog can be renamed but never deleted: the bolt
-							// and the menu on every row write them.
+							{
+								label: "Edit tag",
+								icon: Pencil,
+								onClick: () => setIsEditOpen(true),
+							},
+							// Today can be renamed but never deleted: the bolt on every row
+							// writes it.
 							...(special === null
 								? [
+										{ type: "divider" as const },
 										{
 											label: "Delete tag",
+											icon: Trash2,
 											variant: "destructive" as const,
 											onClick: () => setIsDeletingTag(true),
 										},
@@ -469,6 +540,7 @@ function TagDetailPage() {
 					<ProgressMeter
 						label={`${detail.name} progress`}
 						percent={progress.percent}
+						stages={{ parts: tagStageParts(progress), total: progress.total }}
 						elapsed={pace.elapsed}
 						expectedReading={
 							pace.elapsed == null
@@ -548,6 +620,7 @@ function TagDetailPage() {
 						/>
 						<SortToggle
 							order={sort}
+							hasStageOrder
 							onChange={(next) => {
 								setSort(next);
 								setPage(undefined);
@@ -580,36 +653,49 @@ function TagDetailPage() {
 				) : (
 					<SectionSpinner label="Loading tasks…" />
 				)
-			) : open.length === 0 ? (
-				<EmptyState
-					title={assignee === undefined ? "All done." : "Nothing to do here."}
-					description={
-						assignee === undefined
-							? "Every task with this tag is complete."
-							: "No open task with this tag is assigned to them."
-					}
-				/>
 			) : (
-				<Card padding={0}>
-					<VStack gap={0} paddingBlock={2}>
-						{open.map((entry, index) => (
-							<div
-								key={entry.task.taskId}
-								className="thunderlist-row thunderlist-task-row"
-								data-task-id={entry.task.taskId}
-								data-focused={entry.task.taskId === focusTaskId}
-							>
-								{index === 0 ? null : <Divider />}
-								{taskRow(entry)}
-							</div>
-						))}
-						<ListPagination
-							page={openResult.data.page}
-							total={openResult.data.total}
-							onChange={setPage}
+				<ListLoading isLoading={openResult.isPlaceholderData}>
+					{open.length === 0 ? (
+						<EmptyState
+							title={
+								assignee === undefined ? "All done." : "Nothing to do here."
+							}
+							description={
+								assignee === undefined
+									? "Every task with this tag is complete."
+									: "No open task with this tag is assigned to them."
+							}
 						/>
-					</VStack>
-				</Card>
+					) : (
+						<Card padding={0}>
+							<VStack gap={0} paddingBlock={2}>
+								{open.map((entry, index) => (
+									<div
+										key={entry.task.taskId}
+										className="thunderlist-row thunderlist-task-row"
+										data-task-id={entry.task.taskId}
+										data-focused={entry.task.taskId === focusTaskId}
+										data-picked={pickedEntries.includes(entry)}
+									>
+										{index === 0 ? null : <Divider />}
+										{taskRow(entry)}
+									</div>
+								))}
+								<ListPagination
+									// The page asked for, while it is on its way: the one on
+									// screen until then would pull the highlight back.
+									page={
+										openResult.isPlaceholderData
+											? (page ?? openResult.data.page)
+											: openResult.data.page
+									}
+									total={openResult.data.total}
+									onChange={setPage}
+								/>
+							</VStack>
+						</Card>
+					)}
+				</ListLoading>
 			)}
 
 			<CompletedSection
@@ -620,8 +706,8 @@ function TagDetailPage() {
 						: `Clear from #${detail.name}`
 				}
 				onClear={
-					// Off Today or the Backlog it only takes the tag off, which is an
-					// update; anywhere else it deletes them.
+					// Off Today it only takes the tag off, which is an update;
+					// anywhere else it deletes them.
 					completedResult.data === undefined ||
 					!(special === null ? canManageContent : canUpdateTasks)
 						? undefined
@@ -694,6 +780,7 @@ function TagDetailPage() {
 								className="thunderlist-row thunderlist-task-row"
 								data-task-id={entry.task.taskId}
 								data-focused={entry.task.taskId === focusTaskId}
+								data-picked={pickedEntries.includes(entry)}
 							>
 								{index === 0 ? null : <Divider />}
 								{taskRow(entry)}
@@ -707,6 +794,26 @@ function TagDetailPage() {
 					</>
 				)}
 			</CompletedSection>
+
+			{pickedEntries.length === 0 ? null : (
+				<SelectionBar
+					count={pickedEntries.length}
+					onNextStage={
+						pickedEntries.some(
+							({ task, checklistId }) =>
+								nextStageId(task, stagesFor(checklistId)) !== null,
+						)
+							? moveOn
+							: undefined
+					}
+					onDone={
+						pickedEntries.some(({ task }) => isFinishable(task))
+							? finish
+							: undefined
+					}
+					onClear={clear}
+				/>
+			)}
 
 			<AssignDialog
 				isOpen={assigning !== null}
@@ -792,7 +899,7 @@ function TagDetailPage() {
 				onOpenChange={(isOpen) => {
 					if (!isOpen) setPendingDelete(null);
 				}}
-				title={`Delete "${pendingDelete?.title ?? ""}"?`}
+				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {

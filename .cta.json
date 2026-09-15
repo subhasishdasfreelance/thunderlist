@@ -1,5 +1,5 @@
 {
-  "projectName": "flowstate",
+  "projectName": "thunderlist",
   "mode": "file-router",
   "typescript": true,
   "packageManager": "bun",

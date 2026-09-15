@@ -9,7 +9,8 @@
  * Every task is in a checklist. One written where there is no checklist to put
  * it in — typed onto Today, say — goes into the space's Inbox, which is made on
  * first use and cannot be deleted; see `ensureInbox`. So every task can be
- * moved, and there is always somewhere to find it.
+ * moved, and there is always somewhere to find it. The Backlog, where work is
+ * parked, is the other checklist every space has; see `ensureBacklog`.
  *
  * A checklist's tasks go through its stages — "To do" and "Done" until it is
  * given more — and a task is complete exactly when it is at the last one; see
@@ -30,7 +31,11 @@ import {
 	type TaskDoc,
 } from "#/lib/mongo/client.server";
 import { trackerProgress } from "#/lib/progress";
-import { parseInlineTags, sameTagName } from "#/lib/tags/inline-tags";
+import {
+	parseInlineTags,
+	sameTagName,
+	withoutInlineTag,
+} from "#/lib/tags/inline-tags";
 import {
 	calculateChecklistProgress,
 	matchesFilter,
@@ -42,10 +47,14 @@ import {
 	type Checklist,
 	type ChecklistSummary,
 	checklistStages,
+	countByStage,
+	SPECIAL_CHECKLISTS,
+	type SpecialChecklist,
 	type Stage,
 	stageOf,
 } from "#/schemas/checklist";
 import { type DailyWindow, todayDateOnly } from "#/schemas/common";
+import { SPECIAL_TAGS } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView, TaskPatch } from "#/schemas/task";
 import { type Hidden, isTaskVisible } from "./visibility.server";
 
@@ -59,6 +68,7 @@ const PROGRESS_FIELDS = {
 	_id: 0,
 	checklistId: 1,
 	completed: 1,
+	stageId: 1,
 	trackerId: 1,
 	linkedChecklistId: 1,
 	tagIds: 1,
@@ -86,26 +96,99 @@ async function requireChecklist(
 }
 
 /**
- * A checklist with its progress. Its pace is judged in the browser, on the
- * viewer's own clock, which this server does not know; see `usePace`.
+ * A checklist with its progress, and how many of its tasks are at each stage.
+ * Its pace is judged in the browser, on the viewer's own clock, which this
+ * server does not know; see `usePace`.
  */
 function summarise(
 	checklist: Checklist,
-	tasks: ReadonlyArray<Pick<Task, "completed">>,
+	tasks: ReadonlyArray<Pick<Task, "completed" | "stageId">>,
 ): ChecklistSummary {
-	return { ...checklist, progress: calculateChecklistProgress(tasks) };
+	return {
+		...checklist,
+		progress: {
+			...calculateChecklistProgress(tasks),
+			byStage: countByStage(tasks, checklistStages(checklist)),
+		},
+	};
 }
 
 /* -------------------------------------------------------------------------- */
-/* The Inbox                                                                  */
+/* The Inbox and the Backlog                                                  */
 /* -------------------------------------------------------------------------- */
+
+/** What each special checklist is called, and says of itself, when made. */
+const SPECIAL_CHECKLIST_DETAILS: Record<
+	SpecialChecklist,
+	{ title: string; description: string }
+> = {
+	inbox: {
+		title: "Inbox",
+		description: "Tasks that belong to no other checklist.",
+	},
+	backlog: {
+		title: "Backlog",
+		description: "Work parked until it is picked.",
+	},
+};
 
 /** Spaces whose Inbox this server has already seen to, with its id. */
 const inboxes = new Map<string, string>();
 
-/** Two first requests raced to make the same Inbox; the other won. */
+/** Spaces whose Backlog this server has already seen to, with its id. */
+const backlogs = new Map<string, string>();
+
+/** Two first requests raced to make the same checklist; the other won. */
 function isDuplicateKey(error: unknown): boolean {
 	return error instanceof MongoServerError && error.code === 11000;
+}
+
+/**
+ * The space's special checklist of one kind, made if it has none yet. The
+ * unique index on `(userId, special)` settles two first requests arriving at
+ * once.
+ */
+async function ensureSpecialChecklist(
+	current: Collections,
+	userId: string,
+	kind: SpecialChecklist,
+): Promise<string> {
+	const find = async () =>
+		(
+			await current.checklists.findOne(
+				{ userId, special: kind },
+				{ projection: { _id: 0, checklistId: 1 } },
+			)
+		)?.checklistId ?? null;
+
+	const found = await find();
+	if (found !== null) return found;
+
+	const now = new Date().toISOString();
+	const checklistId = createId(ID_PREFIX.checklist);
+
+	try {
+		await current.checklists.insertOne({
+			checklistId,
+			...SPECIAL_CHECKLIST_DETAILS[kind],
+			startDate: todayDateOnly(),
+			deadline: null,
+			deadlineTime: null,
+			dailyWindow: null,
+			tagIds: [],
+			visibleTo: null,
+			special: kind,
+			createdAt: now,
+			updatedAt: now,
+			userId,
+		});
+		return checklistId;
+	} catch (error) {
+		if (!isDuplicateKey(error)) throw error;
+		const winner = await find();
+		if (winner === null) throw error;
+		return winner;
+	}
 }
 
 /**
@@ -114,50 +197,14 @@ function isDuplicateKey(error: unknown): boolean {
  *
  * Tasks used to be able to belong to none — the ones typed onto a tag's page —
  * and those could then never be moved into a list. The first time a space is
- * seen they are gathered here. The unique index on `(userId, special)` settles
- * two first requests arriving at once.
+ * seen they are gathered here.
  */
 export async function ensureInbox(userId: string): Promise<string> {
 	const known = inboxes.get(userId);
 	if (known !== undefined) return known;
 
 	const current = await collections();
-	const find = async () =>
-		(
-			await current.checklists.findOne(
-				{ userId, special: "inbox" },
-				{ projection: { _id: 0, checklistId: 1 } },
-			)
-		)?.checklistId ?? null;
-
-	let inboxId = await find();
-	if (inboxId === null) {
-		const now = new Date().toISOString();
-		const checklistId = createId(ID_PREFIX.checklist);
-
-		try {
-			await current.checklists.insertOne({
-				checklistId,
-				title: "Inbox",
-				description: "Tasks that belong to no other checklist.",
-				startDate: todayDateOnly(),
-				deadline: null,
-				deadlineTime: null,
-				dailyWindow: null,
-				tagIds: [],
-				visibleTo: null,
-				special: "inbox",
-				createdAt: now,
-				updatedAt: now,
-				userId,
-			});
-			inboxId = checklistId;
-		} catch (error) {
-			if (!isDuplicateKey(error)) throw error;
-			inboxId = await find();
-			if (inboxId === null) throw error;
-		}
-	}
+	const inboxId = await ensureSpecialChecklist(current, userId, "inbox");
 
 	await current.tasks.updateMany(
 		{ userId, checklistId: null },
@@ -168,12 +215,85 @@ export async function ensureInbox(userId: string): Promise<string> {
 	return inboxId;
 }
 
+/**
+ * The space's Backlog, made if it has none yet: where work is parked until it
+ * is picked.
+ *
+ * The Backlog used to be a special tag. The first time a space is seen, every
+ * task still carrying it is moved in here — the `#name` taken out of its
+ * title, and the rest as any move leaves it; see `moveTask` — and the tag is
+ * deleted. After that there is nothing to move.
+ */
+export async function ensureBacklog(userId: string): Promise<string> {
+	const known = backlogs.get(userId);
+	if (known !== undefined) return known;
+
+	const current = await collections();
+	const backlogId = await ensureSpecialChecklist(current, userId, "backlog");
+
+	// Special, but of no kind a tag can be any more: the old Backlog.
+	const tag = await current.tags.findOne(
+		{ userId, special: { $nin: [...SPECIAL_TAGS, null] } },
+		{ projection: { _id: 0, tagId: 1, name: 1 } },
+	);
+
+	if (tag) {
+		const carrying = await current.tasks
+			.find(
+				{ userId, tagIds: tag.tagId },
+				{ projection: { _id: 0, taskId: 1, title: 1 } },
+			)
+			.toArray();
+
+		// The tag comes off first, so each move sees the task as it will be.
+		if (carrying.length > 0) {
+			await current.tasks.bulkWrite(
+				carrying.map((task) => ({
+					updateOne: {
+						filter: { userId, taskId: task.taskId },
+						update: {
+							$set: { title: withoutInlineTag(task.title, tag.name) },
+							$pull: { tagIds: tag.tagId },
+						},
+					},
+				})),
+			);
+		}
+		await Promise.all(
+			carrying.map((task) => moveTask(userId, task.taskId, backlogId)),
+		);
+
+		// Nothing is left pointing at it, and then it goes; see `deleteTag`.
+		await Promise.all([
+			current.checklists.updateMany(
+				{ userId, tagIds: tag.tagId },
+				{ $pull: { tagIds: tag.tagId } },
+			),
+			current.trackers.updateMany(
+				{ userId, tagIds: tag.tagId },
+				{ $pull: { tagIds: tag.tagId } },
+			),
+		]);
+		await current.tags.deleteOne({ userId, tagId: tag.tagId });
+	}
+
+	backlogs.set(userId, backlogId);
+	return backlogId;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Reading                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** The Inbox first, then the Backlog, then every other checklist. */
+function specialRank(checklist: Pick<Checklist, "special">): number {
+	return checklist.special == null
+		? SPECIAL_CHECKLISTS.length
+		: SPECIAL_CHECKLISTS.indexOf(checklist.special);
+}
+
 /**
- * Every checklist with its progress, the Inbox first.
+ * Every checklist with its progress, the Inbox and the Backlog first.
  *
  * Two reads, whatever the number of checklists: the checklists themselves, and
  * the completed flag of every task grouped by the checklist it belongs to. A
@@ -184,6 +304,7 @@ export async function listChecklists(
 	hidden: Hidden,
 ): Promise<Array<ChecklistSummary>> {
 	await ensureInbox(userId);
+	await ensureBacklog(userId);
 	const current = await collections();
 
 	const [checklists, stored] = await Promise.all([
@@ -201,7 +322,10 @@ export async function listChecklists(
 		stored.filter((task) => isTaskVisible(task, hidden)),
 	);
 
-	const byChecklist = new Map<string, Array<Pick<Task, "completed">>>();
+	const byChecklist = new Map<
+		string,
+		Array<Pick<Task, "completed" | "stageId">>
+	>();
 	for (const task of tasks) {
 		if (task.checklistId === null) continue;
 
@@ -214,10 +338,9 @@ export async function listChecklists(
 		checklists
 			// Kept from this person in their team: to them it does not exist.
 			.filter((checklist) => !hidden.checklistIds.has(checklist.checklistId))
-			// Where anything without a home lands, so it is where you look first.
-			.sort(
-				(a, b) => Number(b.special === "inbox") - Number(a.special === "inbox"),
-			)
+			// Where anything without a home lands, then where work is parked:
+			// where you look first.
+			.sort((a, b) => specialRank(a) - specialRank(b))
 			.map((checklist) =>
 				summarise(checklist, byChecklist.get(checklist.checklistId) ?? []),
 			)
@@ -445,10 +568,7 @@ export async function getChecklistStageTasks(
 		await readChecklistTasks(current, userId, checklist, hidden)
 	).filter((task) => matchesFilter(task, view));
 
-	const counts: Record<string, number> = Object.fromEntries(
-		stages.map((stage) => [stage.stageId, 0]),
-	);
-	for (const task of tasks) counts[stageOf(task, stages)] += 1;
+	const counts = countByStage(tasks, stages);
 
 	const revealed = tasks.find((task) => task.taskId === view.reveal);
 	const stageId = stages.some((stage) => stage.stageId === view.stageId)
@@ -736,9 +856,9 @@ export async function updateChecklist(
 	const current = await collections();
 	const before = await requireChecklist(current, userId, checklistId);
 
-	// The Inbox is everyone's, in a team as anywhere.
+	// The Inbox and the Backlog are everyone's, in a team as anywhere.
 	const changes =
-		before.special === "inbox" ? { ...patch, visibleTo: null } : patch;
+		before.special != null ? { ...patch, visibleTo: null } : patch;
 
 	/*
 	 * A checklist's tags and stages are carried by its tasks, so changing them
@@ -780,8 +900,9 @@ export async function updateChecklist(
 }
 
 /**
- * Remove a checklist and the tasks in it. The Inbox is refused: it is where
- * tasks with nowhere else to go are put, so it has to exist.
+ * Remove a checklist and the tasks in it. The Inbox and the Backlog are
+ * refused: tasks with nowhere else to go are put in the one, and parked work
+ * in the other, so both have to exist.
  *
  * The tasks go first: a checklist left holding tasks is still usable, whereas
  * tasks whose checklist has gone belong to nothing and cannot be reached.
@@ -794,10 +915,13 @@ export async function deleteChecklist(
 
 	const checklist = await current.checklists.findOne(
 		{ checklistId, userId },
-		{ projection: { _id: 0, special: 1 } },
+		{ projection: { _id: 0, special: 1, title: 1 } },
 	);
-	if (checklist?.special === "inbox") {
-		throw new AppError("invalid_data", "The Inbox can't be deleted.");
+	if (checklist?.special != null) {
+		throw new AppError(
+			"invalid_data",
+			`"${checklist.title}" can't be deleted.`,
+		);
 	}
 
 	await current.tasks.deleteMany({ checklistId, userId });
@@ -955,7 +1079,8 @@ export async function updateTask(
 	 *
 	 * Reaching the last stage is completing it and leaving it is reopening it,
 	 * so a stage and a tick are one thing said two ways: ticking moves it to the
-	 * last stage, and unticking back to the first.
+	 * last stage, and unticking back one, to the stage before it — Review, not
+	 * To do, when there is one.
 	 */
 	let moved: { stageId: string; completed: boolean } | null = null;
 	if (patch.stageId !== undefined) {
@@ -965,7 +1090,7 @@ export async function updateTask(
 		moved = { stageId: patch.stageId, completed: patch.stageId === last };
 	} else if (patch.completed !== undefined) {
 		moved = {
-			stageId: patch.completed ? last : stages[0].stageId,
+			stageId: patch.completed ? last : stages[stages.length - 2].stageId,
 			completed: patch.completed,
 		};
 	}

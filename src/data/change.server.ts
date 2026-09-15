@@ -49,7 +49,12 @@ import {
 	isTaskVisible,
 } from "./visibility.server";
 
-async function run(userId: string, change: Change): Promise<void> {
+/** `actor` is who is asking, lower-cased; a tracker reading records it. */
+async function run(
+	userId: string,
+	change: Change,
+	actor: string,
+): Promise<void> {
 	switch (change.kind) {
 		case "checklist.create":
 			await createChecklist(userId, change);
@@ -92,7 +97,7 @@ async function run(userId: string, change: Change): Promise<void> {
 			return;
 
 		case "entry.create":
-			await createProgressEntry(userId, change);
+			await createProgressEntry(userId, change, actor);
 			return;
 
 		case "entry.update":
@@ -323,7 +328,7 @@ function includingActor(scope: Scope, change: Change): Change {
 export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
 		await assertAllowed(scope, change);
-		await run(scope.ownerId, includingActor(scope, change));
+		await run(scope.ownerId, includingActor(scope, change), scope.email);
 	} catch (error) {
 		if (error instanceof AppError) {
 			console.error(

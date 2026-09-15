@@ -64,7 +64,7 @@ export const thunderlistTheme = {
   components: {
     "progressbar-track": {
       "base": {
-        "backgroundColor": "var(--color-track)"
+        "backgroundColor": "var(--color-border-emphasized)"
       }
     }
   },

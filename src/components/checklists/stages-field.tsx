@@ -1,11 +1,16 @@
 import { Button } from "@astryxdesign/core/Button";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Plus, X } from "lucide-react";
+import { type Dispatch, memo, type SetStateAction, useCallback } from "react";
+import { StageDot } from "#/components/common/stage-dot";
+import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { createId, ID_PREFIX } from "#/lib/ids";
-import type { Stage } from "#/schemas/checklist";
+import { type Stage, stageColor, unusedStageColor } from "#/schemas/checklist";
+import type { TagColor } from "#/schemas/tag";
 
 /** As many as `stagesSchema` allows. */
 const MAX_STAGES = 12;
@@ -36,38 +41,68 @@ export function stagesProblem(stages: ReadonlyArray<Stage>): string | null {
  * new stage goes in before it, where work in progress belongs. Each can be
  * renamed and moved; renaming keeps the tasks at it, and taking one away moves
  * its tasks back to the stage before it.
+ *
+ * Each but the first has a colour: its part of the progress bar, and the
+ * outline of its tasks' checkboxes. The first is the work not started — the
+ * bar's empty track — so it has none to pick. A new stage takes a colour no
+ * other stage has.
+ *
+ * Memoised, and so is each row: typing a stage's name draws that row again
+ * and no other, and typing anywhere else in the form draws none of them.
+ * `onChange` is a state setter so the rows' handlers can work from the latest
+ * stages and keep their identity while names change.
  */
-export function StagesField({
+export const StagesField = memo(function StagesField({
 	value,
 	onChange,
 }: {
 	value: ReadonlyArray<Stage>;
-	onChange: (stages: Array<Stage>) => void;
+	onChange: Dispatch<SetStateAction<Array<Stage>>>;
 }) {
 	const problem = stagesProblem(value);
 
-	function rename(index: number, name: string) {
-		onChange(
-			value.map((stage, at) => (at === index ? { ...stage, name } : stage)),
-		);
-	}
+	const rename = useCallback(
+		(index: number, name: string) =>
+			onChange((stages) =>
+				stages.map((stage, at) => (at === index ? { ...stage, name } : stage)),
+			),
+		[onChange],
+	);
 
-	function move(index: number, by: -1 | 1) {
-		const next = [...value];
-		const [stage] = next.splice(index, 1);
-		next.splice(index + by, 0, stage);
-		onChange(next);
-	}
+	const recolor = useCallback(
+		(index: number, color: TagColor) =>
+			onChange((stages) =>
+				stages.map((stage, at) => (at === index ? { ...stage, color } : stage)),
+			),
+		[onChange],
+	);
 
-	function remove(index: number) {
-		onChange(value.filter((_, at) => at !== index));
-	}
+	const move = useCallback(
+		(index: number, by: -1 | 1) =>
+			onChange((stages) => {
+				const next = [...stages];
+				const [stage] = next.splice(index, 1);
+				next.splice(index + by, 0, stage);
+				return next;
+			}),
+		[onChange],
+	);
+
+	const remove = useCallback(
+		(index: number) =>
+			onChange((stages) => stages.filter((_, at) => at !== index)),
+		[onChange],
+	);
 
 	function add() {
-		onChange([
-			...value.slice(0, -1),
-			{ stageId: createId(ID_PREFIX.stage), name: "" },
-			...value.slice(-1),
+		onChange((stages) => [
+			...stages.slice(0, -1),
+			{
+				stageId: createId(ID_PREFIX.stage),
+				name: "",
+				color: unusedStageColor(stages),
+			},
+			...stages.slice(-1),
 		]);
 	}
 
@@ -78,52 +113,25 @@ export function StagesField({
 					Stages
 				</Text>
 				<Text type="supporting">
-					Tasks move through these in order. Reaching the last one is done.
+					Tasks move through these in order. Reaching the last one is done. Each
+					colour is that stage's part of the progress bar.
 				</Text>
 			</VStack>
 
-			{value.map((stage, index) => {
-				const isLast = index === value.length - 1;
-
-				return (
-					<HStack key={stage.stageId} gap={1} vAlign="center">
-						<TextInput
-							label={isLast ? `Stage ${index + 1}, done` : `Stage ${index + 1}`}
-							isLabelHidden
-							value={stage.name}
-							onChange={(name) => rename(index, name)}
-							placeholder={
-								isLast ? "Done" : index === 0 ? "To do" : "In review"
-							}
-							width="100%"
-						/>
-						<IconButton
-							label={`Move ${stage.name || "this stage"} earlier`}
-							icon={<ArrowUp aria-hidden />}
-							variant="ghost"
-							size="sm"
-							isDisabled={index === 0}
-							onClick={() => move(index, -1)}
-						/>
-						<IconButton
-							label={`Move ${stage.name || "this stage"} later`}
-							icon={<ArrowDown aria-hidden />}
-							variant="ghost"
-							size="sm"
-							isDisabled={isLast}
-							onClick={() => move(index, 1)}
-						/>
-						<IconButton
-							label={`Remove ${stage.name || "this stage"}`}
-							icon={<X aria-hidden />}
-							variant="ghost"
-							size="sm"
-							isDisabled={value.length <= 2}
-							onClick={() => remove(index)}
-						/>
-					</HStack>
-				);
-			})}
+			{value.map((stage, index) => (
+				<StageRow
+					key={stage.stageId}
+					stage={stage}
+					index={index}
+					color={stageColor(value, index)}
+					isLast={index === value.length - 1}
+					canRemove={value.length > 2}
+					onRename={rename}
+					onRecolor={recolor}
+					onMove={move}
+					onRemove={remove}
+				/>
+			))}
 
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<Button
@@ -138,4 +146,98 @@ export function StagesField({
 			</HStack>
 		</VStack>
 	);
-}
+});
+
+/** One stage: its colour, its name, and the buttons that move or remove it. */
+const StageRow = memo(function StageRow({
+	stage,
+	index,
+	color,
+	isLast,
+	canRemove,
+	onRename,
+	onRecolor,
+	onMove,
+	onRemove,
+}: {
+	stage: Stage;
+	index: number;
+	color: TagColor;
+	isLast: boolean;
+	canRemove: boolean;
+	onRename: (index: number, name: string) => void;
+	onRecolor: (index: number, color: TagColor) => void;
+	onMove: (index: number, by: -1 | 1) => void;
+	onRemove: (index: number) => void;
+}) {
+	const name = stage.name || "this stage";
+
+	return (
+		<HStack gap={1} vAlign="center">
+			{index === 0 ? (
+				<span
+					className="thunderlist-stage-swatch"
+					title="Not started: the empty part of the bar"
+				>
+					<StageDot color={null} />
+				</span>
+			) : (
+				<DropdownMenu
+					hasChevron={false}
+					placement="below"
+					alignment="start"
+					button={{
+						label: `Colour of ${name}`,
+						tooltip: "Colour",
+						variant: "ghost",
+						size: "sm",
+						isIconOnly: true,
+						icon: <StageDot color={color} />,
+					}}
+					items={COLOR_OPTIONS.map((option) => ({
+						id: option.value,
+						label: option.label,
+						icon: <StageDot color={option.value} />,
+						endContent:
+							option.value === color ? (
+								<Check aria-hidden size={16} />
+							) : undefined,
+						onClick: () => onRecolor(index, option.value),
+					}))}
+				/>
+			)}
+			<TextInput
+				label={isLast ? `Stage ${index + 1}, done` : `Stage ${index + 1}`}
+				isLabelHidden
+				value={stage.name}
+				onChange={(next) => onRename(index, next)}
+				placeholder={isLast ? "Done" : index === 0 ? "To do" : "In review"}
+				width="100%"
+			/>
+			<IconButton
+				label={`Move ${name} earlier`}
+				icon={<ArrowUp aria-hidden />}
+				variant="ghost"
+				size="sm"
+				isDisabled={index === 0}
+				onClick={() => onMove(index, -1)}
+			/>
+			<IconButton
+				label={`Move ${name} later`}
+				icon={<ArrowDown aria-hidden />}
+				variant="ghost"
+				size="sm"
+				isDisabled={isLast}
+				onClick={() => onMove(index, 1)}
+			/>
+			<IconButton
+				label={`Remove ${name}`}
+				icon={<X aria-hidden />}
+				variant="ghost"
+				size="sm"
+				isDisabled={!canRemove}
+				onClick={() => onRemove(index)}
+			/>
+		</HStack>
+	);
+});

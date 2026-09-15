@@ -1,4 +1,5 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Icon } from "@astryxdesign/core/Icon";
 import { Check, Hash } from "lucide-react";
 import type { Tag } from "#/schemas/tag";
 
@@ -23,7 +24,18 @@ export function TagFilter({
 
 	const chosen = tags.find((tag) => tag.tagId === value);
 	const tick = (isOn: boolean) =>
-		isOn ? <Check aria-hidden size={16} /> : undefined;
+		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
+	const option = (tag: Tag) => ({
+		id: tag.tagId,
+		label: `#${tag.name}`,
+		endContent: tick(tag.tagId === value),
+		onClick: () => onChange(tag.tagId),
+	});
+
+	// Today is a plan rather than a subject, so it is kept apart from the
+	// rest. A group with nothing in it is left out.
+	const plans = tags.filter((tag) => tag.special !== null);
+	const others = tags.filter((tag) => tag.special === null);
 
 	return (
 		<DropdownMenu
@@ -43,12 +55,26 @@ export function TagFilter({
 					onClick: () => onChange(undefined),
 				},
 				{ type: "divider" as const },
-				...tags.map((tag) => ({
-					id: tag.tagId,
-					label: `#${tag.name}`,
-					endContent: tick(tag.tagId === value),
-					onClick: () => onChange(tag.tagId),
-				})),
+				...(plans.length === 0
+					? []
+					: [
+							{
+								type: "section" as const,
+								id: "plans",
+								title: "Plans",
+								items: plans.map(option),
+							},
+						]),
+				...(others.length === 0
+					? []
+					: [
+							{
+								type: "section" as const,
+								id: "tags",
+								title: "Tags",
+								items: others.map(option),
+							},
+						]),
 			]}
 		/>
 	);
