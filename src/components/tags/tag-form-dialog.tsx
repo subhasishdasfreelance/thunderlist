@@ -9,9 +9,10 @@ import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
-import { VisibilityField } from "#/components/teams/visibility-field";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
+import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 
@@ -57,7 +58,14 @@ export function TagFormDialog({
 		undefined,
 	);
 	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
-	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
+	/*
+	 * Who it is for. A new one starts with nobody but its author — so adding
+	 * someone to a team hands them nothing until they are put on something —
+	 * and `null`, the whole team, stays a choice rather than the default; see
+	 * `AccessField`.
+	 */
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -68,8 +76,12 @@ export function TagFormDialog({
 		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(tag?.deadlineTime ?? undefined);
 		setDailyWindow(tag?.dailyWindow ?? null);
-		setVisibleTo(tag?.visibleTo ?? null);
-	}, [isOpen, tag]);
+		setAccess(
+			tag === null || tag === undefined
+				? ownAlone
+				: ((tag.access ?? null) as Array<AccessEntry> | null),
+		);
+	}, [isOpen, tag, ownAlone]);
 
 	const trimmed = name.trim();
 	const isDuplicate = existingNames.some(
@@ -101,7 +113,7 @@ export function TagFormDialog({
 					? (deadlineTime ?? null)
 					: null,
 			dailyWindow,
-			visibleTo,
+			access,
 		});
 	}
 
@@ -189,7 +201,7 @@ export function TagFormDialog({
 
 				{/* Today is everyone's, in a team as anywhere. */}
 				{tag?.special != null ? null : (
-					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
+					<AccessField noun="tag" value={access} onChange={setAccess} />
 				)}
 			</VStack>
 		</FormDialog>

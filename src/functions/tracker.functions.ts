@@ -4,7 +4,7 @@ import {
 	getTrackerEntries,
 	listTrackers,
 } from "#/data/tracker.server";
-import { assertTrackerVisible } from "#/data/visibility.server";
+import { assertLevel } from "#/data/visibility.server";
 import { trackerIdInputSchema } from "#/schemas/tracker";
 import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
@@ -22,7 +22,7 @@ export const getTrackerFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getTracker", async () => {
 			const scope = await requireScope();
-			assertTrackerVisible(scope.hidden, data.trackerId);
+			assertLevel(scope, "trackers", data.trackerId, "read");
 			return getTracker(scope.ownerId, data.trackerId);
 		}),
 	);
@@ -32,7 +32,7 @@ export const getTrackerEntriesFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getTrackerEntries", async () => {
 			const scope = await requireScope();
-			assertTrackerVisible(scope.hidden, data.trackerId);
+			assertLevel(scope, "trackers", data.trackerId, "read");
 			return getTrackerEntries(scope.ownerId, data.trackerId);
 		}),
 	);

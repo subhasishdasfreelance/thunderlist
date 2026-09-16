@@ -19,6 +19,7 @@ import {
 	trackerProgress,
 	withDeltas,
 } from "#/lib/progress";
+import type { AccessEntry } from "#/schemas/access";
 import type {
 	ProgressEntry,
 	Tracker,
@@ -27,7 +28,7 @@ import type {
 	TrackerType,
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
-import type { Hidden } from "./visibility.server";
+import { type Hidden, withAccess } from "./visibility.server";
 
 /** An entry document holds the link to its tracker; a reading does not. */
 const ENTRY_FIELDS = { _id: 0, trackerId: 0 } as const;
@@ -89,7 +90,9 @@ async function requireEntry(
  */
 export function summarise(tracker: Tracker): TrackerSummary {
 	return {
-		...tracker,
+		// However its audience was stored, the app reads one field; see
+		// `withAccess`.
+		...withAccess(tracker),
 		progress: trackerProgress(
 			tracker.currentValue,
 			tracker.targetValue,
@@ -165,7 +168,7 @@ export async function createTracker(
 		author: string;
 		tagIds: Array<string>;
 		assignees: Array<string>;
-		visibleTo: Array<string> | null;
+		access: Array<AccessEntry> | null;
 	},
 ): Promise<Tracker> {
 	const current = await collections();
@@ -198,7 +201,7 @@ export async function createTracker(
 		deadlineTime: input.deadlineTime,
 		tagIds: input.tagIds,
 		assignees: input.assignees,
-		visibleTo: input.visibleTo,
+		access: input.access,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -225,7 +228,7 @@ export async function updateTracker(
 		author?: string;
 		tagIds?: Array<string>;
 		assignees?: Array<string>;
-		visibleTo?: Array<string> | null;
+		access?: Array<AccessEntry> | null;
 	},
 ): Promise<Tracker> {
 	const current = await collections();
@@ -239,7 +242,12 @@ export async function updateTracker(
 
 	const next = await current.trackers.findOneAndUpdate(
 		{ trackerId, userId },
-		{ $set: changes },
+		{
+			$set: changes,
+			// Written with a list of its own, it stops being read from the old
+			// field; leaving both would mean two answers to the same question.
+			...(patch.access === undefined ? {} : { $unset: { visibleTo: "" } }),
+		},
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
 

@@ -27,16 +27,17 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { SectionSpinner } from "#/components/common/section-spinner";
-import { SortToggle } from "#/components/common/sort-toggle";
+import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
+import { TypeFilter } from "#/components/tasks/type-filter";
+import { AccessButton } from "#/components/teams/access-button";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
-import { VisibilityButton } from "#/components/teams/visibility-button";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
 	createTagResolver,
@@ -61,7 +62,7 @@ import {
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import { type ParsedTitle, withInlineTag } from "#/lib/tags/inline-tags";
 import {
-	isAssignedTo,
+	matchesFilter,
 	mergeReads,
 	orderByTask,
 	type SortOrder,
@@ -72,7 +73,8 @@ import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE, usePages } from "#/lib/use-pages";
 import { useTaskSelection } from "#/lib/use-task-selection";
-import { usePermissions, useSpace } from "#/lib/use-team";
+import { useTaskTypes } from "#/lib/use-task-types";
+import { useItemPermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import {
@@ -91,7 +93,7 @@ import {
 } from "#/schemas/checklist";
 import { todayDateOnly } from "#/schemas/common";
 import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
-import type { Task } from "#/schemas/task";
+import type { Task, TaskFilter } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
 export const Route = createFileRoute("/tags/$tagId")({
@@ -144,10 +146,13 @@ function TagDetailPage() {
 	const { apply, applyAsync } = useApplyChange();
 	const space = useSpace();
 	const team = space?.team ?? null;
-	const { canManageContent, canUpdateTasks } = usePermissions();
 
 	const [renaming, setRenaming] = useState<Task | null>(null);
-	const [moving, setMoving] = useState<TagTaskEntry | null>(null);
+	// The tasks a move is being picked for: one from its own menu, or every
+	// task picked out at once; see `SelectionBar`.
+	const [moving, setMoving] = useState<ReadonlyArray<TagTaskEntry> | null>(
+		null,
+	);
 	const [typing, setTyping] = useState<Task | null>(null);
 	const [assigning, setAssigning] = useState<Task | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
@@ -160,12 +165,17 @@ function TagDetailPage() {
 	const [wantsCompleted, setWantsCompleted] = useState(false);
 	// In a team, one person's work rather than everyone's; see `MemberFilter`.
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
+	// One kind of work rather than every kind; see `TypeFilter`.
+	const [typeId, setTypeId] = useState<string | undefined>(undefined);
+
+	const filter: TaskFilter = { assignee, type: typeId };
+	const isFiltered = assignee !== undefined || typeId !== undefined;
 
 	const { data, isError, error, refetch } = useQuery(tagQuery(tagId));
-	// The same figures, counting only that person's work.
-	const personalResult = useQuery({
-		...tagForQuery(tagId, assignee ?? ""),
-		enabled: assignee !== undefined,
+	// The same figures, counting only what the filter lets through.
+	const filteredResult = useQuery({
+		...tagForQuery(tagId, filter),
+		enabled: isFiltered,
 		placeholderData: keepPreviousData,
 	});
 
@@ -181,6 +191,7 @@ function TagDetailPage() {
 			page,
 			reveal: page === undefined ? focusTaskId : undefined,
 			assignee,
+			type: typeId,
 		}),
 		placeholderData: keepPreviousData,
 	});
@@ -193,8 +204,20 @@ function TagDetailPage() {
 	const tagsResult = useQuery(tagsQuery());
 	const trackersResult = useQuery(trackersQuery());
 	const checklistsResult = useQuery(checklistsQuery());
+	// The space's kinds of work: what the type filter offers, and the order
+	// ordering by type follows.
+	const types = useTaskTypes();
 
 	const detail = data ?? null;
+
+	/*
+	 * What this person may do with this one thing: their role, narrowed by its
+	 * access list; see `useItemPermissions`. While it is still loading nothing
+	 * is held back, as elsewhere — the screen is a spinner until it arrives.
+	 */
+	const { canManageContent, canUpdateTasks } = useItemPermissions(
+		detail?.access,
+	);
 
 	// Ticked on screen, a task stays in the open read until the refetch; it is
 	// drawn with the finished ones from the moment it is ticked.
@@ -213,8 +236,9 @@ function TagDetailPage() {
 							) ?? {},
 						),
 					),
+				types,
 			).filter((entry) => !entry.task.completed),
-		[openResult.data, sort, checklistsResult.data],
+		[openResult.data, sort, checklistsResult.data, types],
 	);
 	const completed = useMemo(
 		() =>
@@ -228,10 +252,14 @@ function TagDetailPage() {
 				),
 				sort,
 				(entry) => entry.task,
+				undefined,
+				types,
 			).filter(
-				(entry) => entry.task.completed && isAssignedTo(entry.task, assignee),
+				(entry) =>
+					entry.task.completed &&
+					matchesFilter(entry.task, { assignee, type: typeId }),
 			),
-		[openResult.data, completedResult.data, sort, assignee],
+		[openResult.data, completedResult.data, sort, assignee, typeId, types],
 	);
 
 	// Twenty rows a page, opening on the one a `?task=` link was sent to.
@@ -264,9 +292,8 @@ function TagDetailPage() {
 		);
 	}
 
-	// What the figures count: everyone's work, or the one person's picked.
-	const figures =
-		assignee === undefined ? detail : (personalResult.data ?? detail);
+	// What the figures count: everything, or only what the filter lets through.
+	const figures = isFiltered ? (filteredResult.data ?? detail) : detail;
 	const { progress } = figures;
 	const startDate = tagStartDate(detail);
 	const daily = detail.dailyWindow ?? null;
@@ -300,7 +327,26 @@ function TagDetailPage() {
 
 	const Mark =
 		detail.special === null ? null : SPECIAL_TAG_ICONS[detail.special];
+
+	// Who and what the figures are narrowed to, said under them. A kind of work
+	// is a task's, so narrowing to one leaves this tag's trackers out; see
+	// `getTag`.
 	const person = team?.members.find((member) => member.email === assignee);
+	const chosenType = types.find((type) => type.typeId === typeId);
+	const filterNote = isFiltered
+		? `Counting only ${[
+				assignee === undefined
+					? null
+					: `${person === undefined ? assignee : memberName(person)}'s work`,
+				typeId === undefined
+					? null
+					: chosenType === undefined
+						? "tasks with no type"
+						: `${chosenType.name.toLowerCase()} tasks`,
+			]
+				.filter((part) => part !== null)
+				.join(", ")}.`
+		: null;
 
 	/** Where a task lives, and the stages it goes through there. */
 	const stagesFor = (checklistId: string | null) =>
@@ -318,6 +364,29 @@ function TagDetailPage() {
 		: [];
 	const isFinishable = (task: Task) =>
 		!task.completed && task.trackerId == null && task.linkedChecklistId == null;
+
+	/** What the move dialog says it is about: the one task, or how many. */
+	const movingSubtitle =
+		moving === null
+			? undefined
+			: moving.length === 1
+				? moving[0].task.title
+				: `${moving.length} tasks`;
+
+	/*
+	 * Where the picked tasks can go: every checklist but the one they are all
+	 * already in. A tag gathers tasks from several, and then every checklist is
+	 * somewhere at least one of them can move to.
+	 */
+	const moveTargets =
+		moving === null
+			? checklists
+			: checklists.filter(
+					(checklist) =>
+						!moving.every(
+							(entry) => entry.checklistId === checklist.checklistId,
+						),
+				);
 
 	/** Every picked task on to the next stage of its own checklist. */
 	function moveOn() {
@@ -441,7 +510,7 @@ function TagDetailPage() {
 						updateTask(apply, task.taskId, { important }),
 					onSetType: () => setTyping(task),
 					onRename: () => setRenaming(task),
-					onMove: () => setMoving(entry),
+					onMove: () => setMoving([entry]),
 					onDelete: () => setPendingDelete(task),
 					onAssign: team === null ? undefined : () => setAssigning(task),
 					onToggleMine:
@@ -467,14 +536,15 @@ function TagDetailPage() {
 				<BackButton to="/tags" label="Tags" />
 				{/* Today is everyone's, in a team as anywhere. */}
 				{special === null ? (
-					<VisibilityButton
+					<AccessButton
 						noun="tag"
-						visibleTo={detail.visibleTo}
-						onChange={(visibleTo) =>
+						access={detail.access}
+						canChange={canManageContent}
+						onChange={(access) =>
 							apply({
 								kind: "tag.update",
 								tagId: detail.tagId,
-								patch: { visibleTo },
+								patch: { access },
 							})
 						}
 					/>
@@ -540,7 +610,12 @@ function TagDetailPage() {
 					<ProgressMeter
 						label={`${detail.name} progress`}
 						percent={progress.percent}
-						stages={{ parts: tagStageParts(progress), total: progress.total }}
+						stages={{
+							parts: tagStageParts(progress),
+							total: progress.total,
+							// Every stage counted under the bar, the not-started ones too.
+							firstName: "To do",
+						}}
 						elapsed={pace.elapsed}
 						expectedReading={
 							pace.elapsed == null
@@ -551,11 +626,8 @@ function TagDetailPage() {
 							progress.total === 1 ? "task" : "tasks"
 						}${scheduleNote === null ? "" : ` · ${scheduleNote}`}`}
 					/>
-					{assignee === undefined ? null : (
-						<Text type="supporting">
-							Counting only{" "}
-							{person === undefined ? assignee : memberName(person)}'s work.
-						</Text>
+					{filterNote === null ? null : (
+						<Text type="supporting">{filterNote}</Text>
 					)}
 				</VStack>
 			</Card>
@@ -618,7 +690,14 @@ function TagDetailPage() {
 								setPage(undefined);
 							}}
 						/>
-						<SortToggle
+						<TypeFilter
+							value={typeId}
+							onChange={(next) => {
+								setTypeId(next);
+								setPage(undefined);
+							}}
+						/>
+						<SortMenu
 							order={sort}
 							hasStageOrder
 							onChange={(next) => {
@@ -811,6 +890,9 @@ function TagDetailPage() {
 							? finish
 							: undefined
 					}
+					onMoveToChecklist={
+						canManageContent ? () => setMoving(pickedEntries) : undefined
+					}
 					onClear={clear}
 				/>
 			)}
@@ -845,20 +927,20 @@ function TagDetailPage() {
 					if (!isOpen) setMoving(null);
 				}}
 				title="Move to checklist"
-				subtitle={moving?.task.title}
-				checklists={checklists.filter(
-					(checklist) => checklist.checklistId !== moving?.checklistId,
-				)}
+				subtitle={movingSubtitle}
+				checklists={moveTargets}
 				isLoading={checklistsResult.isPending}
 				onPick={(target) => {
-					if (moving) {
+					for (const entry of moving ?? []) {
+						if (entry.checklistId === target) continue;
 						apply({
 							kind: "task.move",
-							taskId: moving.task.taskId,
+							taskId: entry.task.taskId,
 							checklistId: target,
 						});
 					}
 					setMoving(null);
+					clear();
 				}}
 			/>
 

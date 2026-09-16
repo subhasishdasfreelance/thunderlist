@@ -34,10 +34,12 @@ import {
 import {
 	calculateChecklistProgress,
 	isAssignedTo,
+	matchesFilter,
 	orderByTask,
 	type Page,
 	pageOf,
 } from "#/lib/tasks/tasks";
+import type { AccessEntry } from "#/schemas/access";
 import {
 	checklistStages,
 	isUnderway,
@@ -55,15 +57,16 @@ import {
 	type TagSummary,
 	type TagTaskEntry,
 } from "#/schemas/tag";
-import type { TaskPageView } from "#/schemas/task";
+import type { TaskFilter, TaskPageView } from "#/schemas/task";
 import {
 	ensureBacklog,
 	ensureInbox,
 	removeTagFromTasks,
 	withTrackedCompletion,
 } from "./checklist.server";
+import { listTaskTypes } from "./settings.server";
 import { summarise as summariseTracker } from "./tracker.server";
-import { type Hidden, isTaskVisible } from "./visibility.server";
+import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
 
 function byName(a: Tag, b: Tag): number {
 	return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
@@ -88,7 +91,9 @@ function inOrder(a: Tag, b: Tag): number {
  */
 function withSchedule(tag: Tag): Tag {
 	return {
-		...tag,
+		// However its audience was stored, the app reads one field; see
+		// `withAccess`.
+		...withAccess(tag),
 		special: tag.special ?? null,
 		description: tag.description ?? "",
 		startDate: tag.startDate ?? null,
@@ -522,7 +527,12 @@ export async function getTag(
 	userId: string,
 	tagIdOrKind: string,
 	hidden: Hidden,
-	assignee?: string,
+	/**
+	 * What the screen has narrowed to, so its figures describe the rows under
+	 * them. A tracker is not a task and has no kind of work, so narrowing to
+	 * one leaves the trackers out rather than counting them as untyped.
+	 */
+	filter: TaskFilter = {},
 ): Promise<TagDetail> {
 	const current = await collections();
 	const tag = await findTag(current, userId, tagIdOrKind, hidden);
@@ -532,11 +542,13 @@ export async function getTag(
 		.find({ userId, tagIds: tagId }, { projection: DOMAIN_FIELDS })
 		.toArray()
 		.then((found) =>
-			found.filter(
-				(tracker) =>
-					!hidden.trackerIds.has(tracker.trackerId) &&
-					isAssignedTo(tracker, assignee),
-			),
+			filter.type !== undefined
+				? []
+				: found.filter(
+						(tracker) =>
+							!hidden.trackerIds.has(tracker.trackerId) &&
+							isAssignedTo(tracker, filter.assignee),
+					),
 		);
 
 	const [tasks, trackers, readings] = await Promise.all([
@@ -553,6 +565,7 @@ export async function getTag(
 						linkedChecklistId: 1,
 						assignees: 1,
 						stageId: 1,
+						typeId: 1,
 					},
 				},
 			)
@@ -566,7 +579,7 @@ export async function getTag(
 					userId,
 					stored.filter(
 						(task) =>
-							isTaskVisible(task, hidden) && isAssignedTo(task, assignee),
+							isTaskVisible(task, hidden) && matchesFilter(task, filter),
 					),
 				),
 			)
@@ -633,12 +646,16 @@ export async function getTagOpenTasks(
 		(entry) => !entry.task.completed && isAssignedTo(entry.task, view.assignee),
 	);
 
+	// Only ordering by type needs the space's list, so only then is it read.
+	const types = view.sort === "type" ? await listTaskTypes(userId) : undefined;
+
 	return pageOf(
 		orderByTask(
 			open,
 			view.sort,
 			(entry) => entry.task,
 			(entry) => stageProgress(entry.task, stagesOf(entry.checklistId)),
+			types,
 		),
 		view,
 		(entry) => entry.task.taskId,
@@ -704,7 +721,7 @@ export async function createTag(
 		deadline: string | null;
 		deadlineTime: string | null;
 		dailyWindow: DailyWindow | null;
-		visibleTo: Array<string> | null;
+		access: Array<AccessEntry> | null;
 	},
 ): Promise<Tag> {
 	const current = await collections();
@@ -732,7 +749,7 @@ export async function createTag(
 		deadline: input.deadline,
 		deadlineTime: input.deadlineTime,
 		dailyWindow: input.dailyWindow,
-		visibleTo: input.visibleTo,
+		access: input.access,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -753,7 +770,7 @@ export async function updateTag(
 		deadline?: string | null;
 		deadlineTime?: string | null;
 		dailyWindow?: DailyWindow | null;
-		visibleTo?: Array<string> | null;
+		access?: Array<AccessEntry> | null;
 	},
 ): Promise<Tag> {
 	const current = await collections();
@@ -779,7 +796,12 @@ export async function updateTag(
 
 	const next = await current.tags.findOneAndUpdate(
 		{ tagId, userId },
-		{ $set: { ...patch, updatedAt: new Date().toISOString() } },
+		{
+			$set: { ...patch, updatedAt: new Date().toISOString() },
+			// Written with a list of its own, it stops being read from the old
+			// field; leaving both would mean two answers to the same question.
+			...(patch.access === undefined ? {} : { $unset: { visibleTo: "" } }),
+		},
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
 

@@ -30,16 +30,17 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { SectionSpinner } from "#/components/common/section-spinner";
-import { SortToggle } from "#/components/common/sort-toggle";
+import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { TagFilter } from "#/components/tags/tag-filter";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
+import { TypeFilter } from "#/components/tasks/type-filter";
+import { AccessButton } from "#/components/teams/access-button";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
-import { VisibilityButton } from "#/components/teams/visibility-button";
 import {
 	type ChecklistValues,
 	createTagResolver,
@@ -73,7 +74,8 @@ import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE } from "#/lib/use-pages";
 import { useTaskSelection } from "#/lib/use-task-selection";
-import { usePermissions, useSpace } from "#/lib/use-team";
+import { useTaskTypes } from "#/lib/use-task-types";
+import { useItemPermissions, useSpace } from "#/lib/use-team";
 import {
 	checklistCompletedQuery,
 	checklistFilteredQuery,
@@ -149,10 +151,11 @@ function ChecklistDetailPage() {
 	const team = space?.team ?? null;
 	// Adding and deleting tasks is shaping the work; updating one is the row's
 	// own business. See `Capability`.
-	const { canManageContent, canUpdateTasks } = usePermissions();
 
 	const [renaming, setRenaming] = useState<Task | null>(null);
-	const [moving, setMoving] = useState<Task | null>(null);
+	// The tasks a move is being picked for: one from its own menu, or every
+	// task picked out at once; see `SelectionBar`.
+	const [moving, setMoving] = useState<ReadonlyArray<Task> | null>(null);
 	const [typing, setTyping] = useState<Task | null>(null);
 	const [assigning, setAssigning] = useState<Task | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
@@ -166,9 +169,11 @@ function ChecklistDetailPage() {
 	const [view, setView] = useState<ProgressView>("list");
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const [tagId, setTagId] = useState<string | undefined>(undefined);
+	const [typeId, setTypeId] = useState<string | undefined>(undefined);
 
-	const filter: TaskFilter = { assignee, tag: tagId };
-	const isFiltered = assignee !== undefined || tagId !== undefined;
+	const filter: TaskFilter = { assignee, tag: tagId, type: typeId };
+	const isFiltered =
+		assignee !== undefined || tagId !== undefined || typeId !== undefined;
 
 	const { data, isError, error, refetch } = useQuery(
 		checklistQuery(checklistId),
@@ -194,11 +199,21 @@ function ChecklistDetailPage() {
 				stageId === undefined && page === undefined ? focusTaskId : undefined,
 			assignee,
 			tag: tagId,
+			type: typeId,
 		}),
 		placeholderData: keepPreviousData,
 	});
 
 	const detail = data ?? null;
+
+	/*
+	 * What this person may do with this one thing: their role, narrowed by its
+	 * access list; see `useItemPermissions`. While it is still loading nothing
+	 * is held back, as elsewhere — the screen is a spinner until it arrives.
+	 */
+	const { canManageContent, canUpdateTasks } = useItemPermissions(
+		detail?.access,
+	);
 	const stages = checklistStages(detail ?? {});
 	const lastStage = stages[stages.length - 1];
 	const shownStageId = stageId ?? pageResult.data?.stageId ?? stages[0].stageId;
@@ -215,20 +230,23 @@ function ChecklistDetailPage() {
 	const completed = useMemo(
 		() =>
 			(completedResult.data ?? []).filter((task) =>
-				matchesFilter(task, { assignee, tag: tagId }),
+				matchesFilter(task, { assignee, tag: tagId, type: typeId }),
 			),
-		[completedResult.data, assignee, tagId],
+		[completedResult.data, assignee, tagId, typeId],
 	);
 
 	const tagsResult = useQuery(tagsQuery());
 	const trackersResult = useQuery(trackersQuery());
 	const checklistsResult = useQuery(checklistsQuery());
+	// The space's kinds of work: what the type filter offers, and the order
+	// ordering by type follows.
+	const types = useTaskTypes();
 
 	// A task ticked or moved on screen is patched in place; the screen's order
 	// is what places it.
 	const rows = useMemo(
-		() => orderTasks(pageResult.data?.items ?? [], sort),
-		[pageResult.data, sort],
+		() => orderTasks(pageResult.data?.items ?? [], sort, types),
+		[pageResult.data, sort, types],
 	);
 
 	const tags = tagsResult.data ?? [];
@@ -302,7 +320,7 @@ function ChecklistDetailPage() {
 					updateTask(apply, task.taskId, { important }),
 				onSetType: () => setTyping(task),
 				onRename: () => setRenaming(task),
-				onMove: () => setMoving(task),
+				onMove: () => setMoving([task]),
 				onDelete: () => setPendingDelete(task),
 				onAssign: team === null ? undefined : () => setAssigning(task),
 				onToggleMine:
@@ -317,6 +335,14 @@ function ChecklistDetailPage() {
 	const pickedTasks = canUpdateTasks
 		? rows.filter((task) => picked.has(task.taskId))
 		: [];
+
+	/** What the move dialog says it is about: the one task, or how many. */
+	const movingSubtitle =
+		moving === null
+			? undefined
+			: moving.length === 1
+				? moving[0].title
+				: `${moving.length} tasks`;
 
 	/** Every picked task on to its next stage; see `nextStageId`. */
 	function moveOn() {
@@ -399,12 +425,18 @@ function ChecklistDetailPage() {
 	// Who and what the figures are narrowed to, said under them.
 	const person = team?.members.find((member) => member.email === assignee);
 	const chosenTag = tags.find((tag) => tag.tagId === tagId);
+	const chosenType = types.find((type) => type.typeId === typeId);
 	const filterNote = isFiltered
 		? `Counting only ${[
 				assignee === undefined
 					? null
 					: `${person === undefined ? assignee : memberName(person)}'s tasks`,
 				chosenTag === undefined ? null : `tasks tagged #${chosenTag.name}`,
+				typeId === undefined
+					? null
+					: chosenType === undefined
+						? "tasks with no type"
+						: `${chosenType.name.toLowerCase()} tasks`,
 			]
 				.filter((part) => part !== null)
 				.join(", ")}.`
@@ -451,14 +483,15 @@ function ChecklistDetailPage() {
 				<BackButton to="/checklists" label="Checklists" />
 				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
 				{special !== null ? null : (
-					<VisibilityButton
+					<AccessButton
 						noun="checklist"
-						visibleTo={detail.visibleTo}
-						onChange={(visibleTo) =>
+						access={detail.access}
+						canChange={canManageContent}
+						onChange={(access) =>
 							apply({
 								kind: "checklist.update",
 								checklistId,
-								patch: { visibleTo },
+								patch: { access },
 							})
 						}
 					/>
@@ -526,6 +559,8 @@ function ChecklistDetailPage() {
 						stages={{
 							parts: stageParts(stages, progress.byStage),
 							total: progress.total,
+							// Every stage counted under the bar, the first one included.
+							firstName: stages[0].name,
 						}}
 						elapsed={pace.elapsed}
 						expectedReading={
@@ -587,6 +622,7 @@ function ChecklistDetailPage() {
 						<HStack gap={1} vAlign="center" wrap="wrap">
 							<MemberFilter value={assignee} onChange={turn(setAssignee)} />
 							<TagFilter tags={tags} value={tagId} onChange={turn(setTagId)} />
+							<TypeFilter value={typeId} onChange={turn(setTypeId)} />
 						</HStack>
 						<HStack gap={1} vAlign="center">
 							{isDoneStage && chart !== null ? (
@@ -605,7 +641,7 @@ function ChecklistDetailPage() {
 									onClick={() => setIsClearingCompleted(true)}
 								/>
 							) : null}
-							<SortToggle order={sort} onChange={turn(setSort)} />
+							<SortMenu order={sort} onChange={turn(setSort)} />
 						</HStack>
 					</HStack>
 
@@ -693,6 +729,9 @@ function ChecklistDetailPage() {
 					}
 					stages={stages}
 					onMoveTo={moveTo}
+					onMoveToChecklist={
+						canManageContent ? () => setMoving(pickedTasks) : undefined
+					}
 					onClear={clear}
 				/>
 			)}
@@ -747,18 +786,19 @@ function ChecklistDetailPage() {
 					if (!open) setMoving(null);
 				}}
 				title="Move to checklist"
-				subtitle={moving?.title}
+				subtitle={movingSubtitle}
 				checklists={otherChecklists}
 				isLoading={checklistsResult.isPending}
 				onPick={(target) => {
-					if (moving) {
+					for (const task of moving ?? []) {
 						apply({
 							kind: "task.move",
-							taskId: moving.taskId,
+							taskId: task.taskId,
 							checklistId: target,
 						});
 					}
 					setMoving(null);
+					clear();
 				}}
 			/>
 

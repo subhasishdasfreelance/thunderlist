@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { accessSchema } from "./access";
 import {
 	assigneesSchema,
 	dateOnlySchema,
@@ -9,7 +10,6 @@ import {
 	tagIdsSchema,
 	timeOfDaySchema,
 	titleSchema,
-	visibleToSchema,
 } from "./common";
 
 export const TRACKER_TYPES = [
@@ -116,10 +116,10 @@ const trackerSchema = v.object({
 	/** In a team, who it is for, by address; absent or empty for nobody. */
 	assignees: v.optional(v.array(v.string())),
 	/**
-	 * In a team, the people who can see it and its history, by address; absent
-	 * or `null` for everyone. See `visibleToSchema`.
+	 * In a team, who may do what with it and its history; absent or `null` for
+	 * everyone, each at whatever their role allows. See `accessSchema`.
 	 */
-	visibleTo: v.optional(v.nullable(v.array(v.string()))),
+	access: v.optional(accessSchema),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -190,7 +190,7 @@ export const createTrackerInputSchema = v.object({
 	author: v.optional(authorSchema, ""),
 	tagIds: v.optional(tagIdsSchema, []),
 	assignees: v.optional(assigneesSchema, []),
-	visibleTo: v.optional(visibleToSchema, null),
+	access: v.optional(accessSchema, null),
 });
 
 export const updateTrackerInputSchema = v.object({
@@ -210,7 +210,7 @@ export const updateTrackerInputSchema = v.object({
 			author: v.optional(authorSchema),
 			tagIds: v.optional(tagIdsSchema),
 			assignees: v.optional(assigneesSchema),
-			visibleTo: v.optional(visibleToSchema),
+			access: v.optional(accessSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

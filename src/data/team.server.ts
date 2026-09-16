@@ -31,7 +31,12 @@ import {
 	type TeamRole,
 	type TeamSummary,
 } from "#/schemas/team";
-import { type Hidden, NOTHING_HIDDEN, readHidden } from "./visibility.server";
+import {
+	type Hidden,
+	type Levels,
+	NOTHING_HIDDEN,
+	readAccess,
+} from "./visibility.server";
 
 /** Where one request is working, and what it may see and do there. */
 export type Scope = {
@@ -43,6 +48,12 @@ export type Scope = {
 	team: { teamId: string; role: TeamRole; emails: Array<string> } | null;
 	/** What in the team is kept from this person; see `Hidden`. */
 	hidden: Hidden;
+	/**
+	 * What they may do with each thing they can reach; `null` where nothing
+	 * narrows them — their own space, or a role that sees everything. See
+	 * `Levels`.
+	 */
+	levels: Levels;
 };
 
 type Person = { userId: string; email: string };
@@ -64,6 +75,7 @@ export async function resolveScope(
 		email,
 		team: null,
 		hidden: NOTHING_HIDDEN,
+		levels: null,
 	};
 	if (teamId === undefined || teamId === "") return own;
 
@@ -76,14 +88,17 @@ export async function resolveScope(
 
 	const role = storedRole(me.role);
 
+	// The admin and viewers see everything, whoever it is kept to, and then
+	// there is nothing to work out: their role alone says what they may do.
+	const reach = roleCan(role, "seeEverything")
+		? { hidden: NOTHING_HIDDEN, levels: null }
+		: await readAccess(current, teamId, email, role);
+
 	return {
 		ownerId: teamId,
 		email,
 		team: { teamId, role, emails: members.map((member) => member.email) },
-		// The admin and viewers see everything, whoever it is kept to.
-		hidden: roleCan(role, "seeEverything")
-			? NOTHING_HIDDEN
-			: await readHidden(current, teamId, email),
+		...reach,
 	};
 }
 

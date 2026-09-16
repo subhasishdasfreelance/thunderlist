@@ -24,6 +24,7 @@ import {
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
 import { queryKeys } from "#/queries/keys";
+import type { AccessEntry } from "#/schemas/access";
 import type { Change } from "#/schemas/change";
 import type { Stage } from "#/schemas/checklist";
 import type { DailyWindow } from "#/schemas/common";
@@ -203,8 +204,11 @@ export type ChecklistValues = {
 	dailyWindow: DailyWindow | null;
 	/** Carried by every task in the checklist; see `Checklist.tagIds`. */
 	tagIds: Array<string>;
-	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
-	visibleTo: Array<string> | null;
+	/**
+	 * In a team, who may do what with it, or `null` for everyone at whatever
+	 * their role allows; see `accessSchema`.
+	 */
+	access: Array<AccessEntry> | null;
 	/**
 	 * The steps its tasks go through; see `Checklist.stages`. Only when they
 	 * change, so saving anything else never moves a task.
@@ -379,8 +383,11 @@ export type TrackerValues = {
 	tagIds: Array<string>;
 	/** In a team, who it is for; see `Tracker.assignees`. */
 	assignees: Array<string>;
-	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
-	visibleTo: Array<string> | null;
+	/**
+	 * In a team, who may do what with it, or `null` for everyone at whatever
+	 * their role allows; see `accessSchema`.
+	 */
+	access: Array<AccessEntry> | null;
 };
 
 export type EntryValues = { value: number; recordedAt: string; note: string };
@@ -403,8 +410,11 @@ export type TagValues = {
 	deadline: string | null;
 	deadlineTime: string | null;
 	dailyWindow: DailyWindow | null;
-	/** In a team, who can see it, or `null` for everyone; see `visibleToSchema`. */
-	visibleTo: Array<string> | null;
+	/**
+	 * In a team, who may do what with it, or `null` for everyone at whatever
+	 * their role allows; see `accessSchema`.
+	 */
+	access: Array<AccessEntry> | null;
 };
 
 export function createTag(apply: ApplyChange, values: TagValues): string {
@@ -455,7 +465,9 @@ export function createTagResolver(
 			deadline: null,
 			deadlineTime: null,
 			dailyWindow: null,
-			visibleTo: null,
+			// A tag typed into a title is shared by nature: whoever reads the
+			// task reads the tag. Narrow it from the Tags screen.
+			access: null,
 		});
 		minted.set(key, tagId);
 		return tagId;

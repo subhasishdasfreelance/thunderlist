@@ -187,7 +187,7 @@ export function PeoplePickerDialog({
 						description={`Nobody in the team matches "${query.trim()}".`}
 					/>
 				) : (
-					<List hasDividers>
+					<List hasDividers className="thunderlist-picker-list">
 						{shown.map((member) => {
 							const note = lockedNote?.(member) ?? null;
 							const isOn = isPicked(member);

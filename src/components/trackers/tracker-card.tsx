@@ -73,6 +73,9 @@ export function TrackerCard({
 					}),
 					tracker.unit,
 					progress.current >= progress.target && progress.target > 0,
+					// A tracker is a goal with a date on it, so the line says when it is
+					// due and what that now asks for a day.
+					tracker.deadline,
 				);
 
 	return (

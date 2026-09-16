@@ -897,6 +897,31 @@ body {
 		overflow-wrap: anywhere;
 	}
 
+	/*
+	 * A list with dividers ends on a row, not on a line.
+	 *
+	 * Astryx draws a line under every row and takes it off the last one with a
+	 * `:last-child` rule written as the `border-block-end` shorthand — which
+	 * StyleX drops, so the rule never reaches the stylesheet and every such
+	 * list ends with a line under nothing. Put right once, here, for every list
+	 * in the app. `!important` is what beats the specificity StyleX gives its
+	 * own rules.
+	 */
+	.astryx-list > .astryx-list-item:last-child {
+		border-block-end: none !important;
+	}
+
+	/*
+	 * A picker's list scrolls on its own, so what filters it — the search field
+	 * above — stays on screen however long the list is. Without this the whole
+	 * dialog body scrolls and the field is the first thing to go.
+	 */
+	.thunderlist-picker-list {
+		max-height: 40vh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
 	/* Footer buttons wrap rather than pushing the dialog wider than the phone. */
 	.thunderlist-dialog-actions {
 		display: flex;
@@ -1122,6 +1147,9 @@ body {
 		height: 0.875rem;
 		max-width: none;
 		filter: drop-shadow(0 1px 1px var(--color-shadow));
+		/* Glides to its new spot as the bar behind it grows, rather than
+		   jumping there while the bar is still moving; see `.thunderlist-stage-bar-part`. */
+		transition: left var(--duration-medium) var(--ease-standard);
 	}
 
 	/* The same bolt beside the words, as the key to the mark. */
@@ -1503,6 +1531,8 @@ body {
 
 		.thunderlist-collapse,
 		.thunderlist-disclosure-chevron,
+		.thunderlist-meter-target,
+		.thunderlist-stage-bar-part,
 		.astryx-segmented-control-item {
 			transition: none;
 		}

@@ -43,6 +43,7 @@ import {
 	pageOf,
 	type StagePage,
 } from "#/lib/tasks/tasks";
+import type { AccessEntry } from "#/schemas/access";
 import {
 	type Checklist,
 	type ChecklistSummary,
@@ -56,7 +57,8 @@ import {
 import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import { SPECIAL_TAGS } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView, TaskPatch } from "#/schemas/task";
-import { type Hidden, isTaskVisible } from "./visibility.server";
+import { listTaskTypes } from "./settings.server";
+import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
 
 /**
  * Just enough of a task to count progress with. `trackerId` is part of that: a
@@ -105,7 +107,9 @@ function summarise(
 	tasks: ReadonlyArray<Pick<Task, "completed" | "stageId">>,
 ): ChecklistSummary {
 	return {
-		...checklist,
+		// However its audience was stored, the app reads one field; see
+		// `withAccess`.
+		...withAccess(checklist),
 		progress: {
 			...calculateChecklistProgress(tasks),
 			byStage: countByStage(tasks, checklistStages(checklist)),
@@ -176,7 +180,7 @@ async function ensureSpecialChecklist(
 			deadlineTime: null,
 			dailyWindow: null,
 			tagIds: [],
-			visibleTo: null,
+			access: null,
 			special: kind,
 			createdAt: now,
 			updatedAt: now,
@@ -578,9 +582,15 @@ export async function getChecklistStageTasks(
 			: stageOf(revealed, stages);
 
 	const atStage = tasks.filter((task) => task.stageId === stageId);
+	// Only ordering by type needs the space's list, so only then is it read.
+	const types = view.sort === "type" ? await listTaskTypes(userId) : undefined;
 
 	return {
-		...pageOf(orderTasks(atStage, view.sort), view, (task) => task.taskId),
+		...pageOf(
+			orderTasks(atStage, view.sort, types),
+			view,
+			(task) => task.taskId,
+		),
 		stageId,
 		counts,
 	};
@@ -645,7 +655,7 @@ export async function createChecklist(
 		deadlineTime: string | null;
 		dailyWindow: DailyWindow | null;
 		tagIds: Array<string>;
-		visibleTo: Array<string> | null;
+		access: Array<AccessEntry> | null;
 		stages?: Array<Stage>;
 	},
 ): Promise<Checklist> {
@@ -671,7 +681,7 @@ export async function createChecklist(
 		deadlineTime: input.deadlineTime,
 		dailyWindow: input.dailyWindow,
 		tagIds: input.tagIds,
-		visibleTo: input.visibleTo,
+		access: input.access,
 		...(input.stages === undefined ? {} : { stages: input.stages }),
 		createdAt: now,
 		updatedAt: now,
@@ -849,7 +859,7 @@ export async function updateChecklist(
 		deadlineTime?: string | null;
 		dailyWindow?: DailyWindow | null;
 		tagIds?: Array<string>;
-		visibleTo?: Array<string> | null;
+		access?: Array<AccessEntry> | null;
 		stages?: Array<Stage>;
 	},
 ): Promise<Checklist> {
@@ -857,8 +867,7 @@ export async function updateChecklist(
 	const before = await requireChecklist(current, userId, checklistId);
 
 	// The Inbox and the Backlog are everyone's, in a team as anywhere.
-	const changes =
-		before.special != null ? { ...patch, visibleTo: null } : patch;
+	const changes = before.special != null ? { ...patch, access: null } : patch;
 
 	/*
 	 * A checklist's tags and stages are carried by its tasks, so changing them
@@ -888,7 +897,12 @@ export async function updateChecklist(
 
 	const next = await current.checklists.findOneAndUpdate(
 		{ checklistId, userId },
-		{ $set: { ...changes, updatedAt: new Date().toISOString() } },
+		{
+			$set: { ...changes, updatedAt: new Date().toISOString() },
+			// Written with a list of its own, it stops being read from the old
+			// field; leaving both would mean two answers to the same question.
+			...(changes.access === undefined ? {} : { $unset: { visibleTo: "" } }),
+		},
 		{ returnDocument: "after", projection: DOMAIN_FIELDS },
 	);
 

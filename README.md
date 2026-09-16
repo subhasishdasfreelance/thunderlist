@@ -1,7 +1,7 @@
 # Thunderlist
 
 A productivity app for one person or a team — **Checklists**, **Trackers**,
-**Tags**, **Priority** and **Stages** — stored in MongoDB. **Today** is a special
+**Tags**, **Priority** and **Across lists** — stored in MongoDB. **Today** is a special
 tag, and the **Inbox** and the **Backlog** are the two checklists every space
 has: one for everything that belongs to no other, one for parked work.
 
@@ -25,10 +25,11 @@ design system, with Tailwind utilities layered on top of Astryx's design tokens.
   fitness target, a project.
 - **Tags** — labels that group tasks across every checklist.
 - **Priority** — every open task, sorted by whether it is urgent and important.
-- **Stages** — every task by the stage it is at, whichever checklist it is in:
-  everything in Review, say, across all of them.
-- **Teams** — a space shared with other people, each with a role that decides
-  what they can change, and lists that can be kept to some of them.
+- **Across lists** — every task by the stage it is at, or by what kind of work
+  it is, whichever checklist it is in: everything in Review, say, or every bug.
+- **Teams** — a space shared with other people, each with a role that caps what
+  they can change, and an access list per checklist, tracker and tag saying who
+  it is for and what each of them may do with it.
 
 Every change is drawn on screen at once and saved straight away. See
 [Making a change](#making-a-change).
@@ -131,7 +132,7 @@ same popup lists who is in the team and has the table below.
 | Tick tasks, move them through stages, edit, flag and take them on; record tracker progress | ✓ | ✓ | ✓ | |
 | Add and delete tasks, and move them between checklists | ✓ | ✓ | | |
 | Make, change and delete checklists, trackers, tags and task types | ✓ | ✓ | | |
-| Choose who can see a checklist, a tag or a tracker | ✓ | ✓ | | |
+| Choose who a checklist, a tag or a tracker is for, and what each may do | ✓ | ✓ | | |
 | Add and remove people, change their roles, delete the team | ✓ | | | |
 
 The roles are defined once, in `src/schemas/team.ts` (`roleCan`), and the
@@ -145,12 +146,40 @@ as plain words, since making tags is not theirs to do. Teams made before the
 roles were split had "members", who could do everything but run the team; they
 are read as project managers.
 
-### Who can see what
+### Who it is for, and what they may do with it
 
-A checklist, a tag or a tracker in a team can be kept to some of its people:
-the row of faces beside **Back** on its page says who, and pressing it opens a
-searchable picker to change it. Whoever keeps it to a few people is always one
-of them, and the admin and viewers see everything whatever it says.
+A role is the **most** anyone can do in a team, not what they are handed. What
+they actually reach is decided per checklist, per tracker and per tag, by an
+access list: who is on it, and how far in each of them may go.
+
+| Level | What it means |
+|---|---|
+| **Read** | Sees it and everything in it. Changes nothing. |
+| **Edit** | Ticks its tasks, moves them along their stages, edits, flags and takes them on; records a tracker's readings. |
+| **Full** | All of that, and adds and deletes tasks, moves them between checklists, and changes or deletes the thing itself — who it is for included. |
+
+The two are read together and the **smaller wins**, so a list can never hand
+out more than a role allows: a collaborator given Full on a checklist still
+adds and deletes nothing, because that is not theirs to do anywhere. The rules
+are in `src/schemas/access.ts` (`levelFor`), and the server holds every change
+to them (`assertLevel`).
+
+The row of faces beside **Back** on a page says who it is for; pressing it
+opens a searchable picker with a level beside each person. Whoever sets it is
+on the list and runs it, so nothing is ever left with nobody who can change it
+again, and the admin and viewers are on every list by right.
+
+**Adding someone to a team hands them nothing.** They see no checklist, no
+tracker and no tag until they are put on one — which is why a new checklist,
+tracker or tag starts with its author alone on its list. A tag typed into a
+title (`#shopping`) is the exception and starts as everyone's: whoever reads
+the task reads the tag.
+
+Anything made before levels existed carries the old `visibleTo` field — who
+could see it, with what they could do left to their role — and is read as an
+access list of those people at Full, which capped by the role is exactly what
+they could already do (`accessFromVisibleTo`). Nobody gains or loses anything;
+the field is dropped the next time that document's list is saved.
 
 What something holds goes with it: a task in a checklist is seen by whoever can
 see the checklist, and a task in the Inbox — which belongs to no checklist of
@@ -202,14 +231,16 @@ rather than a rewrite of the whole checklist.
 ### `checklists`
 
 `checklistId`, `title`, `description`, `startDate`, `deadline`,
-`deadlineTime`, `dailyWindow`, `tagIds`, `stages`, `visibleTo`, `special`,
+`deadlineTime`, `dailyWindow`, `tagIds`, `stages`, `access`, `special`,
 `createdAt`, `updatedAt`.
 
 `special` is `"inbox"` for the Inbox, `"backlog"` for the Backlog, and absent
 for every other checklist.
 `stages` is absent until a checklist is given stages of its own; see
 [Stages](#stages). `tagIds` are carried by every task in the checklist, added
-later or not. `visibleTo` is who in a team can see it, or absent for everyone.
+later or not. `access` is who in a team it is for and what each may do with
+it, or absent for everyone; see
+[Who it is for](#who-it-is-for-and-what-they-may-do-with-it).
 
 ### `tasks`
 
@@ -235,7 +266,7 @@ either, and a field nobody reads is a field that quietly goes stale.
 
 `trackerId`, `title`, `type`, `unit`, `targetValue`, `startValue`,
 `currentValue`, `description`, `coverUrl`, `author`, `startDate`, `deadline`,
-`deadlineTime`, `tagIds`, `assignees`, `visibleTo`, `createdAt`, `updatedAt`.
+`deadlineTime`, `tagIds`, `assignees`, `access`, `createdAt`, `updatedAt`.
 
 ### `entries`
 
@@ -246,7 +277,7 @@ No `delta` is stored — see [tracker progress](#how-tracker-progress-is-stored)
 ### `tags`
 
 `tagId`, `name`, `color`, `special`, `description`, `startDate`, `deadline`,
-`deadlineTime`, `dailyWindow`, `visibleTo`, `createdAt`, `updatedAt`.
+`deadlineTime`, `dailyWindow`, `access`, `createdAt`, `updatedAt`.
 
 Tasks reference a tag by **id**, and also write it into the title by name.
 Renaming a tag rewrites that `#name` in the titles of the tasks carrying it, so
@@ -337,11 +368,16 @@ many tasks are at each. **Stage** in a task's menu sends it to any of them,
 straight to done included. Taking a stage away moves its tasks back to the
 nearest stage before it that is left.
 
-The **Stages** screen shows one stage across every checklist at once, twenty
-tasks a page. A stage there is a name, since that is what checklists share:
-Review is every task at a stage called Review, wherever it lives. The names run
-from the first stages to done, each placed by the earliest point any checklist
-has it (`stagesByName`).
+The **Across lists** screen shows one stage across every checklist at once,
+twenty tasks a page. A stage there is a name, since that is what checklists
+share: Review is every task at a stage called Review, wherever it lives. The
+names run from the first stages to done, each placed by the earliest point any
+checklist has it (`stagesByName`).
+
+The same screen cuts the same rows **by type** instead, at a switch: every bug
+whatever list it is in (`tasksByType`). One screen rather than two, because it
+is the same question asked of the same tasks, and a tab strip that changes what
+it names is the smallest thing that can carry both.
 
 A stage has an id of its own, so renaming one keeps its tasks. A task stores the
 id of the stage it is at; one from before stages, or from a stage since taken
@@ -366,12 +402,19 @@ set it in its edit dialog. Each space keeps its own list, managed from the same
 picker (**Manage types**): types are about tasks, so they live beside them
 rather than in Settings, which is about you.
 
+Every task list can be **narrowed to one kind** — and to one person's and one
+tag's — from the filter row, and **ordered by kind**, in the order the space
+keeps its types in, the untyped last. Everything on the screen follows the
+filter: the list, the counts and the progress.
+
 ---
 
 ## How tasks are ordered
 
-By `addedAt`, newest first — or by priority: urgent and important first, and
-the newest first within each band.
+By `addedAt`, newest first — or by priority (urgent and important first), by
+stage (still to do first, done last), or by type. One menu says which, since
+four orders would be four switches competing to say which one is in force; the
+button always names the order the list is actually in.
 
 A stored position would be a second source of truth to keep in step, and it
 bought nothing a timestamp does not already give: the order you added things in
@@ -519,6 +562,13 @@ does most of the separating and the wash is thin over it. Browsers without
 or more contrast, get the opaque surface instead, because a flat wash of
 translucent white over arbitrary content is exactly the unreadable case.
 
+Every change makes a small sound: a rising note for something added, two
+climbing ones for a tick, an octave down for something gone, the same note
+twice for something moved, a blip for a tag, a long climb for a reading
+recorded. They are synthesised rather than recorded, so there are no files to
+fetch, and anything without a sound of its own falls back to a barely-there tap
+rather than to silence (`src/lib/sounds.ts`).
+
 Dates are written one way everywhere — `8th Oct, 2026` — including inside the
 date pickers, which take the same formatter. They are stored as `YYYY-MM-DD`,
 which is right for storage and wrong for reading.
@@ -539,7 +589,7 @@ cheap by shape instead:
 - a checklist's page is sent one page of one stage; a tag's page one page of
   its open tasks, and its finished ones only once their section is opened
 - the search index doubles as the task source for the Tags, Priority and
-  Stages screens, so none of them costs an extra read
+  Across lists screens, so none of them costs an extra read
 - most changes write **one document**; the few that reach further — deleting a
   tag, changing a checklist's tags or stages — write the tasks they affect in
   one bulk write
@@ -628,8 +678,8 @@ bun run check            # Biome lint + format
 Tests cover the parts worth pinning down: task ordering, paging, checklist
 progress, tracker percentages, delta derivation and re-spacing, pace, velocity,
 calendar arithmetic, date formatting, inline `#tag` parsing, who in a team can
-see which task, and how a change is drawn before the server confirms it —
-stages, counts and pages included.
+see which task and what they may do with it, and how a change is drawn before
+the server confirms it — stages, counts and pages included.
 
 ---
 

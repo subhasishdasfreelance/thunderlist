@@ -111,8 +111,23 @@ export function velocitySummary(
 	velocity: Velocity,
 	unit: string,
 	isComplete: boolean,
+	/**
+	 * Read the line forwards rather than backwards: the day it is due and the
+	 * speed that day now asks for, rather than the speed so far and where that
+	 * would land. What is left to do is the question worth answering once
+	 * something has a deadline — the speed so far is history, and the finish it
+	 * projects is a guess about a date that is already fixed.
+	 *
+	 * Left out, or with no deadline to be due by, the line reads as before.
+	 */
+	deadline?: string | null,
 ): string | null {
 	if (isComplete) return "Complete";
+
+	if (deadline != null && velocity.requiredPerDay !== null) {
+		return `Due ${formatDate(deadline)} · ${rate(velocity.requiredPerDay, unit)} needed`;
+	}
+
 	if (velocity.perDay === null || velocity.perDay <= 0) return null;
 
 	const pace = rate(velocity.perDay, unit);

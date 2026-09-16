@@ -6,7 +6,7 @@ import {
 	listTagSummariesFn,
 	listTagsFn,
 } from "#/functions/tag.functions";
-import type { TaskPageView } from "#/schemas/task";
+import type { TaskFilter, TaskPageView } from "#/schemas/task";
 import { queryKeys } from "./keys";
 
 export const tagsQuery = () =>
@@ -30,11 +30,11 @@ export const tagQuery = (tagId: string) =>
 		retry: false,
 	});
 
-/** The figures, counting one person's work; see `checklistFilteredQuery`. */
-export const tagForQuery = (tagId: string, assignee: string) =>
+/** The figures, counting only what the screen shows; see `checklistFilteredQuery`. */
+export const tagForQuery = (tagId: string, filter: TaskFilter) =>
 	queryOptions({
-		queryKey: queryKeys.tagFor(tagId, assignee),
-		queryFn: () => getTagFn({ data: { tagId, assignee } }),
+		queryKey: queryKeys.tagFor(tagId, filter),
+		queryFn: () => getTagFn({ data: { tagId, ...filter } }),
 		retry: false,
 	});
 

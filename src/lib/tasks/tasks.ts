@@ -8,6 +8,7 @@
 
 import type { ChecklistProgress } from "#/schemas/checklist";
 import {
+	NO_TYPE,
 	PRIORITY_RANKS,
 	priorityRank,
 	type SORT_ORDERS,
@@ -49,12 +50,17 @@ export function isAssignedTo(
 
 /** Whether a task is one a screen's filter lets through; see `TaskFilter`. */
 export function matchesFilter(
-	task: { assignees?: ReadonlyArray<string>; tagIds: ReadonlyArray<string> },
+	task: {
+		assignees?: ReadonlyArray<string>;
+		tagIds: ReadonlyArray<string>;
+		typeId?: string | null;
+	},
 	filter: TaskFilter,
 ): boolean {
 	return (
 		isAssignedTo(task, filter.assignee) &&
-		(filter.tag === undefined || task.tagIds.includes(filter.tag))
+		(filter.tag === undefined || task.tagIds.includes(filter.tag)) &&
+		(filter.type === undefined || (task.typeId ?? NO_TYPE) === filter.type)
 	);
 }
 
@@ -81,12 +87,14 @@ export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
 	newest: "Newest first",
 	priority: "Priority first",
 	stage: "Earliest stage first",
+	type: "By type",
 };
 
 /**
  * Urgent and important first, then urgent, then important, then the rest — or,
  * by stage, the tasks still at their first stage first and the done last, the
- * stages between in order of how far along they are; see `stageProgress`.
+ * stages between in order of how far along they are; see `stageProgress`; or
+ * by type, in the order the space keeps its types in, the untyped last.
  *
  * Within a band the newest is still first, so sorting reorders the list rather
  * than replacing one arbitrary order with another.
@@ -97,24 +105,48 @@ export function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
 	compare: (a: T, b: T) => number,
 	/** How far along each is, 0-1. Without it, by stage is newest first. */
 	stageProgressOf?: (task: T) => number,
+	/** Where each one's type sits in the list. Without it, by type is newest first. */
+	typeRankOf?: (task: T) => number,
 ): Array<T> {
 	const rank =
 		order === "priority"
 			? (task: T) => PRIORITY_RANKS.indexOf(priorityRank(task))
 			: order === "stage"
 				? stageProgressOf
-				: undefined;
+				: order === "type"
+					? typeRankOf
+					: undefined;
 	if (rank === undefined) return [...tasks].sort(compare);
 
 	return [...tasks].sort((a, b) => rank(a) - rank(b) || compare(a, b));
+}
+
+/**
+ * Where a task's type sits in the space's list, for ordering by it: the list's
+ * own order, since that is the order whoever wrote it chose, and the tasks
+ * with no type after every one that has one.
+ */
+export function typeRanker(
+	types: ReadonlyArray<{ typeId: string }>,
+): (task: { typeId?: string | null }) => number {
+	const ranks = new Map(types.map((type, index) => [type.typeId, index]));
+	return (task) => ranks.get(task.typeId ?? "") ?? types.length;
 }
 
 /** The same, for the plain task lists that order by `compareTasks`. */
 export function orderTasks(
 	tasks: ReadonlyArray<Task>,
 	order: SortOrder,
+	/** The space's types, in their order, for `type`; see `typeRanker`. */
+	types?: ReadonlyArray<{ typeId: string }>,
 ): Array<Task> {
-	return sortTasksBy(tasks, order, compareTasks);
+	return sortTasksBy(
+		tasks,
+		order,
+		compareTasks,
+		undefined,
+		types === undefined ? undefined : typeRanker(types),
+	);
 }
 
 /** The same, for rows that carry a task rather than being one: a tag's. */
@@ -123,7 +155,11 @@ export function orderByTask<T>(
 	order: SortOrder,
 	taskOf: (item: T) => Task,
 	stepsLeftOf?: (item: T) => number,
+	/** The space's types, in their order, for `type`; see `typeRanker`. */
+	types?: ReadonlyArray<{ typeId: string }>,
 ): Array<T> {
+	const rankType = types === undefined ? undefined : typeRanker(types);
+
 	return sortTasksBy(
 		items.map((item) => ({
 			item,
@@ -133,6 +169,7 @@ export function orderByTask<T>(
 		order,
 		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),
 		stepsLeftOf === undefined ? undefined : (row) => stepsLeftOf(row.item),
+		rankType === undefined ? undefined : (row) => rankType(taskOf(row.item)),
 	).map((row) => row.item);
 }
 

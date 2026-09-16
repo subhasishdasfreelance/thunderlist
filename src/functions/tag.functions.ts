@@ -32,7 +32,10 @@ export const getTagFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getTag", async () => {
 			const scope = await requireScope();
-			return getTag(scope.ownerId, data.tagId, scope.hidden, data.assignee);
+			return getTag(scope.ownerId, data.tagId, scope.hidden, {
+				assignee: data.assignee,
+				type: data.type,
+			});
 		}),
 	);
 

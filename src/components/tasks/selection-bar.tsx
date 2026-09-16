@@ -2,7 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Text } from "@astryxdesign/core/Text";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, Check, FolderInput, X } from "lucide-react";
 import { StageDot } from "#/components/common/stage-dot";
 import { type Stage, stageColor } from "#/schemas/checklist";
 
@@ -15,6 +15,11 @@ import { type Stage, stageColor } from "#/schemas/checklist";
  * or, on a checklist, all to one stage of its. A tag gathers tasks from
  * checklists with different stages, so there it offers done instead.
  *
+ * Moving them all into another checklist is offered beside those, since a
+ * handful of rows picked out is exactly what a move usually is: sorting a
+ * dozen tasks into the lists they belong in, one pick rather than one menu
+ * each.
+ *
  * It floats at the foot of the screen, over the page, for as long as anything
  * is picked, so the rows picked can be far down a list and the bar still in
  * reach; on a phone it sits above the bottom bar.
@@ -25,6 +30,7 @@ export function SelectionBar({
 	stages,
 	onMoveTo,
 	onDone,
+	onMoveToChecklist,
 	onClear,
 }: {
 	count: number;
@@ -35,6 +41,11 @@ export function SelectionBar({
 	onMoveTo?: (stageId: string) => void;
 	/** Finish them. Left out when none of them can be finished by hand. */
 	onDone?: () => void;
+	/**
+	 * Move all of them into another checklist, picked in a dialog. Left out
+	 * for anyone whose role may not move tasks; see `Capability`.
+	 */
+	onMoveToChecklist?: () => void;
 	onClear: () => void;
 }) {
 	return (
@@ -80,6 +91,16 @@ export function SelectionBar({
 					size="sm"
 					icon={<Check aria-hidden />}
 					onClick={onDone}
+				/>
+			)}
+
+			{onMoveToChecklist === undefined ? null : (
+				<Button
+					label="Move to checklist"
+					variant="secondary"
+					size="sm"
+					icon={<FolderInput aria-hidden />}
+					onClick={onMoveToChecklist}
 				/>
 			)}
 

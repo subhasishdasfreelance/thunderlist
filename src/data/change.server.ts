@@ -20,6 +20,7 @@
 
 import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
+import { type AccessEntry, type AccessLevel, reaches } from "#/schemas/access";
 import type { Change } from "#/schemas/change";
 import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
@@ -42,12 +43,7 @@ import {
 	updateProgressEntry,
 	updateTracker,
 } from "./tracker.server";
-import {
-	assertChecklistVisible,
-	assertTagVisible,
-	assertTrackerVisible,
-	isTaskVisible,
-} from "./visibility.server";
+import { assertLevel, isTaskVisible, levelOf } from "./visibility.server";
 
 /** `actor` is who is asking, lower-cased; a tracker reading records it. */
 async function run(
@@ -155,13 +151,18 @@ function capabilityFor(change: Change): Capability {
 /**
  * Refuse a change this person may not make where they are working.
  *
- * In your own space there is nobody else, and everything is allowed. In a team,
- * their role has to allow it; everyone a change names — to assign something
- * to, or to let see something — has to be in the team; and a change cannot
- * reach anything kept from this person, which to them does not exist.
+ * In your own space there is nobody else, and everything is allowed. In a team
+ * there are three questions and all of them have to say yes: their role has to
+ * allow this kind of change at all; everyone the change names — to assign
+ * something to, or to put on an access list — has to be in the team; and the
+ * thing it reaches has to be one they are on the list for, far enough in to do
+ * this to it. See `assertLevel`.
+ *
+ * A change that reaches something not on their list at all is answered as for
+ * something deleted, because to them that is what it is.
  */
 async function assertAllowed(scope: Scope, change: Change): Promise<void> {
-	const { team, hidden } = scope;
+	const { team } = scope;
 	if (team === null) return;
 
 	const needed = capabilityFor(change);
@@ -184,42 +185,51 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 	switch (change.kind) {
 		case "checklist.update":
 		case "checklist.delete":
-			assertChecklistVisible(hidden, change.checklistId);
+			assertLevel(scope, "checklists", change.checklistId, "full");
 			return;
 
 		case "task.create":
 			if (change.checklistId !== null) {
-				assertChecklistVisible(hidden, change.checklistId);
+				assertLevel(scope, "checklists", change.checklistId, "full");
 			}
+			// Standing for something is only reading it: a task that waits on a
+			// checklist or a tracker changes neither.
 			if (change.linkedChecklistId != null) {
-				assertChecklistVisible(hidden, change.linkedChecklistId);
+				assertLevel(scope, "checklists", change.linkedChecklistId, "read");
 			}
 			if (change.trackerId != null) {
-				assertTrackerVisible(hidden, change.trackerId);
+				assertLevel(scope, "trackers", change.trackerId, "read");
 			}
 			return;
 
 		case "tracker.update":
 		case "tracker.delete":
+			assertLevel(scope, "trackers", change.trackerId, "full");
+			return;
+
+		// A reading is the tracker moving on, not the tracker changing.
 		case "entry.create":
 		case "entry.update":
 		case "entry.delete":
-			assertTrackerVisible(hidden, change.trackerId);
+			assertLevel(scope, "trackers", change.trackerId, "edit");
 			return;
 
 		case "task.move":
-			assertChecklistVisible(hidden, change.checklistId);
-			await assertTaskVisible(scope, change.taskId);
+			assertLevel(scope, "checklists", change.checklistId, "full");
+			await assertTaskAllowed(scope, change.taskId, "full");
+			return;
+
+		case "task.delete":
+			await assertTaskAllowed(scope, change.taskId, "full");
 			return;
 
 		case "task.update":
-		case "task.delete":
-			await assertTaskVisible(scope, change.taskId);
+			await assertTaskAllowed(scope, change.taskId, "edit");
 			return;
 
 		case "tag.update":
 		case "tag.delete":
-			assertTagVisible(hidden, change.tagId);
+			assertLevel(scope, "tags", change.tagId, "full");
 			return;
 
 		default:
@@ -227,96 +237,131 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 	}
 }
 
-/** Everyone a change assigns something to, or lets see something. */
+/** The addresses on an access list; see `accessSchema`. */
+function listed(access: ReadonlyArray<AccessEntry> | null | undefined) {
+	return (access ?? []).map((entry) => entry.email);
+}
+
+/** Everyone a change assigns something to, or puts on an access list. */
 function namedPeople(change: Change): ReadonlyArray<string> {
 	switch (change.kind) {
 		case "checklist.create":
 		case "tag.create":
-			return change.visibleTo ?? [];
+			return listed(change.access);
 		case "checklist.update":
 		case "tag.update":
-			return change.patch.visibleTo ?? [];
+			return listed(change.patch.access);
 		case "task.update":
 			return change.patch.assignees ?? [];
 		case "tracker.create":
-			return [...change.assignees, ...(change.visibleTo ?? [])];
+			return [...change.assignees, ...listed(change.access)];
 		case "tracker.update":
 			return [
 				...(change.patch.assignees ?? []),
-				...(change.patch.visibleTo ?? []),
+				...listed(change.patch.access),
 			];
 		default:
 			return [];
 	}
 }
 
-/** A task is seen by whoever can see where it lives; see `isTaskVisible`. */
-async function assertTaskVisible(scope: Scope, taskId: string): Promise<void> {
-	const { hidden } = scope;
-	if (hidden.checklistIds.size === 0 && hidden.tagIds.size === 0) return;
+/**
+ * A task is reached through wherever it lives, so what may be done to it is
+ * what may be done to that: its checklist, or — for one in the Inbox, which
+ * belongs to no checklist of its own — the tags it carries; see
+ * `isTaskVisible`.
+ *
+ * A task carrying several tags takes the best of them: it is one task, and
+ * someone who runs any of the tags it is on runs it.
+ */
+async function assertTaskAllowed(
+	scope: Scope,
+	taskId: string,
+	needed: AccessLevel,
+): Promise<void> {
+	const { hidden, levels } = scope;
+	if (levels === null) return;
 
 	const current = await collections();
 	const task = await current.tasks.findOne(
 		{ taskId, userId: scope.ownerId },
 		{ projection: { _id: 0, checklistId: 1, tagIds: 1 } },
 	);
+	// Already gone, or never theirs: the write itself is the no-op that answers.
+	if (!task) return;
 
-	if (task && !isTaskVisible(task, hidden)) {
+	if (!isTaskVisible(task, hidden)) {
 		throw new AppError("not_found", "That task no longer exists.");
+	}
+
+	if (task.checklistId != null && task.checklistId !== hidden.inboxId) {
+		assertLevel(scope, "checklists", task.checklistId, needed);
+		return;
+	}
+
+	// In the Inbox, or in no checklist at all: its tags decide. With none,
+	// nobody has been kept from it and the role alone says.
+	if (task.tagIds.length === 0) return;
+
+	const allowed = task.tagIds.some((tagId) => {
+		const level = levelOf(scope, "tags", tagId);
+		return level !== null && reaches(level, needed);
+	});
+
+	if (!allowed) {
+		throw new AppError(
+			"invalid_data",
+			needed === "edit"
+				? "You can only read this task."
+				: "You can work this task, but not add, delete or move it.",
+		);
 	}
 }
 
 /**
- * Whoever keeps a checklist, a tag or a tracker to a few people is one of
- * them, so the list they choose never locks them out of what they are working
- * on.
+ * Whoever keeps a checklist, a tag or a tracker to a few people is one of them
+ * and runs it, so the list they choose never locks them out of what they are
+ * working on — nor leaves it with nobody who can change it again.
  */
 function includingActor(scope: Scope, change: Change): Change {
 	if (scope.team === null) return change;
 
-	const including = (people: Array<string> | null) =>
-		people === null || people.includes(scope.email)
+	const including = (
+		people: Array<AccessEntry> | null,
+	): Array<AccessEntry> | null =>
+		people === null || people.some((entry) => entry.email === scope.email)
 			? people
-			: [...people, scope.email];
+			: [...people, { email: scope.email, level: "full" as const }];
 
 	switch (change.kind) {
 		case "checklist.create":
-			return { ...change, visibleTo: including(change.visibleTo) };
+			return { ...change, access: including(change.access) };
 
 		case "tag.create":
-			return { ...change, visibleTo: including(change.visibleTo) };
+			return { ...change, access: including(change.access) };
 
 		case "tracker.create":
-			return { ...change, visibleTo: including(change.visibleTo) };
+			return { ...change, access: including(change.access) };
 
 		case "checklist.update": {
-			const { visibleTo } = change.patch;
-			return visibleTo === undefined
+			const { access } = change.patch;
+			return access === undefined
 				? change
-				: {
-						...change,
-						patch: { ...change.patch, visibleTo: including(visibleTo) },
-					};
+				: { ...change, patch: { ...change.patch, access: including(access) } };
 		}
 
 		case "tracker.update": {
-			const { visibleTo } = change.patch;
-			return visibleTo === undefined
+			const { access } = change.patch;
+			return access === undefined
 				? change
-				: {
-						...change,
-						patch: { ...change.patch, visibleTo: including(visibleTo) },
-					};
+				: { ...change, patch: { ...change.patch, access: including(access) } };
 		}
 
 		case "tag.update": {
-			const { visibleTo } = change.patch;
-			return visibleTo === undefined
+			const { access } = change.patch;
+			return access === undefined
 				? change
-				: {
-						...change,
-						patch: { ...change.patch, visibleTo: including(visibleTo) },
-					};
+				: { ...change, patch: { ...change.patch, access: including(access) } };
 		}
 
 		default:

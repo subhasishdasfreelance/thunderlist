@@ -1,10 +1,14 @@
 /**
  * The small sounds that confirm a change.
  *
- * Adding, ticking, deleting — each has a sound of its own, short and quiet
- * enough to be felt more than heard: a confirmation, never a notification.
- * They are synthesised rather than recorded, so there are no files to fetch
- * and nothing to wait for.
+ * Adding, ticking, deleting, moving, tagging, recording a reading — each has a
+ * sound of its own, short and quiet enough to be felt more than heard: a
+ * confirmation, never a notification. They are synthesised rather than
+ * recorded, so there are no files to fetch and nothing to wait for.
+ *
+ * Every change gets one, since every change is something the user did; which
+ * one is decided in `soundFor`, and anything without a sound of its own falls
+ * back to the barely-there tap rather than to silence.
  *
  * Nothing is pitched much below 250 Hz: a phone's or a laptop's speaker
  * barely plays anything lower, so a sound down there was simply not heard.
@@ -19,6 +23,9 @@ export type Sound =
 	| "check"
 	| "uncheck"
 	| "delete"
+	| "move"
+	| "tag"
+	| "progress"
 	| "tap";
 
 /** The same sound again within this is the same sound: ten pasted tasks are one chime. */
@@ -110,6 +117,24 @@ const SOUNDS: Record<Sound, (audio: AudioContext) => void> = {
 	// Falling an octave: gone.
 	delete: (audio) =>
 		tone(audio, { from: 520, to: 260, seconds: 0.12, volume: 0.045 }),
+	// The same note twice: the same thing, somewhere else. Moving a task to
+	// another checklist, or along to another stage — nothing came, nothing went.
+	move: (audio) => {
+		tone(audio, { from: 640, to: 640, seconds: 0.045, volume: 0.022 });
+		tone(audio, {
+			from: 640,
+			to: 640,
+			seconds: 0.055,
+			volume: 0.022,
+			delay: 0.07,
+		});
+	},
+	// A short blip, high and quick: a label stuck on, or peeled off.
+	tag: (audio) =>
+		tone(audio, { from: 980, to: 1180, seconds: 0.04, volume: 0.02 }),
+	// A long climb: a reading recorded, further up the same slope.
+	progress: (audio) =>
+		tone(audio, { from: 480, to: 720, seconds: 0.13, volume: 0.028 }),
 	// Barely there: anything else that changed.
 	tap: (audio) =>
 		tone(audio, { from: 1100, to: 950, seconds: 0.03, volume: 0.015 }),
@@ -120,7 +145,6 @@ function soundFor(change: Change): Sound {
 		case "checklist.create":
 		case "task.create":
 		case "tracker.create":
-		case "entry.create":
 		case "tag.create":
 			return "add";
 		case "checklist.delete":
@@ -129,9 +153,18 @@ function soundFor(change: Change): Sound {
 		case "entry.delete":
 		case "tag.delete":
 			return "delete";
+		// A reading is not a thing added to a list; it is the climb going on.
+		case "entry.create":
+		case "entry.update":
+			return "progress";
+		case "task.move":
+			return "move";
 		case "task.update":
 			if (change.patch.completed === true) return "check";
 			if (change.patch.completed === false) return "uncheck";
+			// Along to another stage is the same journey as into another list.
+			if (change.patch.stageId !== undefined) return "move";
+			if (change.patch.tagIds !== undefined) return "tag";
 			return "tap";
 		default:
 			return "tap";

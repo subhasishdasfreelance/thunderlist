@@ -20,8 +20,9 @@ import {
 	TagsField,
 	tagsDraft,
 } from "#/components/tags/tags-field";
-import { VisibilityField } from "#/components/teams/visibility-field";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { ChecklistValues } from "#/lib/changes";
+import type { AccessEntry } from "#/schemas/access";
 import {
 	type Checklist,
 	checklistStages,
@@ -100,7 +101,14 @@ export function ChecklistFormDialog({
 	);
 	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
 	const [tagDraft, setTagDraft] = useState(EMPTY_TAGS_DRAFT);
-	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
+	/*
+	 * Who it is for. A new one starts with nobody but its author — so adding
+	 * someone to a team hands them nothing until they are put on something —
+	 * and `null`, the whole team, stays a choice rather than the default; see
+	 * `AccessField`.
+	 */
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stages, setStages] = useState<Array<Stage>>([...DEFAULT_STAGES]);
 
 	// Reset to the current values every time the dialog opens.
@@ -117,9 +125,13 @@ export function ChecklistFormDialog({
 		setDeadlineTime(checklist?.deadlineTime ?? undefined);
 		setDailyWindow(checklist?.dailyWindow ?? null);
 		setTagDraft(tagsDraft(checklist?.tagIds ?? [], tags));
-		setVisibleTo(checklist?.visibleTo ?? null);
+		setAccess(
+			checklist === null || checklist === undefined
+				? ownAlone
+				: ((checklist.access ?? null) as Array<AccessEntry> | null),
+		);
 		setStages(withColors(checklistStages(checklist ?? {})));
-	}, [isOpen, checklist]);
+	}, [isOpen, checklist, ownAlone]);
 
 	const trimmedTitle = title.trim();
 	const isValid =
@@ -150,7 +162,7 @@ export function ChecklistFormDialog({
 					: null,
 			dailyWindow,
 			tagIds: draftTagIds(tagDraft, resolveTags),
-			visibleTo,
+			access,
 			...(sameStages(named, original) ? {} : { stages: named }),
 		});
 	}
@@ -234,7 +246,7 @@ export function ChecklistFormDialog({
 				/>
 				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
 				{checklist?.special != null ? null : (
-					<VisibilityField value={visibleTo} onChange={setVisibleTo} />
+					<AccessField noun="checklist" value={access} onChange={setAccess} />
 				)}
 			</VStack>
 		</FormDialog>

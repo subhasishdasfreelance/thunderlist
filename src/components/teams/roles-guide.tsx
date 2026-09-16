@@ -29,7 +29,7 @@ const ROWS: Array<{ what: string; roles: ReadonlyArray<TeamRole> }> = [
 		roles: ["admin", "manager"],
 	},
 	{
-		what: "Choose who can see a checklist, a tag or a tracker",
+		what: "Choose who a checklist, a tag or a tracker is for, and what each may do with it",
 		roles: ["admin", "manager"],
 	},
 	{
@@ -47,6 +47,14 @@ export function RolesGuide() {
 				Whoever makes a team is its admin, and there is only ever one: making
 				someone else the admin hands the team over. The admin gives everyone
 				else a role when adding them, and can change it at any time.
+			</Text>
+
+			<Text type="supporting">
+				A role is the most anyone can do, not what they are handed. Apart from
+				the admin and viewers — who see everything — someone sees only the
+				checklists, trackers and tags they have been put on, and does only what
+				that list allows them there. Press the faces at the top of any of them
+				to change who is on it.
 			</Text>
 
 			{/* Wider than a phone, so it scrolls rather than the page. */}

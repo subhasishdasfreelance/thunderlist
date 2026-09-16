@@ -2,6 +2,7 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
 import { CircleAlert, Star, Zap } from "lucide-react";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
+import { shortTitle } from "#/lib/tasks/tasks";
 import type { SpecialTag, Tag } from "#/schemas/tag";
 
 /**
@@ -141,11 +142,12 @@ export function ShortcutKey({ label }: { label: string }) {
 
 /**
  * The Backlog entry for a row's overflow menu: parking the task there. The
- * Backlog is a checklist, named here as the user has named it.
+ * Backlog is a checklist, named here as the user has named it — cut short with
+ * an ellipsis if that name is long, so one rename cannot stretch the menu.
  */
 export function backlogMenuItem(title: string, onMove: () => void) {
 	return {
-		label: `Move to ${title}`,
+		label: `Move to ${shortTitle(title, 24)}`,
 		icon: SPECIAL_CHECKLIST_ICONS.backlog,
 		endContent: <ShortcutKey label={TASK_SHORTCUTS.backlog} />,
 		onClick: onMove,

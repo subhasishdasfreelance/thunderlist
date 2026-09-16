@@ -4,7 +4,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
@@ -63,6 +63,7 @@ export function TaskRenameDialog({
 }) {
 	const [value, setValue] = useState("");
 	const [caption, setCaption] = useState("");
+	const captionRef = useRef<HTMLInputElement>(null);
 	const [notes, setNotes] = useState("");
 	const [typeId, setTypeId] = useState(NO_TYPE);
 	const [notesView, setNotesView] = useState<NotesView>("write");
@@ -78,6 +79,16 @@ export function TaskRenameDialog({
 		// Notes are only ever shown here, so ones that exist open ready to read.
 		setNotesView(task.notes ? "preview" : "write");
 	}, [isOpen, task]);
+
+	/*
+	 * A caption is a line about the task, not a name or an address. Without
+	 * this, a phone offered saved passwords and addresses over the keyboard the
+	 * moment the field was tapped. Set on the element itself, which is where
+	 * autofill reads it, as the title field does; see `TagTextField`.
+	 */
+	useEffect(() => {
+		captionRef.current?.setAttribute("autocomplete", "off");
+	}, []);
 
 	const parsed = parseInlineTags(value.replace(/\s*\n\s*/g, " "));
 
@@ -140,6 +151,7 @@ export function TaskRenameDialog({
 				)}
 
 				<TextInput
+					ref={captionRef}
 					label="Caption"
 					isOptional
 					description="Shown in small text under the title."

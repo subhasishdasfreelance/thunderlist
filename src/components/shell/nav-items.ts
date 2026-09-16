@@ -10,7 +10,8 @@ import {
  * The primary destinations.
  *
  * Checklists are where work lives, the Inbox and the Backlog among them;
- * Priority, Stages, Tags and Trackers are ways of looking across all of it.
+ * Priority, Across lists, Tags and Trackers are ways of looking across all
+ * of it.
  * Today is a tag, so it is reached from the Tags screen rather than having an
  * entry of its own — and Today is where the app opens. Detail routes live
  * underneath these and are deliberately not entries either, and neither is the
@@ -27,7 +28,12 @@ export const NAV_ITEMS = [
 		icon: ListChecks,
 	},
 	{ to: "/priority", label: "Priority", shortLabel: "Priority", icon: Target },
-	{ to: "/stages", label: "Stages", shortLabel: "Stages", icon: SquareKanban },
+	{
+		to: "/stages",
+		label: "Across lists",
+		shortLabel: "Across",
+		icon: SquareKanban,
+	},
 	{ to: "/tags", label: "Tags", shortLabel: "Tags", icon: Tags },
 	{
 		to: "/trackers",

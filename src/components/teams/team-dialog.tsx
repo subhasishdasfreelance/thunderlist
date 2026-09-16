@@ -259,33 +259,46 @@ export function TeamDialog({
 					</List>
 
 					{isAdmin ? (
-						<div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-							<TextInput
-								label="Add someone"
-								description="The address their Google account signs in with."
-								placeholder="name@example.com"
-								value={email}
-								onChange={setEmail}
-								onEnter={() => void add()}
-								width="100%"
-							/>
-							<Selector
-								label="As"
-								options={GRANTED_ROLES.map((each) => ({
-									value: each,
-									label: ROLE_LABELS[each],
-								}))}
-								value={role}
-								onChange={(next) => setRole(next as GrantedRole)}
-							/>
-							<Button
-								label="Add"
-								icon={<UserPlus aria-hidden />}
-								variant="primary"
-								isDisabled={email.trim() === "" || isBusy}
-								onClick={() => void add()}
-							/>
-						</div>
+						<VStack gap={1}>
+							{/*
+							 * Adding someone hands them nothing: a role is the most they
+							 * could ever do, and what they actually see is whatever they
+							 * have been put on. Said here, because "I added them and they
+							 * see nothing" is otherwise a bug report.
+							 */}
+							<Text type="supporting">
+								Someone added sees nothing until they are put on a checklist, a
+								tracker or a tag — press the faces at the top of one to put them
+								on it. Viewers see everything.
+							</Text>
+							<div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+								<TextInput
+									label="Add someone"
+									description="The address their Google account signs in with."
+									placeholder="name@example.com"
+									value={email}
+									onChange={setEmail}
+									onEnter={() => void add()}
+									width="100%"
+								/>
+								<Selector
+									label="As"
+									options={GRANTED_ROLES.map((each) => ({
+										value: each,
+										label: ROLE_LABELS[each],
+									}))}
+									value={role}
+									onChange={(next) => setRole(next as GrantedRole)}
+								/>
+								<Button
+									label="Add"
+									icon={<UserPlus aria-hidden />}
+									variant="primary"
+									isDisabled={email.trim() === "" || isBusy}
+									onClick={() => void add()}
+								/>
+							</div>
+						</VStack>
 					) : null}
 
 					{/* Folded: it is for the occasional question, not every visit. */}

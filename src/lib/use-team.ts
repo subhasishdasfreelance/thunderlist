@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { spaceQuery } from "#/queries/space";
+import { type AccessEntry, levelFor, reaches } from "#/schemas/access";
 import { roleCan, type SpaceView, type TeamRole } from "#/schemas/team";
 
 /** Where the app is working, once that has been read; see `SpaceView`. */
@@ -47,5 +48,35 @@ export function usePermissions(): Permissions {
 		role: team.role,
 		canManageContent: roleCan(team.role, "manageContent"),
 		canUpdateTasks: roleCan(team.role, "updateTasks"),
+	};
+}
+
+/**
+ * The same, for one checklist, tag or tracker: what its access list allows
+ * this person, capped by their role; see `levelFor`.
+ *
+ * A screen about one thing asks this rather than `usePermissions`, because a
+ * role alone no longer answers it: a project manager may run the team's work
+ * and still be no more than a reader of this particular list.
+ *
+ * As everywhere, this only keeps the controls out of the way. The server
+ * refuses what the list does not allow whatever the screen shows.
+ */
+export function useItemPermissions(
+	/** Who may do what with it, or `null`/absent for the whole team. */
+	access: ReadonlyArray<AccessEntry> | null | undefined,
+): Permissions {
+	const space = useSpace();
+	const team = space?.team ?? null;
+	if (space === null || team === null) {
+		return { role: null, canManageContent: true, canUpdateTasks: true };
+	}
+
+	const level = levelFor(team.role, space.email, access);
+
+	return {
+		role: team.role,
+		canManageContent: level !== null && reaches(level, "full"),
+		canUpdateTasks: level !== null && reaches(level, "edit"),
 	};
 }

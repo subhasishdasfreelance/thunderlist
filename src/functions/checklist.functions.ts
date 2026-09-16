@@ -6,7 +6,7 @@ import {
 	getChecklistStageTasks,
 	listChecklists,
 } from "#/data/checklist.server";
-import { assertChecklistVisible } from "#/data/visibility.server";
+import { assertLevel } from "#/data/visibility.server";
 import {
 	checklistIdInputSchema,
 	checklistReadInputSchema,
@@ -28,7 +28,7 @@ export const getChecklistFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getChecklist", async () => {
 			const scope = await requireScope();
-			assertChecklistVisible(scope.hidden, data.checklistId);
+			assertLevel(scope, "checklists", data.checklistId, "read");
 			return getChecklist(scope.ownerId, data.checklistId, scope.hidden, {
 				assignee: data.assignee,
 				tag: data.tag,
@@ -48,7 +48,7 @@ export const getChecklistStageTasksFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getChecklistStageTasks", async () => {
 			const scope = await requireScope();
-			assertChecklistVisible(scope.hidden, data.checklistId);
+			assertLevel(scope, "checklists", data.checklistId, "read");
 			return getChecklistStageTasks(
 				scope.ownerId,
 				data.checklistId,
@@ -63,7 +63,7 @@ export const getChecklistCompletedFn = createServerFn()
 	.handler(({ data }) =>
 		guard("getChecklistCompleted", async () => {
 			const scope = await requireScope();
-			assertChecklistVisible(scope.hidden, data.checklistId);
+			assertLevel(scope, "checklists", data.checklistId, "read");
 			return getChecklistCompleted(
 				scope.ownerId,
 				data.checklistId,

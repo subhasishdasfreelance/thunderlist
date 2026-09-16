@@ -75,7 +75,7 @@ export function ChecklistPickerDialog({
 						description={`No checklist matches "${query.trim()}".`}
 					/>
 				) : (
-					<List hasDividers>
+					<List hasDividers className="thunderlist-picker-list">
 						{shown.map((checklist) => (
 							<ListItem
 								key={checklist.checklistId}

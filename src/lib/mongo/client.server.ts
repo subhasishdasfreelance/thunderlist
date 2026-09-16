@@ -53,9 +53,19 @@ const DB_NAME = "thunderlist";
  */
 export type Owned = { userId: string };
 
-export type ChecklistDoc = Checklist & Owned;
-export type TrackerDoc = Tracker & Owned;
-export type TagDoc = Tag & Owned;
+/**
+ * Anything a team can keep to some of its people, as stored.
+ *
+ * `visibleTo` is the old field: a list of who could see it, with what they
+ * could do left to their role. It is read and never written — see
+ * `accessFromVisibleTo` — and goes when the document is next saved with an
+ * access list of its own.
+ */
+type Shared = { visibleTo?: Array<string> | null };
+
+export type ChecklistDoc = Checklist & Owned & Shared;
+export type TrackerDoc = Tracker & Owned & Shared;
+export type TagDoc = Tag & Owned & Shared;
 
 /** `checklistId` is null for a task that belongs to no checklist. */
 export type TaskDoc = Task & Owned & { checklistId: string | null };

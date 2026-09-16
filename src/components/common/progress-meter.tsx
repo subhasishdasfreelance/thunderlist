@@ -121,9 +121,24 @@ export function ProgressMeter({
 	 * A checklist's stages, done first, and how many tasks it has in all: the
 	 * bar is drawn in their colours; see `stageParts`.
 	 */
-	stages?: { parts: ReadonlyArray<StagePart>; total: number };
+	stages?: {
+		parts: ReadonlyArray<StagePart>;
+		total: number;
+		/**
+		 * What the first stage is called — the work not started, which is the
+		 * bar's empty track rather than a part of it. Named here so the key can
+		 * count it with the rest; how many are at it is whatever the parts leave
+		 * over, so the two can never disagree.
+		 */
+		firstName?: string;
+	};
 }) {
 	const expectedPercent = elapsed == null ? null : elapsed * 100;
+	// What the parts leave over: the tasks still at the first stage.
+	const notStarted =
+		stages === undefined
+			? 0
+			: stages.total - stages.parts.reduce((sum, part) => sum + part.count, 0);
 	const expected =
 		expectedPercent === null ? null : clampPercent(expectedPercent);
 	const reading = expectedReading === undefined ? "" : ` (${expectedReading})`;
@@ -159,8 +174,13 @@ export function ProgressMeter({
 				)}
 			</div>
 
-			{/* The key: a stage's colour is never the only thing naming it. */}
-			{stages === undefined || stages.parts.length < 2 ? null : (
+			{/*
+			 * The key: a stage's colour is never the only thing naming it, and
+			 * every stage is counted — the first one last, where the bar leaves it,
+			 * drawn as the empty ring its empty track deserves.
+			 */}
+			{stages === undefined ||
+			(stages.firstName === undefined && stages.parts.length < 2) ? null : (
 				<HStack gap={3} vAlign="center" wrap="wrap">
 					{stages.parts.map((part) => (
 						<HStack key={part.stageId} gap={1} vAlign="center">
@@ -170,6 +190,14 @@ export function ProgressMeter({
 							</Text>
 						</HStack>
 					))}
+					{stages.firstName === undefined ? null : (
+						<HStack gap={1} vAlign="center">
+							<StageDot color={null} />
+							<Text type="supporting">
+								{stages.firstName} {notStarted}
+							</Text>
+						</HStack>
+					)}
 				</HStack>
 			)}
 

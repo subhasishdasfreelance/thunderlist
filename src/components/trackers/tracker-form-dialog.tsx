@@ -22,10 +22,11 @@ import {
 	TagsField,
 	tagsDraft,
 } from "#/components/tags/tags-field";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
-import { VisibilityField } from "#/components/teams/visibility-field";
 import type { TrackerValues } from "#/lib/changes";
 import { useTeam } from "#/lib/use-team";
+import type { AccessEntry } from "#/schemas/access";
 import { todayDateOnly } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import { TRACKER_TYPE_DEFAULT_UNITS, type Tracker } from "#/schemas/tracker";
@@ -75,7 +76,14 @@ export function TrackerFormDialog({
 	const [author, setAuthor] = useState("");
 	const [tagDraft, setTagDraft] = useState(EMPTY_TAGS_DRAFT);
 	const [assignees, setAssignees] = useState<Array<string>>([]);
-	const [visibleTo, setVisibleTo] = useState<Array<string> | null>(null);
+	/*
+	 * Who it is for. A new one starts with nobody but its author — so adding
+	 * someone to a team hands them nothing until they are put on something —
+	 * and `null`, the whole team, stays a choice rather than the default; see
+	 * `AccessField`.
+	 */
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const team = useTeam();
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
@@ -96,8 +104,12 @@ export function TrackerFormDialog({
 		setAuthor(tracker?.author ?? "");
 		setTagDraft(tagsDraft(tracker?.tagIds ?? [], tags));
 		setAssignees(tracker?.assignees ?? []);
-		setVisibleTo(tracker?.visibleTo ?? null);
-	}, [isOpen, tracker]);
+		setAccess(
+			tracker === null || tracker === undefined
+				? ownAlone
+				: ((tracker.access ?? null) as Array<AccessEntry> | null),
+		);
+	}, [isOpen, tracker, ownAlone]);
 
 	const trimmedTitle = title.trim();
 	const from = startValue ?? 0;
@@ -131,7 +143,7 @@ export function TrackerFormDialog({
 			author: author.trim(),
 			tagIds: draftTagIds(tagDraft, resolveTags),
 			assignees,
-			visibleTo,
+			access,
 		});
 	}
 
@@ -257,7 +269,7 @@ export function TrackerFormDialog({
 					/>
 				)}
 
-				<VisibilityField value={visibleTo} onChange={setVisibleTo} />
+				<AccessField noun="tracker" value={access} onChange={setAccess} />
 
 				<TextArea
 					label="Description"

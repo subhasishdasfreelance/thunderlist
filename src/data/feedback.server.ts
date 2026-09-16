@@ -53,7 +53,7 @@ export async function sendFeedback(
 		deadlineTime: null,
 		dailyWindow: null,
 		tagIds: [],
-		visibleTo: null,
+		access: null,
 	});
 
 	const firstLine = message.split("\n")[0].trim();

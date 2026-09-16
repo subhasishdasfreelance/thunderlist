@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { accessSchema } from "./access";
 import {
 	dailyWindowSchema,
 	dateOnlySchema,
@@ -7,7 +8,6 @@ import {
 	tagIdsSchema,
 	timeOfDaySchema,
 	titleSchema,
-	visibleToSchema,
 } from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
 import { taskFilterSchema } from "./task";
@@ -362,10 +362,14 @@ const checklistSchema = v.object({
 	 */
 	tagIds: v.optional(v.array(idSchema)),
 	/**
-	 * In a team, the people who can see it and every task in it, by address;
-	 * absent or `null` for everyone. See `visibleToSchema`.
+	 * In a team, who may do what with it and every task in it; absent or `null`
+	 * for everyone, each at whatever their role allows. See `accessSchema`.
+	 *
+	 * Read from `visibleTo` on anything written before levels existed, which
+	 * named who could see it and left the rest to their role; see
+	 * `accessFromVisibleTo`.
 	 */
-	visibleTo: v.optional(v.nullable(v.array(v.string()))),
+	access: v.optional(accessSchema),
 	/** The steps its tasks go through; absent for `DEFAULT_STAGES`. */
 	stages: v.optional(v.array(stageSchema)),
 	/**
@@ -416,7 +420,7 @@ export const createChecklistInputSchema = v.object({
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema), null),
 	tagIds: v.optional(tagIdsSchema, []),
-	visibleTo: v.optional(visibleToSchema, null),
+	access: v.optional(accessSchema, null),
 	stages: v.optional(stagesSchema),
 });
 
@@ -431,7 +435,7 @@ export const updateChecklistInputSchema = v.object({
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 			tagIds: v.optional(tagIdsSchema),
-			visibleTo: v.optional(visibleToSchema),
+			access: v.optional(accessSchema),
 			stages: v.optional(stagesSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),

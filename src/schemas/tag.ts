@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { accessSchema } from "./access";
 import type { ChecklistProgress, StagePart } from "./checklist";
 import {
 	dailyWindowSchema,
@@ -8,7 +9,6 @@ import {
 	idSchema,
 	timeOfDaySchema,
 	todayDateOnly,
-	visibleToSchema,
 } from "./common";
 import type { Task } from "./task";
 import type { TrackerSummary } from "./tracker";
@@ -85,11 +85,11 @@ const tagSchema = v.object({
 	 */
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 	/**
-	 * In a team, the people who can see it and the tasks that live under it, by
-	 * address; absent or `null` for everyone. Never set on Today, which is
-	 * everyone's. See `visibleToSchema`.
+	 * In a team, who may do what with it and the tasks that live under it;
+	 * absent or `null` for everyone, each at whatever their role allows. Never
+	 * set on Today, which is everyone's. See `accessSchema`.
 	 */
-	visibleTo: v.optional(v.nullable(v.array(v.string()))),
+	access: v.optional(accessSchema),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -175,9 +175,15 @@ export function tagStageParts(
 			? []
 			: [
 					{
+						/*
+						 * Amber for under way against green for done, the way a signal
+						 * reads. Blue sat too close to the green beside it on a bar a
+						 * few pixels tall — and too close to the app's own accent, which
+						 * means something else entirely.
+						 */
 						stageId: "underway",
 						name: "In progress",
-						color: "blue" as const,
+						color: "orange" as const,
 						count: inProgress,
 					},
 				]),
@@ -217,7 +223,7 @@ export const createTagInputSchema = v.object({
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema), null),
-	visibleTo: v.optional(visibleToSchema, null),
+	access: v.optional(accessSchema, null),
 });
 
 export const updateTagInputSchema = v.object({
@@ -231,7 +237,7 @@ export const updateTagInputSchema = v.object({
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
-			visibleTo: v.optional(visibleToSchema),
+			access: v.optional(accessSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),
@@ -240,10 +246,11 @@ export const updateTagInputSchema = v.object({
 export const tagIdInputSchema = v.object({ tagId: idSchema });
 
 /**
- * A tag's figures, narrowed to one person's work in a team; see
- * `taskFilterSchema`. A tag is its own filter, so there is no tag to pick.
+ * A tag's figures, narrowed the way its screen is; see `taskFilterSchema`. A
+ * tag is its own filter, so there is no tag to pick.
  */
 export const tagReadInputSchema = v.object({
 	...tagIdInputSchema.entries,
 	assignee: v.optional(emailSchema),
+	type: v.optional(idSchema),
 });

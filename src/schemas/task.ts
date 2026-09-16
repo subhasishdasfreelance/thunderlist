@@ -129,12 +129,21 @@ export function priorityRank(
 }
 
 /** The orders a list of tasks can be shown in; see `sortTasksBy`. */
-export const SORT_ORDERS = ["newest", "priority", "stage"] as const;
+export const SORT_ORDERS = ["newest", "priority", "stage", "type"] as const;
 
 /**
- * What a screen narrows its tasks to: one person's, in a team, and one tag's,
- * on a checklist. Everything on the screen follows it — the list, the counts
- * and the progress — so the figures always describe the rows under them.
+ * What a task with no type is called wherever one is picked or filtered by.
+ *
+ * "No type" is a choice like any other — it is what most tasks are — so it
+ * needs a value to be chosen by, and a task's own `typeId` is `null`. One
+ * word, here, rather than a different one in each picker.
+ */
+export const NO_TYPE = "none";
+
+/**
+ * What a screen narrows its tasks to: one person's, in a team, one tag's, and
+ * one kind of work's. Everything on the screen follows it — the list, the
+ * counts and the progress — so the figures always describe the rows under them.
  */
 export const taskFilterSchema = v.object({
 	/** In a team, only the tasks assigned to this person. */
@@ -144,6 +153,8 @@ export const taskFilterSchema = v.object({
 	 * addressed by that, and a filter must never be mistaken for the page.
 	 */
 	tag: v.optional(idSchema),
+	/** Only the tasks of this kind, by id — or `NO_TYPE` for those with none. */
+	type: v.optional(idSchema),
 });
 
 export type TaskFilter = v.InferOutput<typeof taskFilterSchema>;

@@ -37,9 +37,10 @@ export const queryKeys = {
 		["trackers", trackerId, "entries"] as const,
 	tags: ["tags"] as const,
 	tag: (tagId: string) => ["tags", tagId] as const,
-	/** A tag's figures, counting one person's work; see `checklistFiltered`. */
-	tagFor: (tagId: string, assignee: string) =>
-		["tags", tagId, "person", assignee] as const,
+	/** A tag's figures, counting only what a filter lets through; see
+	 * `checklistFiltered`. */
+	tagFor: (tagId: string, filter: TaskFilter) =>
+		["tags", tagId, "filtered", filter] as const,
 	/** A tag's open tasks: every page of them read, under one key. */
 	tagOpen: (tagId: string) => ["tags", tagId, "open"] as const,
 	/** One page of them, in one order; see `getTagOpenTasks`. */

@@ -543,7 +543,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				deadlineTime: change.deadlineTime,
 				dailyWindow: change.dailyWindow,
 				tagIds: change.tagIds,
-				visibleTo: change.visibleTo,
+				access: change.access,
 				stages: change.stages,
 				createdAt,
 				updatedAt: createdAt,

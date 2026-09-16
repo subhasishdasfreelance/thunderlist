@@ -4,7 +4,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
-import { VStack } from "@astryxdesign/core/Stack";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -16,9 +16,13 @@ import { TaskRow } from "#/components/checklists/task-row";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { ListPagination } from "#/components/common/list-pagination";
 import { LoadingState } from "#/components/common/loading-state";
+import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
+import { TagFilter } from "#/components/tags/tag-filter";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
+import { TypeFilter } from "#/components/tasks/type-filter";
 import { AssignDialog } from "#/components/teams/assign-dialog";
+import { MemberFilter } from "#/components/teams/member-filter";
 import {
 	createTagResolver,
 	moveToBacklog,
@@ -28,14 +32,24 @@ import {
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
-import { shortTitle } from "#/lib/tasks/tasks";
+import {
+	matchesFilter,
+	orderByTask,
+	type SortOrder,
+	shortTitle,
+} from "#/lib/tasks/tasks";
 import { usePages } from "#/lib/use-pages";
+import { useTaskTypes } from "#/lib/use-task-types";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery, type TaggedTask } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
-import { checklistStages, specialChecklist } from "#/schemas/checklist";
+import {
+	checklistStages,
+	specialChecklist,
+	stageProgress,
+} from "#/schemas/checklist";
 import {
 	PRIORITY_LABELS,
 	PRIORITY_RANKS,
@@ -101,9 +115,14 @@ function PriorityPage() {
 	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
 	const [typing, setTyping] = useState<TaggedTask | null>(null);
 	const [moving, setMoving] = useState<TaggedTask | null>(null);
+	const [sort, setSort] = useState<SortOrder>("newest");
+	const [assignee, setAssignee] = useState<string | undefined>(undefined);
+	const [tagId, setTagId] = useState<string | undefined>(undefined);
+	const [typeId, setTypeId] = useState<string | undefined>(undefined);
 	const space = useSpace();
 	const team = space?.team ?? null;
 	const { canManageContent } = usePermissions();
+	const types = useTaskTypes();
 
 	const tags = tagsResult.data ?? [];
 	const checklists = checklistsResult.data ?? [];
@@ -111,8 +130,13 @@ function PriorityPage() {
 	const backlog = specialChecklist(checklists, "backlog");
 
 	const tasks = useMemo(
-		() => (index.data?.tasks ?? []).filter((task) => !task.completed),
-		[index.data],
+		() =>
+			(index.data?.tasks ?? []).filter(
+				(task) =>
+					!task.completed &&
+					matchesFilter(task, { assignee, tag: tagId, type: typeId }),
+			),
+		[index.data, assignee, tagId, typeId],
 	);
 
 	const [selected, setSelected] = useState<PriorityRank>("urgent-important");
@@ -124,7 +148,27 @@ function PriorityPage() {
 		return grouped;
 	}, [tasks]);
 
-	const shown = bands.get(selected) ?? [];
+	const shown = useMemo(
+		() =>
+			orderByTask(
+				bands.get(selected) ?? [],
+				sort,
+				(task) => task,
+				// A band holds tasks from lists with stages of their own, so how far
+				// along each is is what puts them in one order; see `stageProgress`.
+				(task) =>
+					stageProgress(
+						task,
+						checklistStages(
+							checklists.find(
+								(each) => each.checklistId === task.checklistId,
+							) ?? {},
+						),
+					),
+				types,
+			),
+		[bands, selected, sort, types, checklists],
+	);
 	const paging = usePages(shown);
 
 	if (index.isError) {
@@ -242,6 +286,42 @@ function PriorityPage() {
 					/>
 
 					<VStack gap={2}>
+						{/* The filters and the order, as every other task list has them. */}
+						<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
+							<HStack gap={1} vAlign="center" wrap="wrap">
+								<MemberFilter
+									value={assignee}
+									onChange={(next) => {
+										setAssignee(next);
+										paging.reset();
+									}}
+								/>
+								<TagFilter
+									tags={tags}
+									value={tagId}
+									onChange={(next) => {
+										setTagId(next);
+										paging.reset();
+									}}
+								/>
+								<TypeFilter
+									value={typeId}
+									onChange={(next) => {
+										setTypeId(next);
+										paging.reset();
+									}}
+								/>
+							</HStack>
+							<SortMenu
+								order={sort}
+								hasStageOrder
+								onChange={(next) => {
+									setSort(next);
+									paging.reset();
+								}}
+							/>
+						</HStack>
+
 						<Text type="supporting">{BAND_HINTS[selected]}</Text>
 
 						{shown.length === 0 ? (

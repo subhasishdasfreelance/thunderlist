@@ -22,8 +22,8 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
+import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
-import { VisibilityButton } from "#/components/teams/visibility-button";
 import { EntryFormDialog } from "#/components/trackers/entry-form-dialog";
 import { ProgressHistory } from "#/components/trackers/progress-history";
 import {
@@ -51,7 +51,7 @@ import {
 import { withInlineTag } from "#/lib/tags/inline-tags";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
-import { usePermissions, useSpace } from "#/lib/use-team";
+import { useItemPermissions, useSpace } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
@@ -103,7 +103,6 @@ function TrackerDetailPage() {
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingEntry, setPendingEntry] = useState<ProgressEntry | null>(null);
 	const [isDeletingTracker, setIsDeletingTracker] = useState(false);
-	const { canManageContent, canUpdateTasks } = usePermissions();
 	// In a team, what one person logged rather than everyone's; see `MemberFilter`.
 	const [person, setPerson] = useState<string | undefined>(undefined);
 	const team = useSpace()?.team ?? null;
@@ -124,6 +123,15 @@ function TrackerDetailPage() {
 	const now = useNow();
 
 	const detail = data ?? null;
+
+	/*
+	 * What this person may do with this one thing: their role, narrowed by its
+	 * access list; see `useItemPermissions`. While it is still loading nothing
+	 * is held back, as elsewhere — the screen is a spinner until it arrives.
+	 */
+	const { canManageContent, canUpdateTasks } = useItemPermissions(
+		detail?.access,
+	);
 
 	if (isError && detail === null) {
 		return (
@@ -244,11 +252,12 @@ function TrackerDetailPage() {
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<BackButton to="/trackers" label="Trackers" />
-				<VisibilityButton
+				<AccessButton
 					noun="tracker"
-					visibleTo={detail.visibleTo}
-					onChange={(visibleTo) =>
-						apply({ kind: "tracker.update", trackerId, patch: { visibleTo } })
+					access={detail.access}
+					canChange={canManageContent}
+					onChange={(access) =>
+						apply({ kind: "tracker.update", trackerId, patch: { access } })
 					}
 				/>
 			</HStack>
