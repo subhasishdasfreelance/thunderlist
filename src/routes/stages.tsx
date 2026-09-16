@@ -3,7 +3,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
-import { VStack } from "@astryxdesign/core/Stack";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -14,6 +14,7 @@ import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { ListPagination } from "#/components/common/list-pagination";
 import { LoadingState } from "#/components/common/loading-state";
+import { SortToggle } from "#/components/common/sort-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { AssignDialog } from "#/components/teams/assign-dialog";
@@ -26,7 +27,7 @@ import {
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
-import { orderByTask, shortTitle } from "#/lib/tasks/tasks";
+import { orderByTask, type SortOrder, shortTitle } from "#/lib/tasks/tasks";
 import { usePages } from "#/lib/use-pages";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
@@ -76,6 +77,7 @@ function StagesPage() {
 	const [moving, setMoving] = useState<TaggedTask | null>(null);
 	// Picked by hand; until then, the first stage.
 	const [selected, setSelected] = useState<string | null>(null);
+	const [sort, setSort] = useState<SortOrder>("newest");
 	const space = useSpace();
 	const team = space?.team ?? null;
 	const { canManageContent } = usePermissions();
@@ -90,10 +92,10 @@ function StagesPage() {
 		[checklistsResult.data, index.data],
 	);
 	const stage = stages.find((each) => each.key === selected) ?? stages[0];
-	// Newest first, as every list is.
+	// Newest first, as every list is, until the order is switched.
 	const shown = useMemo(
-		() => orderByTask(stage?.tasks ?? [], "newest", (task) => task),
-		[stage],
+		() => orderByTask(stage?.tasks ?? [], sort, (task) => task),
+		[stage, sort],
 	);
 	const paging = usePages(shown);
 
@@ -187,6 +189,17 @@ function StagesPage() {
 				<LoadingState />
 			) : (
 				<VStack gap={2}>
+					{/* The order, where a checklist's screen has it: above its stages. */}
+					<HStack gap={1} hAlign="end" vAlign="center">
+						<SortToggle
+							order={sort}
+							onChange={(next) => {
+								setSort(next);
+								paging.reset();
+							}}
+						/>
+					</HStack>
+
 					<StageTabs
 						stages={stages.map((each) => ({
 							stageId: each.key,
