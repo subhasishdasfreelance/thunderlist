@@ -1,4 +1,4 @@
-import type { TaskFilter, TaskPageView } from "#/schemas/task";
+import type { AcrossPageView, TaskFilter, TaskPageView } from "#/schemas/task";
 
 /** Query keys, in one place so a confirmed batch can invalidate precisely. */
 export const queryKeys = {
@@ -12,6 +12,10 @@ export const queryKeys = {
 	/** The space's task types; see `taskTypesQuery`. */
 	taskTypes: ["task-types"] as const,
 	searchIndex: ["search-index"] as const,
+	/** Every page of every group the Across lists screen reads, under one key. */
+	across: ["across"] as const,
+	/** One group of it, one page, in one order; see `getAcrossTasks`. */
+	acrossPage: (view: AcrossPageView) => ["across", view] as const,
 	checklists: ["checklists"] as const,
 	checklist: (checklistId: string) => ["checklists", checklistId] as const,
 	/**

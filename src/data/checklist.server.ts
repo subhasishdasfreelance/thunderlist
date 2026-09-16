@@ -75,6 +75,9 @@ const PROGRESS_FIELDS = {
 	linkedChecklistId: 1,
 	tagIds: 1,
 	assignees: 1,
+	// Narrowing to one kind of work narrows the figures too, so the field the
+	// filter reads has to come back with them; see `matchesFilter`.
+	typeId: 1,
 } as const;
 
 /** A task document holds the link to its checklist; a `Task` does not. */

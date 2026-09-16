@@ -2,24 +2,11 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { TagTextField } from "#/components/tags/tag-text-field";
+import { TaskTitleField } from "#/components/checklists/task-title-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
-
-/** Enough rows to see a pasted list without the field taking over the screen. */
-const MAX_ROWS = 8;
-
-/**
- * Two, not one.
- *
- * A single row is shorter than the hint written in it, so on a narrow screen
- * the placeholder was cut off mid-sentence with no way to read the rest. Two
- * rows fit it, and they also say without saying it that more than one line is
- * expected here.
- */
-const MIN_ROWS = 2;
 
 /** One task per non-blank line, each split into its title and its tags. */
 function parseLines(value: string): Array<ParsedTitle> {
@@ -30,19 +17,6 @@ function parseLines(value: string): Array<ParsedTitle> {
 		.filter((parsed) => parsed.title !== "");
 }
 
-/** How many lines are in the field, so it grows with a pasted list. */
-function countLines(value: string): number {
-	return value.split("\n").length;
-}
-
-/**
- * How many rows the task field shows. Shared with the edit dialog, so a task is
- * edited in the same field it was written in.
- */
-export function taskFieldRows(value: string): number {
-	return Math.min(Math.max(countLines(value), MIN_ROWS), MAX_ROWS);
-}
-
 /**
  * Add tasks without opening anything.
  *
@@ -51,10 +25,9 @@ export function taskFieldRows(value: string): number {
  * add, which is what makes emptying your head into a list actually work.
  *
  * A newline is a task boundary, so a list written or copied from somewhere else
- * can be pasted in one go and lands as one task per line. That is the reason
- * this is a text area and not a single-line input: an `<input>` flattens a
- * multi-line paste into one line and the boundaries are lost before the app
- * ever sees them. Enter still adds; Shift+Enter starts another line by hand.
+ * can be pasted in one go and lands as one task per line — which is the reason
+ * the field it is typed into is a text area; see `TaskTitleField`. Enter still
+ * adds; Shift+Enter starts another line by hand.
  *
  * Tags are written in the same breath — "buy milk #shopping" — and completed as
  * they are typed. A line beginning `&` names a tracker or another checklist
@@ -90,7 +63,7 @@ export function QuickAddTask({
 
 	return (
 		<HStack gap={2} vAlign="start">
-			<TagTextField
+			<TaskTitleField
 				label={placeholder}
 				placeholder={placeholder}
 				value={value}
@@ -99,8 +72,6 @@ export function QuickAddTask({
 				tags={tags}
 				trackers={trackers}
 				checklists={checklists}
-				multiline
-				rows={taskFieldRows(value)}
 			/>
 			<IconButton
 				label={label}

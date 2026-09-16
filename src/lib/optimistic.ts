@@ -19,6 +19,7 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
+import type { AcrossGroup, AcrossPage, AcrossTask } from "#/data/across.server";
 import type { SearchIndex } from "#/data/search.server";
 import { unwrittenTags } from "#/lib/tags/inline-tags";
 import { matchesFilter, type Page, type StagePage } from "#/lib/tasks/tasks";
@@ -35,7 +36,13 @@ import {
 	stageOf,
 } from "#/schemas/checklist";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
-import type { Task, TaskPageView, TaskPatch } from "#/schemas/task";
+import type {
+	AcrossPageView,
+	Task,
+	TaskPageView,
+	TaskPatch,
+} from "#/schemas/task";
+import { UNTYPED } from "#/schemas/task-type";
 
 /**
  * A list's counts, moved by one task arriving, leaving or being ticked.
@@ -299,6 +306,112 @@ function patchTags(
 }
 
 /**
+ * The group a task falls into under one cut, as the server grouped it.
+ *
+ * Cut by stage that is the name of the stage it is at, lowercased, since names
+ * are what checklists share; cut by type it is its type's id, or the group the
+ * untyped fall into — which is also where a type the space no longer has puts
+ * it, so `groups` is what decides whether an id is still one.
+ */
+function acrossGroupOf(
+	task: AcrossTask,
+	view: AcrossPageView,
+	groups: ReadonlyArray<AcrossGroup>,
+	stages: ReadonlyArray<Stage>,
+): string {
+	if (view.groupBy === "type") {
+		const typeId = task.typeId ?? UNTYPED;
+		return groups.some((group) => group.key === typeId) ? typeId : UNTYPED;
+	}
+
+	const at = stageOf(task, stages);
+	return (
+		stages.find((stage) => stage.stageId === at)?.name ?? ""
+	).toLowerCase();
+}
+
+/** A group's counts with one task gone from `from` and arrived at `to`. */
+function moveGroup(
+	groups: ReadonlyArray<AcrossGroup>,
+	from: string | null,
+	to: string | null,
+): Array<AcrossGroup> {
+	return groups.map((group) => ({
+		...group,
+		count: Math.max(
+			0,
+			group.count - (group.key === from ? 1 : 0) + (group.key === to ? 1 : 0),
+		),
+	}));
+}
+
+/**
+ * The same, on every page of the Across lists screen. A task that has moved to
+ * another group — ticked on to the next stage, given another type — or out of
+ * the page's filter leaves the rows now and is counted under its new tab.
+ */
+function patchAcross(
+	client: QueryClient,
+	taskId: string,
+	next: (task: AcrossTask) => AcrossTask | null,
+): void {
+	const matches = (task: AcrossTask) => task.taskId === taskId;
+
+	for (const [key, page] of client.getQueriesData<AcrossPage>({
+		queryKey: queryKeys.across,
+	})) {
+		if (!page) continue;
+
+		const before = page.items.find(matches);
+		if (!before) continue;
+
+		const view = viewOf(key) as AcrossPageView;
+		const after = next(before);
+		const stages = stagesOf(client, before.checklistId);
+		const from = acrossGroupOf(before, view, page.groups, stages);
+		const to =
+			after === null || !matchesFilter(after, view)
+				? null
+				: acrossGroupOf(after, view, page.groups, stages);
+
+		client.setQueryData<AcrossPage>(key, {
+			...swapInPage(page, matches, to === page.key ? after : null),
+			groups: moveGroup(page.groups, from, to),
+		});
+	}
+}
+
+/**
+ * A task arriving, on every page of the Across lists screen: counted under the
+ * tab it belongs to, and drawn when that is the tab being read.
+ */
+function addToAcrossPages(client: QueryClient, task: AcrossTask): void {
+	for (const [key, page] of client.getQueriesData<AcrossPage>({
+		queryKey: queryKeys.across,
+	})) {
+		if (!page) continue;
+
+		const view = viewOf(key) as AcrossPageView;
+		if (!matchesFilter(task, view)) continue;
+
+		const group = acrossGroupOf(
+			task,
+			view,
+			page.groups,
+			stagesOf(client, task.checklistId),
+		);
+		const isHere = group === page.key;
+
+		client.setQueryData<AcrossPage>(key, {
+			...page,
+			groups: moveGroup(page.groups, null, group),
+			items: isHere && page.page === 1 ? [...page.items, task] : page.items,
+			total: isHere ? page.total + 1 : page.total,
+		});
+	}
+}
+
+/**
  * The same, in the search index, which the Priority screen lists from. `next`
  * returns `null` to take the task out.
  */
@@ -321,6 +434,70 @@ function patchSearchIndex(
 	);
 }
 
+/**
+ * One task as this browser last drew it, from whichever list it is in, with
+ * the checklist it belongs to.
+ *
+ * Every screen holds its tasks in a cache of its own shape, so this looks in
+ * each in turn and takes the first answer. It is how a change is worked out to
+ * be the undo of another: what a task was before an edit is only known from
+ * the copy on screen a moment earlier; see `invertChange`.
+ */
+export function findCachedTask(
+	client: QueryClient,
+	taskId: string,
+): { task: Task; checklistId: string | null } | null {
+	const indexed = client
+		.getQueryData<SearchIndex>(queryKeys.searchIndex)
+		?.tasks.find((task) => task.taskId === taskId);
+	if (indexed) return { task: indexed, checklistId: indexed.checklistId };
+
+	for (const [, page] of client.getQueriesData<AcrossPage>({
+		queryKey: queryKeys.across,
+	})) {
+		const found = page?.items.find((task) => task.taskId === taskId);
+		if (found) return { task: found, checklistId: found.checklistId };
+	}
+
+	for (const [key] of client.getQueriesData({
+		queryKey: queryKeys.checklists,
+	})) {
+		if (key.length !== 2) continue;
+
+		const checklistId = String(key[1]);
+		const found =
+			client
+				.getQueriesData<StagePage>({
+					queryKey: queryKeys.checklistPages(checklistId),
+				})
+				.flatMap(([, page]) => page?.items ?? [])
+				.find((task) => task.taskId === taskId) ??
+			client
+				.getQueryData<Array<Task>>(queryKeys.checklistCompleted(checklistId))
+				?.find((task) => task.taskId === taskId);
+		if (found) return { task: found, checklistId };
+	}
+
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+
+		const address = String(key[1]);
+		const found =
+			client
+				.getQueriesData<Page<TagTaskEntry>>({
+					queryKey: queryKeys.tagOpen(address),
+				})
+				.flatMap(([, page]) => page?.items ?? [])
+				.find((entry) => entry.task.taskId === taskId) ??
+			client
+				.getQueryData<Array<TagTaskEntry>>(queryKeys.tagCompleted(address))
+				?.find((entry) => entry.task.taskId === taskId);
+		if (found) return { task: found.task, checklistId: found.checklistId };
+	}
+
+	return null;
+}
+
 /** Change one task wherever it is shown. */
 function patchTask(
 	client: QueryClient,
@@ -341,12 +518,18 @@ function patchTask(
 		...task,
 		...change(task, task.checklistId),
 	}));
+
+	patchAcross(client, taskId, (task) => ({
+		...task,
+		...change(task, task.checklistId),
+	}));
 }
 
 function dropTask(client: QueryClient, taskId: string): void {
 	patchChecklists(client, taskId, () => null);
 	patchTags(client, taskId, () => null);
 	patchSearchIndex(client, taskId, () => null);
+	patchAcross(client, taskId, () => null);
 }
 
 /**
@@ -500,6 +683,18 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				);
 				addToChecklistPages(client, change.checklistId, task);
 			}
+
+			// The Across lists screen gathers every task, so one just added is one
+			// of them whichever checklist it went into.
+			addToAcrossPages(client, {
+				...task,
+				checklistId: change.checklistId,
+				// Left to the refetch, as on a tag's page: a title for a checklist
+				// this browser may not hold — or the Inbox it lands in — is not
+				// something to guess.
+				checklistTitle: null,
+				caption: "",
+			});
 
 			// A task typed on a tag's page is drawn there at once instead of
 			// waiting for a refetch to reveal it.

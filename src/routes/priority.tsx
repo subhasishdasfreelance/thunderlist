@@ -218,6 +218,7 @@ function PriorityPage() {
 										task,
 										backlog.checklistId,
 										tags,
+										task.checklistTitle,
 									),
 							}
 				}

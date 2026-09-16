@@ -23,6 +23,7 @@ import { SaveIndicator } from "./save-indicator";
 import { SearchDialog } from "./search-dialog";
 import { SetupNotice } from "./setup-notice";
 import { ThemeToggle } from "./theme-toggle";
+import { UndoQuestion } from "./undo-provider";
 import { UserMenu } from "./user-menu";
 
 /** Watches for being taken out of the team; see `useSpaceWatch`. */
@@ -245,6 +246,8 @@ export function AppFrame({
 				{user === null ? null : <SpaceWatch />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
+				{/* Inside the theme, though its state lives above the frame. */}
+				<UndoQuestion />
 			</LinkProvider>
 		</Theme>
 	);

@@ -49,6 +49,7 @@ const GROUPS: Array<Group> = [
 		title: "Anywhere",
 		rows: [
 			{ keys: ["Ctrl", "K"], what: "Search everything" },
+			{ keys: ["Ctrl", "Z"], what: "Undo the last thing you did to a task" },
 			{ keys: ["?"], what: "This" },
 		],
 	},

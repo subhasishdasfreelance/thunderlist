@@ -481,6 +481,7 @@ function TagDetailPage() {
 										task,
 										backlog.checklistId,
 										tags,
+										checklistTitle,
 									),
 							}
 				}

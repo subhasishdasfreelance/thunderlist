@@ -5,66 +5,67 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
+import { QuickAddTask } from "#/components/checklists/quick-add-task";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { ListPagination } from "#/components/common/list-pagination";
-import { LoadingState } from "#/components/common/loading-state";
+import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { TagFilter } from "#/components/tags/tag-filter";
-import {
-	type GroupBy,
-	GroupByToggle,
-} from "#/components/tasks/group-by-toggle";
+import { GroupByToggle } from "#/components/tasks/group-by-toggle";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { TypeFilter } from "#/components/tasks/type-filter";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
+import type { AcrossTask } from "#/data/across.server";
 import {
 	createTagResolver,
+	createTask,
 	moveToBacklog,
+	resolveChecklistName,
 	resolveTags,
+	resolveTrackerName,
 	setSpecialTag,
 	toggleAssignee,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
-import {
-	matchesFilter,
-	orderByTask,
-	type SortOrder,
-	shortTitle,
-} from "#/lib/tasks/tasks";
-import { usePages } from "#/lib/use-pages";
-import { useTaskTypes } from "#/lib/use-task-types";
+import type { ParsedTitle } from "#/lib/tags/inline-tags";
+import { type SortOrder, shortTitle } from "#/lib/tasks/tasks";
+import { PAGE_SIZE } from "#/lib/use-pages";
 import { usePermissions, useSpace } from "#/lib/use-team";
+import { acrossQuery } from "#/queries/across";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { searchIndexQuery, type TaggedTask } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
-import {
-	checklistStages,
-	specialChecklist,
-	stageProgress,
-	stagesByName,
-} from "#/schemas/checklist";
-import { tasksByType } from "#/schemas/task-type";
+import { trackersQuery } from "#/queries/trackers";
+import { checklistStages, specialChecklist } from "#/schemas/checklist";
+import type { AcrossPageView, GroupBy } from "#/schemas/task";
+
+/** The cut and the page the screen opens on: by stage, newest first. */
+const FIRST_VIEW: AcrossPageView = {
+	groupBy: "stage",
+	sort: "newest",
+	limit: PAGE_SIZE,
+};
 
 export const Route = createFileRoute("/stages")({
 	loader: async ({ context }) => {
-		// Tags only colour the rows and light their Today buttons. The tasks, and
-		// the checklists whose stages say where each one is, are the screen.
+		// Tags colour the rows and light their Today buttons; the checklists say
+		// where each task lives, and answer a `&` line typed into quick-add, as
+		// the trackers do. None of them is waited for.
 		deferQuery(context.queryClient, tagsQuery());
+		deferQuery(context.queryClient, trackersQuery());
+		deferQuery(context.queryClient, checklistsQuery());
 
-		await Promise.all([
-			primeQuery(context.queryClient, searchIndexQuery()),
-			primeQuery(context.queryClient, checklistsQuery()),
-		]);
+		// The first page of the first group is the screen.
+		await primeQuery(context.queryClient, acrossQuery(FIRST_VIEW));
 	},
 	component: StagesPage,
 });
@@ -82,25 +83,29 @@ export const Route = createFileRoute("/stages")({
  * second entry in the bar that looks the same and is not. A tab strip that
  * changes what it names is the smallest thing that can carry both.
  *
+ * The cut, the filters, the order and the page are the server's to answer, as
+ * they are on a checklist and on a tag: one group and one page of it come back,
+ * with the counts for the tabs over it. Switching any of them asks again,
+ * rather than the screen holding every task in the space to slice for itself.
+ *
  * Each task is the row a tag's page shows, with the checklist it lives in
- * under the title, so it can be moved on from here, and leaves the list when
- * it is.
+ * under the title, so it can be moved on from here, and leaves the list when it
+ * is. Tasks can be typed straight in, as on a checklist; one typed here belongs
+ * to no list yet, so it goes into the Inbox.
  */
 function StagesPage() {
 	const navigate = useNavigate();
 	const { apply, applyAsync } = useApplyChange();
-	const index = useQuery(searchIndexQuery());
-	const tagsResult = useQuery(tagsQuery());
-	const checklistsResult = useQuery(checklistsQuery());
 
-	const [renaming, setRenaming] = useState<TaggedTask | null>(null);
-	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
-	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
-	const [typing, setTyping] = useState<TaggedTask | null>(null);
-	const [moving, setMoving] = useState<TaggedTask | null>(null);
+	const [renaming, setRenaming] = useState<AcrossTask | null>(null);
+	const [pendingDelete, setPendingDelete] = useState<AcrossTask | null>(null);
+	const [assigning, setAssigning] = useState<AcrossTask | null>(null);
+	const [typing, setTyping] = useState<AcrossTask | null>(null);
+	const [moving, setMoving] = useState<AcrossTask | null>(null);
 	const [groupBy, setGroupBy] = useState<GroupBy>("stage");
 	// Picked by hand; until then, the first group of whichever cut is shown.
-	const [selected, setSelected] = useState<string | null>(null);
+	const [group, setGroup] = useState<string | undefined>(undefined);
+	const [page, setPage] = useState<number | undefined>(undefined);
 	const [sort, setSort] = useState<SortOrder>("newest");
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const [tagId, setTagId] = useState<string | undefined>(undefined);
@@ -108,73 +113,92 @@ function StagesPage() {
 	const space = useSpace();
 	const team = space?.team ?? null;
 	const { canManageContent } = usePermissions();
-	const types = useTaskTypes();
-
-	const tags = tagsResult.data ?? [];
-	const checklists = checklistsResult.data ?? [];
-	// Somewhere to park a task; see `moveToBacklog`.
-	const backlog = specialChecklist(checklists, "backlog");
 
 	// Cut by type, the tabs are already the type filter, so only the other two
 	// narrow the rows then.
 	const shownType = groupBy === "stage" ? typeId : undefined;
-	const narrowed = useMemo(
-		() =>
-			(index.data?.tasks ?? []).filter((task) =>
-				matchesFilter(task, { assignee, tag: tagId, type: shownType }),
-			),
-		[index.data, assignee, tagId, shownType],
-	);
 
-	const groups = useMemo(
-		() =>
-			groupBy === "stage"
-				? stagesByName(checklistsResult.data ?? [], narrowed)
-				: tasksByType(types, narrowed),
-		[groupBy, checklistsResult.data, narrowed, types],
-	);
-	const group = groups.find((each) => each.key === selected) ?? groups[0];
-	// Newest first, as every list is, until the order is switched.
-	const shown = useMemo(
-		() =>
-			orderByTask(
-				group?.tasks ?? [],
-				sort,
-				(task) => task,
-				// Only meaningful cut by type, where one group holds tasks at every
-				// stage of every list; see `stageProgress`.
-				(task) =>
-					stageProgress(
-						task,
-						checklistStages(
-							checklists.find(
-								(each) => each.checklistId === task.checklistId,
-							) ?? {},
-						),
-					),
-				types,
-			),
-		[group, sort, types, checklists],
-	);
-	const paging = usePages(shown);
+	/*
+	 * One group, one page of it. The rows on screen stay up while another
+	 * group, order or page is on its way, as on a checklist's screen.
+	 */
+	const result = useQuery({
+		...acrossQuery({
+			groupBy,
+			group,
+			sort,
+			limit: PAGE_SIZE,
+			page,
+			assignee,
+			tag: tagId,
+			type: shownType,
+		}),
+		placeholderData: keepPreviousData,
+	});
 
-	if (index.isError || checklistsResult.isError) {
+	const tagsResult = useQuery(tagsQuery());
+	const trackersResult = useQuery(trackersQuery());
+	const checklistsResult = useQuery(checklistsQuery());
+
+	const tags = tagsResult.data ?? [];
+	const trackers = trackersResult.data ?? [];
+	const checklists = checklistsResult.data ?? [];
+	// Somewhere to park a task; see `moveToBacklog`.
+	const backlog = specialChecklist(checklists, "backlog");
+
+	/** Back to the first page, for a different list shown in its place. */
+	const turn =
+		<T,>(set: (value: T) => void) =>
+		(value: T) => {
+			set(value);
+			setPage(undefined);
+		};
+
+	if (result.isError) {
 		return (
 			<VStack gap={4}>
 				<Heading level={1}>Across lists</Heading>
 				<ErrorNotice
-					error={index.error ?? checklistsResult.error}
-					onRetry={() => {
-						void index.refetch();
-						void checklistsResult.refetch();
-					}}
+					error={result.error}
+					onRetry={() => void result.refetch()}
 				/>
 			</VStack>
 		);
 	}
 
+	const data = result.data ?? null;
+	const shown = data?.groups.find((each) => each.key === data.key) ?? null;
+
+	/**
+	 * Add a pasted block of tasks. Belonging to no list yet, they go into the
+	 * Inbox; see `ensureInbox`. One resolver for the whole block, so a tag
+	 * written on three lines is created once rather than three times.
+	 */
+	function addTasks(lines: Array<ParsedTitle>) {
+		const resolveTag = createTagResolver(apply, tags, canManageContent);
+
+		for (const line of lines) {
+			// A line naming a tracker or a checklist becomes a task that follows
+			// it, titled with its own title. A name matching nothing stays text.
+			const tracker = resolveTrackerName(trackers, line.trackerName);
+			const linked = tracker
+				? null
+				: resolveChecklistName(checklists, line.trackerName);
+
+			createTask(apply, {
+				checklistId: null,
+				title: tracker?.title ?? linked?.title ?? line.title,
+				tagIds: tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
+				trackerId: tracker?.trackerId ?? null,
+				linkedChecklistId: linked?.checklistId ?? null,
+				urgent: line.urgent,
+				important: line.important,
+			});
+		}
+	}
+
 	/** One task, as a tag's page draws it. */
-	const taskRow = (task: TaggedTask) => {
+	const taskRow = (task: AcrossTask) => {
 		const { checklistId } = task;
 
 		return (
@@ -195,6 +219,7 @@ function StagesPage() {
 										task,
 										backlog.checklistId,
 										tags,
+										task.checklistTitle,
 									),
 							}
 				}
@@ -245,8 +270,25 @@ function StagesPage() {
 				</Text>
 			</VStack>
 
-			{group === undefined || index.isPending || checklistsResult.isPending ? (
+			{/* Adding a task is shaping the work; see `Capability`. */}
+			{canManageContent ? (
+				<QuickAddTask
+					placeholder="Add a task to the Inbox — #tag it, &track it, or paste a list"
+					tags={tags}
+					trackers={trackers}
+					checklists={checklists}
+					onAdd={addTasks}
+				/>
+			) : null}
+
+			{data === null ? (
 				<LoadingState />
+			) : shown === null ? (
+				/* No checklist has a stage and the space has no types: nothing to cut. */
+				<EmptyState
+					title="Nothing to show yet."
+					description="Tasks show up here once there is a checklist to put them in."
+				/>
 			) : (
 				<VStack gap={2}>
 					{/* The cut and the filters, then the order — as a checklist has it. */}
@@ -258,33 +300,14 @@ function StagesPage() {
 									setGroupBy(next);
 									// The groups are named differently now, so whatever was
 									// picked under the old cut no longer means anything.
-									setSelected(null);
-									paging.reset();
+									setGroup(undefined);
+									setPage(undefined);
 								}}
 							/>
-							<MemberFilter
-								value={assignee}
-								onChange={(next) => {
-									setAssignee(next);
-									paging.reset();
-								}}
-							/>
-							<TagFilter
-								tags={tags}
-								value={tagId}
-								onChange={(next) => {
-									setTagId(next);
-									paging.reset();
-								}}
-							/>
+							<MemberFilter value={assignee} onChange={turn(setAssignee)} />
+							<TagFilter tags={tags} value={tagId} onChange={turn(setTagId)} />
 							{groupBy === "stage" ? (
-								<TypeFilter
-									value={typeId}
-									onChange={(next) => {
-										setTypeId(next);
-										paging.reset();
-									}}
-								/>
+								<TypeFilter value={typeId} onChange={turn(setTypeId)} />
 							) : null}
 						</HStack>
 						<SortMenu
@@ -292,58 +315,57 @@ function StagesPage() {
 							// One stage at a time when that is the cut; by type a group
 							// gathers tasks from every stage there is.
 							hasStageOrder={groupBy === "type"}
-							onChange={(next) => {
-								setSort(next);
-								paging.reset();
-							}}
+							onChange={turn(setSort)}
 						/>
 					</HStack>
 
 					<StageTabs
-						stages={groups.map((each) => ({
+						stages={data.groups.map((each) => ({
 							stageId: each.key,
 							name: each.name,
 						}))}
-						value={group.key}
+						value={data.key}
 						counts={Object.fromEntries(
-							groups.map((each) => [each.key, each.tasks.length]),
+							data.groups.map((each) => [each.key, each.count]),
 						)}
 						onChange={(key) => {
-							setSelected(key);
-							paging.reset();
+							setGroup(key);
+							setPage(undefined);
 						}}
 					/>
 
-					{shown.length === 0 ? (
-						<EmptyState
-							isCompact
-							title={`Nothing in ${group.name}.`}
-							description={
-								groupBy === "stage"
-									? `Tasks at ${group.name}, in any checklist, show up here.`
-									: "Tasks of this kind, in any checklist, show up here."
-							}
-						/>
-					) : (
-						<Card padding={0}>
-							<VStack gap={0} paddingBlock={2}>
-								{paging.shown.map((task, position) => (
-									<div
-										key={task.taskId}
-										className="thunderlist-row thunderlist-task-row"
-									>
-										{position === 0 ? null : <Divider />}
-										{taskRow(task)}
-									</div>
-								))}
-								<ListPagination
-									page={paging.page}
-									total={paging.total}
-									onChange={paging.setPage}
-								/>
-							</VStack>
-						</Card>
-					)}
+					<ListLoading isLoading={result.isPlaceholderData}>
+						{data.items.length === 0 ? (
+							<EmptyState
+								isCompact
+								title={`Nothing in ${shown.name}.`}
+								description={
+									groupBy === "stage"
+										? `Tasks at ${shown.name}, in any checklist, show up here.`
+										: "Tasks of this kind, in any checklist, show up here."
+								}
+							/>
+						) : (
+							<Card padding={0}>
+								<VStack gap={0} paddingBlock={2}>
+									{data.items.map((task, position) => (
+										<div
+											key={task.taskId}
+											className="thunderlist-row thunderlist-task-row"
+										>
+											{position === 0 ? null : <Divider />}
+											{taskRow(task)}
+										</div>
+									))}
+									<ListPagination
+										page={data.page}
+										total={data.total}
+										onChange={setPage}
+									/>
+								</VStack>
+							</Card>
+						)}
+					</ListLoading>
 				</VStack>
 			)}
 

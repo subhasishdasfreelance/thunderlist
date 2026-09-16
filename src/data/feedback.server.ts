@@ -4,8 +4,8 @@
  *
  * It arrives as a task in their own checklist, `thunderlist-feedback`, in their
  * own space — so it is theirs alone to see — assigned to them. One message is
- * one task: its first line the title, who sent it the caption, and the whole
- * message in the notes.
+ * one task: its first line the title, who sent it — their name and address
+ * — the caption, and the whole message in the notes.
  */
 
 import { AppError } from "#/lib/errors";
@@ -72,7 +72,7 @@ export async function sendFeedback(
 		important: false,
 	});
 	await updateTask(ownerId, taskId, {
-		caption: `From ${from.name} · ${from.email}`,
+		caption: `${from.name} (${from.email})`,
 		notes: message,
 		assignees: [RECIPIENT],
 	});

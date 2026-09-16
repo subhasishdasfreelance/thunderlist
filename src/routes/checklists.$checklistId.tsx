@@ -306,7 +306,13 @@ function ChecklistDetailPage() {
 					: {
 							title: backlog.title,
 							onMove: () =>
-								void moveToBacklog(applyAsync, task, backlog.checklistId, tags),
+								void moveToBacklog(
+									applyAsync,
+									task,
+									backlog.checklistId,
+									tags,
+									detail.title,
+								),
 						}
 			}
 			actions={{

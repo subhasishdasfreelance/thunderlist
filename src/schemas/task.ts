@@ -179,6 +179,27 @@ export const taskPageSchema = v.object({
 
 export type TaskPageView = v.InferOutput<typeof taskPageSchema>;
 
+/** How the Across lists screen cuts every task; see its page. */
+export const GROUP_BYS = ["stage", "type"] as const;
+
+export type GroupBy = (typeof GROUP_BYS)[number];
+
+/**
+ * Which page of which group the Across lists screen is showing.
+ *
+ * `group` is not an id: cut by stage a group is a stage *name*, lowercased,
+ * since that is what checklists share; cut by type it is a type's id, or the
+ * word for the tasks with none. With none asked for it is the first group of
+ * whichever cut is shown.
+ */
+export const acrossPageSchema = v.object({
+	groupBy: v.picklist(GROUP_BYS),
+	group: v.optional(v.pipe(v.string(), v.maxLength(120))),
+	...taskPageSchema.entries,
+});
+
+export type AcrossPageView = v.InferOutput<typeof acrossPageSchema>;
+
 /**
  * Adding a task is meant to be quick, so the only thing required is a title.
  * The id and the timestamp are decided by the client, because a queued task

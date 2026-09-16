@@ -40,7 +40,7 @@ export const DEFAULT_TASK_TYPES: ReadonlyArray<TaskType> = [
 export type TypeGroup<T> = { key: string; name: string; tasks: Array<T> };
 
 /** The group tasks with no type of their own fall into. */
-const UNTYPED = "untyped";
+export const UNTYPED = "untyped";
 
 /**
  * Tasks by the kind of work each is, in the order the space keeps its types

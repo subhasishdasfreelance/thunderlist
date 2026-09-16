@@ -11,6 +11,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
 import { OfflineScreen } from "#/components/shell/offline-screen";
+import { UndoProvider } from "#/components/shell/undo-provider";
 import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
 import { drawnColorScheme, THEME_INIT_SCRIPT } from "#/lib/theme";
 import { useIsOnline } from "#/lib/use-online";
@@ -170,10 +171,18 @@ function RootComponent() {
 	// Offline it is drawn the same way, around the offline screen rather than
 	// the page: nothing that needs the server is left to be pressed, so no change
 	// is made only to fail. The page comes back with the connection.
+	// Ctrl+Z wraps the whole frame rather than the screens inside it, so the
+	// last few things done are still there to take back after moving between
+	// them; see `UndoProvider`.
 	return (
-		<AppFrame user={isOnline ? (user ?? null) : null} colorScheme={colorScheme}>
-			{isOnline ? <Outlet /> : <OfflineScreen />}
-		</AppFrame>
+		<UndoProvider>
+			<AppFrame
+				user={isOnline ? (user ?? null) : null}
+				colorScheme={colorScheme}
+			>
+				{isOnline ? <Outlet /> : <OfflineScreen />}
+			</AppFrame>
+		</UndoProvider>
 	);
 }
 

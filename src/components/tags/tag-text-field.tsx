@@ -148,7 +148,8 @@ export function TagTextField({
 	trackers = [],
 	checklists = [],
 	multiline = false,
-	rows,
+	minRows = 2,
+	maxRows,
 	hasAutoFocus = false,
 }: {
 	label: string;
@@ -163,7 +164,14 @@ export function TagTextField({
 	/** The checklists a line beginning `&` may also name. */
 	checklists?: ReadonlyArray<Pick<Checklist, "checklistId" | "title">>;
 	multiline?: boolean;
-	rows?: number;
+	/** The height it never goes below, in rows. Multiline only. */
+	minRows?: number;
+	/**
+	 * The height it never goes past, in rows. Given, the field grows and
+	 * shrinks with what is in it between the two and scrolls beyond; left out,
+	 * it stays `minRows` tall. Multiline only.
+	 */
+	maxRows?: number;
 	hasAutoFocus?: boolean;
 }) {
 	const fieldRef = useRef<(HTMLTextAreaElement & HTMLInputElement) | null>(
@@ -293,6 +301,48 @@ export function TagTextField({
 	}
 
 	/*
+	 * The field takes the height of what is in it, between the two bounds.
+	 *
+	 * `rows` alone counts lines that were typed, not lines that are there: one
+	 * long title wraps onto four of them and the field still showed two, so half
+	 * of what was being written sat out of sight. This measures the text as laid
+	 * out — wrapping included — and follows it, stopping at `maxRows` so a
+	 * pasted list of fifty tasks does not push the rest of the form off screen.
+	 *
+	 * Written straight onto the element rather than kept in state: it settles
+	 * before the browser paints, and a state round trip on every keystroke is
+	 * exactly the lag this field cannot afford.
+	 */
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the value is what changed the text being measured, even though the measuring reads the element rather than it.
+	useLayoutEffect(() => {
+		const field = fieldRef.current;
+		if (!field || !multiline || maxRows === undefined) return;
+
+		// Measured from nothing, or a field that has grown can never shrink.
+		field.style.height = "auto";
+
+		const cs = getComputedStyle(field);
+		const line = Number.parseFloat(cs.lineHeight);
+		const padding =
+			Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom);
+		// `scrollHeight` stops at the padding edge; the box is measured to its
+		// border, so the borders are added back on.
+		const borders = field.offsetHeight - field.clientHeight;
+
+		if (!Number.isFinite(line)) return;
+
+		const wanted = field.scrollHeight + borders;
+		const least = minRows * line + padding + borders;
+		const most = maxRows * line + padding + borders;
+
+		field.style.height = `${Math.min(Math.max(wanted, least), most)}px`;
+		// Only past the last row it may grow to is there anything to scroll.
+		field.style.overflowY = wanted > most ? "auto" : "hidden";
+		// A drag handle would only undo itself on the next keystroke.
+		field.style.resize = "none";
+	}, [value, multiline, minRows, maxRows]);
+
+	/*
 	 * The highlight layer sits behind the field, drawing the same text with the
 	 * tags picked out, while the field itself renders its text transparently.
 	 * The two only line up if the layer copies the field's box exactly, so the
@@ -312,7 +362,28 @@ export function TagTextField({
 				left: field.offsetLeft,
 				width: field.offsetWidth,
 				height: field.offsetHeight,
-				font: cs.font,
+				/*
+				 * The font is copied property by property rather than through the
+				 * `font` shorthand. A computed `font` serialises to an empty string
+				 * whenever the element's font cannot be written as one — which it
+				 * cannot here, since the body face is set with `font-family` and a
+				 * separate weight — and the layer then fell back to the page's font.
+				 * Every character was then a fraction of a pixel out, and by the end
+				 * of a line the words sat a good five or six characters away from the
+				 * caret still typing them.
+				 */
+				fontFamily: cs.fontFamily,
+				fontSize: cs.fontSize,
+				fontWeight: cs.fontWeight,
+				fontStyle: cs.fontStyle,
+				fontVariant: cs.fontVariant,
+				fontStretch: cs.fontStretch,
+				fontFeatureSettings: cs.fontFeatureSettings,
+				fontKerning: cs.fontKerning as CSSProperties["fontKerning"],
+				tabSize: cs.tabSize,
+				// The field's own width includes its border and padding, so the layer
+				// has to measure the same way or it wraps a word later than the field.
+				boxSizing: "border-box",
 				letterSpacing: cs.letterSpacing,
 				wordSpacing: cs.wordSpacing,
 				textIndent: cs.textIndent,
@@ -389,7 +460,7 @@ export function TagTextField({
 			</div>
 
 			{multiline ? (
-				<TextArea {...shared} rows={rows} ref={fieldRef} />
+				<TextArea {...shared} rows={minRows} ref={fieldRef} />
 			) : (
 				<TextInput {...shared} ref={fieldRef} />
 			)}

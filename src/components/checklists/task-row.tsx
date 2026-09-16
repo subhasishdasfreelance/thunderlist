@@ -3,7 +3,6 @@ import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { Token } from "@astryxdesign/core/Token";
 import {
 	Check,
 	FolderInput,
@@ -67,8 +66,10 @@ export type TaskRowActions = TaskQuickActions & {
  *
  * Tags are highlighted inside the title, where they were typed, and are not
  * edited here: they are part of the text, so editing them is editing the task.
- * Its type sits in front of the title, the first thing to know about it.
- * Everything rarer stays in the overflow menu.
+ * Its type is drawn under the title beside the rest of the small print, as a
+ * tag without the hash and in italics — a task carries one and it is given to
+ * it rather than typed, so it reads as a label on the task rather than as a
+ * word in it. Everything rarer stays in the overflow menu.
  *
  * For someone who may only look — a viewer, in a team — the row is the task
  * and nothing to press.
@@ -207,17 +208,12 @@ export function TaskRow({
 	useRowShortcuts(isHovered && canUpdateTasks, shortcuts);
 
 	const title = (
-		<HStack gap={1.5} vAlign="center" wrap="wrap">
-			{type === null ? null : (
-				<Token size="sm" color={type.color} label={type.name} />
-			)}
-			<TaggedTitle
-				title={task.title}
-				tags={tags}
-				tagIds={task.tagIds}
-				isMuted={task.completed}
-			/>
-		</HStack>
+		<TaggedTitle
+			title={task.title}
+			tags={tags}
+			tagIds={task.tagIds}
+			isMuted={task.completed}
+		/>
 	);
 
 	// Where it lives is the way into it: the checklist, on a screen that is not
@@ -324,7 +320,7 @@ export function TaskRow({
 						onChange={check}
 					/>
 				</span>
-				{crumb === null && !task.caption ? (
+				{crumb === null && !task.caption && type === null ? (
 					title
 				) : (
 					<VStack gap={0}>
@@ -332,17 +328,27 @@ export function TaskRow({
 						{task.caption ? (
 							<Text type="supporting">{task.caption}</Text>
 						) : null}
-						{crumb === null ? null : (
-							<HStack gap={1} vAlign="center">
-								<button
-									type="button"
-									className="thunderlist-crumb"
-									title={`Open ${crumb.title}`}
-									onClick={crumb.onOpen}
-								>
-									{crumb.title}
-								</button>
-								{shownStage === null ? null : (
+						{crumb === null && type === null ? null : (
+							<HStack gap={1} vAlign="center" wrap="wrap">
+								{type === null ? null : (
+									<span
+										className="thunderlist-tag thunderlist-type"
+										data-color={type.color}
+									>
+										{type.name}
+									</span>
+								)}
+								{crumb === null ? null : (
+									<button
+										type="button"
+										className="thunderlist-crumb"
+										title={`Open ${crumb.title}`}
+										onClick={crumb.onOpen}
+									>
+										{crumb.title}
+									</button>
+								)}
+								{shownStage === null || crumb === null ? null : (
 									<Text type="supporting">· {shownStage.name}</Text>
 								)}
 							</HStack>

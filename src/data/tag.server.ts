@@ -641,9 +641,11 @@ export async function getTagOpenTasks(
 		tag.tagId,
 		hidden,
 	);
-	// In a team, only one person's when the screen asks for theirs.
+	// Narrowed exactly as the figures above the list are: in a team, to one
+	// person's, and to one kind of work. Both have to cut the same rows, or the
+	// list and the progress bar over it describe different things.
 	const open = entries.filter(
-		(entry) => !entry.task.completed && isAssignedTo(entry.task, view.assignee),
+		(entry) => !entry.task.completed && matchesFilter(entry.task, view),
 	);
 
 	// Only ordering by type needs the space's list, so only then is it read.

@@ -23,6 +23,7 @@ import {
 	withInlineTag,
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
+import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
 import type { Change } from "#/schemas/change";
@@ -100,6 +101,7 @@ async function send(change: Change): Promise<void> {
 export function useApplyChange() {
 	const queryClient = useQueryClient();
 	const toast = useToast();
+	const remember = useRememberUndo();
 
 	const mutation = useMutation({
 		mutationFn: send,
@@ -121,6 +123,9 @@ export function useApplyChange() {
 		onMutate: async (change) => {
 			await queryClient.cancelQueries();
 			const previous = snapshot(queryClient);
+			// Worked out from the caches as they still are, since what a change
+			// undoes is only knowable before it lands; see `invertChange`.
+			remember?.(change);
 			applyOptimistically(queryClient, change);
 			return { previous };
 		},
@@ -319,9 +324,38 @@ export function setSpecialTag(
 	});
 }
 
+/** How a caption's parts are joined, so a note can be added beside one. */
+const CAPTION_SEPARATOR = " · ";
+
+/** The note a parked task carries, so where it came from is not lost. */
+const FROM_NOTE = "From ";
+
+/**
+ * A caption saying which checklist the task was parked from, ahead of whatever
+ * it already said. An earlier note of the same kind is replaced rather than
+ * stacked up, so a task parked twice names where it came from, not its whole
+ * history.
+ */
+export function captionFromChecklist(
+	caption: string | undefined,
+	checklistTitle: string,
+): string {
+	const rest = (caption ?? "")
+		.split(CAPTION_SEPARATOR)
+		.filter((part) => part.trim() !== "" && !part.startsWith(FROM_NOTE))
+		.join(CAPTION_SEPARATOR);
+	const note = `${FROM_NOTE}${checklistTitle}`;
+
+	return rest === "" ? note : `${note}${CAPTION_SEPARATOR}${rest}`;
+}
+
 /**
  * Park a task in the Backlog: off Today, since a task is planned or parked
  * but never both, and then into the Backlog checklist.
+ *
+ * The checklist it leaves is written into its caption. Parked tasks from every
+ * list sit together, and without the note the one thing you need to put a task
+ * back — where it came from — is the one thing the move throws away.
  *
  * The move waits for the first change to land. Two requests can arrive in
  * either order, and the move takes off the tags the task only had from the
@@ -329,21 +363,33 @@ export function setSpecialTag(
  */
 export async function moveToBacklog(
 	applyAsync: ApplyChangeAsync,
-	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	task: Pick<Task, "taskId" | "title" | "tagIds" | "caption">,
 	backlogId: string,
 	tags: ReadonlyArray<Tag>,
+	/** The checklist it is leaving, or `null` when it is in none. */
+	fromTitle: string | null,
 ): Promise<void> {
 	const today = specialTag(tags, "today");
+	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
+
+	const patch: TaskPatch = {
+		...(isOnToday && today !== null
+			? {
+					title: withoutInlineTag(task.title, today.name),
+					tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
+				}
+			: {}),
+		...(fromTitle === null || fromTitle === ""
+			? {}
+			: { caption: captionFromChecklist(task.caption, fromTitle) }),
+	};
 
 	try {
-		if (today !== null && task.tagIds.includes(today.tagId)) {
+		if (Object.keys(patch).length > 0) {
 			await applyAsync({
 				kind: "task.update",
 				taskId: task.taskId,
-				patch: {
-					title: withoutInlineTag(task.title, today.name),
-					tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
-				},
+				patch,
 			});
 		}
 		await applyAsync({

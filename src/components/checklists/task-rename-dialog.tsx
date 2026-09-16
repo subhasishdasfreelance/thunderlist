@@ -1,19 +1,17 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
 import { Check, X } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
-import { TagTextField } from "#/components/tags/tag-text-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
-import { taskFieldRows } from "./quick-add-task";
 import { type NotesView, TaskNotesField } from "./task-notes-field";
+import { TaskTitleField } from "./task-title-field";
 
 /** The type field's value for a task with none. */
 const NO_TYPE = "none";
@@ -63,7 +61,6 @@ export function TaskRenameDialog({
 }) {
 	const [value, setValue] = useState("");
 	const [caption, setCaption] = useState("");
-	const captionRef = useRef<HTMLInputElement>(null);
 	const [notes, setNotes] = useState("");
 	const [typeId, setTypeId] = useState(NO_TYPE);
 	const [notesView, setNotesView] = useState<NotesView>("write");
@@ -80,22 +77,13 @@ export function TaskRenameDialog({
 		setNotesView(task.notes ? "preview" : "write");
 	}, [isOpen, task]);
 
-	/*
-	 * A caption is a line about the task, not a name or an address. Without
-	 * this, a phone offered saved passwords and addresses over the keyboard the
-	 * moment the field was tapped. Set on the element itself, which is where
-	 * autofill reads it, as the title field does; see `TagTextField`.
-	 */
-	useEffect(() => {
-		captionRef.current?.setAttribute("autocomplete", "off");
-	}, []);
-
 	const parsed = parseInlineTags(value.replace(/\s*\n\s*/g, " "));
 
 	function save() {
 		if (parsed.title === "") return;
 		onSubmit(parsed, {
-			caption: caption.trim(),
+			// One line, however it was typed or pasted; see the field below.
+			caption: caption.replace(/\s*\n\s*/g, " ").trim(),
 			notes: notes.trim(),
 			typeId: typeId === NO_TYPE ? null : typeId,
 			...(parsed.urgent ? { urgent: true } : {}),
@@ -128,38 +116,41 @@ export function TaskRenameDialog({
 			)}
 		>
 			<VStack gap={4}>
-				<VStack gap={1}>
-					<TagTextField
-						label="Title"
-						value={value}
-						onChange={setValue}
-						onSubmit={save}
-						tags={tags}
-						multiline
-						rows={taskFieldRows(value)}
-						hasAutoFocus
-					/>
-					<Text type="supporting">
-						Write tags inline, like #shopping. Removing one here takes it off
-						the task. End with -u, -i or -ui to flag it.
-					</Text>
-				</VStack>
+				<TaskTitleField
+					label="Title"
+					value={value}
+					onChange={setValue}
+					onSubmit={save}
+					tags={tags}
+					hasAutoFocus
+					hint="Write tags inline, like #shopping. Removing one here takes it off the task. End with -u, -i or -ui to flag it."
+				/>
 
 				{/* A type the list no longer has still reads as none, not as blank. */}
 				{types.length === 0 && typeId === NO_TYPE ? null : (
 					<TypeField types={types} value={typeId} onChange={setTypeId} />
 				)}
 
-				<TextInput
-					ref={captionRef}
+				{/*
+				 * A text area rather than a one-line input, and not for the room: a
+				 * phone offers saved passwords and addresses over any text input it
+				 * takes for part of a form, and `autocomplete="off"` does not stop
+				 * it. Nothing offers to fill a text area, so the keyboard stays a
+				 * keyboard. Whatever is typed is still one line when it is saved.
+				 */}
+				<TextArea
 					label="Caption"
 					isOptional
 					description="Shown in small text under the title."
+					rows={2}
 					value={caption}
 					onChange={setCaption}
 					// Enter saves here too, as it does in the title.
 					onKeyDown={(event) => {
-						if (event.key === "Enter") save();
+						if (event.key === "Enter" && !event.shiftKey) {
+							event.preventDefault();
+							save();
+						}
 					}}
 					width="100%"
 				/>

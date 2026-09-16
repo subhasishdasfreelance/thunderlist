@@ -194,6 +194,49 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Fields                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * A deadline is one answer — a day, and an hour when the hour matters — so it
+ * is drawn as one field rather than as two boxes with a gap between them.
+ *
+ * Astryx gives the date and the time a bordered box each, which is right where
+ * they are independent and wrong here: the time means nothing without the day
+ * it is on. Butting them together and sharing the edge where they meet says
+ * that, and costs nothing else — each half keeps its own picker, its own
+ * keyboard handling and its own focus ring.
+ */
+@layer components {
+	.astryx-date-time-input {
+		gap: 0;
+		/* Wrapped onto two lines, one field would read as a broken one. */
+		flex-wrap: nowrap;
+	}
+
+	.astryx-date-time-input > .astryx-date-time-input-date-segment {
+		border-start-end-radius: 0;
+		border-end-end-radius: 0;
+	}
+
+	.astryx-date-time-input > .astryx-date-time-input-time-segment {
+		border-start-start-radius: 0;
+		border-end-start-radius: 0;
+		/* One shared edge down the middle, not two borders side by side. */
+		margin-inline-start: calc(-1 * var(--border-width, 1px));
+	}
+
+	/*
+	 * The half being typed in owns the shared edge, so its accent border is
+	 * drawn whole rather than half-covered by the other's.
+	 */
+	.astryx-date-time-input > .astryx-date-time-input-date-segment:focus-within,
+	.astryx-date-time-input > .astryx-date-time-input-time-segment:focus-within {
+		z-index: 2;
+	}
+}
+
+/* -------------------------------------------------------------------------- */
 /* Motion                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -288,6 +331,21 @@ body {
 	/* Outside a field nothing depends on the metrics, so it can breathe. */
 	:not(.thunderlist-mirror) > .thunderlist-tag {
 		padding-inline: 0.25rem;
+	}
+
+	/*
+	 * What kind of work a task is, under its title.
+	 *
+	 * It wears a tag's colours because it is read in the same glance, but no
+	 * hash and an italic face: a tag is a word somebody typed into the title,
+	 * while a type is picked from a list and given to the task. Without the
+	 * difference the two would be indistinguishable, and a row would look as
+	 * though it carried a tag nobody wrote.
+	 */
+	.thunderlist-type {
+		font-size: var(--text-supporting-size);
+		line-height: var(--text-supporting-leading);
+		font-style: italic;
 	}
 
 	.thunderlist-tag[data-color="blue"] {
