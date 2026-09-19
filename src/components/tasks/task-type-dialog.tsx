@@ -80,6 +80,7 @@ export function TaskTypeDialog({
 			>
 				<VStack gap={3}>
 					<TextInput
+						autoComplete="off"
 						label="Find a type"
 						isLabelHidden
 						placeholder="Find a type, then Enter"

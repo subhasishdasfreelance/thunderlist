@@ -225,6 +225,7 @@ function TypeRow({
 			/>
 			<span className="min-w-40 flex-1">
 				<TextInput
+					autoComplete="off"
 					label={`Type ${index + 1}`}
 					isLabelHidden
 					value={type.name}

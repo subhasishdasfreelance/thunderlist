@@ -271,11 +271,15 @@ function patchChecklists(
  * The same, for every tag page in the cache — walked by key for the same
  * reason, since `["tags"]` is the tag list's own key too. `next` is told which
  * tag the page is for.
+ *
+ * It is handed the whole row rather than only the task on it, because a task
+ * moved to another checklist changes which list the row names underneath the
+ * title as well as the task itself.
  */
 function patchTags(
 	client: QueryClient,
 	taskId: string,
-	next: (task: Task, tagId: string, checklistId: string | null) => Task | null,
+	next: (entry: TagTaskEntry, tagId: string) => TagTaskEntry | null,
 ): void {
 	const matches = (entry: TagTaskEntry) => entry.task.taskId === taskId;
 
@@ -296,8 +300,8 @@ function patchTags(
 			done?.find(matches);
 		if (!detail || !before) continue;
 
-		const task = next(before.task, detail.tagId, before.checklistId);
-		const after = task === null ? null : { ...before, task };
+		const after = next(before, detail.tagId);
+		const task = after === null ? null : after.task;
 		// Moving along its stages moves it in and out of the part under way.
 		const stages = stagesOf(client, before.checklistId);
 		const underway = (each: Task | null) =>
@@ -525,9 +529,9 @@ function patchTask(
 	// A tag's page shows the tasks carrying it, so one that has just lost the
 	// tag — taken off Today with the bolt — leaves the page now, not on the
 	// refetch.
-	patchTags(client, taskId, (task, tagId, checklistId) => {
-		const next = change(task, checklistId);
-		return next.tagIds.includes(tagId) ? next : null;
+	patchTags(client, taskId, (entry, tagId) => {
+		const next = change(entry.task, entry.checklistId);
+		return next.tagIds.includes(tagId) ? { ...entry, task: next } : null;
 	});
 
 	patchSearchIndex(client, taskId, (task) => ({
@@ -791,11 +795,98 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			dropTask(client, change.taskId);
 			return;
 
-		// Gone from the checklist it left at once. The one it joined shows it on
-		// its next read, with the tags the server works out for it there.
-		case "task.move":
+		case "task.move": {
+			/*
+			 * Out of the list it left and into the one it joined, in one go.
+			 *
+			 * It used only to leave, and the arrival was left to the refetch —
+			 * which meant moving a task made it disappear, and *undoing* a move
+			 * made it disappear again rather than come back. The landing is
+			 * worked out here the way the server works it out: at the new list's
+			 * first stage, carrying the new list's tags, and having dropped the
+			 * ones it only ever had from the old one.
+			 */
+			const found = findCachedTask(client, change.taskId);
+			if (found === null) {
+				patchChecklists(client, change.taskId, () => null);
+				return;
+			}
+
+			const { task, checklistId: from } = found;
+			const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
+			const summary = (checklistId: string) =>
+				client.getQueryData<ChecklistSummary>(queryKeys.checklist(checklistId));
+			const source = from === null ? undefined : summary(from);
+			const target = summary(change.checklistId);
+
+			/*
+			 * A task carries its checklist's tags. The ones it is losing are the
+			 * old list's that the new one does not also have — and of those, only
+			 * the ones nobody wrote into the title, since a tag someone typed is
+			 * theirs and not the list's; see `moveTask`.
+			 */
+			const joining = target?.tagIds ?? [];
+			const leaving = (source?.tagIds ?? []).filter(
+				(tagId) => !joining.includes(tagId),
+			);
+			const dropped = new Set(
+				unwrittenTags(task.title, leaving, tags).map((tag) => tag.tagId),
+			);
+
+			const moved: Task = {
+				...task,
+				// Its stage was the old list's; see `stageOf`.
+				stageId: stagesOf(client, change.checklistId)[0].stageId,
+				tagIds: [
+					...new Set([
+						...task.tagIds.filter((tagId) => !dropped.has(tagId)),
+						...joining,
+					]),
+				],
+			};
+
 			patchChecklists(client, change.taskId, () => null);
+
+			if (target !== undefined) {
+				client.setQueryData<ChecklistSummary>(
+					queryKeys.checklist(change.checklistId),
+					{
+						...target,
+						progress: {
+							...shift(target.progress, null, moved),
+							byStage: moveStage(
+								target.progress.byStage,
+								null,
+								moved.stageId ?? "",
+							),
+						},
+					},
+				);
+			}
+			addToChecklistPages(client, change.checklistId, moved);
+
+			// Everywhere else it is drawn it is the same task, in another list.
+			const landed = {
+				checklistId: change.checklistId,
+				checklistTitle: target?.title ?? null,
+			};
+			patchTags(client, change.taskId, (entry, tagId) =>
+				moved.tagIds.includes(tagId)
+					? { ...entry, ...landed, task: moved }
+					: null,
+			);
+			patchSearchIndex(client, change.taskId, (each) => ({
+				...each,
+				...moved,
+				...landed,
+			}));
+			patchAcross(client, change.taskId, (each) => ({
+				...each,
+				...moved,
+				...landed,
+			}));
 			return;
+		}
 
 		case "task.create": {
 			// A task added to a checklist carries its tags as well, just as the
@@ -1108,8 +1199,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			return;
 
 		default:
-			// Everything a change can be is patched above. `task.move` is the one
-			// that only half is, and says why where it is handled.
+			// Every kind of change a screen can make is patched above.
 			return;
 	}
 }

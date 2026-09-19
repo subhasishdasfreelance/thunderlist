@@ -5,6 +5,7 @@ import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
+import { useToast } from "@astryxdesign/core/Toast";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -41,6 +42,7 @@ export function EntryFormDialog({
 		undefined,
 	);
 	const [note, setNote] = useState("");
+	const toast = useToast();
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -61,8 +63,8 @@ export function EntryFormDialog({
 	const delta = value === null ? null : value - previousValue;
 
 	/*
-	 * A reading identical to the one before it records nothing, so there is
-	 * nothing to write and Save simply closes.
+	 * A reading identical to the one before it records nothing, so Save refuses
+	 * it and says so.
 	 *
 	 * Editing is the exception. An entry already stored at that value is a fact
 	 * about the past, and its note or its date can still be wrong — so a change
@@ -77,10 +79,19 @@ export function EntryFormDialog({
 		event.preventDefault();
 		if (!isValid || value === null || recordedAt === undefined) return;
 
-		// Nothing to record is nothing to write: the dialog just closes, as it
-		// would on Cancel. The line above the date says why.
+		/*
+		 * A reading that records nothing is refused, and said out loud.
+		 *
+		 * The dialog stays open with the reading still in it, because the likely
+		 * next move is to correct it rather than to start again — and a dialog
+		 * that closed on a press meant as "save" would read as having saved.
+		 */
 		if (!hasSomethingToSave) {
-			onOpenChange(false);
+			toast({
+				body: `You are already at ${previousValue} ${tracker.unit}. Enter where you have got to since.`,
+				type: "error",
+				uniqueID: "entry",
+			});
 			return;
 		}
 
@@ -125,6 +136,7 @@ export function EntryFormDialog({
 		>
 			<VStack gap={4}>
 				<NumberInput
+					autoComplete="off"
 					label={valueLabel}
 					isRequired
 					description={`You were at ${previousValue} ${tracker.unit}.`}
@@ -138,7 +150,7 @@ export function EntryFormDialog({
 						{delta === 0
 							? hasSomethingToSave
 								? "No change since the last reading."
-								: "No change since the last reading — nothing to save."
+								: "No change since the last reading — there is nothing to record."
 							: delta > 0
 								? `That records +${delta} ${tracker.unit}.`
 								: `That records ${delta} ${tracker.unit}, going backwards.`}
@@ -154,6 +166,7 @@ export function EntryFormDialog({
 					onChange={setRecordedAt}
 				/>
 				<TextArea
+					autoComplete="off"
 					label="Note"
 					isOptional
 					rows={4}

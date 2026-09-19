@@ -22,7 +22,7 @@ export function BottomNav() {
 	return (
 		<nav
 			aria-label="Primary"
-			className="thunderlist-glass fixed inset-x-0 bottom-0 z-50 border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden"
+			className="thunderlist-bottom-nav thunderlist-glass fixed inset-x-0 bottom-0 z-50 border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden"
 		>
 			<ul className="m-0 flex list-none justify-around p-0">
 				{NAV_ITEMS.map((item) => {

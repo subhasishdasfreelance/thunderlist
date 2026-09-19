@@ -45,7 +45,7 @@ export type Stage = v.InferOutput<typeof stageSchema>;
  * something to do and it being done — which is what every checklist has until
  * it is given more.
  */
-export const stagesSchema = v.pipe(
+const stagesSchema = v.pipe(
 	v.array(stageSchema),
 	v.minLength(2, "A checklist needs at least two stages"),
 	v.maxLength(12, "At most 12 stages"),

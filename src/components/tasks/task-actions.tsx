@@ -22,6 +22,8 @@ export const TASK_SHORTCUTS = {
 	edit: "e",
 	/** What kind of work it is — the one letter of "kind" nothing else took. */
 	type: "k",
+	/** Tag it: the character a tag is written with, wherever it is written. */
+	tag: "#",
 	/**
 	 * In a team: take it on yourself, or give it back. The one key a thumb is
 	 * already resting on, for the thing done most.

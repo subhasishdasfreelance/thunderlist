@@ -70,7 +70,12 @@ export function FormDialog({
 				content={
 					<LayoutContent>
 						{onSubmit ? (
-							<form id={formId} onSubmit={onSubmit}>
+							/*
+							 * Nothing in this app is a credential, an address or a card,
+							 * and some browsers decide that per form rather than per
+							 * field; see `src/types/astryx-autofill.d.ts`.
+							 */
+							<form id={formId} autoComplete="off" onSubmit={onSubmit}>
 								{children}
 							</form>
 						) : (

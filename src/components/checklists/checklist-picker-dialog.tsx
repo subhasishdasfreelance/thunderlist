@@ -52,6 +52,7 @@ export function ChecklistPickerDialog({
 		>
 			<VStack gap={3}>
 				<TextInput
+					autoComplete="off"
 					label="Find a checklist"
 					isLabelHidden
 					placeholder="Find a checklist"

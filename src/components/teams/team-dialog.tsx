@@ -274,6 +274,11 @@ export function TeamDialog({
 							<div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
 								<TextInput
 									label="Add someone"
+									// The one field in the app where the browser knowing an
+									// address is the point, so it is told which kind it is
+									// rather than told to keep quiet; see
+									// `src/types/astryx-autofill.d.ts`.
+									autoComplete="email"
 									description="The address their Google account signs in with."
 									placeholder="name@example.com"
 									value={email}

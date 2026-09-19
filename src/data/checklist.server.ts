@@ -354,35 +354,6 @@ export async function listChecklists(
 	);
 }
 
-/** A task with the checklist it belongs to, if any. */
-export type TaskWithChecklist = { task: Task; checklistId: string | null };
-
-/**
- * Tasks by id, in one read.
- *
- * Today and the Backlog reference tasks by id and nothing else, so this asks
- * for exactly what they name.
- */
-export async function readTasksByIds(
-	userId: string,
-	taskIds: ReadonlyArray<string>,
-): Promise<Map<string, TaskWithChecklist>> {
-	const byId = new Map<string, TaskWithChecklist>();
-	if (taskIds.length === 0) return byId;
-
-	const current = await collections();
-	const rows = await current.tasks
-		.find({ userId, taskId: { $in: [...taskIds] } })
-		.project<TaskDoc>(DOMAIN_FIELDS)
-		.toArray();
-
-	for (const { checklistId, ...task } of rows) {
-		byId.set(task.taskId, { task, checklistId });
-	}
-
-	return byId;
-}
-
 /**
  * Fill in the completion of any task that stands for something else: a
  * tracker, done when it reaches its target, or another checklist, done when

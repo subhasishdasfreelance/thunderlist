@@ -9,6 +9,7 @@ import {
 	MoreHorizontal,
 	Pencil,
 	Shapes,
+	Tag as TagIcon,
 	Trash2,
 	UserCheck,
 	UserMinus,
@@ -39,6 +40,8 @@ export type TaskRowActions = TaskQuickActions & {
 	onDelete: () => void;
 	/** Say what kind of work it is; see `TaskTypeDialog`. */
 	onSetType: () => void;
+	/** Put a tag on it, picked from the list; see `TagPickerDialog`. */
+	onAddTag: () => void;
 	/** Move it into another checklist. Left out where a screen offers no move. */
 	onMove?: () => void;
 	/** Move it to another of its checklist's stages; see `Checklist.stages`. */
@@ -187,6 +190,7 @@ export function TaskRow({
 			},
 			[TASK_SHORTCUTS.edit]: actions.onRename,
 			[TASK_SHORTCUTS.type]: actions.onSetType,
+			[TASK_SHORTCUTS.tag]: actions.onAddTag,
 			// Only in a team, where there is somebody to assign it to.
 			...(actions.onToggleMine === undefined
 				? {}
@@ -408,6 +412,12 @@ export function TaskRow({
 											<ShortcutKey label={TASK_SHORTCUTS.type.toUpperCase()} />
 										),
 										onClick: actions.onSetType,
+									},
+									{
+										label: "Tag",
+										icon: TagIcon,
+										endContent: <ShortcutKey label={TASK_SHORTCUTS.tag} />,
+										onClick: actions.onAddTag,
 									},
 								],
 							},

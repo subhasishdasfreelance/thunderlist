@@ -136,6 +136,7 @@ export function SearchDialog({
 		>
 			<VStack gap={3}>
 				<TextInput
+					autoComplete="off"
 					label="Search checklists, tasks and trackers"
 					isLabelHidden
 					// Opening search is asking to type: the caret is waiting in the

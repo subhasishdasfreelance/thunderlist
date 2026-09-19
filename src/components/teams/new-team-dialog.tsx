@@ -78,6 +78,7 @@ export function NewTeamDialog({
 			)}
 		>
 			<TextInput
+				autoComplete="off"
 				label="Name"
 				isRequired
 				value={name}

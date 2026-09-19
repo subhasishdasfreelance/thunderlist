@@ -216,6 +216,7 @@ const StageRow = memo(function StageRow({
 			)}
 			<span className="min-w-40 flex-1">
 				<TextInput
+					autoComplete="off"
 					label={isLast ? `Stage ${index + 1}, done` : `Stage ${index + 1}`}
 					isLabelHidden
 					value={stage.name}

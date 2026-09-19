@@ -65,7 +65,7 @@ function rank(level: AccessLevel): number {
 }
 
 /** The lower of two levels; see the top of this file. */
-export function lowerOf(a: AccessLevel, b: AccessLevel): AccessLevel {
+function lowerOf(a: AccessLevel, b: AccessLevel): AccessLevel {
 	return rank(a) <= rank(b) ? a : b;
 }
 

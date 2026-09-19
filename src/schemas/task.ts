@@ -180,7 +180,7 @@ export const taskPageSchema = v.object({
 export type TaskPageView = v.InferOutput<typeof taskPageSchema>;
 
 /** How the Across lists screen cuts every task; see its page. */
-export const GROUP_BYS = ["stage", "type"] as const;
+const GROUP_BYS = ["stage", "type"] as const;
 
 export type GroupBy = (typeof GROUP_BYS)[number];
 

@@ -139,6 +139,7 @@ export function TaskRenameDialog({
 				 * keyboard. Whatever is typed is still one line when it is saved.
 				 */}
 				<TextArea
+					autoComplete="off"
 					label="Caption"
 					isOptional
 					description="Shown in small text under the title."

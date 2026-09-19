@@ -1,3 +1,5 @@
+// fallow-ignore-file unused-file -- registered by the browser at
+// runtime, so nothing in the source graph imports it.
 /*
  * Thunderlist's service worker. Registered from `src/routes/__root.tsx`, in
  * production builds only.

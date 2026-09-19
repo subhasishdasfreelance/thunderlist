@@ -2,6 +2,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { FormDialog } from "#/components/common/form-dialog";
+import { PAGE_SHORTCUTS } from "#/components/shell/nav-items";
 import { TASK_SHORTCUTS } from "#/components/tasks/task-actions";
 
 type Row = { keys: Array<string>; what: string };
@@ -29,7 +30,18 @@ const GROUPS: Array<Group> = [
 				keys: [TASK_SHORTCUTS.type.toUpperCase()],
 				what: "Type — bug, feature…",
 			},
+			{ keys: [TASK_SHORTCUTS.tag], what: "Tag it, picked from the list" },
 			{ keys: ["Space"], what: "Assign to me, or unassign me — in a team" },
+		],
+	},
+	{
+		title: "Several tasks at once",
+		rows: [
+			{
+				keys: ["Drag"],
+				what: "Select across rows to pick them — press and hold on a phone",
+			},
+			{ keys: ["Esc"], what: "Drop the pick" },
 		],
 	},
 	{
@@ -46,10 +58,18 @@ const GROUPS: Array<Group> = [
 		],
 	},
 	{
+		title: "Going somewhere",
+		rows: PAGE_SHORTCUTS.map((page) => ({
+			keys: [page.key],
+			what: page.label,
+		})),
+	},
+	{
 		title: "Anywhere",
 		rows: [
 			{ keys: ["Ctrl", "K"], what: "Search everything" },
 			{ keys: ["Ctrl", "Z"], what: "Undo the last thing you did to a task" },
+			{ keys: ["Esc"], what: "Close this, or drop what is picked" },
 			{ keys: ["?"], what: "This" },
 		],
 	},

@@ -3,9 +3,7 @@ import {
 	SegmentedControlItem,
 } from "@astryxdesign/core/SegmentedControl";
 import { Shapes, SquareKanban } from "lucide-react";
-
-/** How the Across lists screen cuts every task; see its page. */
-export type GroupBy = "stage" | "type";
+import type { GroupBy } from "#/schemas/task";
 
 /**
  * Stage or type: which way the screen cuts the same rows.

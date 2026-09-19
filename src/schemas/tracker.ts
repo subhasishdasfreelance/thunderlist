@@ -12,7 +12,7 @@ import {
 	titleSchema,
 } from "./common";
 
-export const TRACKER_TYPES = [
+const TRACKER_TYPES = [
 	"book",
 	"course",
 	"project",

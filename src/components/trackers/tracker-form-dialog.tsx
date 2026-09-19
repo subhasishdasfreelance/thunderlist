@@ -205,6 +205,7 @@ export function TrackerFormDialog({
 		>
 			<VStack gap={4}>
 				<TextInput
+					autoComplete="off"
 					label="Title"
 					isRequired
 					value={title}
@@ -214,6 +215,7 @@ export function TrackerFormDialog({
 
 				<FieldRow>
 					<TextInput
+						autoComplete="off"
 						label="Unit"
 						isRequired
 						value={unit}
@@ -221,6 +223,7 @@ export function TrackerFormDialog({
 						placeholder="pages"
 					/>
 					<NumberInput
+						autoComplete="off"
 						label="Target"
 						isRequired
 						min={1}
@@ -231,6 +234,7 @@ export function TrackerFormDialog({
 				</FieldRow>
 
 				<NumberInput
+					autoComplete="off"
 					label="Starting from"
 					isOptional
 					description="Where you already are. Leave at 0 to start from scratch."
@@ -242,6 +246,7 @@ export function TrackerFormDialog({
 
 				{tracker?.type === "book" ? (
 					<TextInput
+						autoComplete="off"
 						label="Author"
 						isOptional
 						value={author}
@@ -251,6 +256,7 @@ export function TrackerFormDialog({
 				) : null}
 
 				<TextInput
+					autoComplete="off"
 					label="Cover image URL"
 					isOptional
 					value={coverUrl}
@@ -289,6 +295,7 @@ export function TrackerFormDialog({
 				<AccessField noun="tracker" value={access} onChange={setAccess} />
 
 				<TextArea
+					autoComplete="off"
 					label="Description"
 					isOptional
 					rows={4}

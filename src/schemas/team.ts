@@ -16,7 +16,7 @@ import { emailSchema, idSchema } from "./common";
  * - **Viewer** — sees everything, whoever it is kept to, and changes nothing.
  *
  * Project managers and collaborators see only what is shared with them; see
- * `visibleToSchema`.
+ * `accessSchema`.
  */
 export const TEAM_ROLES = [
 	"admin",

@@ -18,6 +18,7 @@ import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { TagFilter } from "#/components/tags/tag-filter";
+import { TagTasks } from "#/components/tags/tag-tasks";
 import { GroupByToggle } from "#/components/tasks/group-by-toggle";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { TypeFilter } from "#/components/tasks/type-filter";
@@ -101,6 +102,11 @@ function StagesPage() {
 	const [pendingDelete, setPendingDelete] = useState<AcrossTask | null>(null);
 	const [assigning, setAssigning] = useState<AcrossTask | null>(null);
 	const [typing, setTyping] = useState<AcrossTask | null>(null);
+	// The tasks a tag is being put on: the one pointed at, or every one
+	// picked out; see `TagPickerDialog`.
+	const [tagging, setTagging] = useState<ReadonlyArray<AcrossTask> | null>(
+		null,
+	);
 	const [moving, setMoving] = useState<AcrossTask | null>(null);
 	const [groupBy, setGroupBy] = useState<GroupBy>("stage");
 	// Picked by hand; until then, the first group of whichever cut is shown.
@@ -220,6 +226,7 @@ function StagesPage() {
 										backlog.checklistId,
 										tags,
 										task.checklistTitle,
+										checklists.map((each) => each.title),
 									),
 							}
 				}
@@ -247,6 +254,7 @@ function StagesPage() {
 					onSetImportant: (important) =>
 						updateTask(apply, task.taskId, { important }),
 					onSetType: () => setTyping(task),
+					onAddTag: () => setTagging([task]),
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving(task),
 					onDelete: () => setPendingDelete(task),
@@ -379,6 +387,13 @@ function StagesPage() {
 					if (assigning) updateTask(apply, assigning.taskId, { assignees });
 					setAssigning(null);
 				}}
+			/>
+
+			<TagTasks
+				tasks={tagging}
+				tags={tags}
+				canCreate={canManageContent}
+				onClose={() => setTagging(null)}
 			/>
 
 			<TaskTypeDialog

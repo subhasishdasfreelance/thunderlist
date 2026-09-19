@@ -75,7 +75,7 @@ type Stored = {
  * that is everyone named at Full — which, capped by the role, is exactly what
  * they could already do; see `accessFromVisibleTo`.
  */
-export function accessOf(stored: Stored): ReadonlyArray<AccessEntry> | null {
+function accessOf(stored: Stored): ReadonlyArray<AccessEntry> | null {
 	return stored.access ?? accessFromVisibleTo(stored.visibleTo);
 }
 

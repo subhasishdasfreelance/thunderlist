@@ -5,7 +5,7 @@ import { SideNav, SideNavItem } from "@astryxdesign/core/SideNav";
 import { HStack } from "@astryxdesign/core/Stack";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { Theme } from "@astryxdesign/core/theme";
-import { useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SignedInUser } from "#/lib/auth.server";
@@ -16,7 +16,7 @@ import { thunderlistTheme } from "#/theme/thunderlist";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
 import { HelpDialog } from "./help-dialog";
-import { isNavItemActive, NAV_ITEMS } from "./nav-items";
+import { isNavItemActive, NAV_ITEMS, PAGE_SHORTCUTS } from "./nav-items";
 import { RouteProgress } from "./route-progress";
 import { RouterLink } from "./router-link";
 import { SaveIndicator } from "./save-indicator";
@@ -64,16 +64,19 @@ export function AppFrame({
 	colorScheme: ColorScheme;
 	children: ReactNode;
 }) {
+	const navigate = useNavigate();
 	const scheme = useColorScheme(colorScheme);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
 	useTaskCopy();
 
 	/*
-	 * Two keys that work from anywhere.
+	 * The keys that work from anywhere.
 	 *
-	 * `?` opens the shortcuts, but not while typing: it is an ordinary character
-	 * in a task, and a shortcut that eats one is worse than no shortcut.
+	 * `?` opens the shortcuts, and a digit goes to a screen — Today, then the
+	 * bar in its own order; see `PAGE_SHORTCUTS`. Neither fires while typing:
+	 * both are ordinary characters in a task, and a shortcut that eats one is
+	 * worse than no shortcut.
 	 *
 	 * Ctrl+K opens search, and does work while typing — it is a chord, so it
 	 * cannot be typed by accident, and wanting to search from inside a half
@@ -97,19 +100,31 @@ export function AppFrame({
 				return;
 			}
 
-			if (event.key !== "?" || event.metaKey || event.ctrlKey || event.altKey) {
+			if (event.metaKey || event.ctrlKey || event.altKey) return;
+			if (isTyping(event.target)) return;
+
+			if (event.key === "?") {
+				event.preventDefault();
+				setIsHelpOpen(true);
 				return;
 			}
 
-			if (isTyping(event.target)) return;
+			const page = PAGE_SHORTCUTS.find((each) => each.key === event.key);
+			if (page === undefined) return;
 
 			event.preventDefault();
-			setIsHelpOpen(true);
+			void navigate({
+				to: page.to,
+				params: page.params,
+				// Every screen that takes one reads `?task=`, and arriving by key
+				// is arriving at the list rather than at one task on it.
+				search: { task: undefined },
+			} as never);
 		}
 
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
-	}, []);
+	}, [navigate]);
 
 	/*
 	 * Whether the page has moved off the top.

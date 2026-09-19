@@ -29,15 +29,6 @@ export const emailSchema = v.pipe(
 	v.email("Enter a valid email address"),
 );
 
-/**
- * Who in a team can see a checklist or a tag: the addresses of the people
- * allowed, or `null` for everyone in it. The team's admins see everything,
- * whatever this says.
- */
-export const visibleToSchema = v.nullable(
-	v.pipe(v.array(emailSchema), v.maxLength(200, "Too many people")),
-);
-
 /** The people in a team a task or a tracker is assigned to, by address. */
 export const assigneesSchema = v.pipe(
 	v.array(emailSchema),

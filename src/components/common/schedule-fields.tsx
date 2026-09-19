@@ -1,9 +1,5 @@
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
-import {
-	DateTimeInput,
-	type ISODateTimeString,
-} from "@astryxdesign/core/DateTimeInput";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Switch } from "@astryxdesign/core/Switch";
 import { type ISOTimeString, TimeInput } from "@astryxdesign/core/TimeInput";
@@ -11,9 +7,6 @@ import { memo } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { formatDate } from "#/lib/format-date";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
-
-/** Midnight: the start of the day, which a deadline with no time is due by. */
-const START_OF_DAY = "00:00";
 
 /**
  * The schedule every pace figure is measured against, shared by the checklist,
@@ -23,10 +16,15 @@ const START_OF_DAY = "00:00";
  * begun last month is paced from when it really began rather than from when it
  * was typed in. The deadline can carry a time as well as a day — due at six,
  * not just due on Friday — and pace is then measured right up to it, in
- * fractions of an hour. The day and the time are one field, picked together:
- * on a phone they open one sheet, a month to swipe through and wheels for the
- * time, with the hour, the minutes and AM or PM each plainly marked where the
- * phone's own picker left them faint.
+ * fractions of an hour.
+ *
+ * A day and a time are always two fields, here and everywhere else in the app:
+ * one picker each, never a combined one. Two of them fit a phone, which a
+ * combined field never did, and the same shape everywhere means the deadline is
+ * filled in the way the daily hours below it already were.
+ *
+ * The time only appears once there is a day for it to be on, since an hour with
+ * no date is not an answer to anything, and clearing the day takes it with it.
  *
  * Where `onDailyWindowChange` is given, the schedule can repeat daily instead:
  * the same hours every day, morning to night to begin with, and pace is judged
@@ -71,24 +69,10 @@ export const ScheduleFields = memo(function ScheduleFields({
 	const isWindowBackwards =
 		dailyWindow !== null && dailyWindow.to <= dailyWindow.from;
 
-	/** The deadline and its time split back into the two the forms keep. */
-	function changeDeadline(next: ISODateTimeString | undefined) {
-		if (next === undefined) {
-			onDeadlineChange(undefined);
-			onDeadlineTimeChange(undefined);
-			return;
-		}
-
-		const [day, time] = next.split("T");
-		onDeadlineChange(day as ISODateString);
-		// A day picked on its own comes with the time it is now, which nobody
-		// chose: it means the start of the day, as a deadline always has. The
-		// start of the day is kept as no time at all, as it always was.
-		onDeadlineTimeChange(
-			deadline === undefined || time.startsWith(START_OF_DAY)
-				? undefined
-				: time.slice(0, 5),
-		);
+	/** Clearing the day clears the hour with it; see above. */
+	function changeDeadline(next: ISODateString | undefined) {
+		onDeadlineChange(next);
+		if (next === undefined) onDeadlineTimeChange(undefined);
 	}
 
 	return (
@@ -108,22 +92,28 @@ export const ScheduleFields = memo(function ScheduleFields({
 					onChange={onStartDateChange}
 				/>
 				{dailyWindow !== null ? null : (
-					<DateTimeInput
+					<DateInput
 						label="Deadline"
 						isOptional
 						hasClear
-						description="Due at the start of the day unless you set a time. Used to work out whether you are ahead or behind."
-						// Astryx's own pickers everywhere, rather than the phone's.
-						nativePicker="never"
-						value={
-							deadline === undefined
-								? undefined
-								: (`${deadline}T${deadlineTime ?? START_OF_DAY}` as ISODateTimeString)
-						}
+						description="Used to work out whether you are ahead or behind."
+						format={formatDate}
+						value={deadline}
 						onChange={changeDeadline}
 					/>
 				)}
 			</FieldRow>
+
+			{dailyWindow !== null || deadline === undefined ? null : (
+				<TimeInput
+					label="Due at"
+					isOptional
+					hasClear
+					description="Leave empty and it is due at the start of that day."
+					value={deadlineTime as ISOTimeString | undefined}
+					onChange={(time) => onDeadlineTimeChange(time?.slice(0, 5))}
+				/>
+			)}
 
 			{onDailyWindowChange === undefined ? null : (
 				<VStack gap={2}>

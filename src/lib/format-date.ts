@@ -118,7 +118,7 @@ export function formatDeadline(date: string, time?: string | null): string {
 }
 
 /** `06:00` to `22:00` → `6:00 am – 10:00 pm`. */
-export function formatWindow(window: { from: string; to: string }): string {
+function formatWindow(window: { from: string; to: string }): string {
 	return `${formatClock(window.from)} – ${formatClock(window.to)}`;
 }
 

@@ -151,6 +151,7 @@ export function TagFormDialog({
 		>
 			<VStack gap={4}>
 				<TextInput
+					autoComplete="off"
 					label="Name"
 					isRequired
 					value={name}
@@ -188,6 +189,7 @@ export function TagFormDialog({
 				</HStack>
 
 				<TextArea
+					autoComplete="off"
 					label="Description"
 					isOptional
 					rows={3}

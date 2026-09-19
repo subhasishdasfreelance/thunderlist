@@ -32,6 +32,7 @@ import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
+import { TagTasks } from "#/components/tags/tag-tasks";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { TypeFilter } from "#/components/tasks/type-filter";
@@ -154,6 +155,9 @@ function TagDetailPage() {
 		null,
 	);
 	const [typing, setTyping] = useState<Task | null>(null);
+	// The tasks a tag is being put on: the one pointed at, or every one
+	// picked out; see `TagPickerDialog`.
+	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
 	const [assigning, setAssigning] = useState<Task | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
@@ -461,6 +465,7 @@ function TagDetailPage() {
 	}
 
 	/** One task row, used by both the open and the completed sections. */
+
 	const taskRow = (entry: TagTaskEntry) => {
 		const { task, checklistId, checklistTitle } = entry;
 
@@ -482,6 +487,7 @@ function TagDetailPage() {
 										backlog.checklistId,
 										tags,
 										checklistTitle,
+										checklists.map((each) => each.title),
 									),
 							}
 				}
@@ -510,6 +516,7 @@ function TagDetailPage() {
 					onSetImportant: (important) =>
 						updateTask(apply, task.taskId, { important }),
 					onSetType: () => setTyping(task),
+					onAddTag: () => setTagging([task]),
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving([entry]),
 					onDelete: () => setPendingDelete(task),
@@ -894,6 +901,7 @@ function TagDetailPage() {
 					onMoveToChecklist={
 						canManageContent ? () => setMoving(pickedEntries) : undefined
 					}
+					onAddTag={() => setTagging(pickedEntries.map((entry) => entry.task))}
 					onClear={clear}
 				/>
 			)}
@@ -908,6 +916,13 @@ function TagDetailPage() {
 					if (assigning) updateTask(apply, assigning.taskId, { assignees });
 					setAssigning(null);
 				}}
+			/>
+
+			<TagTasks
+				tasks={tagging}
+				tags={tags}
+				canCreate={canManageContent}
+				onClose={() => setTagging(null)}
 			/>
 
 			<TaskTypeDialog

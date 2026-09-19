@@ -211,6 +211,7 @@ export function ChecklistFormDialog({
 		>
 			<VStack gap={4}>
 				<TextInput
+					autoComplete="off"
 					label="Title"
 					isRequired
 					value={title}
@@ -218,6 +219,7 @@ export function ChecklistFormDialog({
 					placeholder="Product Launch Q3"
 				/>
 				<TextArea
+					autoComplete="off"
 					label="Description"
 					isOptional
 					rows={4}

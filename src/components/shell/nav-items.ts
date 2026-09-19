@@ -19,6 +19,8 @@ import {
  *
  * `shortLabel` is what the bottom bar uses: the labels share a phone screen,
  * and a truncated word reads worse than a shorter one.
+ *
+ * `key` is the digit that goes there from anywhere; see `PAGE_SHORTCUTS`.
  */
 export const NAV_ITEMS = [
 	{
@@ -26,22 +28,58 @@ export const NAV_ITEMS = [
 		label: "Checklists",
 		shortLabel: "Lists",
 		icon: ListChecks,
+		key: "2",
 	},
-	{ to: "/priority", label: "Priority", shortLabel: "Priority", icon: Target },
+	{
+		to: "/priority",
+		label: "Priority",
+		shortLabel: "Priority",
+		icon: Target,
+		key: "3",
+	},
 	{
 		to: "/stages",
 		label: "Across lists",
 		shortLabel: "Across",
 		icon: SquareKanban,
+		key: "4",
 	},
-	{ to: "/tags", label: "Tags", shortLabel: "Tags", icon: Tags },
+	{ to: "/tags", label: "Tags", shortLabel: "Tags", icon: Tags, key: "5" },
 	{
 		to: "/trackers",
 		label: "Trackers",
 		shortLabel: "Trackers",
 		icon: TrendingUp,
+		key: "6",
 	},
 ] as const;
+
+/**
+ * The digit that goes to each screen, from anywhere that is not a text field.
+ *
+ * Digits, because every letter on this keyboard already belongs to the row
+ * under the pointer — and because the order is the order of the bar, so the
+ * key and the place it goes are the same list read twice.
+ *
+ * Today leads it. It is not a bar entry, being a tag, but it is where the app
+ * opens and the screen anyone comes back to, so it would be strange for it to
+ * be the one screen with no key.
+ */
+export const PAGE_SHORTCUTS: ReadonlyArray<{
+	key: string;
+	label: string;
+	/** Where it goes, as `Link` takes it. */
+	to: string;
+	/** The route params it needs, for the one screen that takes any. */
+	params?: Record<string, string>;
+}> = [
+	{ key: "1", label: "Today", to: "/tags/$tagId", params: { tagId: "today" } },
+	...NAV_ITEMS.map((item) => ({
+		key: item.key,
+		label: item.label,
+		to: item.to,
+	})),
+];
 
 /** A nav entry is active for its own route and for any detail route below it. */
 export function isNavItemActive(pathname: string, to: string): boolean {

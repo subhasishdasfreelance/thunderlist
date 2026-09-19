@@ -55,6 +55,7 @@ export const TaskNotesField = memo(function TaskNotesField({
 			{view === "write" ? (
 				<>
 					<TextArea
+						autoComplete="off"
 						label="Notes"
 						isLabelHidden
 						rows={6}

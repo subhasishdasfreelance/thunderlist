@@ -11,6 +11,17 @@ export function getRouter() {
 		routeTree,
 		context,
 		scrollRestoration: true,
+		/*
+		 * Every navigation is a view transition.
+		 *
+		 * The browser holds the old screen, swaps the content, and cross-fades
+		 * the two — so a page arrives instead of blinking into place, and the
+		 * bars around it stay exactly where they are while it does; see
+		 * "View transitions" in `styles.css`. Where the browser has no such
+		 * thing the router falls back to a plain navigation, and the arrival
+		 * animation keyed on the path takes over instead.
+		 */
+		defaultViewTransition: true,
 		defaultPreload: "intent",
 		defaultPreloadStaleTime: 0,
 		defaultErrorComponent: RouteError,

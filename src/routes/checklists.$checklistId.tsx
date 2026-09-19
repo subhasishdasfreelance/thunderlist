@@ -35,6 +35,7 @@ import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { TagFilter } from "#/components/tags/tag-filter";
+import { TagTasks } from "#/components/tags/tag-tasks";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { TypeFilter } from "#/components/tasks/type-filter";
@@ -157,6 +158,9 @@ function ChecklistDetailPage() {
 	// task picked out at once; see `SelectionBar`.
 	const [moving, setMoving] = useState<ReadonlyArray<Task> | null>(null);
 	const [typing, setTyping] = useState<Task | null>(null);
+	// The tasks a tag is being put on: the one pointed at, or every one
+	// picked out; see `TagPickerDialog`.
+	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
 	const [assigning, setAssigning] = useState<Task | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
@@ -295,6 +299,7 @@ function ChecklistDetailPage() {
 		};
 
 	/** One task row, the same at every stage. */
+
 	const taskRow = (task: Task) => (
 		<TaskRow
 			task={task}
@@ -312,6 +317,7 @@ function ChecklistDetailPage() {
 									backlog.checklistId,
 									tags,
 									detail.title,
+									(checklistsResult.data ?? []).map((each) => each.title),
 								),
 						}
 			}
@@ -325,6 +331,7 @@ function ChecklistDetailPage() {
 				onSetImportant: (important) =>
 					updateTask(apply, task.taskId, { important }),
 				onSetType: () => setTyping(task),
+				onAddTag: () => setTagging([task]),
 				onRename: () => setRenaming(task),
 				onMove: () => setMoving([task]),
 				onDelete: () => setPendingDelete(task),
@@ -738,6 +745,7 @@ function ChecklistDetailPage() {
 					onMoveToChecklist={
 						canManageContent ? () => setMoving(pickedTasks) : undefined
 					}
+					onAddTag={() => setTagging(pickedTasks)}
 					onClear={clear}
 				/>
 			)}
@@ -752,6 +760,13 @@ function ChecklistDetailPage() {
 					if (assigning) updateTask(apply, assigning.taskId, { assignees });
 					setAssigning(null);
 				}}
+			/>
+
+			<TagTasks
+				tasks={tagging}
+				tags={tags}
+				canCreate={canManageContent}
+				onClose={() => setTagging(null)}
 			/>
 
 			<TaskTypeDialog

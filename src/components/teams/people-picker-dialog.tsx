@@ -171,6 +171,7 @@ export function PeoplePickerDialog({
 				</HStack>
 
 				<TextInput
+					autoComplete="off"
 					label="Search people"
 					isLabelHidden
 					placeholder="Search by name or email"

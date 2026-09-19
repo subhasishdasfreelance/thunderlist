@@ -2,7 +2,13 @@ import { Button } from "@astryxdesign/core/Button";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Text } from "@astryxdesign/core/Text";
-import { ArrowRight, Check, FolderInput, X } from "lucide-react";
+import {
+	ArrowRight,
+	Check,
+	FolderInput,
+	Tag as TagIcon,
+	X,
+} from "lucide-react";
 import { StageDot } from "#/components/common/stage-dot";
 import { type Stage, stageColor } from "#/schemas/checklist";
 
@@ -18,7 +24,8 @@ import { type Stage, stageColor } from "#/schemas/checklist";
  * Moving them all into another checklist is offered beside those, since a
  * handful of rows picked out is exactly what a move usually is: sorting a
  * dozen tasks into the lists they belong in, one pick rather than one menu
- * each.
+ * each. Tagging them is offered for the same reason, and is the other half of
+ * that sort: what a dozen tasks have in common is usually one word.
  *
  * It floats at the foot of the screen, over the page, for as long as anything
  * is picked, so the rows picked can be far down a list and the bar still in
@@ -31,6 +38,7 @@ export function SelectionBar({
 	onMoveTo,
 	onDone,
 	onMoveToChecklist,
+	onAddTag,
 	onClear,
 }: {
 	count: number;
@@ -46,6 +54,8 @@ export function SelectionBar({
 	 * for anyone whose role may not move tasks; see `Capability`.
 	 */
 	onMoveToChecklist?: () => void;
+	/** Put one tag on all of them, picked in a dialog; see `TagPickerDialog`. */
+	onAddTag?: () => void;
 	onClear: () => void;
 }) {
 	return (
@@ -91,6 +101,16 @@ export function SelectionBar({
 					size="sm"
 					icon={<Check aria-hidden />}
 					onClick={onDone}
+				/>
+			)}
+
+			{onAddTag === undefined ? null : (
+				<Button
+					label="Add tag"
+					variant="secondary"
+					size="sm"
+					icon={<TagIcon aria-hidden />}
+					onClick={onAddTag}
 				/>
 			)}
 

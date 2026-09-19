@@ -432,6 +432,9 @@ export function TagTextField({
 		label,
 		isLabelHidden: true,
 		placeholder,
+		// A task title is nobody's name, address or password; see
+		// `src/types/astryx-autofill.d.ts`.
+		autoComplete: "off",
 		value,
 		onChange: handleChange,
 		onKeyDown: handleKeyDown,

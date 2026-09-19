@@ -23,6 +23,7 @@ import {
 	withInlineTag,
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
+import { captionFromChecklist } from "#/lib/tasks/tasks";
 import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
@@ -299,25 +300,20 @@ export function toggleAssignee(
 }
 
 /**
- * Put a task on one of the special tags, or take it off.
+ * Put a tag on a task, or take it off.
  *
  * The tag is written into the title the way the user would have typed it — at
  * the end — and taken off by removing it wherever it was written, the middle
- * of the sentence included.
- *
- * Nothing happens until the tags have loaded, since until then there is no
- * telling what the tag is called.
+ * of the sentence included. The title and the list of ids are one answer kept
+ * in two places, so both move together or a tag would show on the row and not
+ * in the words, or the other way about.
  */
-export function setSpecialTag(
+export function setTag(
 	apply: ApplyChange,
 	task: Pick<Task, "taskId" | "title" | "tagIds">,
-	kind: SpecialTag,
+	tag: Pick<Tag, "tagId" | "name">,
 	isOn: boolean,
-	tags: ReadonlyArray<Tag>,
 ): void {
-	const tag = specialTag(tags, kind);
-	if (tag === null) return;
-
 	if (!isOn) {
 		updateTask(apply, task.taskId, {
 			title: withoutInlineTag(task.title, tag.name),
@@ -332,29 +328,22 @@ export function setSpecialTag(
 	});
 }
 
-/** How a caption's parts are joined, so a note can be added beside one. */
-const CAPTION_SEPARATOR = " · ";
-
-/** The note a parked task carries, so where it came from is not lost. */
-const FROM_NOTE = "From ";
-
 /**
- * A caption saying which checklist the task was parked from, ahead of whatever
- * it already said. An earlier note of the same kind is replaced rather than
- * stacked up, so a task parked twice names where it came from, not its whole
- * history.
+ * The same for one of the special tags, named by its kind rather than by id
+ * because its name is the user's to change; see `SPECIAL_TAGS`.
+ *
+ * Nothing happens until the tags have loaded, since until then there is no
+ * telling what the tag is called.
  */
-export function captionFromChecklist(
-	caption: string | undefined,
-	checklistTitle: string,
-): string {
-	const rest = (caption ?? "")
-		.split(CAPTION_SEPARATOR)
-		.filter((part) => part.trim() !== "" && !part.startsWith(FROM_NOTE))
-		.join(CAPTION_SEPARATOR);
-	const note = `${FROM_NOTE}${checklistTitle}`;
-
-	return rest === "" ? note : `${note}${CAPTION_SEPARATOR}${rest}`;
+export function setSpecialTag(
+	apply: ApplyChange,
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	kind: SpecialTag,
+	isOn: boolean,
+	tags: ReadonlyArray<Tag>,
+): void {
+	const tag = specialTag(tags, kind);
+	if (tag !== null) setTag(apply, task, tag, isOn);
 }
 
 /**
@@ -376,6 +365,8 @@ export async function moveToBacklog(
 	tags: ReadonlyArray<Tag>,
 	/** The checklist it is leaving, or `null` when it is in none. */
 	fromTitle: string | null,
+	/** Every checklist's title; see `captionFromChecklist`. */
+	checklistTitles: ReadonlyArray<string>,
 ): Promise<void> {
 	const today = specialTag(tags, "today");
 	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
@@ -389,7 +380,13 @@ export async function moveToBacklog(
 			: {}),
 		...(fromTitle === null || fromTitle === ""
 			? {}
-			: { caption: captionFromChecklist(task.caption, fromTitle) }),
+			: {
+					caption: captionFromChecklist(
+						task.caption,
+						fromTitle,
+						checklistTitles,
+					),
+				}),
 	};
 
 	try {

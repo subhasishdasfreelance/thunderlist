@@ -18,7 +18,7 @@ import type { ProgressEntry, TrackerProgress } from "#/schemas/tracker";
  * in either direction. Today reads its pace against the same figure, so
  * "Behind" means the same thing on every screen.
  */
-export const PACE_TOLERANCE = 0.01;
+const PACE_TOLERANCE = 0.01;
 
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_DAY = 1440;
@@ -252,7 +252,7 @@ export function todayWindow(
  * `null` when there is nothing to measure against: no deadline, a date that
  * does not parse, or a window with no length.
  */
-export function paceWindow(
+function paceWindow(
 	input: PaceInput,
 	now: number,
 ): { start: number; end: number } | null {

@@ -870,3 +870,116 @@ describe("applyOptimistically, on the rest", () => {
 		).toEqual(types);
 	});
 });
+
+describe("applyOptimistically, moving a task", () => {
+	/** Two checklists, the task in the first, both pages on screen. */
+	function moving(): QueryClient {
+		const queryClient = new QueryClient();
+		const from = { ...summary("chk_1"), tagIds: ["tag_1"] };
+		const to = { ...summary("chk_2"), tagIds: ["tag_2"] };
+
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			from,
+			to,
+		]);
+		queryClient.setQueryData<ChecklistSummary>(
+			queryKeys.checklist("chk_1"),
+			from,
+		);
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_2"), {
+			...to,
+			progress: { total: 0, completed: 0, percent: 0, byStage: {} },
+		});
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([task({ taskId: "tsk_1", tagIds: ["tag_1", "tag_3"] })]),
+		);
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_2", VIEW),
+			stagePage([]),
+		);
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [
+			tag("tag_1"),
+			tag("tag_2"),
+			tag("tag_3"),
+		]);
+		return queryClient;
+	}
+
+	const pageOf = (queryClient: QueryClient, checklistId: string) =>
+		queryClient.getQueryData<StagePage>(
+			queryKeys.checklistPage(checklistId, VIEW),
+		);
+
+	/*
+	 * It used only to leave, so moving a task made it disappear until the
+	 * refetch — and undoing a move made it disappear a second time.
+	 */
+	it("takes it off the list it left and puts it on the one it joined", () => {
+		const queryClient = moving();
+
+		applyOptimistically(queryClient, {
+			kind: "task.move",
+			taskId: "tsk_1",
+			checklistId: "chk_2",
+		});
+
+		expect(pageOf(queryClient, "chk_1")?.items).toEqual([]);
+		expect(
+			pageOf(queryClient, "chk_2")?.items.map((each) => each.taskId),
+		).toEqual(["tsk_1"]);
+		expect(pageOf(queryClient, "chk_2")?.counts.todo).toBe(1);
+		expect(
+			queryClient.getQueryData<ChecklistSummary>(queryKeys.checklist("chk_2"))
+				?.progress.total,
+		).toBe(1);
+		expect(
+			queryClient.getQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"))
+				?.progress.total,
+		).toBe(0);
+	});
+
+	/*
+	 * A task carries its checklist's tags. `tag_1` came from the list it is
+	 * leaving and nobody wrote it, so it goes; `tag_3` is its own and stays.
+	 */
+	it("swaps the tags it had from the old list for the new list's", () => {
+		const queryClient = moving();
+
+		applyOptimistically(queryClient, {
+			kind: "task.move",
+			taskId: "tsk_1",
+			checklistId: "chk_2",
+		});
+
+		expect(pageOf(queryClient, "chk_2")?.items[0]?.tagIds).toEqual([
+			"tag_3",
+			"tag_2",
+		]);
+	});
+
+	it("keeps a tag the title wrote, whichever list it was from", () => {
+		const queryClient = moving();
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([
+				task({
+					taskId: "tsk_1",
+					title: "read the spec #tag_1",
+					tagIds: ["tag_1"],
+				}),
+			]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.move",
+			taskId: "tsk_1",
+			checklistId: "chk_2",
+		});
+
+		expect(pageOf(queryClient, "chk_2")?.items[0]?.tagIds).toEqual([
+			"tag_1",
+			"tag_2",
+		]);
+	});
+});

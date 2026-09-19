@@ -69,6 +69,59 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 	return [...tasks].sort(compareTasks);
 }
 
+/** How a caption's parts are joined, so a note can be added beside one. */
+const CAPTION_SEPARATOR = " · ";
+
+/**
+ * A caption naming the checklist the task was parked from, ahead of whatever
+ * it already said.
+ *
+ * The name on its own — "Design system", not "From Design system". Every task
+ * in the Backlog was parked from somewhere, so the word was on every row and
+ * told none of them apart.
+ *
+ * Without that word there is nothing in the text marking which part is the
+ * origin, so an earlier one is recognised by being the name of a checklist.
+ * That is what the names are for, and it is what keeps a task parked twice
+ * from carrying its whole history. Anything the user wrote themselves is not a
+ * checklist name, so it is kept.
+ */
+export function captionFromChecklist(
+	caption: string | undefined,
+	checklistTitle: string,
+	/** Every checklist there is, so an earlier origin can be told from a note. */
+	checklistTitles: ReadonlyArray<string>,
+): string {
+	const isOrigin = (part: string) =>
+		checklistTitles.some((title) => title.toLowerCase() === part.toLowerCase());
+
+	const rest = (caption ?? "")
+		.split(CAPTION_SEPARATOR)
+		.map((part) => part.trim())
+		.filter((part) => part !== "" && !isOrigin(part))
+		.join(CAPTION_SEPARATOR);
+
+	return rest === ""
+		? checklistTitle
+		: `${checklistTitle}${CAPTION_SEPARATOR}${rest}`;
+}
+
+/**
+ * The tags every one of these tasks carries.
+ *
+ * What a tag picker ticks when it is open over several tasks: a tag only one
+ * of them has is not a tag "they" have, and ticking it would say it was.
+ */
+export function sharedTagIds(
+	tasks: ReadonlyArray<Pick<Task, "tagIds">> | null,
+): Array<string> {
+	if (tasks === null || tasks.length === 0) return [];
+
+	return tasks[0].tagIds.filter((tagId) =>
+		tasks.every((task) => task.tagIds.includes(tagId)),
+	);
+}
+
 /**
  * A task's title cut short, for a confirmation that names it: enough to know
  * it by, never the whole of a long one.
@@ -99,7 +152,7 @@ export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
  * Within a band the newest is still first, so sorting reorders the list rather
  * than replacing one arbitrary order with another.
  */
-export function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
+function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
 	tasks: ReadonlyArray<T>,
 	order: SortOrder,
 	compare: (a: T, b: T) => number,
@@ -126,7 +179,7 @@ export function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
  * own order, since that is the order whoever wrote it chose, and the tasks
  * with no type after every one that has one.
  */
-export function typeRanker(
+function typeRanker(
 	types: ReadonlyArray<{ typeId: string }>,
 ): (task: { typeId?: string | null }) => number {
 	const ranks = new Map(types.map((type, index) => [type.typeId, index]));

@@ -77,6 +77,7 @@ export function FeedbackDialog({
 			)}
 		>
 			<TextArea
+				autoComplete="off"
 				label="Your feedback"
 				rows={6}
 				value={message}
