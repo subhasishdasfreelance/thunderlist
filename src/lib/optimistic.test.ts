@@ -5,6 +5,12 @@ import { queryKeys } from "#/queries/keys";
 import type { ChecklistSummary } from "#/schemas/checklist";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
+import type { TaskType } from "#/schemas/task-type";
+import type {
+	ProgressEntry,
+	TrackerDetail,
+	TrackerSummary,
+} from "#/schemas/tracker";
 import { applyOptimistically } from "./optimistic";
 
 /** The first page of the first stage, as a screen reads it. */
@@ -499,5 +505,368 @@ describe("applyOptimistically", () => {
 
 		expect(toDo(queryClient)?.items[0]?.tagIds).toEqual(["tag_1", "tag_2"]);
 		expect(toDo(queryClient)?.counts.todo).toBe(1);
+	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* Whole things                                                               */
+/* -------------------------------------------------------------------------- */
+
+function tracker(partial: Partial<TrackerSummary> = {}): TrackerSummary {
+	const startValue = partial.startValue ?? 0;
+	const currentValue = partial.currentValue ?? startValue;
+	const targetValue = partial.targetValue ?? 100;
+
+	return {
+		trackerId: "trk_1",
+		title: "Dune",
+		type: "book",
+		description: "",
+		unit: "pages",
+		targetValue,
+		startValue,
+		currentValue,
+		coverUrl: null,
+		author: "",
+		startDate: "2026-01-01",
+		deadline: null,
+		deadlineTime: null,
+		tagIds: [],
+		assignees: [],
+		access: null,
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		progress: {
+			current: currentValue,
+			target: targetValue,
+			percent: Math.round(
+				((currentValue - startValue) / (targetValue - startValue)) * 100,
+			),
+		},
+		...partial,
+	};
+}
+
+/** A reading as the server hands it back: its step already measured. */
+function reading(
+	entryId: string,
+	value: number,
+	recordedAt: string,
+	delta: number,
+): ProgressEntry {
+	return {
+		entryId,
+		value,
+		recordedAt,
+		delta,
+		note: "",
+		recordedBy: "someone@example.com",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+	};
+}
+
+/** A client on a tracker's screen: the figures, the list, and the history. */
+function trackerClient(
+	history: Array<ProgressEntry>,
+	partial: Partial<TrackerSummary> = {},
+): QueryClient {
+	const queryClient = new QueryClient();
+	const only = tracker(partial);
+
+	queryClient.setQueryData<TrackerDetail>(queryKeys.tracker("trk_1"), only);
+	queryClient.setQueryData<Array<TrackerSummary>>(queryKeys.trackers, [only]);
+	queryClient.setQueryData<Array<ProgressEntry>>(
+		queryKeys.trackerEntries("trk_1"),
+		history,
+	);
+
+	return queryClient;
+}
+
+const entriesOf = (queryClient: QueryClient) =>
+	queryClient.getQueryData<Array<ProgressEntry>>(
+		queryKeys.trackerEntries("trk_1"),
+	);
+
+const trackerOf = (queryClient: QueryClient) =>
+	queryClient.getQueryData<TrackerDetail>(queryKeys.tracker("trk_1"));
+
+const trackerList = (queryClient: QueryClient) =>
+	queryClient.getQueryData<Array<TrackerSummary>>(queryKeys.trackers);
+
+describe("applyOptimistically, on a tracker", () => {
+	it("draws a new reading, its step, and where the tracker now stands", () => {
+		const queryClient = trackerClient([reading("ent_1", 40, "2026-01-01", 40)]);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.create",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+			value: 78,
+			recordedAt: "2026-01-02",
+			note: "chapter 7",
+		});
+
+		const history = entriesOf(queryClient);
+		expect(history?.map((each) => each.entryId)).toEqual(["ent_1", "ent_2"]);
+		// The step is measured from the reading before it, never typed.
+		expect(history?.[1]?.delta).toBe(38);
+		expect(trackerOf(queryClient)?.currentValue).toBe(78);
+		expect(trackerOf(queryClient)?.progress.percent).toBe(78);
+		// The list behind the screen moves with it.
+		expect(trackerList(queryClient)?.[0]?.currentValue).toBe(78);
+	});
+
+	it("drops a back-dated reading into the history and re-spaces its neighbours", () => {
+		const queryClient = trackerClient([
+			reading("ent_1", 40, "2026-01-01", 40),
+			reading("ent_3", 90, "2026-01-05", 50),
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.create",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+			value: 60,
+			recordedAt: "2026-01-03",
+			note: "",
+		});
+
+		const history = entriesOf(queryClient);
+		expect(history?.map((each) => each.entryId)).toEqual([
+			"ent_1",
+			"ent_2",
+			"ent_3",
+		]);
+		expect(history?.map((each) => each.delta)).toEqual([40, 20, 30]);
+		// The latest reading is still the latest, so the tracker has not moved.
+		expect(trackerOf(queryClient)?.currentValue).toBe(90);
+	});
+
+	it("takes a reading out and hands its step to the one after it", () => {
+		const queryClient = trackerClient([
+			reading("ent_1", 40, "2026-01-01", 40),
+			reading("ent_2", 60, "2026-01-03", 20),
+			reading("ent_3", 90, "2026-01-05", 30),
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.delete",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+		});
+
+		expect(entriesOf(queryClient)?.map((each) => each.delta)).toEqual([40, 50]);
+		expect(trackerOf(queryClient)?.currentValue).toBe(90);
+	});
+
+	it("corrects the latest reading and brings the tracker back with it", () => {
+		const queryClient = trackerClient([
+			reading("ent_1", 40, "2026-01-01", 40),
+			reading("ent_2", 90, "2026-01-05", 50),
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.update",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+			patch: { value: 70 },
+		});
+
+		expect(entriesOf(queryClient)?.[1]?.delta).toBe(30);
+		expect(trackerOf(queryClient)?.currentValue).toBe(70);
+	});
+
+	/*
+	 * A step measured against readings this browser has not seen would be a
+	 * number made up; the read already running brings the real one.
+	 */
+	it("leaves the figures alone while the history is still on its way", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<TrackerDetail>(
+			queryKeys.tracker("trk_1"),
+			tracker({ currentValue: 40 }),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.create",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+			value: 78,
+			recordedAt: "2026-01-02",
+			note: "",
+		});
+
+		expect(trackerOf(queryClient)?.currentValue).toBe(40);
+	});
+
+	it("moves the percentage when the target moves, and not where it stands", () => {
+		const queryClient = trackerClient([], { currentValue: 50 });
+
+		applyOptimistically(queryClient, {
+			kind: "tracker.update",
+			trackerId: "trk_1",
+			patch: { targetValue: 200 },
+		});
+
+		expect(trackerOf(queryClient)?.currentValue).toBe(50);
+		expect(trackerOf(queryClient)?.progress.percent).toBe(25);
+	});
+
+	it("takes a deleted tracker off the list at once", () => {
+		const queryClient = trackerClient([]);
+
+		applyOptimistically(queryClient, {
+			kind: "tracker.delete",
+			trackerId: "trk_1",
+		});
+
+		expect(trackerList(queryClient)).toEqual([]);
+	});
+
+	it("puts a new tracker on the list with an empty history", () => {
+		const queryClient = trackerClient([], { trackerId: "trk_other" });
+
+		applyOptimistically(queryClient, {
+			kind: "tracker.create",
+			trackerId: "trk_2",
+			title: "Sapiens",
+			type: "book",
+			unit: "pages",
+			targetValue: 400,
+			startValue: 40,
+			startDate: "2026-02-01",
+			deadline: null,
+			deadlineTime: null,
+			description: "",
+			coverUrl: null,
+			author: "",
+			tagIds: [],
+			assignees: [],
+			access: null,
+		});
+
+		const list = trackerList(queryClient);
+		expect(list?.map((each) => each.trackerId)).toEqual(["trk_other", "trk_2"]);
+		// It stands where it starts, so it is 0% of the way and not 10%.
+		expect(list?.[1]?.currentValue).toBe(40);
+		expect(list?.[1]?.progress.percent).toBe(0);
+		expect(
+			queryClient.getQueryData<Array<ProgressEntry>>(
+				queryKeys.trackerEntries("trk_2"),
+			),
+		).toEqual([]);
+	});
+});
+
+describe("applyOptimistically, on the rest", () => {
+	const checklists = (queryClient: QueryClient) =>
+		queryClient.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists);
+
+	it("renames a checklist on its own screen and on its card", () => {
+		const queryClient = client();
+
+		applyOptimistically(queryClient, {
+			kind: "checklist.update",
+			checklistId: "chk_1",
+			patch: { title: "Renamed" },
+		});
+
+		expect(checklist(queryClient)?.title).toBe("Renamed");
+		expect(checklists(queryClient)?.map((each) => each.title)).toEqual([
+			"Renamed",
+		]);
+	});
+
+	it("takes a deleted checklist off the list", () => {
+		const queryClient = client();
+
+		applyOptimistically(queryClient, {
+			kind: "checklist.delete",
+			checklistId: "chk_1",
+		});
+
+		expect(checklists(queryClient)).toEqual([]);
+	});
+
+	/*
+	 * A tag is usually born mid-sentence, as `#name` typed into a task: the chip
+	 * on that row is looked up in this list, so without the tag on it the task
+	 * read as having lost the tag that had just been typed.
+	 */
+	it("draws a tag the moment it is made", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [tag("tag_1")]);
+
+		applyOptimistically(queryClient, {
+			kind: "tag.create",
+			tagId: "tag_2",
+			name: "deep-work",
+			color: "indigo",
+			description: "",
+			startDate: null,
+			deadline: null,
+			deadlineTime: null,
+			dailyWindow: null,
+			access: null,
+		});
+
+		const tags = queryClient.getQueryData<Array<Tag>>(queryKeys.tags);
+		expect(tags?.map((each) => each.name)).toEqual(["tag_1", "deep-work"]);
+		expect(tags?.[1]?.color).toBe("indigo");
+	});
+
+	it("recolours a tag on the list and on its own page together", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [tag("tag_1")]);
+		queryClient.setQueryData<TagDetail>(
+			queryKeys.tag("tag_1"),
+			tagPage("tag_1", []),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "tag.update",
+			tagId: "tag_1",
+			patch: { color: "lime" },
+		});
+
+		expect(
+			queryClient.getQueryData<Array<Tag>>(queryKeys.tags)?.[0]?.color,
+		).toBe("lime");
+		expect(
+			queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"))?.color,
+		).toBe("lime");
+	});
+
+	it("takes a deleted tag off the list, which takes its chips off the rows", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [
+			tag("tag_1"),
+			tag("tag_2"),
+		]);
+
+		applyOptimistically(queryClient, { kind: "tag.delete", tagId: "tag_1" });
+
+		expect(
+			queryClient
+				.getQueryData<Array<Tag>>(queryKeys.tags)
+				?.map((each) => each.tagId),
+		).toEqual(["tag_2"]);
+	});
+
+	it("rewrites the space's task types at once", () => {
+		const queryClient = new QueryClient();
+		const types: Array<TaskType> = [
+			{ typeId: "bug", name: "Defect", color: "rose" },
+		];
+		queryClient.setQueryData<Array<TaskType>>(queryKeys.taskTypes, [
+			{ typeId: "bug", name: "Bug", color: "red" },
+		]);
+
+		applyOptimistically(queryClient, { kind: "taskTypes.set", types });
+
+		expect(
+			queryClient.getQueryData<Array<TaskType>>(queryKeys.taskTypes),
+		).toEqual(types);
 	});
 });

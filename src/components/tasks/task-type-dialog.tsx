@@ -20,8 +20,9 @@ import { TaskTypesDialog } from "./task-types-dialog";
  * task into: two letters and Enter is quicker than finding the row. Picking
  * the type it already has, or "No type", takes it off.
  *
- * The list itself is managed from here too, for whoever may change it: it is
- * about tasks, so it lives beside them.
+ * The list itself can be opened from here, for whoever may change it, so a
+ * type that is missing can be added without leaving the task. It lives on the
+ * Settings screen.
  */
 export function TaskTypeDialog({
 	isOpen,
@@ -103,7 +104,8 @@ export function TaskTypeDialog({
 							}
 						/>
 					) : (
-						<List hasDividers>
+						// A space may have thirty types; the list scrolls, the field stays.
+						<List hasDividers className="thunderlist-picker-list">
 							{shown.map((type) => (
 								<ListItem
 									key={type.typeId}

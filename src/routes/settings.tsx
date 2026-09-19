@@ -11,22 +11,28 @@ import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronRight, Plus, User, Users } from "lucide-react";
+import { ChevronRight, Plus, Shapes, User, Users } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
+import { TaskTypesDialog } from "#/components/tasks/task-types-dialog";
 import { NewTeamDialog } from "#/components/teams/new-team-dialog";
 import { RoleToken } from "#/components/teams/role-token";
 import { TeamDialog } from "#/components/teams/team-dialog";
 import { selectSpaceFn } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
 import { useSpaceChanged } from "#/lib/use-space-changed";
-import { useSpace } from "#/lib/use-team";
+import { useTaskTypes } from "#/lib/use-task-types";
+import { usePermissions, useSpace } from "#/lib/use-team";
 import { primeQuery } from "#/queries/prime";
-import { teamsQuery } from "#/queries/space";
+import { taskTypesQuery, teamsQuery } from "#/queries/space";
 
 export const Route = createFileRoute("/settings")({
-	loader: ({ context }) => primeQuery(context.queryClient, teamsQuery()),
+	loader: ({ context }) => {
+		// The types are a short read and the section draws from them directly.
+		void context.queryClient.prefetchQuery(taskTypesQuery());
+		return primeQuery(context.queryClient, teamsQuery());
+	},
 	component: SettingsPage,
 });
 
@@ -67,8 +73,11 @@ function Section({
  * its people and their roles, opens in a popup from its row, so this screen
  * stays one glance long. This is also where you move between spaces.
  *
- * Settings about the work itself live with the work: task types are managed
- * from where a type is picked.
+ * Task types are here too, because they are not about one checklist the way
+ * stages are: a space has one list of them and every task in it is sorted by
+ * that list. So they belong with the space, which is what this screen is
+ * about. They are shown as the chips they are drawn as, and changed in a
+ * popup, the way a team's people are.
  */
 function SettingsPage() {
 	const { user } = Route.useRouteContext();
@@ -76,7 +85,10 @@ function SettingsPage() {
 	const toast = useToast();
 	const spaceChanged = useSpaceChanged();
 	const teamsResult = useQuery(teamsQuery());
+	const types = useTaskTypes();
+	const { canManageContent } = usePermissions();
 	const [isCreating, setIsCreating] = useState(false);
+	const [isManagingTypes, setIsManagingTypes] = useState(false);
 	const [openTeamId, setOpenTeamId] = useState<string | null>(null);
 	// The space being moved into, while the move is on its way.
 	const [movingTo, setMovingTo] = useState<string | null | undefined>(
@@ -206,6 +218,49 @@ function SettingsPage() {
 					</Card>
 				)}
 			</Section>
+
+			<Section
+				title="Task types"
+				description={`The kinds of work tasks in ${
+					space?.team?.name ?? "your own space"
+				} are sorted into — a bug, a feature, a chore. One list, shared by everyone here.`}
+				action={
+					!canManageContent ? undefined : (
+						<Button
+							label="Manage types"
+							icon={<Shapes aria-hidden />}
+							variant="secondary"
+							onClick={() => setIsManagingTypes(true)}
+						/>
+					)
+				}
+			>
+				<Card padding={4}>
+					{types.length === 0 ? (
+						<Text type="supporting">
+							{canManageContent
+								? "No types yet. Add one, and tasks can be marked with it."
+								: "This space has no task types."}
+						</Text>
+					) : (
+						<HStack gap={1.5} wrap="wrap">
+							{types.map((type) => (
+								<Token
+									key={type.typeId}
+									size="sm"
+									color={type.color}
+									label={type.name}
+								/>
+							))}
+						</HStack>
+					)}
+				</Card>
+			</Section>
+
+			<TaskTypesDialog
+				isOpen={isManagingTypes}
+				onOpenChange={setIsManagingTypes}
+			/>
 
 			<TeamDialog
 				team={openTeam}

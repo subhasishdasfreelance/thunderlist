@@ -2,6 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
@@ -115,16 +116,32 @@ export function TrackerFormDialog({
 	const from = startValue ?? 0;
 
 	/*
+	 * What is still missing, or `null` once nothing is.
+	 *
+	 * Said in words beside the button rather than by switching the button off.
+	 * `NumberInput` keeps what is being typed to itself until the field is
+	 * left, so while the caret is in the target this still reads the old one —
+	 * and a button disabled on that can never be pressed: a disabled button
+	 * takes no pointer events, so the field never loses focus, so the target
+	 * never arrives. Pressing it is what commits the target.
+	 *
 	 * The target has to be past the starting point, or there is no distance to
 	 * cover: "page 40 to page 40" is not a plan, and every pace figure derived
 	 * from it would be a division by zero.
 	 */
-	const isValid =
-		trimmedTitle !== "" &&
-		unit.trim() !== "" &&
-		targetValue !== null &&
-		targetValue > from &&
-		startDate !== undefined;
+	const problem =
+		trimmedTitle === ""
+			? "Give it a title."
+			: unit.trim() === ""
+				? "Say what it counts."
+				: targetValue === null
+					? "Set a target."
+					: targetValue <= from
+						? "The target has to be past where it starts."
+						: startDate === undefined
+							? "Set a start date."
+							: null;
+	const isValid = problem === null;
 
 	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
@@ -167,7 +184,8 @@ export function TrackerFormDialog({
 			title={tracker ? "Edit tracker" : "New tracker"}
 			onSubmit={submit}
 			actions={(formId) => (
-				<HStack gap={2} hAlign="end">
+				<HStack gap={2} hAlign="end" vAlign="center">
+					{problem === null ? null : <Text type="supporting">{problem}</Text>}
 					<Button
 						label="Cancel"
 						icon={<X aria-hidden />}
@@ -180,7 +198,6 @@ export function TrackerFormDialog({
 						variant="primary"
 						type="submit"
 						form={formId}
-						isDisabled={!isValid}
 						isLoading={isSaving}
 					/>
 				</HStack>

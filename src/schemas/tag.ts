@@ -13,20 +13,58 @@ import {
 import type { Task } from "./task";
 import type { TrackerSummary } from "./tracker";
 
+/*
+ * Six colours beyond the ten Astryx's `Token` ships with; see `TAG_COLORS`.
+ *
+ * Declaring them here is what lets a tag, a stage or a type hand its colour
+ * straight to a `Token` and be type-checked. What they look like is in
+ * `styles.css`, beside the marks they share their contrast budget with.
+ */
+declare module "@astryxdesign/core/Token" {
+	interface TokenColorMap {
+		rose: true;
+		magenta: true;
+		indigo: true;
+		lime: true;
+		brown: true;
+		slate: true;
+	}
+}
+
 /**
- * Tag colours are the Astryx `Token` palette, so a tag renders the same
- * everywhere without a lookup table of hex values.
+ * The colours a tag, a stage or a task type can be, as a ring: red round to
+ * brown, then the two neutrals.
+ *
+ * Ten of them are the Astryx `Token` palette, so a tag renders the same
+ * everywhere without a lookup table of hex values. The other six are this
+ * app's, filling the gaps that ring had — a list of ten stages ran out of
+ * colours before it ran out of stages, and two that were only a shade apart
+ * were no help on a bar a few pixels tall.
+ *
+ * They are in order round the wheel rather than in any order of preference,
+ * because that is the order a colour is looked for in.
+ *
+ * Every one of them is contrast-checked against the page in both schemes,
+ * twice over: as a chip, where the text sits on a wash of it, and as a mark —
+ * the dot, the bar, the checkbox — where the colour is the thing being seen.
+ * See `--thunderlist-mark-*` in `styles.css`.
  */
 export const TAG_COLORS = [
-	"blue",
-	"purple",
-	"pink",
 	"red",
-	"orange",
-	"yellow",
-	"green",
-	"teal",
+	"rose",
+	"pink",
+	"magenta",
+	"purple",
+	"indigo",
+	"blue",
 	"cyan",
+	"teal",
+	"green",
+	"lime",
+	"yellow",
+	"orange",
+	"brown",
+	"slate",
 	"gray",
 ] as const;
 

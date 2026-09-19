@@ -62,7 +62,7 @@ export function EntryFormDialog({
 
 	/*
 	 * A reading identical to the one before it records nothing, so there is
-	 * nothing to save and the button says so by being off.
+	 * nothing to write and Save simply closes.
 	 *
 	 * Editing is the exception. An entry already stored at that value is a fact
 	 * about the past, and its note or its date can still be wrong — so a change
@@ -75,8 +75,14 @@ export function EntryFormDialog({
 
 	function submit(event: FormEvent) {
 		event.preventDefault();
-		if (!isValid || !hasSomethingToSave) return;
-		if (value === null || recordedAt === undefined) return;
+		if (!isValid || value === null || recordedAt === undefined) return;
+
+		// Nothing to record is nothing to write: the dialog just closes, as it
+		// would on Cancel. The line above the date says why.
+		if (!hasSomethingToSave) {
+			onOpenChange(false);
+			return;
+		}
 
 		onSubmit({ value, recordedAt, note: note.trim() });
 	}
@@ -97,13 +103,22 @@ export function EntryFormDialog({
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
+					{/*
+					 * Never disabled by the reading, which the form does not yet know.
+					 *
+					 * `NumberInput` keeps what is being typed to itself until the field
+					 * is left, so while the caret is in it this still holds the old
+					 * reading — and a button disabled on that can never be pressed: a
+					 * disabled button takes no pointer events, so the field never loses
+					 * focus, so the new reading never arrives. Pressing it is what
+					 * commits the reading; `submit` then decides.
+					 */}
 					<Button
 						label="Save"
 						icon={<Check aria-hidden />}
 						variant="primary"
 						type="submit"
 						form={formId}
-						isDisabled={!isValid || !hasSomethingToSave}
 					/>
 				</HStack>
 			)}

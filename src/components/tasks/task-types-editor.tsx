@@ -1,14 +1,15 @@
 import { Button } from "@astryxdesign/core/Button";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
+import { StageDot } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { useApplyChange } from "#/lib/changes";
@@ -114,39 +115,23 @@ export function TaskTypesEditor() {
 				</Text>
 			) : null}
 
-			{types.map((type, index) => (
-				<HStack key={type.typeId} gap={2} vAlign="center">
-					<span className="w-24 shrink-0">
-						<Token
-							size="sm"
-							color={type.color}
-							label={type.name.trim() === "" ? "Untitled" : type.name}
-						/>
-					</span>
-					<TextInput
-						label={`Type ${index + 1}`}
-						isLabelHidden
-						value={type.name}
-						onChange={(name) => edit(index, { name })}
-						placeholder="Bug"
-						width="100%"
+			{/*
+			 * A space may have thirty types, so the rows scroll and the buttons
+			 * under them stay where they were rather than being pushed off the
+			 * bottom of the dialog.
+			 */}
+			<VStack gap={1} className="thunderlist-picker-list">
+				{types.map((type, index) => (
+					<TypeRow
+						key={type.typeId}
+						type={type}
+						index={index}
+						onRename={(name) => edit(index, { name })}
+						onRecolor={(color) => edit(index, { color })}
+						onRemove={() => setDraft(types.filter((_, at) => at !== index))}
 					/>
-					<Selector
-						label={`Colour of type ${index + 1}`}
-						isLabelHidden
-						options={COLOR_OPTIONS}
-						value={type.color}
-						onChange={(color) => edit(index, { color: color as TagColor })}
-					/>
-					<IconButton
-						label={`Remove ${type.name || "this type"}`}
-						icon={<X aria-hidden />}
-						variant="ghost"
-						size="sm"
-						onClick={() => setDraft(types.filter((_, at) => at !== index))}
-					/>
-				</HStack>
-			))}
+				))}
+			</VStack>
 
 			<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
 				<Button
@@ -188,5 +173,73 @@ export function TaskTypesEditor() {
 				</HStack>
 			</HStack>
 		</VStack>
+	);
+}
+
+/**
+ * One type: its colour, its name, and the button that takes it away.
+ *
+ * Laid out as a stage's row is, and for the same reason — the two lists are
+ * the same kind of list — and it wraps, so on a narrow phone the name takes a
+ * line of its own rather than being squeezed to a few characters.
+ */
+function TypeRow({
+	type,
+	index,
+	onRename,
+	onRecolor,
+	onRemove,
+}: {
+	type: TaskType;
+	index: number;
+	onRename: (name: string) => void;
+	onRecolor: (color: TagColor) => void;
+	onRemove: () => void;
+}) {
+	const name = type.name.trim() === "" ? "this type" : type.name;
+
+	return (
+		<div className="flex flex-wrap items-center gap-1">
+			<DropdownMenu
+				hasChevron={false}
+				placement="below"
+				alignment="start"
+				button={{
+					label: `Colour of ${name}`,
+					tooltip: "Colour",
+					variant: "ghost",
+					size: "sm",
+					isIconOnly: true,
+					icon: <StageDot color={type.color} />,
+				}}
+				items={COLOR_OPTIONS.map((option) => ({
+					id: option.value,
+					label: option.label,
+					icon: <StageDot color={option.value} />,
+					endContent:
+						option.value === type.color ? (
+							<Check aria-hidden size={16} />
+						) : undefined,
+					onClick: () => onRecolor(option.value),
+				}))}
+			/>
+			<span className="min-w-40 flex-1">
+				<TextInput
+					label={`Type ${index + 1}`}
+					isLabelHidden
+					value={type.name}
+					onChange={onRename}
+					placeholder="Bug"
+					width="100%"
+				/>
+			</span>
+			<IconButton
+				label={`Remove ${name}`}
+				icon={<X aria-hidden />}
+				variant="ghost"
+				size="sm"
+				onClick={onRemove}
+			/>
+		</div>
 	);
 }

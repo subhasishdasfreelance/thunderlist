@@ -398,9 +398,13 @@ it then (`ensureInbox`).
 
 A task can say what kind of work it is — a bug, a feature, a chore — shown as a
 coloured label in front of its title. Press **K** with the pointer on a task, or
-set it in its edit dialog. Each space keeps its own list, managed from the same
-picker (**Manage types**): types are about tasks, so they live beside them
-rather than in Settings, which is about you.
+set it in its edit dialog.
+
+Each space keeps its own list, and the **Settings** screen is where it lives:
+unlike a checklist's stages, types belong to the whole space, so they sit with
+the space rather than with any one list. The type picker opens the same editor
+(**Manage types**), so a type that is missing can be added without leaving the
+task.
 
 Every task list can be **narrowed to one kind** — and to one person's and one
 tag's — from the filter row, and **ordered by kind**, in the order the space
@@ -544,6 +548,25 @@ stylesheet the server can send with the page, rather than a `<style>` the
 browser injects at hydration, which is a flash of the wrong colours on every
 first paint. `bun run build` recompiles it first, so the two cannot drift;
 `bun run theme:check` fails if they have.
+
+### The sixteen colours
+
+A tag, a stage and a task type each pick from one list of sixteen
+(`TAG_COLORS`), ordered round the wheel. Ten are Astryx's own `Token` colours;
+the other six — rose, magenta, indigo, lime, brown, slate — fill the gaps that
+ring had, because a checklist may run to a dozen stages and ten colours could
+not keep them apart.
+
+Each colour is two things, and both were measured rather than picked by eye:
+
+- a **chip**, where the name sits on a 20% wash of the colour. At least 7:1 on
+  the card, the page and a menu, in both schemes — the ratio Astryx's ten keep.
+- a **mark** (`--thunderlist-mark-*`), the solid dot, bar segment and checkbox
+  outline. At least 3:1 against those same three surfaces, in both schemes,
+  because a mark is read against the page and not beside its own label.
+  Astryx's `--color-icon-*` is tuned for the latter and its yellow is 1.5:1 on
+  a white card, which as a dot is a dot you cannot see, so the marks are the
+  app's own table.
 
 Light, dark or match the system is chosen from the bar and kept per browser, in
 local storage and in a cookie. The server reads the cookie and draws the page in

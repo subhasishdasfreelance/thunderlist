@@ -118,20 +118,26 @@ export const StagesField = memo(function StagesField({
 				</Text>
 			</VStack>
 
-			{value.map((stage, index) => (
-				<StageRow
-					key={stage.stageId}
-					stage={stage}
-					index={index}
-					color={stageColor(value, index)}
-					isLast={index === value.length - 1}
-					canRemove={value.length > 2}
-					onRename={rename}
-					onRecolor={recolor}
-					onMove={move}
-					onRemove={remove}
-				/>
-			))}
+			{/*
+			 * A checklist may have a dozen stages, so the rows scroll and the
+			 * button that adds one stays where it was.
+			 */}
+			<VStack gap={1} className="thunderlist-picker-list">
+				{value.map((stage, index) => (
+					<StageRow
+						key={stage.stageId}
+						stage={stage}
+						index={index}
+						color={stageColor(value, index)}
+						isLast={index === value.length - 1}
+						canRemove={value.length > 2}
+						onRename={rename}
+						onRecolor={recolor}
+						onMove={move}
+						onRemove={remove}
+					/>
+				))}
+			</VStack>
 
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<Button
@@ -173,7 +179,9 @@ const StageRow = memo(function StageRow({
 	const name = stage.name || "this stage";
 
 	return (
-		<HStack gap={1} vAlign="center">
+		// Wraps, so on a narrow phone the name takes a line of its own rather
+		// than being squeezed between the colour and the three buttons.
+		<div className="flex flex-wrap items-center gap-1">
 			{index === 0 ? (
 				<span
 					className="thunderlist-stage-swatch"
@@ -206,14 +214,16 @@ const StageRow = memo(function StageRow({
 					}))}
 				/>
 			)}
-			<TextInput
-				label={isLast ? `Stage ${index + 1}, done` : `Stage ${index + 1}`}
-				isLabelHidden
-				value={stage.name}
-				onChange={(next) => onRename(index, next)}
-				placeholder={isLast ? "Done" : index === 0 ? "To do" : "In review"}
-				width="100%"
-			/>
+			<span className="min-w-40 flex-1">
+				<TextInput
+					label={isLast ? `Stage ${index + 1}, done` : `Stage ${index + 1}`}
+					isLabelHidden
+					value={stage.name}
+					onChange={(next) => onRename(index, next)}
+					placeholder={isLast ? "Done" : index === 0 ? "To do" : "In review"}
+					width="100%"
+				/>
+			</span>
 			<IconButton
 				label={`Move ${name} earlier`}
 				icon={<ArrowUp aria-hidden />}
@@ -238,6 +248,6 @@ const StageRow = memo(function StageRow({
 				isDisabled={!canRemove}
 				onClick={() => onRemove(index)}
 			/>
-		</HStack>
+		</div>
 	);
 });

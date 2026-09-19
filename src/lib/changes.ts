@@ -135,13 +135,21 @@ export function useApplyChange() {
 		onError: (error, change, context) => {
 			if (context?.previous) restore(queryClient, context.previous);
 
-			// A checklist that was only ever drawn has no earlier state to put
-			// back, so it is emptied instead: the screen showing it asks again and
-			// hears that it does not exist, rather than showing it as if saved.
+			/*
+			 * A checklist or tracker that was only ever drawn has no earlier state
+			 * to put back — its own caches did not exist to be snapshotted — so
+			 * they are emptied instead: the screen showing it asks again and hears
+			 * that it does not exist, rather than showing it as if saved.
+			 */
 			if (change.kind === "checklist.create") {
 				void queryClient.resetQueries({
 					queryKey: queryKeys.checklist(change.checklistId),
 					exact: true,
+				});
+			}
+			if (change.kind === "tracker.create") {
+				void queryClient.resetQueries({
+					queryKey: queryKeys.tracker(change.trackerId),
 				});
 			}
 

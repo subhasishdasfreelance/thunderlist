@@ -6,12 +6,16 @@
  * it is thinking about whether to agree, so the caches are patched immediately
  * and the request goes out behind it.
  *
- * Only the changes made *while reading a list* are patched here: ticking,
- * flagging, tagging, moving along the stages, adding and removing. The rest —
- * editing a checklist, creating a tracker — happen in a dialog that closes
- * anyway, where a moment's wait costs nothing and a second copy of the write
- * logic would. Creating a checklist is the exception, because the app goes
- * straight into the new one; see below.
+ * Every change the app can make is patched here: ticking, flagging, tagging and
+ * moving along the stages while reading a list, and equally the things done
+ * behind a dialog — a checklist edited, a tracker made, a reading logged, the
+ * space's task types rewritten. A dialog closing onto a list that has not
+ * changed yet is the same lie as a tick that takes a round trip to appear.
+ *
+ * What is *not* patched is said where it is skipped, and it is always the same
+ * kind of thing: a figure this browser cannot work out from what it holds — the
+ * title of a checklist it has never read, the tabs the server groups by — which
+ * is left to arrive with the refetch rather than guessed at.
  *
  * Every patch is a guess. It is replaced by the server's answer on the next
  * refetch, and thrown away if the request fails, so a wrong guess is visible
@@ -21,6 +25,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { AcrossGroup, AcrossPage, AcrossTask } from "#/data/across.server";
 import type { SearchIndex } from "#/data/search.server";
+import {
+	deriveCurrentValue,
+	trackerProgress,
+	withDeltas,
+} from "#/lib/progress";
 import { unwrittenTags } from "#/lib/tags/inline-tags";
 import { matchesFilter, type Page, type StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
@@ -35,14 +44,21 @@ import {
 	type Stage,
 	stageOf,
 } from "#/schemas/checklist";
-import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
+import type { Tag, TagDetail, TagSummary, TagTaskEntry } from "#/schemas/tag";
 import type {
 	AcrossPageView,
 	Task,
 	TaskPageView,
 	TaskPatch,
 } from "#/schemas/task";
-import { UNTYPED } from "#/schemas/task-type";
+import { type TaskType, UNTYPED } from "#/schemas/task-type";
+import type { SpaceView } from "#/schemas/team";
+import type {
+	ProgressEntry,
+	Tracker,
+	TrackerDetail,
+	TrackerSummary,
+} from "#/schemas/tracker";
 
 /**
  * A list's counts, moved by one task arriving, leaving or being ticked.
@@ -581,6 +597,145 @@ function addToTagPages(
 	}
 }
 
+/* -------------------------------------------------------------------------- */
+/* Whole things                                                               */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * A checklist, a tracker, a tag: each is held twice over — once on its own key,
+ * for the screen about it, and once inside the list every one of them is on.
+ * The helpers below change both together, so a title edited in a dialog is the
+ * new title on the card behind it as well as on the screen it opens onto.
+ */
+
+/** Change one checklist wherever it is held; `null` takes it off the list. */
+function patchChecklist(
+	client: QueryClient,
+	checklistId: string,
+	next: (checklist: ChecklistSummary) => ChecklistSummary | null,
+): void {
+	const held = client.getQueryData<ChecklistSummary>(
+		queryKeys.checklist(checklistId),
+	);
+	const after = held === undefined ? undefined : next(held);
+	// One being deleted keeps its own cache until the screen showing it has
+	// left; the list is what has to stop offering it now.
+	if (after != null) {
+		client.setQueryData(queryKeys.checklist(checklistId), after);
+	}
+
+	client.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, (list) =>
+		list?.flatMap((checklist) => {
+			if (checklist.checklistId !== checklistId) return [checklist];
+			const edited = next(checklist);
+			return edited === null ? [] : [edited];
+		}),
+	);
+}
+
+/** A tracker's percentage, worked out again from where it now stands. */
+function withProgress(tracker: Tracker): TrackerSummary {
+	return {
+		...tracker,
+		progress: trackerProgress(
+			tracker.currentValue,
+			tracker.targetValue,
+			tracker.startValue,
+		),
+	};
+}
+
+/** Change one tracker wherever it is held; `null` takes it off the list. */
+function patchTracker(
+	client: QueryClient,
+	trackerId: string,
+	next: (tracker: TrackerSummary) => TrackerSummary | null,
+): void {
+	const held = client.getQueryData<TrackerDetail>(queryKeys.tracker(trackerId));
+	const after = held === undefined ? undefined : next(held);
+	if (after != null) client.setQueryData(queryKeys.tracker(trackerId), after);
+
+	client.setQueryData<Array<TrackerSummary>>(queryKeys.trackers, (list) =>
+		list?.flatMap((tracker) => {
+			if (tracker.trackerId !== trackerId) return [tracker];
+			const edited = next(tracker);
+			return edited === null ? [] : [edited];
+		}),
+	);
+}
+
+/**
+ * A tracker's history after a reading was added, corrected or taken out, with
+ * the tracker's own figures brought back in line with it.
+ *
+ * Every step is measured again from the reading before it, exactly as the
+ * server does on each write: a reading entered for last Tuesday drops into the
+ * middle of the history and re-spaces its neighbours, so no entry can simply be
+ * patched where it sits. `withDeltas` and `deriveCurrentValue` are the same two
+ * functions the server answers with, which is why the guess and the answer
+ * agree.
+ *
+ * Nothing is drawn while the history is still on its way. A step measured
+ * against readings this browser has not seen would be a number made up, and the
+ * read that is already running will bring the real one.
+ */
+function patchHistory(
+	client: QueryClient,
+	trackerId: string,
+	next: (readings: ReadonlyArray<ProgressEntry>) => Array<ProgressEntry>,
+): void {
+	const tracker =
+		client.getQueryData<TrackerDetail>(queryKeys.tracker(trackerId)) ??
+		client
+			.getQueryData<Array<TrackerSummary>>(queryKeys.trackers)
+			?.find((each) => each.trackerId === trackerId);
+	const key = queryKeys.trackerEntries(trackerId);
+	const history = client.getQueryData<Array<ProgressEntry>>(key);
+	if (tracker === undefined || history === undefined) return;
+
+	const entries = withDeltas(next(history), tracker.startValue);
+	client.setQueryData<Array<ProgressEntry>>(key, entries);
+
+	const currentValue = deriveCurrentValue(entries, tracker.startValue);
+	patchTracker(client, trackerId, (each) =>
+		withProgress({ ...each, currentValue }),
+	);
+}
+
+/**
+ * Change one tag wherever it is held: the list every screen reads it from, the
+ * list with the figures on it that only the Tags screen reads, and the tag's
+ * own page. `null` takes it out of all of them.
+ *
+ * A tag's page is keyed by its address rather than its id — Today answers to
+ * its kind — so the pages are walked and each asked which tag it is for.
+ */
+function patchTag(
+	client: QueryClient,
+	tagId: string,
+	next: <T extends Tag>(tag: T) => T | null,
+): void {
+	const edit = <T extends Tag>(tags: Array<T> | undefined) =>
+		tags?.flatMap((tag) => {
+			if (tag.tagId !== tagId) return [tag];
+			const edited = next(tag);
+			return edited === null ? [] : [edited];
+		});
+
+	client.setQueryData<Array<Tag>>(queryKeys.tags, edit);
+	client.setQueryData<Array<TagSummary>>(queryKeys.tagSummaries, edit);
+
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+
+		const detail = client.getQueryData<TagDetail>(key);
+		if (detail === undefined || detail.tagId !== tagId) continue;
+
+		const after = next(detail);
+		if (after !== null) client.setQueryData<TagDetail>(key, after);
+	}
+}
+
 /**
  * Draw a change now.
  *
@@ -756,9 +911,205 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			return;
 		}
 
+		case "checklist.update": {
+			const { checklistId, patch } = change;
+			const updatedAt = new Date().toISOString();
+
+			patchChecklist(client, checklistId, (checklist) => ({
+				...checklist,
+				...patch,
+				updatedAt,
+			}));
+			/*
+			 * The counts are left as they are. Taking a stage away moves its
+			 * tasks back to the one before it, which is a walk over every task in
+			 * the list — the server does it in a single write and the refetch
+			 * brings the answer. The stages themselves are on screen at once,
+			 * which is what was asked for.
+			 */
+			return;
+		}
+
+		case "checklist.delete":
+			patchChecklist(client, change.checklistId, () => null);
+			return;
+
+		case "tracker.create": {
+			const createdAt = new Date().toISOString();
+			const tracker = withProgress({
+				trackerId: change.trackerId,
+				title: change.title,
+				type: change.type,
+				description: change.description,
+				unit: change.unit,
+				targetValue: change.targetValue,
+				startValue: change.startValue,
+				// Nothing has been logged yet, so it stands where it starts.
+				currentValue: change.startValue,
+				coverUrl: change.coverUrl,
+				author: change.author,
+				startDate: change.startDate,
+				deadline: change.deadline,
+				deadlineTime: change.deadlineTime,
+				tagIds: change.tagIds,
+				assignees: change.assignees,
+				access: change.access,
+				createdAt,
+				updatedAt: createdAt,
+			});
+
+			client.setQueryData<TrackerDetail>(
+				queryKeys.tracker(change.trackerId),
+				tracker,
+			);
+			client.setQueryData<Array<TrackerSummary>>(queryKeys.trackers, (list) =>
+				list === undefined ? list : [...list, tracker],
+			);
+			// An empty history rather than none, so the screen the app goes into
+			// draws its "nothing logged yet" instead of a spinner.
+			client.setQueryData<Array<ProgressEntry>>(
+				queryKeys.trackerEntries(change.trackerId),
+				[],
+			);
+			return;
+		}
+
+		case "tracker.update": {
+			const updatedAt = new Date().toISOString();
+
+			/*
+			 * Where it stands is not touched, only what that is measured against.
+			 * A reading is a fact about the past; moving the target or the
+			 * starting point changes the percentage it makes, and nothing else —
+			 * which is exactly what the server does with it too.
+			 */
+			patchTracker(client, change.trackerId, (tracker) =>
+				withProgress({ ...tracker, ...change.patch, updatedAt }),
+			);
+			return;
+		}
+
+		case "tracker.delete":
+			patchTracker(client, change.trackerId, () => null);
+			return;
+
+		case "entry.create": {
+			// Who logged it is the server's to stamp; in a team it is what one
+			// person's share is counted from, so it is guessed the same way here.
+			const recordedBy =
+				client.getQueryData<SpaceView>(queryKeys.space)?.email ?? null;
+
+			patchHistory(client, change.trackerId, (history) => [
+				...history,
+				{
+					entryId: change.entryId,
+					recordedAt: change.recordedAt,
+					value: change.value,
+					note: change.note,
+					recordedBy,
+					// Measured by `patchHistory`, from the reading before it.
+					delta: 0,
+					updatedAt: new Date().toISOString(),
+				},
+			]);
+			return;
+		}
+
+		case "entry.update": {
+			const updatedAt = new Date().toISOString();
+
+			patchHistory(client, change.trackerId, (history) =>
+				history.map((entry) =>
+					entry.entryId === change.entryId
+						? { ...entry, ...change.patch, updatedAt }
+						: entry,
+				),
+			);
+			return;
+		}
+
+		case "entry.delete":
+			patchHistory(client, change.trackerId, (history) =>
+				history.filter((entry) => entry.entryId !== change.entryId),
+			);
+			return;
+
+		case "tag.create": {
+			const createdAt = new Date().toISOString();
+			const tag: Tag = {
+				tagId: change.tagId,
+				name: change.name,
+				color: change.color,
+				// Only the ones the account is born with are special, and they are
+				// never made from here.
+				special: null,
+				description: change.description,
+				startDate: change.startDate,
+				deadline: change.deadline,
+				deadlineTime: change.deadlineTime,
+				dailyWindow: change.dailyWindow,
+				access: change.access,
+				createdAt,
+				updatedAt: createdAt,
+			};
+
+			/*
+			 * Drawn at once because a tag is usually born mid-sentence, as `#name`
+			 * typed into a task: the chip on that task's row is looked up in this
+			 * list, and without the tag in it the row showed the task with its new
+			 * tag missing until the refetch.
+			 */
+			client.setQueryData<Array<Tag>>(queryKeys.tags, (tags) =>
+				tags === undefined ? tags : [...tags, tag],
+			);
+			client.setQueryData<Array<TagSummary>>(
+				queryKeys.tagSummaries,
+				(summaries) =>
+					summaries === undefined
+						? summaries
+						: [
+								...summaries,
+								{
+									...tag,
+									progress: {
+										total: 0,
+										completed: 0,
+										percent: 0,
+										inProgress: 0,
+									},
+								},
+							],
+			);
+			return;
+		}
+
+		case "tag.update": {
+			const updatedAt = new Date().toISOString();
+
+			patchTag(client, change.tagId, (tag) => ({
+				...tag,
+				...change.patch,
+				updatedAt,
+			}));
+			return;
+		}
+
+		case "tag.delete":
+			/*
+			 * Off the lists, which is enough for the rows too: a task names its
+			 * tags by id and each row looks them up here, so a tag that is no
+			 * longer on the list is no longer a chip on anything.
+			 */
+			patchTag(client, change.tagId, () => null);
+			return;
+
+		case "taskTypes.set":
+			client.setQueryData<Array<TaskType>>(queryKeys.taskTypes, change.types);
+			return;
+
 		default:
-			// Everything else happens behind a dialog, where the refetch is the
-			// fastest honest answer.
+			// Everything a change can be is patched above. `task.move` is the one
+			// that only half is, and says why where it is handled.
 			return;
 	}
 }

@@ -9,6 +9,7 @@ import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
+import { StageDot } from "#/components/common/stage-dot";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
@@ -16,10 +17,18 @@ import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
 import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
 
-/** The Token palette as options to pick from; task types use it too. */
+/**
+ * The sixteen colours as options to pick from; stages and task types use the
+ * same list.
+ *
+ * Each carries its own dot, because sixteen names is a list you read and
+ * sixteen dots is one you look at — and "teal" and "cyan" are not words that
+ * tell them apart.
+ */
 export const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
 	value: color,
 	label: `${color.charAt(0).toUpperCase()}${color.slice(1)}`,
+	icon: <StageDot color={color} />,
 }));
 
 /**

@@ -3,10 +3,12 @@ import { useSpace } from "#/lib/use-team";
 import { TaskTypesEditor } from "./task-types-editor";
 
 /**
- * The space's list of task types, opened from where a type is picked.
+ * The space's list of task types.
  *
- * Types are about tasks, so they are managed beside them rather than among the
- * settings that are about the person signed in.
+ * The list lives on the Settings screen, beside the space it belongs to, and
+ * this is what opens there. It opens from the type picker too, so a type that
+ * is missing can be added while a task is being sorted rather than a screen
+ * away.
  */
 export function TaskTypesDialog({
 	isOpen,

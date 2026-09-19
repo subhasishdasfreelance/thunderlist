@@ -47,6 +47,106 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Colours                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The sixteen colours a tag, a stage or a task type can be; see `TAG_COLORS`.
+ *
+ * Ten come from Astryx, which supplies a wash and an ink for each. The six
+ * below fill the gaps in that ring — a checklist may have a dozen stages, and
+ * ten colours could not tell them apart. They are declared in Astryx's own
+ * token names so a chip, an inline tag and everything else that already reads
+ * `--color-background-*` and `--color-text-*` picks them up unchanged.
+ *
+ * Every pair was measured rather than guessed: the ink on its wash is at least
+ * 7:1 over the card, the page and a menu, in both schemes — the ratio Astryx's
+ * own ten keep.
+ */
+@layer astryx-base {
+	:root {
+		--color-background-rose: light-dark(#f43f5e33, #f43f5e33);
+		--color-text-rose: light-dark(#7a0620, #fecdd3);
+		--color-background-magenta: light-dark(#c026d333, #c026d333);
+		--color-text-magenta: light-dark(#59096b, #f5d0fe);
+		--color-background-indigo: light-dark(#4f46e533, #4f46e533);
+		--color-text-indigo: light-dark(#1e1b7a, #c7c6fd);
+		--color-background-lime: light-dark(#65a30d33, #65a30d33);
+		--color-text-lime: light-dark(#27330a, #d7f08a);
+		--color-background-brown: light-dark(#a0522d33, #a0522d33);
+		--color-text-brown: light-dark(#43200f, #f0cdb8);
+		--color-background-slate: light-dark(#64748b33, #64748b33);
+		--color-text-slate: light-dark(#1e293b, #cbd5e1);
+	}
+
+	/*
+	 * A colour as a mark: the stage dot, its part of a progress bar, the
+	 * outline of its tasks' checkboxes, a type's dot in a menu.
+	 *
+	 * Astryx has `--color-icon-*`, and for most of the ten it would do — but it
+	 * is tuned for an icon beside its own text, not for a solid shape read on
+	 * its own against the page. Its yellow is 1.5:1 on a white card and its
+	 * cyan 2.4:1, which as a dot is a dot you cannot see. These are the same
+	 * hues taken to where every one of the sixteen clears 3:1 against the
+	 * card, the page and a menu in both schemes — the floor for something that
+	 * is not text but still has to be seen — and most clear 4.5:1.
+	 *
+	 * Stated for all sixteen rather than only the ones that needed moving, so
+	 * the table can be read straight down and checked.
+	 */
+	:root {
+		--thunderlist-mark-red: light-dark(#d31130, #f5606f);
+		--thunderlist-mark-rose: light-dark(#be123c, #fb7185);
+		--thunderlist-mark-pink: light-dark(#c2185b, #ec407a);
+		--thunderlist-mark-magenta: light-dark(#a21caf, #e17ff0);
+		--thunderlist-mark-purple: light-dark(#5b08d8, #9b84ff);
+		--thunderlist-mark-indigo: light-dark(#4338ca, #9694f8);
+		--thunderlist-mark-blue: light-dark(#0064e0, #2694fe);
+		--thunderlist-mark-cyan: light-dark(#0284a6, #26c6da);
+		--thunderlist-mark-teal: light-dark(#00786d, #26a69a);
+		--thunderlist-mark-green: light-dark(#0d8626, #26a756);
+		--thunderlist-mark-lime: light-dark(#4d7c0f, #a3d53b);
+		--thunderlist-mark-yellow: light-dark(#8a6100, #fbce03);
+		--thunderlist-mark-orange: light-dark(#c25200, #fb8c00);
+		--thunderlist-mark-brown: light-dark(#8a4423, #ce8c64);
+		--thunderlist-mark-slate: light-dark(#4b5a6e, #93a3b8);
+		--thunderlist-mark-gray: light-dark(#4e606f, #aaafb5);
+	}
+}
+
+/*
+ * The six as chips. Astryx styles its own ten from a lookup it keeps to
+ * itself; a colour it has never heard of reaches the element as nothing but
+ * the `default` class and its `data-color`, which is what these hang on.
+ */
+@layer components {
+	.astryx-token[data-color="rose"] {
+		background-color: var(--color-background-rose);
+		color: var(--color-text-rose);
+	}
+	.astryx-token[data-color="magenta"] {
+		background-color: var(--color-background-magenta);
+		color: var(--color-text-magenta);
+	}
+	.astryx-token[data-color="indigo"] {
+		background-color: var(--color-background-indigo);
+		color: var(--color-text-indigo);
+	}
+	.astryx-token[data-color="lime"] {
+		background-color: var(--color-background-lime);
+		color: var(--color-text-lime);
+	}
+	.astryx-token[data-color="brown"] {
+		background-color: var(--color-background-brown);
+		color: var(--color-text-brown);
+	}
+	.astryx-token[data-color="slate"] {
+		background-color: var(--color-background-slate);
+		color: var(--color-text-slate);
+	}
+}
+
+/* -------------------------------------------------------------------------- */
 /* Glass                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -206,24 +306,46 @@ body {
  * it is on. Butting them together and sharing the edge where they meet says
  * that, and costs nothing else — each half keeps its own picker, its own
  * keyboard handling and its own focus ring.
+ *
+ * They are stacked, the day over the hour, rather than set side by side. Each
+ * half wants about 196px of its own, and this field is never given 400: on a
+ * phone it is the width of the screen less the dialog's padding, and on a
+ * desktop it is half of a dialog no wider than 560, because the deadline sits
+ * beside the start date. Side by side it was two squeezed boxes at every width
+ * — and on a phone it pushed the dialog wider than the screen. One over the
+ * other, both halves are full width and legible on any screen there is.
  */
 @layer components {
 	.astryx-date-time-input {
 		gap: 0;
-		/* Wrapped onto two lines, one field would read as a broken one. */
+		flex-direction: column;
+		/* Full width each, rather than each as narrow as its own content. */
+		align-items: stretch;
+		/* Stacked already; wrapping has nothing left to do. */
 		flex-wrap: nowrap;
 	}
 
+	/*
+	 * Each half is as tall as one field and as wide as the whole. Astryx gives
+	 * them a flex basis of 196px, which is a width while they sit side by side
+	 * and — turned upright — became a height: two boxes a couple of hundred
+	 * pixels tall with a date sitting in the middle of one of them.
+	 */
+	.astryx-date-time-input > .astryx-date-time-input-date-segment,
+	.astryx-date-time-input > .astryx-date-time-input-time-segment {
+		flex: none;
+	}
+
 	.astryx-date-time-input > .astryx-date-time-input-date-segment {
-		border-start-end-radius: 0;
+		border-end-start-radius: 0;
 		border-end-end-radius: 0;
 	}
 
 	.astryx-date-time-input > .astryx-date-time-input-time-segment {
 		border-start-start-radius: 0;
-		border-end-start-radius: 0;
-		/* One shared edge down the middle, not two borders side by side. */
-		margin-inline-start: calc(-1 * var(--border-width, 1px));
+		border-start-end-radius: 0;
+		/* One shared edge between them, not two borders back to back. */
+		margin-block-start: calc(-1 * var(--border-width, 1px));
 	}
 
 	/*
@@ -286,9 +408,11 @@ body {
 	 * pair rather than vanishing into the text.
 	 */
 	.thunderlist-tag {
+		--thunderlist-tag-wash: var(--color-background-gray);
+		--thunderlist-tag-ink: var(--color-text-gray);
 		border-radius: var(--radius-inner, 0.25rem);
-		background-color: var(--color-background-gray);
-		color: var(--color-text-gray);
+		background-color: var(--thunderlist-tag-wash);
+		color: var(--thunderlist-tag-ink);
 	}
 
 	/*
@@ -298,34 +422,7 @@ body {
 	 * outside the box with a shadow rather than by padding it.
 	 */
 	.thunderlist-mirror .thunderlist-tag {
-		box-shadow: 0 0 0 2px var(--color-background-gray);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="blue"] {
-		box-shadow: 0 0 0 2px var(--color-background-blue);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="purple"] {
-		box-shadow: 0 0 0 2px var(--color-background-purple);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="pink"] {
-		box-shadow: 0 0 0 2px var(--color-background-pink);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="red"] {
-		box-shadow: 0 0 0 2px var(--color-background-red);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="orange"] {
-		box-shadow: 0 0 0 2px var(--color-background-orange);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="yellow"] {
-		box-shadow: 0 0 0 2px var(--color-background-yellow);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="green"] {
-		box-shadow: 0 0 0 2px var(--color-background-green);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="teal"] {
-		box-shadow: 0 0 0 2px var(--color-background-teal);
-	}
-	.thunderlist-mirror .thunderlist-tag[data-color="cyan"] {
-		box-shadow: 0 0 0 2px var(--color-background-cyan);
+		box-shadow: 0 0 0 2px var(--thunderlist-tag-wash);
 	}
 
 	/* Outside a field nothing depends on the metrics, so it can breathe. */
@@ -348,41 +445,74 @@ body {
 		font-style: italic;
 	}
 
-	.thunderlist-tag[data-color="blue"] {
-		background-color: var(--color-background-blue);
-		color: var(--color-text-blue);
+	/*
+	 * Which of the sixteen a written tag wears; see `TAG_COLORS`. The pair is
+	 * named once here and used by both the highlight above and the plain
+	 * rendering, so a colour is added in one place rather than three.
+	 */
+	.thunderlist-tag[data-color="red"] {
+		--thunderlist-tag-wash: var(--color-background-red);
+		--thunderlist-tag-ink: var(--color-text-red);
 	}
-	.thunderlist-tag[data-color="purple"] {
-		background-color: var(--color-background-purple);
-		color: var(--color-text-purple);
+	.thunderlist-tag[data-color="rose"] {
+		--thunderlist-tag-wash: var(--color-background-rose);
+		--thunderlist-tag-ink: var(--color-text-rose);
 	}
 	.thunderlist-tag[data-color="pink"] {
-		background-color: var(--color-background-pink);
-		color: var(--color-text-pink);
+		--thunderlist-tag-wash: var(--color-background-pink);
+		--thunderlist-tag-ink: var(--color-text-pink);
 	}
-	.thunderlist-tag[data-color="red"] {
-		background-color: var(--color-background-red);
-		color: var(--color-text-red);
+	.thunderlist-tag[data-color="magenta"] {
+		--thunderlist-tag-wash: var(--color-background-magenta);
+		--thunderlist-tag-ink: var(--color-text-magenta);
 	}
-	.thunderlist-tag[data-color="orange"] {
-		background-color: var(--color-background-orange);
-		color: var(--color-text-orange);
+	.thunderlist-tag[data-color="purple"] {
+		--thunderlist-tag-wash: var(--color-background-purple);
+		--thunderlist-tag-ink: var(--color-text-purple);
 	}
-	.thunderlist-tag[data-color="yellow"] {
-		background-color: var(--color-background-yellow);
-		color: var(--color-text-yellow);
+	.thunderlist-tag[data-color="indigo"] {
+		--thunderlist-tag-wash: var(--color-background-indigo);
+		--thunderlist-tag-ink: var(--color-text-indigo);
 	}
-	.thunderlist-tag[data-color="green"] {
-		background-color: var(--color-background-green);
-		color: var(--color-text-green);
-	}
-	.thunderlist-tag[data-color="teal"] {
-		background-color: var(--color-background-teal);
-		color: var(--color-text-teal);
+	.thunderlist-tag[data-color="blue"] {
+		--thunderlist-tag-wash: var(--color-background-blue);
+		--thunderlist-tag-ink: var(--color-text-blue);
 	}
 	.thunderlist-tag[data-color="cyan"] {
-		background-color: var(--color-background-cyan);
-		color: var(--color-text-cyan);
+		--thunderlist-tag-wash: var(--color-background-cyan);
+		--thunderlist-tag-ink: var(--color-text-cyan);
+	}
+	.thunderlist-tag[data-color="teal"] {
+		--thunderlist-tag-wash: var(--color-background-teal);
+		--thunderlist-tag-ink: var(--color-text-teal);
+	}
+	.thunderlist-tag[data-color="green"] {
+		--thunderlist-tag-wash: var(--color-background-green);
+		--thunderlist-tag-ink: var(--color-text-green);
+	}
+	.thunderlist-tag[data-color="lime"] {
+		--thunderlist-tag-wash: var(--color-background-lime);
+		--thunderlist-tag-ink: var(--color-text-lime);
+	}
+	.thunderlist-tag[data-color="yellow"] {
+		--thunderlist-tag-wash: var(--color-background-yellow);
+		--thunderlist-tag-ink: var(--color-text-yellow);
+	}
+	.thunderlist-tag[data-color="orange"] {
+		--thunderlist-tag-wash: var(--color-background-orange);
+		--thunderlist-tag-ink: var(--color-text-orange);
+	}
+	.thunderlist-tag[data-color="brown"] {
+		--thunderlist-tag-wash: var(--color-background-brown);
+		--thunderlist-tag-ink: var(--color-text-brown);
+	}
+	.thunderlist-tag[data-color="slate"] {
+		--thunderlist-tag-wash: var(--color-background-slate);
+		--thunderlist-tag-ink: var(--color-text-slate);
+	}
+	.thunderlist-tag[data-color="gray"] {
+		--thunderlist-tag-wash: var(--color-background-gray);
+		--thunderlist-tag-ink: var(--color-text-gray);
 	}
 
 	/*
@@ -970,9 +1100,10 @@ body {
 	}
 
 	/*
-	 * A picker's list scrolls on its own, so what filters it — the search field
-	 * above — stays on screen however long the list is. Without this the whole
-	 * dialog body scrolls and the field is the first thing to go.
+	 * A long list inside a dialog scrolls on its own, so what sits above and
+	 * below it — the field that filters it, the buttons that save it — stays on
+	 * screen however long the list is. Without this the whole dialog body
+	 * scrolls and those are the first things to go.
 	 */
 	.thunderlist-picker-list {
 		max-height: 40vh;
