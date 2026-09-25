@@ -1,5 +1,6 @@
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { useId, useMemo } from "react";
 
 /**
@@ -13,7 +14,16 @@ import { useId, useMemo } from "react";
  * entries recorded on one day at the same value), so the drawn position is not
  * something a dot can be identified by.
  */
-export type ChartPoint = { id: string; at: number; value: number };
+export type ChartPoint = {
+	id: string;
+	at: number;
+	value: number;
+	/**
+	 * What pointing at its dot says — "284 pages · 3rd Sep, 2026". Without one
+	 * the dot is only drawn.
+	 */
+	label?: string;
+};
 
 /** The drawing box. The SVG scales to its container; these are its proportions. */
 const WIDTH = 640;
@@ -165,93 +175,126 @@ export function ProgressChart({
 				id: point.id,
 				cx: x(point.at),
 				cy: y(point.value),
+				label: point.label,
 			})),
 		};
 	}, [start, end, now, target, current, points, floor]);
 
 	return (
 		<VStack gap={2}>
-			<svg
-				viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-				className="h-auto w-full"
-				role="img"
-				aria-labelledby={titleId}
-				preserveAspectRatio="none"
-			>
-				<title id={titleId}>{summary}</title>
+			{/* The frame the dots' hover targets are laid over; see below. */}
+			<div className="relative">
+				<svg
+					viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+					className="h-auto w-full"
+					role="img"
+					aria-labelledby={titleId}
+					preserveAspectRatio="none"
+				>
+					<title id={titleId}>{summary}</title>
 
-				{/* The two axes, drawn as one path so they share a stroke. */}
-				<path
-					d={`M ${PADDING.left} ${PADDING.top} V ${PADDING.top + PLOT_HEIGHT} H ${PADDING.left + PLOT_WIDTH}`}
-					fill="none"
-					stroke="var(--color-border)"
-					strokeWidth={1}
-					vectorEffect="non-scaling-stroke"
-				/>
-
-				{chart.series.map((line) => (
-					<polyline
-						key={line.key}
-						points={line.points.map(([px, py]) => `${px},${py}`).join(" ")}
+					{/* The two axes, drawn as one path so they share a stroke. */}
+					<path
+						d={`M ${PADDING.left} ${PADDING.top} V ${PADDING.top + PLOT_HEIGHT} H ${PADDING.left + PLOT_WIDTH}`}
 						fill="none"
-						stroke={line.colour}
-						strokeWidth={2}
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeDasharray={line.dashed ? "5 5" : undefined}
+						stroke="var(--color-border)"
+						strokeWidth={1}
 						vectorEffect="non-scaling-stroke"
 					/>
-				))}
 
-				{chart.dots.map((dot) => (
-					<circle
-						key={dot.id}
-						cx={dot.cx}
-						cy={dot.cy}
-						r={3}
-						fill="var(--color-accent)"
-					/>
-				))}
+					{chart.series.map((line) => (
+						<polyline
+							key={line.key}
+							points={line.points.map(([px, py]) => `${px},${py}`).join(" ")}
+							fill="none"
+							stroke={line.colour}
+							strokeWidth={2}
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeDasharray={line.dashed ? "5 5" : undefined}
+							vectorEffect="non-scaling-stroke"
+						/>
+					))}
 
-				{/* Only the corners are labelled: a chart this size cannot carry a
+					{chart.dots.map((dot) => (
+						<circle
+							key={dot.id}
+							cx={dot.cx}
+							cy={dot.cy}
+							r={3}
+							fill="var(--color-accent)"
+						/>
+					))}
+
+					{/* Only the corners are labelled: a chart this size cannot carry a
 				    full scale without the numbers colliding. */}
-				<text
-					x={PADDING.left - 6}
-					y={PADDING.top + 4}
-					textAnchor="end"
-					fontSize={11}
-					fill="var(--color-text-secondary)"
-				>
-					{chart.ceiling}
-				</text>
-				<text
-					x={PADDING.left - 6}
-					y={PADDING.top + PLOT_HEIGHT}
-					textAnchor="end"
-					fontSize={11}
-					fill="var(--color-text-secondary)"
-				>
-					{floor}
-				</text>
-				<text
-					x={PADDING.left}
-					y={HEIGHT - 8}
-					textAnchor="start"
-					fontSize={11}
-					fill="var(--color-text-secondary)"
-				>
-					{startLabel}
-				</text>
-				<text
-					x={WIDTH - PADDING.right}
-					y={HEIGHT - 8}
-					textAnchor="end"
-					fontSize={11}
-					fill="var(--color-text-secondary)"
-				>
-					{endLabel}
-				</text>
-			</svg>
+					<text
+						x={PADDING.left - 6}
+						y={PADDING.top + 4}
+						textAnchor="end"
+						fontSize={11}
+						fill="var(--color-text-secondary)"
+					>
+						{chart.ceiling}
+					</text>
+					<text
+						x={PADDING.left - 6}
+						y={PADDING.top + PLOT_HEIGHT}
+						textAnchor="end"
+						fontSize={11}
+						fill="var(--color-text-secondary)"
+					>
+						{floor}
+					</text>
+					<text
+						x={PADDING.left}
+						y={HEIGHT - 8}
+						textAnchor="start"
+						fontSize={11}
+						fill="var(--color-text-secondary)"
+					>
+						{startLabel}
+					</text>
+					<text
+						x={WIDTH - PADDING.right}
+						y={HEIGHT - 8}
+						textAnchor="end"
+						fontSize={11}
+						fill="var(--color-text-secondary)"
+					>
+						{endLabel}
+					</text>
+				</svg>
+
+				{/*
+				 * Each reading, pointed at or tabbed to, says what it was and when.
+				 * Laid over the drawing rather than drawn in it: the picture stretches
+				 * to its box, and a target placed by percentage stretches with it
+				 * while staying a round, finger-sized spot.
+				 */}
+				{chart.dots.map((dot) =>
+					dot.label === undefined ? null : (
+						<Tooltip
+							key={dot.id}
+							content={dot.label}
+							delay={0}
+							touchTrigger="tap"
+						>
+							<span
+								// biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so the reading can be read from the keyboard, as the pointer reads it.
+								tabIndex={0}
+								role="img"
+								aria-label={dot.label}
+								className="thunderlist-chart-dot"
+								style={{
+									left: `${(dot.cx / WIDTH) * 100}%`,
+									top: `${(dot.cy / HEIGHT) * 100}%`,
+								}}
+							/>
+						</Tooltip>
+					),
+				)}
+			</div>
 
 			<HStack gap={3} wrap="wrap">
 				{chart.series.map((line) => (

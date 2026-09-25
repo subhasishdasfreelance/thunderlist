@@ -191,7 +191,7 @@
   }
 
   .astryx-progressbar-track {
-    background-color: var(--color-border-emphasized);
+    background-color: var(--thunderlist-track);
   }
 }
 }

@@ -7,7 +7,6 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -15,12 +14,14 @@ import { ChevronRight, Plus, Shapes, User, Users } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
+import { NotificationSettings } from "#/components/shell/notification-settings";
 import { TaskTypesDialog } from "#/components/tasks/task-types-dialog";
 import { NewTeamDialog } from "#/components/teams/new-team-dialog";
 import { RoleToken } from "#/components/teams/role-token";
 import { TeamDialog } from "#/components/teams/team-dialog";
 import { selectSpaceFn } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
+import { useToast } from "#/lib/toasts";
 import { useSpaceChanged } from "#/lib/use-space-changed";
 import { useTaskTypes } from "#/lib/use-task-types";
 import { usePermissions, useSpace } from "#/lib/use-team";
@@ -255,6 +256,13 @@ function SettingsPage() {
 						</HStack>
 					)}
 				</Card>
+			</Section>
+
+			<Section
+				title="Notifications"
+				description="Reminders from the installed app, at the times you choose — a daily review here, and one for any checklist, tracker or tag from its edit dialog."
+			>
+				<NotificationSettings />
 			</Section>
 
 			<TaskTypesDialog

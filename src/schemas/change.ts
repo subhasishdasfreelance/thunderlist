@@ -1,9 +1,16 @@
 import * as v from "valibot";
+import { arrangementInputSchema } from "./arrangement";
 import {
 	checklistIdInputSchema,
 	createChecklistInputSchema,
 	updateChecklistInputSchema,
 } from "./checklist";
+import {
+	createPlanInputSchema,
+	planIdInputSchema,
+	updatePlanInputSchema,
+} from "./plan";
+import { setReminderInputSchema } from "./reminder";
 import {
 	createTagInputSchema,
 	tagIdInputSchema,
@@ -101,6 +108,26 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("taskTypes.set"),
 		...taskTypesInputSchema.entries,
+	}),
+
+	v.object({
+		kind: v.literal("arrangement.set"),
+		...arrangementInputSchema.entries,
+	}),
+
+	v.object({
+		kind: v.literal("plan.create"),
+		...createPlanInputSchema.entries,
+	}),
+	v.object({
+		kind: v.literal("plan.update"),
+		...updatePlanInputSchema.entries,
+	}),
+	v.object({ kind: v.literal("plan.delete"), ...planIdInputSchema.entries }),
+
+	v.object({
+		kind: v.literal("reminder.set"),
+		...setReminderInputSchema.pipe[0].entries,
 	}),
 ]);
 

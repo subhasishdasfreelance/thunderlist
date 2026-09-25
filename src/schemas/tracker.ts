@@ -24,14 +24,6 @@ export type TrackerType = (typeof TRACKER_TYPES)[number];
 
 const trackerTypeSchema = v.picklist(TRACKER_TYPES);
 
-export const TRACKER_TYPE_LABELS: Record<TrackerType, string> = {
-	book: "Book",
-	course: "Course",
-	project: "Project",
-	fitness: "Fitness",
-	custom: "Custom",
-};
-
 /** Sensible default unit per type; the user can always override it. */
 export const TRACKER_TYPE_DEFAULT_UNITS: Record<TrackerType, string> = {
 	book: "pages",
@@ -72,6 +64,12 @@ const progressValueSchema = v.pipe(
 	v.maxValue(1_000_000, "Value is too large"),
 );
 
+const captionSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.maxLength(120, "Caption must be 120 characters or fewer"),
+);
+
 const authorSchema = v.pipe(
 	v.string(),
 	v.trim(),
@@ -81,6 +79,11 @@ const authorSchema = v.pipe(
 const trackerSchema = v.object({
 	trackerId: idSchema,
 	title: titleSchema,
+	/**
+	 * A line under the title saying what it is — "Dune, for book club". Absent
+	 * on trackers made before there was one, which is the same as none.
+	 */
+	caption: v.optional(v.string()),
 	type: trackerTypeSchema,
 	description: v.string(),
 	unit: v.string(),
@@ -178,6 +181,7 @@ export type TrackerDetail = TrackerSummary;
 export const createTrackerInputSchema = v.object({
 	trackerId: idSchema,
 	title: titleSchema,
+	caption: v.optional(captionSchema, ""),
 	type: trackerTypeSchema,
 	unit: unitSchema,
 	targetValue: targetValueSchema,
@@ -198,6 +202,7 @@ export const updateTrackerInputSchema = v.object({
 	patch: v.pipe(
 		v.object({
 			title: v.optional(titleSchema),
+			caption: v.optional(captionSchema),
 			type: v.optional(trackerTypeSchema),
 			unit: v.optional(unitSchema),
 			targetValue: v.optional(targetValueSchema),

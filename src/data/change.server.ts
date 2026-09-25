@@ -32,7 +32,9 @@ import {
 	updateChecklist,
 	updateTask,
 } from "./checklist.server";
-import { setTaskTypes } from "./settings.server";
+import { createPlan, deletePlan, updatePlan } from "./plan.server";
+import { setReminder } from "./reminder.server";
+import { setArrangement, setTaskTypes } from "./settings.server";
 import { createTag, deleteTag, updateTag } from "./tag.server";
 import type { Scope } from "./team.server";
 import {
@@ -125,6 +127,26 @@ async function run(
 		case "taskTypes.set":
 			await setTaskTypes(userId, change.types);
 			return;
+
+		case "arrangement.set":
+			await setArrangement(userId, change.list, change.arrangement);
+			return;
+
+		case "plan.create":
+			await createPlan(userId, change);
+			return;
+
+		case "plan.update":
+			await updatePlan(userId, change.planId, change.patch);
+			return;
+
+		case "plan.delete":
+			await deletePlan(userId, change.planId);
+			return;
+
+		case "reminder.set":
+			await setReminder(userId, actor, change);
+			return;
 	}
 }
 
@@ -164,6 +186,16 @@ function capabilityFor(change: Change): Capability {
 async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 	const { team } = scope;
 	if (team === null) return;
+
+	// A reminder is the person's own, whatever their role: reading the thing
+	// it is about is all it takes.
+	if (change.kind === "reminder.set") {
+		if (change.target !== "day" && change.targetId !== null) {
+			const kind = `${change.target}s` as const;
+			assertLevel(scope, kind, change.targetId, "read");
+		}
+		return;
+	}
 
 	const needed = capabilityFor(change);
 	if (!roleCan(team.role, needed)) {

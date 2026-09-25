@@ -123,8 +123,8 @@ function formatWindow(window: { from: string; to: string }): string {
 }
 
 /**
- * What a schedule asks for, in a few words: `due 8th Oct, 2026, 6:30 pm`, or
- * `daily 6:00 am – 10:00 pm`. `null` for one that asks for nothing.
+ * What a schedule asks for, in a few words: `Due 8th Oct, 2026, 6:30 pm`, or
+ * `Daily 6:00 am – 10:00 pm`. `null` for one that asks for nothing.
  */
 export function formatSchedule(schedule: {
 	deadline: string | null;
@@ -132,9 +132,9 @@ export function formatSchedule(schedule: {
 	dailyWindow?: { from: string; to: string } | null;
 }): string | null {
 	if (schedule.dailyWindow)
-		return `daily ${formatWindow(schedule.dailyWindow)}`;
+		return `Daily ${formatWindow(schedule.dailyWindow)}`;
 	if (schedule.deadline) {
-		return `due ${formatDeadline(schedule.deadline, schedule.deadlineTime)}`;
+		return `Due ${formatDeadline(schedule.deadline, schedule.deadlineTime)}`;
 	}
 	return null;
 }

@@ -1,13 +1,13 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack } from "@astryxdesign/core/Stack";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { useToast } from "@astryxdesign/core/Toast";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { createTeamFn } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
 import { playSound } from "#/lib/sounds";
+import { useToast } from "#/lib/toasts";
 import { useSpaceChanged } from "#/lib/use-space-changed";
 
 /**

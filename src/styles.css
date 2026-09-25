@@ -51,7 +51,7 @@ body {
 /* -------------------------------------------------------------------------- */
 
 /*
- * The sixteen colours a tag, a stage or a task type can be; see `TAG_COLORS`.
+ * The colours a tag, a stage or a task type can be; see `TAG_COLORS`.
  *
  * One hex each, the same in both schemes. A colour that changed between them
  * was not one colour but two with a shared name: the yellow stage was a dark
@@ -63,28 +63,44 @@ body {
  * both schemes at once means: dark enough to clear 3:1 on a white card, light
  * enough to clear it on a dark menu. That is why the yellow is a gold — a
  * lemon on white is 1.5:1, which as a dot is a dot you cannot see. Every one
- * of them clears **3.3:1** against the card, the page and a menu in both
- * schemes, which is the floor for something that is not text but still has to
- * be seen.
+ * of them clears **3:1** against the card and the page in both schemes, which
+ * is the floor for something that is not text but still has to be seen.
  */
 @layer components {
+	/*
+	 * Eight to pick from — `PICKABLE_COLORS` — softer than the neon they
+	 * replaced and as light as the band allows: every one clears 3:1 on the
+	 * card and the page in both schemes, and 3.4:1 on a dark menu.
+	 *
+	 * The other names are colours something may already be wearing from
+	 * before; each now draws as the nearest of the eight, so nothing stored
+	 * has to change. Gray stays the neutral of a tag with no colour yet.
+	 */
 	:root {
-		--thunderlist-color-red: #ff2436;
-		--thunderlist-color-rose: #ff1a66;
-		--thunderlist-color-pink: #f812a3;
-		--thunderlist-color-magenta: #e20ced;
-		--thunderlist-color-purple: #ab57ff;
-		--thunderlist-color-indigo: #776bff;
-		--thunderlist-color-blue: #1f7cff;
-		--thunderlist-color-cyan: #008ebd;
-		--thunderlist-color-teal: #00948d;
-		--thunderlist-color-green: #00943e;
-		--thunderlist-color-lime: #4a9400;
-		--thunderlist-color-yellow: #9e7e00;
-		--thunderlist-color-orange: #d16200;
-		--thunderlist-color-brown: #c26c47;
-		--thunderlist-color-slate: #6684a9;
+		--thunderlist-color-red: #ef5350;
+		--thunderlist-color-orange: #e8590c;
+		--thunderlist-color-yellow: #b07d00;
+		--thunderlist-color-green: #2e9e62;
+		--thunderlist-color-teal: #0d9a8b;
+		--thunderlist-color-blue: #3b82f6;
+		--thunderlist-color-purple: #9b6be8;
+		--thunderlist-color-pink: #e0559f;
 		--thunderlist-color-gray: #798196;
+
+		--thunderlist-color-rose: var(--thunderlist-color-red);
+		--thunderlist-color-brown: var(--thunderlist-color-orange);
+		--thunderlist-color-lime: var(--thunderlist-color-green);
+		--thunderlist-color-cyan: var(--thunderlist-color-teal);
+		--thunderlist-color-slate: var(--thunderlist-color-blue);
+		--thunderlist-color-indigo: var(--thunderlist-color-purple);
+		--thunderlist-color-magenta: var(--thunderlist-color-pink);
+
+		/*
+		 * The part of a bar still to do: a pale slate in the light scheme and a
+		 * deep one in the dark, both well apart from every colour above so the
+		 * done parts and the track never blur together.
+		 */
+		--thunderlist-track: light-dark(#cbd5e1, #475569);
 	}
 
 	/*
@@ -129,7 +145,7 @@ body {
 	}
 
 	/*
-	 * Which of the sixteen each one wears. A tag with no colour yet — queued,
+	 * Which colour each one wears. A tag with no colour yet — queued,
 	 * or deleted — is neutral rather than invisible.
 	 */
 	.thunderlist-tag {
@@ -567,6 +583,18 @@ body {
 		font-family: var(--font-family-code, monospace);
 		font-size: var(--text-supporting-size, 0.8125rem);
 		line-height: 1.4;
+		/* A key is one word however narrow the screen: "Drag", never "Dr" over
+		   "ag". The line of keys keeps its width and the description wraps. */
+		flex: none;
+		white-space: nowrap;
+	}
+
+	/*
+	 * A text area that can be dragged taller, for notes that run long. Astryx
+	 * pins `resize: none` with a heavily weighted class, hence `!important`.
+	 */
+	.thunderlist-resizable textarea {
+		resize: vertical !important;
 	}
 
 	/*
@@ -728,28 +756,6 @@ body {
 	}
 
 	/*
-	 * A switch for how a list is ordered; see `OrderToggle`.
-	 *
-	 * Off, it is a quiet ghost button in the secondary ink. On, it is lit in
-	 * the accent — the same wash the selected facet and the selected stage
-	 * wear — so the order in force is told apart at a glance, not by reading
-	 * a tooltip.
-	 */
-	.thunderlist-order[data-on="false"] svg {
-		color: var(--color-icon-secondary);
-	}
-
-	.thunderlist-order[data-on="true"] button {
-		background-color: var(--color-accent-muted);
-		color: var(--color-text-accent);
-	}
-
-	.thunderlist-order[data-on="true"] svg {
-		color: var(--color-icon-accent);
-		animation: thunderlist-check var(--duration-fast-max) var(--ease-standard);
-	}
-
-	/*
 	 * A segment gives under the finger the way a button does. Astryx's own
 	 * colour transitions are restated alongside, since naming `transform` here
 	 * replaces its list rather than adding to it.
@@ -833,6 +839,125 @@ body {
 	.thunderlist-crumb:hover {
 		background-color: var(--color-overlay-hover);
 		color: var(--color-text-accent);
+	}
+
+	/*
+	 * A task parked in the Backlog: the list's name in the error red, with the
+	 * Backlog's box, so it reads as where the task is stuck rather than as a
+	 * caption someone wrote under it.
+	 */
+	.thunderlist-crumb[data-backlog="true"] {
+		color: var(--color-error);
+		font-weight: 500;
+	}
+
+	.thunderlist-crumb[data-backlog="true"]:hover {
+		color: var(--color-error);
+	}
+
+	/* A place in the phone bar's "More" dropup; see `BottomNav`. */
+	.thunderlist-more-link {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-height: 2.75rem;
+		padding-inline: 0.75rem;
+		border-radius: var(--radius-inner, 0.375rem);
+		text-decoration: none;
+	}
+
+	.thunderlist-more-link:hover,
+	.thunderlist-more-link[data-active="true"] {
+		background-color: var(--color-overlay-hover);
+	}
+
+	/*
+	 * A plan, read: long Markdown, so wide tables and code scroll on their own
+	 * rather than widening the page, and long words break.
+	 */
+	.thunderlist-plan-body {
+		overflow-wrap: anywhere;
+	}
+
+	.thunderlist-plan-body :is(pre, table) {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	/*
+	 * Search results: a list the box drives with ↑ ↓ and Enter, so the lit
+	 * one wears the same wash the pointer gives it; see `SearchDialog`.
+	 */
+	.thunderlist-search-results {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.thunderlist-search-result {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.25rem;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-inner, 0.375rem);
+		text-align: start;
+		cursor: pointer;
+		transition: background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-search-result[data-active="true"] {
+		background-color: var(--color-overlay-hover);
+		box-shadow: inset 3px 0 0 var(--color-accent);
+	}
+
+	.thunderlist-search-label {
+		color: var(--color-text-primary);
+		font-weight: 500;
+		overflow-wrap: anywhere;
+	}
+
+	.thunderlist-search-context {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm, 0.8125rem);
+		line-height: 1.4;
+	}
+
+	/*
+	 * The stage a found task is at: its dot, and a wash of its colour with the
+	 * name pushed toward the ink, as a chip is. The first stage has no colour,
+	 * so it is an outline.
+	 */
+	.thunderlist-search-stage {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3125rem;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-full);
+		font-weight: 500;
+		background-color: color-mix(
+			in srgb,
+			var(--thunderlist-stage-color) 16%,
+			transparent
+		);
+		color: light-dark(
+			color-mix(in srgb, var(--thunderlist-stage-color) 40%, #1c1b21),
+			color-mix(in srgb, var(--thunderlist-stage-color) 45%, #e1e2ec)
+		);
+	}
+
+	.thunderlist-search-stage[data-first="true"] {
+		background-color: transparent;
+		box-shadow: inset 0 0 0 1px var(--color-border-emphasized);
+		color: var(--color-text-secondary);
 	}
 
 	/* The tag suggestions, which appear under the caret as you type. */
@@ -1384,7 +1509,7 @@ body {
 		height: 8px;
 		overflow: hidden;
 		border-radius: var(--radius-full);
-		background-color: var(--color-border-emphasized);
+		background-color: var(--thunderlist-track);
 	}
 
 	.thunderlist-stage-bar-part {
@@ -1395,9 +1520,15 @@ body {
 		transition: flex-basis var(--duration-medium) var(--ease-standard);
 	}
 
-	.thunderlist-stage-bar-part:last-child {
+	/* An attribute, not `:last-child`: each part sits in its tooltip's wrapper. */
+	.thunderlist-stage-bar-part[data-last="true"] {
 		border-start-end-radius: var(--radius-full);
 		border-end-end-radius: var(--radius-full);
+	}
+
+	/* The track the work not started leaves, there to be pointed at. */
+	.thunderlist-stage-bar-rest {
+		flex: 1 1 0;
 	}
 
 	/* A stage's colour as a dot: the key to the bar, and its mark in a menu. */
@@ -1560,6 +1691,47 @@ body {
 
 	.thunderlist-facet[data-selected="true"] {
 		background-color: var(--color-accent-muted);
+	}
+
+	/*
+	 * An image dissolving in once it has arrived; see `FadeImage`. Quick and
+	 * light: an opacity change only, over the app's fast duration.
+	 */
+	.thunderlist-fade-image {
+		max-width: 100%;
+		opacity: 0;
+		transition: opacity var(--duration-medium) var(--ease-standard);
+	}
+
+	.thunderlist-fade-image[data-loaded="true"] {
+		opacity: 1;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.thunderlist-fade-image {
+			transition: none;
+		}
+	}
+
+	/*
+	 * A reading on the chart, to point at or tab to: a spot centred on its dot,
+	 * larger than the dot so a finger finds it, ringed while it is being read.
+	 */
+	.thunderlist-chart-dot {
+		position: absolute;
+		width: 1.25rem;
+		height: 1.25rem;
+		margin-top: -0.625rem;
+		margin-left: -0.625rem;
+		border-radius: var(--radius-full);
+		cursor: default;
+		transition: box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-chart-dot:hover,
+	.thunderlist-chart-dot:focus-visible {
+		outline: none;
+		box-shadow: inset 0 0 0 2px var(--color-accent);
 	}
 
 	/*
@@ -1761,8 +1933,7 @@ body {
 			transition: none;
 		}
 
-		.thunderlist-flag[data-on="true"] svg,
-		.thunderlist-order[data-on="true"] svg {
+		.thunderlist-flag[data-on="true"] svg {
 			animation: none;
 		}
 

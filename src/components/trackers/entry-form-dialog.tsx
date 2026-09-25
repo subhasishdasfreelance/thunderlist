@@ -5,7 +5,6 @@ import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
-import { useToast } from "@astryxdesign/core/Toast";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -42,7 +41,8 @@ export function EntryFormDialog({
 		undefined,
 	);
 	const [note, setNote] = useState("");
-	const toast = useToast();
+	// Save was pressed on a reading that records nothing; see `submit`.
+	const [isUnchanged, setIsUnchanged] = useState(false);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -52,6 +52,7 @@ export function EntryFormDialog({
 				(todayDateOnly() as ISODateString),
 		);
 		setNote(entry?.note ?? "");
+		setIsUnchanged(false);
 	}, [isOpen, entry, tracker.currentValue]);
 
 	const valueLabel =
@@ -80,18 +81,14 @@ export function EntryFormDialog({
 		if (!isValid || value === null || recordedAt === undefined) return;
 
 		/*
-		 * A reading that records nothing is refused, and said out loud.
+		 * A reading that records nothing is refused, and the field says so.
 		 *
 		 * The dialog stays open with the reading still in it, because the likely
 		 * next move is to correct it rather than to start again — and a dialog
 		 * that closed on a press meant as "save" would read as having saved.
 		 */
 		if (!hasSomethingToSave) {
-			toast({
-				body: `You are already at ${previousValue} ${tracker.unit}. Enter where you have got to since.`,
-				type: "error",
-				uniqueID: "entry",
-			});
+			setIsUnchanged(true);
 			return;
 		}
 
@@ -142,10 +139,21 @@ export function EntryFormDialog({
 					description={`You were at ${previousValue} ${tracker.unit}.`}
 					min={0}
 					value={value}
-					onChange={setValue}
+					onChange={(next) => {
+						setValue(next);
+						setIsUnchanged(false);
+					}}
+					status={
+						isUnchanged
+							? {
+									type: "error",
+									message: `You are already at ${previousValue} ${tracker.unit}. Enter where you have got to since.`,
+								}
+							: undefined
+					}
 				/>
 
-				{delta === null ? null : (
+				{delta === null || isUnchanged ? null : (
 					<Text type="supporting">
 						{delta === 0
 							? hasSomethingToSave
@@ -165,15 +173,19 @@ export function EntryFormDialog({
 					value={recordedAt}
 					onChange={setRecordedAt}
 				/>
-				<TextArea
-					autoComplete="off"
-					label="Note"
-					isOptional
-					rows={4}
-					value={note}
-					onChange={setNote}
-					placeholder="Finished chapter 7"
-				/>
+				{/* Dragged taller for a long entry; see `.thunderlist-resizable`. */}
+				<div className="thunderlist-resizable">
+					<TextArea
+						autoComplete="off"
+						label="Notes"
+						isOptional
+						rows={4}
+						value={note}
+						onChange={setNote}
+						placeholder="Finished chapter 7"
+						width="100%"
+					/>
+				</div>
 			</VStack>
 		</FormDialog>
 	);

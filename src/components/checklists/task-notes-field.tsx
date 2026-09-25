@@ -8,8 +8,16 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { memo, useId } from "react";
+import { FadeImage } from "#/components/common/fade-image";
 
 export type NotesView = "write" | "preview";
+
+/** An image written into notes, drawn as every image in the app is. */
+const MARKDOWN_COMPONENTS = {
+	image: ({ src, alt }: { src: string; alt: string }) => (
+		<FadeImage src={src} alt={alt} />
+	),
+};
 
 /**
  * A task's notes, written in Markdown.
@@ -73,6 +81,8 @@ export const TaskNotesField = memo(function TaskNotesField({
 				<Markdown
 					density="compact"
 					headingLevelStart={3}
+					// Images in notes load as they near the screen, and fade in.
+					components={MARKDOWN_COMPONENTS}
 					// A link opens beside the app, not in place of it: following one
 					// here would otherwise throw away whatever else was being edited.
 					onLinkClick={(href) => {

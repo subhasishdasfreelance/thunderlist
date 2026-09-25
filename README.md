@@ -27,6 +27,8 @@ design system, with Tailwind utilities layered on top of Astryx's design tokens.
 - **Priority** — every open task, sorted by whether it is urgent and important.
 - **Across lists** — every task by the stage it is at, or by what kind of work
   it is, whichever checklist it is in: everything in Review, say, or every bug.
+- **Plans** — long Markdown documents kept with the work: a roadmap, a spec,
+  written here or imported from a `.md` file.
 - **Teams** — a space shared with other people, each with a role that caps what
   they can change, and an access list per checklist, tracker and tag saying who
   it is for and what each of them may do with it.
@@ -215,7 +217,10 @@ entries      one reading per document, linked by trackerId
 tags         tag names, colours and schedules
 teams        one document per team
 members      one document per person per team, with their role
-settings     what a space has chosen for itself: its task types
+settings     what a space has chosen for itself: task types, list layouts
+plans        one long Markdown document per plan
+reminders    one daily reminder per person per thing
+pushSubscriptions  one device per document, that notifications go to
 taskRefs     the old Today and Backlog lists, moved onto tags on first read
 ```
 
@@ -264,7 +269,7 @@ either, and a field nobody reads is a field that quietly goes stale.
 
 ### `trackers`
 
-`trackerId`, `title`, `type`, `unit`, `targetValue`, `startValue`,
+`trackerId`, `title`, `caption`, `type`, `unit`, `targetValue`, `startValue`,
 `currentValue`, `description`, `coverUrl`, `author`, `startDate`, `deadline`,
 `deadlineTime`, `tagIds`, `assignees`, `access`, `createdAt`, `updatedAt`.
 
@@ -326,6 +331,26 @@ changes anything. Each type is a `typeId`, a `name` and a `color`; with no
 document a space has Bug, Feature, Story and Chore. Taking a type off the list
 takes it off every task that had it.
 
+`arrangements` is how the Checklists, Trackers and Tags screens are laid out:
+for each, an `order` picked by hand and its `groups` — a name and the ids in
+it. One write however much moves (`arrangement.set`); an id that names
+nothing any more is ignored when drawn and kept when written, so arranging
+never loses the place of something kept from whoever is arranging. Which
+order a screen shows — by hand, newest first or most behind first — is the
+viewer's, kept in their browser.
+
+### `plans`
+
+`planId`, `title`, `body`, `createdAt`, `updatedAt`. The body is Markdown, up
+to two million characters, written in the app or imported from a `.md` file;
+the list reads everything but it.
+
+### `reminders` and `pushSubscriptions`
+
+`email`, `ownerId`, `target`, `targetId`, `time`, `timeZone`, `lastSentOn` —
+and for each device, `endpoint`, `email`, `keys`, `createdAt`. See
+[Reminders](#reminders).
+
 ### `taskRefs`
 
 `itemId`, `list`, `taskId`, `sortOrder`, `addedAt`.
@@ -350,6 +375,9 @@ app-minted id is unique; the rest are the lookups every screen makes.
 | `teams` | `teamId` unique |
 | `members` | `teamId, email` unique; `email` |
 | `settings` | `userId` unique |
+| `plans` | `planId` unique; `userId, updatedAt` |
+| `reminders` | `email, ownerId, target, targetId` unique |
+| `pushSubscriptions` | `endpoint` unique; `email` |
 | `taskRefs` | `itemId` unique; `userId, taskId`; `userId, list, sortOrder` |
 
 ---
@@ -549,13 +577,16 @@ browser injects at hydration, which is a flash of the wrong colours on every
 first paint. `bun run build` recompiles it first, so the two cannot drift;
 `bun run theme:check` fails if they have.
 
-### The sixteen colours
+### The colours
 
-A tag, a stage and a task type each pick from one list of sixteen
-(`TAG_COLORS`), ordered round the wheel. Ten are Astryx's own `Token` colours;
-the other six — rose, magenta, indigo, lime, brown, slate — fill the gaps that
-ring had, because a checklist may run to a dozen stages and ten colours could
-not keep them apart.
+A tag, a stage and a task type each pick from eight colours
+(`PICKABLE_COLORS`) — red, orange, yellow, green, teal, blue, purple, pink —
+plus gray for a tag or type that wants none. Each is one hex, the same in both
+schemes, soft rather than neon, and as light as it can be while still standing
+3:1 against the card and the page in both. The track of a bar — the work not
+done — is a pale slate in the light scheme and a deep one in the dark
+(`--thunderlist-track`), apart from all eight. The eight other names
+`TAG_COLORS` still accepts, from before, draw as the nearest of these.
 
 Each colour is two things, and both were measured rather than picked by eye:
 
@@ -669,6 +700,9 @@ cp .env.example .env.local
 | `BETTER_AUTH_URL` | `http://localhost:4000` in development — the exact origin, port included |
 | `GOOGLE_CLIENT_ID` | From the OAuth client above |
 | `GOOGLE_CLIENT_SECRET` | From the OAuth client above |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Push keys, for reminders: `bunx web-push generate-vapid-keys` |
+| `VAPID_SUBJECT` | Optional: a `mailto:` or URL push services can reach you at; defaults to `BETTER_AUTH_URL` |
+| `CRON_SECRET` | Any long random string; see [Reminders](#reminders) |
 
 The database is always `thunderlist`; a database named in the connection string
 is ignored.
@@ -714,8 +748,9 @@ The project targets Vercel (`vercel.json` sets the framework to
 1. Push to GitHub, GitLab or Bitbucket.
 2. In Vercel choose **Add New → Project** and import the repo.
 3. Under **Settings → Environment Variables** add `MONGO_CONN_STR`,
-   `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`, with `BETTER_AUTH_URL` set to the deployed origin.
+   `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+   `CRON_SECRET`, with `BETTER_AUTH_URL` set to the deployed origin.
 4. Add the deployed origin's redirect URI to the Google OAuth client.
 5. On Atlas, allow Vercel's egress under **Network Access**.
 6. Deploy.
@@ -748,6 +783,31 @@ The splash and status bar colours, icon and name come from the manifest, which
 Chrome builds into the installed app. The manifest is never cached, and Chrome
 checks it when the app is opened and updates the installed app on its own —
 usually within a day, with no reinstall.
+
+
+### Reminders
+
+The installed app can be sent a notification every day at a set time: a
+**daily review** from Settings, and one for any checklist, tracker or tag from
+its edit dialog. Each is the person's own, on their own clock (the browser's
+time zone when they set it), and goes to every device they turned
+notifications on for in Settings. On an iPhone that means the app added to the
+home screen.
+
+A notification with the app closed has to be pushed by the server, and the
+server has to be woken to push it. `/api/reminders` sends whatever is due —
+each reminder once a day, and not more than three hours late — when called
+with `Authorization: Bearer <CRON_SECRET>`. Something has to call it every
+five minutes or so:
+
+- On Vercel Pro, a cron job in `vercel.json`:
+  `"crons": [{ "path": "/api/reminders", "schedule": "*/5 * * * *" }]`.
+  Vercel sends the `CRON_SECRET` header itself.
+- On the Hobby plan, whose cron jobs run once a day, any outside scheduler —
+  cron-job.org, a GitHub Actions schedule — making that request.
+
+Without the push keys, Settings says notifications are not set up; without a
+scheduler, reminders are saved but never sent.
 
 ---
 

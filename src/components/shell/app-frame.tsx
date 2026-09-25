@@ -8,8 +8,11 @@ import { Theme } from "@astryxdesign/core/theme";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
 import { type ColorScheme, useColorScheme } from "#/lib/theme";
+import { useEscape } from "#/lib/use-escape";
+import { useNoAutofill } from "#/lib/use-no-autofill";
 import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
 import { thunderlistTheme } from "#/theme/thunderlist";
@@ -69,6 +72,9 @@ export function AppFrame({
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
 	useTaskCopy();
+	// Escape closes the nearest thing: a field, then a popup, then the toasts.
+	useEscape();
+	useNoAutofill();
 
 	/*
 	 * The keys that work from anywhere.
@@ -233,6 +239,7 @@ export function AppFrame({
 										label={item.label}
 										href={item.to}
 										icon={item.icon}
+										endContent={<ShortcutKey label={item.key} />}
 										isSelected={isNavItemActive(pathname, item.to)}
 									/>
 								))}

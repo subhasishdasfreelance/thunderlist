@@ -16,7 +16,7 @@ import { useApplyChange } from "#/lib/changes";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { usePermissions } from "#/lib/use-team";
 import { taskTypesQuery } from "#/queries/space";
-import type { TagColor } from "#/schemas/tag";
+import { pickableColor, type TagColor } from "#/schemas/tag";
 import type { TaskType } from "#/schemas/task-type";
 
 /** What is wrong with a list of types, or `null` when it can be saved. */
@@ -217,7 +217,7 @@ function TypeRow({
 					label: option.label,
 					icon: <StageDot color={option.value} />,
 					endContent:
-						option.value === type.color ? (
+						option.value === pickableColor(type.color) ? (
 							<Check aria-hidden size={16} />
 						) : undefined,
 					onClick: () => onRecolor(option.value),

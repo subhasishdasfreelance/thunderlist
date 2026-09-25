@@ -2,7 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import type { Page, StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
+import type { Arrangements } from "#/schemas/arrangement";
 import type { ChecklistSummary } from "#/schemas/checklist";
+import type { Plan, PlanSummary } from "#/schemas/plan";
+import type { Reminder } from "#/schemas/reminder";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -195,6 +198,51 @@ describe("applyOptimistically", () => {
 		expect(toDo(queryClient)?.items).toEqual([]);
 		expect(toDo(queryClient)?.counts).toEqual({ todo: 0, review: 1, done: 0 });
 		expect(checklist(queryClient)?.progress.completed).toBe(0);
+	});
+
+	/*
+	 * Undoing a move along the stages: the task is at a stage whose page was
+	 * never read, so no page holds it — and it still has to come back onto
+	 * the one being read, at once.
+	 */
+	it("brings a task back to the stage being read from one never opened", () => {
+		const queryClient = client();
+		const stages = [
+			{ stageId: "todo", name: "To do" },
+			{ stageId: "review", name: "Review" },
+			{ stageId: "done", name: "Done" },
+		];
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
+			...summary("chk_1"),
+			stages,
+		});
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			{
+				...stagePage([task({ taskId: "tsk_1" })]),
+				counts: { todo: 1, review: 0, done: 0 },
+			},
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { stageId: "review" },
+		});
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { stageId: "todo" },
+		});
+
+		expect(toDo(queryClient)?.items.map((each) => each.taskId)).toEqual([
+			"tsk_1",
+		]);
+		expect(toDo(queryClient)?.counts).toEqual({ todo: 1, review: 0, done: 0 });
+		expect(checklist(queryClient)?.progress.byStage).toEqual({
+			todo: 1,
+			review: 0,
+		});
 	});
 
 	/*
@@ -731,6 +779,7 @@ describe("applyOptimistically, on a tracker", () => {
 			kind: "tracker.create",
 			trackerId: "trk_2",
 			title: "Sapiens",
+			caption: "",
 			type: "book",
 			unit: "pages",
 			targetValue: 400,
@@ -787,6 +836,30 @@ describe("applyOptimistically, on the rest", () => {
 		});
 
 		expect(checklists(queryClient)).toEqual([]);
+	});
+
+	it("takes a deleted checklist's tasks off a tag's page with it", () => {
+		const queryClient = client();
+		const tasks = [task({ taskId: "tsk_1", tagIds: ["tag_1"] })];
+		queryClient.setQueryData<TagDetail>(
+			queryKeys.tag("tag_1"),
+			tagPage("tag_1", tasks),
+		);
+		queryClient.setQueryData<Page<TagTaskEntry>>(
+			queryKeys.tagOpenPage("tag_1", VIEW),
+			page(entries(tasks)),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "checklist.delete",
+			checklistId: "chk_1",
+		});
+
+		expect(tagTasks(queryClient, "tag_1")?.items).toEqual([]);
+		expect(
+			queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"))?.progress
+				.total,
+		).toBe(0);
 	});
 
 	/*
@@ -852,6 +925,86 @@ describe("applyOptimistically, on the rest", () => {
 				.getQueryData<Array<Tag>>(queryKeys.tags)
 				?.map((each) => each.tagId),
 		).toEqual(["tag_2"]);
+	});
+
+	it("draws a plan made, edited and deleted, newest-changed first", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<PlanSummary>>(queryKeys.plans, [
+			{
+				planId: "pln_1",
+				title: "Old",
+				length: 3,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "plan.create",
+			planId: "pln_2",
+			title: "Roadmap",
+			body: "# Roadmap",
+		});
+		applyOptimistically(queryClient, {
+			kind: "plan.update",
+			planId: "pln_1",
+			patch: { body: "longer body" },
+		});
+
+		const plans = () =>
+			queryClient.getQueryData<Array<PlanSummary>>(queryKeys.plans);
+		expect(plans()?.map((each) => [each.planId, each.length])).toEqual([
+			["pln_1", 11],
+			["pln_2", 9],
+		]);
+		expect(queryClient.getQueryData<Plan>(queryKeys.plan("pln_2"))?.body).toBe(
+			"# Roadmap",
+		);
+
+		applyOptimistically(queryClient, { kind: "plan.delete", planId: "pln_1" });
+		expect(plans()?.map((each) => each.planId)).toEqual(["pln_2"]);
+	});
+
+	it("sets, moves and takes away a reminder at once", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<Reminder>>(queryKeys.reminders, [
+			{ target: "day", targetId: null, time: "08:00" },
+		]);
+		const change = {
+			kind: "reminder.set" as const,
+			target: "checklist" as const,
+			targetId: "chk_1",
+			timeZone: "UTC",
+		};
+		const reminders = () =>
+			queryClient.getQueryData<Array<Reminder>>(queryKeys.reminders);
+
+		applyOptimistically(queryClient, { ...change, time: "18:00" });
+		applyOptimistically(queryClient, { ...change, time: "19:30" });
+		expect(reminders()?.map((each) => each.time)).toEqual(["08:00", "19:30"]);
+
+		applyOptimistically(queryClient, { ...change, time: null });
+		expect(reminders()?.map((each) => each.target)).toEqual(["day"]);
+	});
+
+	it("lays a list out again at once, leaving the others as they were", () => {
+		const queryClient = new QueryClient();
+		const tags = { order: ["tag_1"], groups: [] };
+		queryClient.setQueryData<Arrangements>(queryKeys.arrangements, { tags });
+
+		const checklists = {
+			order: ["chk_2", "chk_1"],
+			groups: [{ groupId: "grp_1", name: "Work", itemIds: ["chk_2"] }],
+		};
+		applyOptimistically(queryClient, {
+			kind: "arrangement.set",
+			list: "checklists",
+			arrangement: checklists,
+		});
+
+		expect(
+			queryClient.getQueryData<Arrangements>(queryKeys.arrangements),
+		).toEqual({ tags, checklists });
 	});
 
 	it("rewrites the space's task types at once", () => {

@@ -156,6 +156,7 @@ export async function createTracker(
 	input: {
 		trackerId: string;
 		title: string;
+		caption: string;
 		type: TrackerType;
 		unit: string;
 		targetValue: number;
@@ -187,6 +188,7 @@ export async function createTracker(
 	const tracker: Tracker = {
 		trackerId: input.trackerId,
 		title: input.title,
+		caption: input.caption,
 		type: input.type,
 		description: input.description,
 		unit: input.unit,
@@ -216,6 +218,7 @@ export async function updateTracker(
 	trackerId: string,
 	patch: {
 		title?: string;
+		caption?: string;
 		type?: TrackerType;
 		unit?: string;
 		targetValue?: number;

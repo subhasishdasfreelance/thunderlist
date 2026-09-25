@@ -10,9 +10,16 @@ import {
 	useRouter,
 } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	ArrangedSections,
+	ListOrderMenu,
+	saveArrangement,
+	useArrangedList,
+} from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
-import { OrderToggle } from "#/components/common/order-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { TrackerCard } from "#/components/trackers/tracker-card";
@@ -31,6 +38,7 @@ import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagsQuery } from "#/queries/tags";
 import { trackerQuery, trackersQuery } from "#/queries/trackers";
+import { manualOrder } from "#/schemas/arrangement";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 /**
@@ -49,6 +57,9 @@ function lag(tracker: TrackerSummary, now: number): number {
 	});
 }
 
+const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
+const createdAtOf = (tracker: TrackerSummary) => tracker.createdAt;
+
 export const Route = createFileRoute("/trackers/")({
 	loader: ({ context }) => {
 		// The tags on each card, and for the form; the trackers are the screen.
@@ -66,7 +77,7 @@ function TrackersPage() {
 	const [isFormOpen, setIsFormOpen] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const [isOpening, setIsOpening] = useState(false);
-	const [isBehindFirst, setIsBehindFirst] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 	// In a team, one person's trackers rather than everyone's; see `MemberFilter`.
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const { apply, applyAsync } = useApplyChange();
@@ -92,12 +103,24 @@ function TrackersPage() {
 	 * needs me", and that is an ordering of the cards rather than a row of
 	 * figures above them.
 	 */
-	// Judged on the viewer's clock, so sorted only once the browser has it.
+	// Your order, newest first or most behind first, and in your groups; see
+	// `useArrangedList`. Behind is judged on the viewer's clock, so only once
+	// the browser has it.
 	const now = useNow();
-	const ordered =
-		isBehindFirst && now !== null
-			? [...trackers].sort((a, b) => lag(b, now) - lag(a, now))
-			: trackers;
+	const behind = useMemo(
+		() =>
+			now === null
+				? null
+				: (a: TrackerSummary, b: TrackerSummary) => lag(b, now) - lag(a, now),
+		[now],
+	);
+	const arranged = useArrangedList({
+		list: "trackers",
+		items: trackers,
+		idOf: trackerIdOf,
+		createdAt: createdAtOf,
+		compareBehind: behind,
+	});
 
 	/*
 	 * Into the new tracker once the server has it and its screen is ready to
@@ -162,12 +185,13 @@ function TrackersPage() {
 						</Text>
 						<HStack gap={1} vAlign="center">
 							<MemberFilter value={assignee} onChange={setAssignee} />
-							<OrderToggle
-								isSorted={isBehindFirst}
-								sortedLabel="Most behind first"
-								defaultLabel="As added"
-								onChange={setIsBehindFirst}
+							<ListOrderMenu
+								order={arranged.order}
+								onChange={arranged.setOrder}
 							/>
+							{canManageContent ? (
+								<ArrangeButton onClick={() => setIsArranging(true)} />
+							) : null}
 						</HStack>
 					</HStack>
 					{trackers.length === 0 ? (
@@ -177,15 +201,29 @@ function TrackersPage() {
 							description="No tracker is assigned to them."
 						/>
 					) : null}
-					{ordered.map((tracker) => (
-						<TrackerCard
-							key={tracker.trackerId}
-							tracker={tracker}
-							tags={tags}
-						/>
-					))}
+					<ArrangedSections
+						sections={arranged.sections}
+						idOf={trackerIdOf}
+						render={(tracker) => <TrackerCard tracker={tracker} tags={tags} />}
+					/>
 				</VStack>
 			)}
+
+			<ArrangeDialog
+				isOpen={isArranging}
+				onOpenChange={setIsArranging}
+				noun="trackers"
+				items={manualOrder(
+					allTrackers,
+					trackerIdOf,
+					arranged.arrangement.order,
+				).map((tracker) => ({ id: tracker.trackerId, label: tracker.title }))}
+				arrangement={arranged.arrangement}
+				onSave={(next) => {
+					saveArrangement(apply, "trackers", next);
+					setIsArranging(false);
+				}}
+			/>
 
 			<TrackerFormDialog
 				isOpen={isFormOpen}

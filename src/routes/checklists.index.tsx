@@ -10,11 +10,18 @@ import {
 	useRouter,
 } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	ArrangedSections,
+	ListOrderMenu,
+	saveArrangement,
+	useArrangedList,
+} from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
-import { OrderToggle } from "#/components/common/order-toggle";
 import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
@@ -50,6 +57,9 @@ function standing(checklist: ChecklistSummary, now: number) {
 	};
 }
 
+const checklistIdOf = (checklist: ChecklistSummary) => checklist.checklistId;
+const createdAtOf = (checklist: ChecklistSummary) => checklist.createdAt;
+
 export const Route = createFileRoute("/checklists/")({
 	loader: ({ context }) => {
 		// Only the new-checklist form needs the tags, and not on the first frame.
@@ -67,7 +77,7 @@ function ChecklistsPage() {
 	const [isFormOpen, setIsFormOpen] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
 	const [isOpening, setIsOpening] = useState(false);
-	const [isBehindFirst, setIsBehindFirst] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
 
@@ -80,7 +90,8 @@ function ChecklistsPage() {
 	const tags = tagsResult.data ?? [];
 
 	/*
-	 * Behind first, or the order they were made in.
+	 * In your own order, newest first, or most behind first — and in your
+	 * groups; see `useArrangedList`.
 	 *
 	 * A page of totals answered "how is all of this going" with one number that
 	 * was true of nothing in particular. The useful version of that question is
@@ -89,12 +100,20 @@ function ChecklistsPage() {
 	 */
 	// Judged on the viewer's clock, so sorted only once the browser has it.
 	const now = useNow();
-	const ordered =
-		isBehindFirst && now !== null
-			? [...checklists].sort((a, b) =>
-					compareBehind(standing(a, now), standing(b, now)),
-				)
-			: checklists;
+	const arranged = useArrangedList({
+		list: "checklists",
+		items: checklists,
+		idOf: checklistIdOf,
+		createdAt: createdAtOf,
+		compareBehind: useMemo(
+			() =>
+				now === null
+					? null
+					: (a: ChecklistSummary, b: ChecklistSummary) =>
+							compareBehind(standing(a, now), standing(b, now)),
+			[now],
+		),
+	});
 
 	/*
 	 * Into the new checklist so tasks can be added — but only once the server
@@ -163,18 +182,38 @@ function ChecklistsPage() {
 							{checklists.length}{" "}
 							{checklists.length === 1 ? "checklist" : "checklists"}
 						</Text>
-						<OrderToggle
-							isSorted={isBehindFirst}
-							sortedLabel="Most behind first"
-							defaultLabel="As added"
-							onChange={setIsBehindFirst}
-						/>
+						<HStack gap={1} vAlign="center">
+							<ListOrderMenu
+								order={arranged.order}
+								onChange={arranged.setOrder}
+							/>
+							{canManageContent ? (
+								<ArrangeButton onClick={() => setIsArranging(true)} />
+							) : null}
+						</HStack>
 					</HStack>
-					{ordered.map((checklist) => (
-						<ChecklistCard key={checklist.checklistId} checklist={checklist} />
-					))}
+					<ArrangedSections
+						sections={arranged.sections}
+						idOf={checklistIdOf}
+						render={(checklist) => <ChecklistCard checklist={checklist} />}
+					/>
 				</VStack>
 			)}
+
+			<ArrangeDialog
+				isOpen={isArranging}
+				onOpenChange={setIsArranging}
+				noun="checklists"
+				items={arranged.byHand.map((checklist) => ({
+					id: checklist.checklistId,
+					label: checklist.title,
+				}))}
+				arrangement={arranged.arrangement}
+				onSave={(next) => {
+					saveArrangement(apply, "checklists", next);
+					setIsArranging(false);
+				}}
+			/>
 
 			<ChecklistFormDialog
 				isOpen={isFormOpen}

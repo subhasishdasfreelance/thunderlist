@@ -1,5 +1,6 @@
 import {
 	ListChecks,
+	NotebookText,
 	SquareKanban,
 	Tags,
 	Target,
@@ -11,7 +12,7 @@ import {
  *
  * Checklists are where work lives, the Inbox and the Backlog among them;
  * Priority, Across lists, Tags and Trackers are ways of looking across all
- * of it.
+ * of it; Plans are the documents the work follows.
  * Today is a tag, so it is reached from the Tags screen rather than having an
  * entry of its own — and Today is where the app opens. Detail routes live
  * underneath these and are deliberately not entries either, and neither is the
@@ -21,8 +22,19 @@ import {
  * and a truncated word reads worse than a shorter one.
  *
  * `key` is the digit that goes there from anywhere; see `PAGE_SHORTCUTS`.
+ *
+ * `isInMore` puts an entry in the phone bar's "More" dropup rather than on
+ * the bar itself: five places are what a phone's width holds, and these are
+ * the ones visited least. The side bar shows every one.
  */
-export const NAV_ITEMS = [
+export const NAV_ITEMS: ReadonlyArray<{
+	to: string;
+	label: string;
+	shortLabel: string;
+	icon: typeof ListChecks;
+	key: string;
+	isInMore?: boolean;
+}> = [
 	{
 		to: "/checklists",
 		label: "Checklists",
@@ -43,6 +55,7 @@ export const NAV_ITEMS = [
 		shortLabel: "Across",
 		icon: SquareKanban,
 		key: "4",
+		isInMore: true,
 	},
 	{ to: "/tags", label: "Tags", shortLabel: "Tags", icon: Tags, key: "5" },
 	{
@@ -52,7 +65,15 @@ export const NAV_ITEMS = [
 		icon: TrendingUp,
 		key: "6",
 	},
-] as const;
+	{
+		to: "/plans",
+		label: "Plans",
+		shortLabel: "Plans",
+		icon: NotebookText,
+		key: "7",
+		isInMore: true,
+	},
+];
 
 /**
  * The digit that goes to each screen, from anywhere that is not a text field.

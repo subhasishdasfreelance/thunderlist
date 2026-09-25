@@ -18,7 +18,10 @@ import {
 	type ObjectId,
 } from "mongodb";
 import { AppError } from "#/lib/errors";
+import type { Arrangements } from "#/schemas/arrangement";
 import type { Checklist } from "#/schemas/checklist";
+import type { Plan } from "#/schemas/plan";
+import type { ReminderTarget } from "#/schemas/reminder";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -68,6 +71,31 @@ export type TrackerDoc = Tracker & Owned & Shared;
 export type TagDoc = Tag & Owned & Shared;
 
 /** `checklistId` is null for a task that belongs to no checklist. */
+export type PlanDoc = Plan & Owned;
+
+/**
+ * One person's daily reminder; see `Reminder`. `ownerId` is the space it
+ * is about, or `null` for the day's, which is the same in every space.
+ */
+export type ReminderDoc = {
+	email: string;
+	ownerId: string | null;
+	target: ReminderTarget;
+	targetId: string | null;
+	time: string;
+	timeZone: string;
+	/** The day, on its own clock, it last went out. */
+	lastSentOn?: string | null;
+};
+
+/** A device someone turned notifications on for. */
+export type PushSubscriptionDoc = {
+	endpoint: string;
+	email: string;
+	keys: { p256dh: string; auth: string };
+	createdAt: string;
+};
+
 export type TaskDoc = Task & Owned & { checklistId: string | null };
 
 /**
@@ -105,6 +133,8 @@ export type TeamDoc = { teamId: string; name: string; createdAt: string };
  */
 export type SettingsDoc = Owned & {
 	taskTypes: Array<TaskType>;
+	/** How its lists are laid out; see `Arrangement`. Absent for none. */
+	arrangements?: Arrangements;
 	updatedAt: string;
 };
 
@@ -136,6 +166,9 @@ export type Collections = {
 	taskRefs: Collection<TaskRefDoc>;
 	tags: Collection<TagDoc>;
 	settings: Collection<SettingsDoc>;
+	plans: Collection<PlanDoc>;
+	reminders: Collection<ReminderDoc>;
+	pushSubscriptions: Collection<PushSubscriptionDoc>;
 	teams: Collection<TeamDoc>;
 	members: Collection<MemberDoc>;
 	users: Collection<AuthUserDoc>;
@@ -180,6 +213,10 @@ function collectionsOf(database: Db): Collections {
 		taskRefs: database.collection<TaskRefDoc>("taskRefs"),
 		tags: database.collection<TagDoc>("tags"),
 		settings: database.collection<SettingsDoc>("settings"),
+		plans: database.collection<PlanDoc>("plans"),
+		reminders: database.collection<ReminderDoc>("reminders"),
+		pushSubscriptions:
+			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
 		teams: database.collection<TeamDoc>("teams"),
 		members: database.collection<MemberDoc>("members"),
 		// Better Auth's own name for its accounts; see `authDatabase`.
@@ -209,6 +246,15 @@ async function ensureIndexes(current: Collections): Promise<void> {
 			},
 		),
 		current.settings.createIndex({ userId: 1 }, { unique: true }),
+		current.plans.createIndex({ planId: 1 }, { unique: true }),
+		current.plans.createIndex({ userId: 1, updatedAt: -1 }),
+		// One reminder per person per thing, however often it is set.
+		current.reminders.createIndex(
+			{ email: 1, ownerId: 1, target: 1, targetId: 1 },
+			{ unique: true },
+		),
+		current.pushSubscriptions.createIndex({ endpoint: 1 }, { unique: true }),
+		current.pushSubscriptions.createIndex({ email: 1 }),
 		current.trackers.createIndex({ trackerId: 1 }, { unique: true }),
 		current.trackers.createIndex({ userId: 1 }),
 		current.tags.createIndex({ tagId: 1 }, { unique: true }),

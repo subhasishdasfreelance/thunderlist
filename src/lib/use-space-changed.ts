@@ -1,7 +1,7 @@
-import { useToast } from "@astryxdesign/core/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef } from "react";
+import { useToast } from "#/lib/toasts";
 import { spaceQuery } from "#/queries/space";
 
 /**

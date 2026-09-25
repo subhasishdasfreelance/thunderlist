@@ -250,3 +250,52 @@ async function trim(cache) {
 
 	await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)));
 }
+
+/*
+ * 5. Reminders. A push from the server is shown as a notification — see
+ *    `src/data/reminder.server.ts` — and tapping it opens the page it is
+ *    about: in a window of the app already open, where there is one.
+ */
+self.addEventListener("push", (event) => {
+	let message = { title: "Thunderlist", body: "", url: "/tags/today" };
+	try {
+		message = { ...message, ...event.data?.json() };
+	} catch {
+		// Not ours to read; the default says enough.
+	}
+
+	event.waitUntil(
+		self.registration.showNotification(message.title, {
+			body: message.body,
+			icon: "/icons/icon-192.png",
+			badge: "/icons/icon-192.png",
+			data: { url: message.url },
+		}),
+	);
+});
+
+self.addEventListener("notificationclick", (event) => {
+	event.notification.close();
+	const url = new URL(
+		event.notification.data?.url ?? "/tags/today",
+		self.location.origin,
+	).href;
+
+	event.waitUntil(
+		(async () => {
+			const windows = await self.clients.matchAll({
+				type: "window",
+				includeUncontrolled: true,
+			});
+			const open = windows.find(
+				(client) => new URL(client.url).origin === self.location.origin,
+			);
+			if (open) {
+				await open.focus();
+				await open.navigate(url);
+				return;
+			}
+			await self.clients.openWindow(url);
+		})(),
+	);
+});

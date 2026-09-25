@@ -11,6 +11,8 @@ export const queryKeys = {
 	teams: ["teams"] as const,
 	/** The space's task types; see `taskTypesQuery`. */
 	taskTypes: ["task-types"] as const,
+	/** How the space lays out its lists; see `arrangementsQuery`. */
+	arrangements: ["arrangements"] as const,
 	searchIndex: ["search-index"] as const,
 	/** Every page of every group the Across lists screen reads, under one key. */
 	across: ["across"] as const,
@@ -54,4 +56,9 @@ export const queryKeys = {
 	tagCompleted: (tagId: string) => ["tags", tagId, "completed"] as const,
 	/** The tags with their progress, which only the Tags screen reads. */
 	tagSummaries: ["tag-summaries"] as const,
+	/** This person's daily reminders here; see `Reminder`. */
+	reminders: ["reminders"] as const,
+	/** Every plan, without its body; see `PlanSummary`. */
+	plans: ["plans"] as const,
+	plan: (planId: string) => ["plans", planId] as const,
 };

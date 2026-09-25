@@ -5,10 +5,13 @@ import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
+import { ShortcutKey, TASK_SHORTCUTS } from "#/components/tasks/task-actions";
 import { formatDate } from "#/lib/format-date";
 import { usePages } from "#/lib/use-pages";
+import { type RowShortcuts, useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTeam } from "#/lib/use-team";
 import { memberName } from "#/schemas/team";
 import type { ProgressEntry } from "#/schemas/tracker";
@@ -48,6 +51,14 @@ export function ProgressHistory({
 	const history = [...entries].reverse();
 	const paging = usePages(history);
 	const team = useTeam();
+	// The reading under the pointer answers to the keys a task does: E edits it.
+	const [hovered, setHovered] = useState<ProgressEntry | null>(null);
+	const shortcuts = useMemo(() => {
+		const keys: RowShortcuts = {};
+		if (hovered !== null) keys[TASK_SHORTCUTS.edit] = () => onEdit(hovered);
+		return keys;
+	}, [hovered, onEdit]);
+	useRowShortcuts(hovered !== null && canEdit, shortcuts);
 
 	/** In a team, who logged it: their name, or their address until they have one. */
 	const loggedBy = (email: string | null | undefined) => {
@@ -72,6 +83,8 @@ export function ProgressHistory({
 						{paging.shown.map((entry) => (
 							<ListItem
 								key={entry.entryId}
+								onMouseEnter={() => setHovered(entry)}
+								onMouseLeave={() => setHovered(null)}
 								label={`${entry.value} ${unit}`}
 								description={[
 									formatDate(entry.recordedAt),
@@ -104,6 +117,9 @@ export function ProgressHistory({
 																{
 																	label: "Edit entry",
 																	icon: Pencil,
+																	endContent: (
+																		<ShortcutKey label={TASK_SHORTCUTS.edit} />
+																	),
 																	onClick: () => onEdit(entry),
 																},
 															]

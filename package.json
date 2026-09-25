@@ -37,7 +37,8 @@
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
 		"tailwindcss": "^4.1.18",
-		"valibot": "^1.4.2"
+		"valibot": "^1.4.2",
+		"web-push": "^3.6.7"
 	},
 	"devDependencies": {
 		"@astryxdesign/cli": "^0.5.4",
@@ -48,6 +49,7 @@
 		"@types/node": "^22.10.2",
 		"@types/react": "^19.2.0",
 		"@types/react-dom": "^19.2.0",
+		"@types/web-push": "^3.6.4",
 		"@vitejs/plugin-react": "^6.0.1",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.0"

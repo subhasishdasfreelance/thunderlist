@@ -7,10 +7,10 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { ArrowDown, ArrowUp, Check, Plus, X } from "lucide-react";
 import { type Dispatch, memo, type SetStateAction, useCallback } from "react";
 import { StageDot } from "#/components/common/stage-dot";
-import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
+import { STAGE_COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { type Stage, stageColor, unusedStageColor } from "#/schemas/checklist";
-import type { TagColor } from "#/schemas/tag";
+import { pickableColor, type TagColor } from "#/schemas/tag";
 
 /** As many as `stagesSchema` allows. */
 const MAX_STAGES = 12;
@@ -202,12 +202,12 @@ const StageRow = memo(function StageRow({
 						isIconOnly: true,
 						icon: <StageDot color={color} />,
 					}}
-					items={COLOR_OPTIONS.map((option) => ({
+					items={STAGE_COLOR_OPTIONS.map((option) => ({
 						id: option.value,
 						label: option.label,
 						icon: <StageDot color={option.value} />,
 						endContent:
-							option.value === color ? (
+							option.value === pickableColor(color) ? (
 								<Check aria-hidden size={16} />
 							) : undefined,
 						onClick: () => onRecolor(index, option.value),

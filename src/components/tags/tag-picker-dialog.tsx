@@ -43,7 +43,7 @@ export function TagPickerDialog({
 	subtitle: string;
 	/**
 	 * The tags already on it — on every one of them, where there are several.
-	 * Ticked, and picking one again takes it off a single task.
+	 * Ticked, and picking one again takes it off every one of them.
 	 */
 	current: ReadonlyArray<string>;
 	/** Whether a name matching nothing offers to become a tag. */

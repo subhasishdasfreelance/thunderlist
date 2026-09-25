@@ -11,7 +11,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
@@ -70,7 +70,7 @@ import {
 	type SortOrder,
 	shortTitle,
 } from "#/lib/tasks/tasks";
-import { useFocusTask } from "#/lib/use-focus-task";
+import { useArrival, useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE } from "#/lib/use-pages";
@@ -174,6 +174,23 @@ function ChecklistDetailPage() {
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const [tagId, setTagId] = useState<string | undefined>(undefined);
 	const [typeId, setTypeId] = useState<string | undefined>(undefined);
+
+	/*
+	 * Sent to a task on this page while already here — from search, say — the
+	 * page goes back to where `?task=` would have opened it: the stage and page
+	 * the task is on, with no filter hiding it. It is not remounted, so what was
+	 * picked by hand would otherwise keep the task off screen.
+	 */
+	const arrival = useArrival();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
+	useEffect(() => {
+		if (focusTaskId === undefined) return;
+		setStageId(undefined);
+		setPage(undefined);
+		setAssignee(undefined);
+		setTagId(undefined);
+		setTypeId(undefined);
+	}, [arrival, focusTaskId]);
 
 	const filter: TaskFilter = { assignee, tag: tagId, type: typeId };
 	const isFiltered =
@@ -581,9 +598,7 @@ function ChecklistDetailPage() {
 								? undefined
 								: formatExpectedTasks(pace.elapsed, progress.total)
 						}
-						footnote={`${progress.completed} / ${progress.total} ${
-							progress.total === 1 ? "task" : "tasks"
-						}${scheduleNote === null ? "" : ` · ${scheduleNote}`}`}
+						footnote={scheduleNote}
 					/>
 					{filterNote === null ? null : (
 						<Text type="supporting">{filterNote}</Text>

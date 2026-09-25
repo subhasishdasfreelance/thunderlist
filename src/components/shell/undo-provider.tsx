@@ -1,5 +1,4 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { useToast } from "@astryxdesign/core/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	type ReactNode,
@@ -10,6 +9,7 @@ import {
 	useState,
 } from "react";
 import { useApplyChange } from "#/lib/changes";
+import { useToast } from "#/lib/toasts";
 import { invertChange, UndoContext, type UndoStep, useUndo } from "#/lib/undo";
 import type { Change } from "#/schemas/change";
 
@@ -51,12 +51,12 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	);
 
 	/*
-	 * One at a time, and only then said to be done.
+	 * Drawn at once, like any change, and said to be done once it has landed.
 	 *
 	 * Putting a deleted task back is two changes — the task, then the rest of
 	 * what it carried — and the second names a task the first has to have
-	 * written already. Sent together they can arrive in either order, and the
-	 * edit would be refused for naming a task that does not exist yet.
+	 * written already. Both are drawn now; the second is only sent once the
+	 * first has landed; see `sendingTasks`.
 	 *
 	 * A failure has already been reported by `useApplyChange`, so nothing is
 	 * said here beyond not claiming it worked.
@@ -64,12 +64,10 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	const run = useCallback(
 		(step: UndoStep) => {
 			void (async () => {
-				for (const change of step.changes) {
-					try {
-						await applyAsync(change);
-					} catch {
-						return;
-					}
+				try {
+					await Promise.all(step.changes.map((change) => applyAsync(change)));
+				} catch {
+					return;
 				}
 
 				toast({

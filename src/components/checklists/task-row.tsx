@@ -16,6 +16,7 @@ import {
 	Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
 import { TaggedTitle } from "#/components/tags/tagged-title";
 import {
@@ -98,9 +99,14 @@ export function TaskRow({
 	/**
 	 * The checklist the task lives in, on a screen that gathers tasks from many
 	 * — a tag's. Left out on a checklist's own page, where the page is the
-	 * answer. `null` while that is not known yet.
+	 * answer. `null` while that is not known yet. `isBacklog` marks one that is
+	 * parked, so "Backlog" never reads as the task's own caption.
 	 */
-	checklist?: { title: string | null; onOpen: () => void } | null;
+	checklist?: {
+		title: string | null;
+		onOpen: () => void;
+		isBacklog?: boolean;
+	} | null;
 	/**
 	 * Its checklist's stages. Ticking it sends it on to the next one; the menu
 	 * sends it to any of them, done included.
@@ -346,9 +352,17 @@ export function TaskRow({
 									<button
 										type="button"
 										className="thunderlist-crumb"
+										data-backlog={crumb.isBacklog === true}
 										title={`Open ${crumb.title}`}
 										onClick={crumb.onOpen}
 									>
+										{crumb.isBacklog === true ? (
+											<SPECIAL_CHECKLIST_ICONS.backlog
+												aria-hidden
+												size={12}
+												className="mr-1 inline align-[-1px]"
+											/>
+										) : null}
 										{crumb.title}
 									</button>
 								)}

@@ -54,7 +54,10 @@ export function SelectionBar({
 	 * for anyone whose role may not move tasks; see `Capability`.
 	 */
 	onMoveToChecklist?: () => void;
-	/** Put one tag on all of them, picked in a dialog; see `TagPickerDialog`. */
+	/**
+	 * Put a tag on all of them, or take it off all of them where every one has
+	 * it — picked in a dialog; see `TagTasks`.
+	 */
 	onAddTag?: () => void;
 	onClear: () => void;
 }) {
@@ -106,7 +109,7 @@ export function SelectionBar({
 
 			{onAddTag === undefined ? null : (
 				<Button
-					label="Add tag"
+					label="Tag"
 					variant="secondary"
 					size="sm"
 					icon={<TagIcon aria-hidden />}

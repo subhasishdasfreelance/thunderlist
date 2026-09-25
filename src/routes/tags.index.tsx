@@ -7,8 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	ArrangedSections,
+	ListOrderMenu,
+	saveArrangement,
+	useArrangedList,
+} from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
-import { OrderToggle } from "#/components/common/order-toggle";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
@@ -39,6 +46,9 @@ function standing(tag: TagSummary, now: number) {
 	};
 }
 
+const tagIdOf = (tag: TagSummary) => tag.tagId;
+const createdAtOf = (tag: TagSummary) => tag.createdAt;
+
 export const Route = createFileRoute("/tags/")({
 	loader: ({ context }) => {
 		// The untagged card after the tags; the tags are what the screen is.
@@ -56,7 +66,7 @@ export const Route = createFileRoute("/tags/")({
 function TagsPage() {
 	const { apply } = useApplyChange();
 	const [isCreating, setIsCreating] = useState(false);
-	const [isBehindFirst, setIsBehindFirst] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 	const { canManageContent } = usePermissions();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
@@ -79,14 +89,25 @@ function TagsPage() {
 		[index.data],
 	);
 
-	// Judged on the viewer's clock, so sorted only once the browser has it.
+	// Your order, newest first or most behind first, and in your groups; see
+	// `useArrangedList`. Behind is judged on the viewer's clock, so only once
+	// the browser has it.
 	const now = useNow();
-	const ordered =
-		isBehindFirst && now !== null
-			? [...tags].sort((a, b) =>
-					compareBehind(standing(a, now), standing(b, now)),
-				)
-			: tags;
+	const behind = useMemo(
+		() =>
+			now === null
+				? null
+				: (a: TagSummary, b: TagSummary) =>
+						compareBehind(standing(a, now), standing(b, now)),
+		[now],
+	);
+	const arranged = useArrangedList({
+		list: "tags",
+		items: tags,
+		idOf: tagIdOf,
+		createdAt: createdAtOf,
+		compareBehind: behind,
+	});
 
 	return (
 		<VStack gap={4}>
@@ -119,16 +140,21 @@ function TagsPage() {
 								<Text type="label" weight="semibold">
 									Your Tags
 								</Text>
-								<OrderToggle
-									isSorted={isBehindFirst}
-									sortedLabel="Most behind first"
-									defaultLabel="By name"
-									onChange={setIsBehindFirst}
-								/>
+								<HStack gap={1} vAlign="center">
+									<ListOrderMenu
+										order={arranged.order}
+										onChange={arranged.setOrder}
+									/>
+									{canManageContent ? (
+										<ArrangeButton onClick={() => setIsArranging(true)} />
+									) : null}
+								</HStack>
 							</HStack>
-							{ordered.map((tag) => (
-								<TagCard key={tag.tagId} tag={tag} />
-							))}
+							<ArrangedSections
+								sections={arranged.sections}
+								idOf={tagIdOf}
+								render={(tag) => <TagCard tag={tag} />}
+							/>
 						</>
 					)}
 
@@ -144,6 +170,21 @@ function TagsPage() {
 					)}
 				</VStack>
 			)}
+
+			<ArrangeDialog
+				isOpen={isArranging}
+				onOpenChange={setIsArranging}
+				noun="tags"
+				items={arranged.byHand.map((tag) => ({
+					id: tag.tagId,
+					label: `#${tag.name}`,
+				}))}
+				arrangement={arranged.arrangement}
+				onSave={(next) => {
+					saveArrangement(apply, "tags", next);
+					setIsArranging(false);
+				}}
+			/>
 
 			<TagFormDialog
 				isOpen={isCreating}

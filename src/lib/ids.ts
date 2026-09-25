@@ -19,6 +19,10 @@ export const ID_PREFIX = {
 	stage: "stg",
 	/** One of a space's task types; see `TaskType`. */
 	taskType: "typ",
+	/** A group of checklists, trackers or tags; see `Arrangement`. */
+	group: "grp",
+	/** A long Markdown document; see `Plan`. */
+	plan: "pln",
 	/** Minted on the server, which is the only place a team is made. */
 	team: "team",
 	/** Identifies a queued change in the browser; never written to the database. */

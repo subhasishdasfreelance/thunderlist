@@ -234,6 +234,7 @@ function PriorityPage() {
 						? null
 						: {
 								title: task.checklistTitle,
+								isBacklog: checklistId === backlog?.checklistId,
 								// Straight to the task, not just the checklist it lives in.
 								onOpen: () =>
 									void navigate({

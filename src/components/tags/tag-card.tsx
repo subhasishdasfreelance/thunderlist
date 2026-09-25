@@ -9,6 +9,7 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
 import {
@@ -75,16 +76,18 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 				<ProgressMeter
 					label={`${tag.name} progress`}
 					percent={progress.percent}
-					stages={{ parts: tagStageParts(progress), total: progress.total }}
+					stages={{
+						parts: tagStageParts(progress),
+						total: progress.total,
+						firstName: "To do",
+					}}
 					elapsed={pace.elapsed}
 					expectedReading={
 						pace.elapsed == null
 							? undefined
 							: formatExpectedTasks(pace.elapsed, progress.total)
 					}
-					footnote={`${progress.completed} / ${progress.total} ${
-						progress.total === 1 ? "task" : "tasks"
-					}`}
+					footnote={formatSchedule(tag)}
 				/>
 
 				{summary === null ? null : <Text type="supporting">{summary}</Text>}

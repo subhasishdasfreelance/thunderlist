@@ -11,6 +11,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
+import { FadeImage } from "#/components/common/fade-image";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
@@ -58,7 +59,7 @@ import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { specialTag, tagsFor } from "#/schemas/tag";
 import type { TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
-import { type ProgressEntry, TRACKER_TYPE_LABELS } from "#/schemas/tracker";
+import type { ProgressEntry } from "#/schemas/tracker";
 
 /**
  * All of Today's open tasks, to see whether this tracker is among them. The one
@@ -205,6 +206,7 @@ function TrackerDetailPage() {
 			id: entry.entryId,
 			at: dayStart(entry.recordedAt),
 			value: reached,
+			label: `${reached} ${detail.unit} · ${formatDate(entry.recordedAt)}`,
 		});
 	}
 
@@ -265,7 +267,7 @@ function TrackerDetailPage() {
 			<HStack gap={3} hAlign="between" vAlign="start">
 				<HStack gap={3} vAlign="center">
 					{detail.coverUrl ? (
-						<img
+						<FadeImage
 							src={detail.coverUrl}
 							alt=""
 							className="h-20 w-14 shrink-0 rounded-sm border border-border object-cover"
@@ -274,7 +276,9 @@ function TrackerDetailPage() {
 					<VStack gap={1}>
 						<Heading level={1}>{detail.title}</Heading>
 						<HStack gap={2} vAlign="center" wrap="wrap">
-							<Token label={TRACKER_TYPE_LABELS[detail.type]} size="sm" />
+							{detail.caption ? (
+								<Text color="secondary">{detail.caption}</Text>
+							) : null}
 							{tagsFor(detail.tagIds ?? [], tags).map((tag) => (
 								<Token
 									key={tag.tagId}

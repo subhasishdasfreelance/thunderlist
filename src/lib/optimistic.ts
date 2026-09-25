@@ -34,6 +34,7 @@ import { unwrittenTags } from "#/lib/tags/inline-tags";
 import { matchesFilter, type Page, type StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { TaggedTask } from "#/queries/system";
+import type { Arrangements } from "#/schemas/arrangement";
 import type { Change } from "#/schemas/change";
 import {
 	type ChecklistProgress,
@@ -44,6 +45,8 @@ import {
 	type Stage,
 	stageOf,
 } from "#/schemas/checklist";
+import type { Plan, PlanSummary } from "#/schemas/plan";
+import type { Reminder } from "#/schemas/reminder";
 import type { Tag, TagDetail, TagSummary, TagTaskEntry } from "#/schemas/tag";
 import type {
 	AcrossPageView,
@@ -189,6 +192,30 @@ function settle(
 }
 
 /**
+ * The last copy drawn of each task a change touched, per client.
+ *
+ * A checklist's screen holds one stage's page at a time, so a task moved on to
+ * a stage nobody has opened yet is held by no page at all — and moving it back
+ * (Ctrl+Z, say) had nothing to draw from until the refetch. This is where it
+ * is looked for last; see `findCachedTask`.
+ */
+const lastDrawn = new WeakMap<
+	QueryClient,
+	Map<string, { task: Task; checklistId: string }>
+>();
+
+function offPageTasks(
+	client: QueryClient,
+): Map<string, { task: Task; checklistId: string }> {
+	let held = lastDrawn.get(client);
+	if (held === undefined) {
+		held = new Map();
+		lastDrawn.set(client, held);
+	}
+	return held;
+}
+
+/**
  * Change one task on every checklist page in the cache.
  *
  * A checklist's screen is several caches: the checklist, with the counts; its
@@ -225,9 +252,22 @@ function patchChecklists(
 		const doneKey = queryKeys.checklistCompleted(checklistId);
 		const done = client.getQueryData<Array<Task>>(doneKey);
 
+		/*
+		 * The task as it was: from this checklist's own pages, or — when none of
+		 * them holds it, because it sits at a stage whose page was never read —
+		 * from any other copy this browser has of a task in this checklist.
+		 * Without that, a task moved to Review from To do and then moved back
+		 * was in no page of this list, and nothing was drawn until the refetch.
+		 */
+		const elsewhere = () => {
+			const found = findCachedTask(client, taskId);
+			return found?.checklistId === checklistId ? found.task : undefined;
+		};
+		const offPage = offPageTasks(client);
 		const before =
 			pages.flatMap(([, page]) => page?.items ?? []).find(matches) ??
-			done?.find(matches);
+			done?.find(matches) ??
+			elsewhere();
 		if (!checklist || !before) continue;
 
 		const stages = checklistStages(checklist);
@@ -243,6 +283,10 @@ function patchChecklists(
 			},
 		});
 
+		// Remembered while no page of this list holds it; see `offPageTasks`.
+		if (after === null) offPage.delete(taskId);
+		else offPage.set(taskId, { task: after, checklistId });
+
 		for (const [pageKey, page] of pages) {
 			if (!page) continue;
 			const view = viewOf(pageKey);
@@ -257,13 +301,34 @@ function patchChecklists(
 
 			const stays =
 				after !== null && to === page.stageId && matchesFilter(after, view);
+
+			// Arriving at this page's stage from another: drawn on its first
+			// page, where a task arriving is drawn; see `addToChecklistPages`.
+			if (stays && !page.items.some(matches)) {
+				client.setQueryData<StagePage>(pageKey, {
+					...page,
+					items: page.page === 1 ? [...page.items, after] : page.items,
+					total: page.total + 1,
+					counts,
+				});
+				continue;
+			}
+
 			client.setQueryData<StagePage>(pageKey, {
 				...swapInPage(page, matches, stays ? after : null),
 				counts,
 			});
 		}
 
-		if (done) client.setQueryData(doneKey, swap(done, matches, after));
+		if (done) {
+			const isThere = done.some(matches);
+			client.setQueryData(
+				doneKey,
+				!isThere && after?.completed
+					? [...done, after]
+					: swap(done, matches, after),
+			);
+		}
 	}
 }
 
@@ -515,7 +580,7 @@ export function findCachedTask(
 		if (found) return { task: found.task, checklistId: found.checklistId };
 	}
 
-	return null;
+	return offPageTasks(client).get(taskId) ?? null;
 }
 
 /** Change one task wherever it is shown. */
@@ -550,6 +615,42 @@ function dropTask(client: QueryClient, taskId: string): void {
 	patchTags(client, taskId, () => null);
 	patchSearchIndex(client, taskId, () => null);
 	patchAcross(client, taskId, () => null);
+}
+
+/** Every task this browser holds that lives in one checklist. */
+function tasksIn(client: QueryClient, checklistId: string): Set<string> {
+	const found = new Set<string>();
+
+	for (const task of client.getQueryData<SearchIndex>(queryKeys.searchIndex)
+		?.tasks ?? []) {
+		if (task.checklistId === checklistId) found.add(task.taskId);
+	}
+	for (const [, page] of client.getQueriesData<AcrossPage>({
+		queryKey: queryKeys.across,
+	})) {
+		for (const task of page?.items ?? []) {
+			if (task.checklistId === checklistId) found.add(task.taskId);
+		}
+	}
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+		const address = String(key[1]);
+		const entries = [
+			...client
+				.getQueriesData<Page<TagTaskEntry>>({
+					queryKey: queryKeys.tagOpen(address),
+				})
+				.flatMap(([, page]) => page?.items ?? []),
+			...(client.getQueryData<Array<TagTaskEntry>>(
+				queryKeys.tagCompleted(address),
+			) ?? []),
+		];
+		for (const entry of entries) {
+			if (entry.checklistId === checklistId) found.add(entry.task.taskId);
+		}
+	}
+
+	return found;
 }
 
 /**
@@ -738,6 +839,11 @@ function patchTag(
 		const after = next(detail);
 		if (after !== null) client.setQueryData<TagDetail>(key, after);
 	}
+}
+
+/** A plan as the list shows it; see `PlanSummary`. */
+function summaryOf({ body, ...rest }: Plan): PlanSummary {
+	return { ...rest, length: body.length };
 }
 
 /**
@@ -1021,15 +1127,23 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			return;
 		}
 
-		case "checklist.delete":
+		case "checklist.delete": {
+			// Its tasks go with it, on the server in one write; see `deleteChecklist`.
+			// So they leave every other screen now too — a tag's, Across lists,
+			// Priority — rather than lingering there until the refetch.
+			for (const taskId of tasksIn(client, change.checklistId)) {
+				dropTask(client, taskId);
+			}
 			patchChecklist(client, change.checklistId, () => null);
 			return;
+		}
 
 		case "tracker.create": {
 			const createdAt = new Date().toISOString();
 			const tracker = withProgress({
 				trackerId: change.trackerId,
 				title: change.title,
+				caption: change.caption,
 				type: change.type,
 				description: change.description,
 				unit: change.unit,
@@ -1196,6 +1310,83 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 
 		case "taskTypes.set":
 			client.setQueryData<Array<TaskType>>(queryKeys.taskTypes, change.types);
+			return;
+
+		case "arrangement.set":
+			client.setQueryData<Arrangements>(queryKeys.arrangements, (held) => ({
+				...held,
+				[change.list]: change.arrangement,
+			}));
+			return;
+
+		case "plan.create": {
+			const createdAt = new Date().toISOString();
+			const plan: Plan = {
+				planId: change.planId,
+				title: change.title,
+				body: change.body,
+				createdAt,
+				updatedAt: createdAt,
+			};
+
+			client.setQueryData<Plan>(queryKeys.plan(change.planId), plan);
+			client.setQueryData<Array<PlanSummary>>(queryKeys.plans, (list) =>
+				list === undefined ? list : [summaryOf(plan), ...list],
+			);
+			return;
+		}
+
+		case "plan.update": {
+			const updatedAt = new Date().toISOString();
+			const held = client.getQueryData<Plan>(queryKeys.plan(change.planId));
+			if (held !== undefined) {
+				client.setQueryData<Plan>(queryKeys.plan(change.planId), {
+					...held,
+					...change.patch,
+					updatedAt,
+				});
+			}
+
+			// To the top of the list, which reads most recently changed first.
+			client.setQueryData<Array<PlanSummary>>(queryKeys.plans, (list) => {
+				const before = list?.find((each) => each.planId === change.planId);
+				if (list === undefined || before === undefined) return list;
+
+				const { body, ...patch } = change.patch;
+				const after: PlanSummary = {
+					...before,
+					...patch,
+					length: body === undefined ? before.length : body.length,
+					updatedAt,
+				};
+				return [after, ...list.filter((each) => each !== before)];
+			});
+			return;
+		}
+
+		case "plan.delete":
+			client.setQueryData<Array<PlanSummary>>(queryKeys.plans, (list) =>
+				list?.filter((each) => each.planId !== change.planId),
+			);
+			return;
+
+		case "reminder.set":
+			client.setQueryData<Array<Reminder>>(queryKeys.reminders, (list) => {
+				const others = (list ?? []).filter(
+					(each) =>
+						each.target !== change.target || each.targetId !== change.targetId,
+				);
+				return change.time === null
+					? others
+					: [
+							...others,
+							{
+								target: change.target,
+								targetId: change.targetId,
+								time: change.time,
+							},
+						];
+			});
 			return;
 
 		default:

@@ -8,6 +8,7 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
 import {
@@ -81,6 +82,7 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 					stages={{
 						parts: stageParts(checklistStages(checklist), progress.byStage),
 						total: progress.total,
+						firstName: checklistStages(checklist)[0].name,
 					}}
 					elapsed={pace.elapsed}
 					expectedReading={
@@ -88,9 +90,7 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 							? undefined
 							: formatExpectedTasks(pace.elapsed, progress.total)
 					}
-					footnote={`${progress.completed} / ${progress.total} ${
-						progress.total === 1 ? "task" : "tasks"
-					}`}
+					footnote={formatSchedule(checklist)}
 				/>
 
 				{summary === null ? null : <Text type="supporting">{summary}</Text>}

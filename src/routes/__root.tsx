@@ -13,6 +13,7 @@ import { AppFrame } from "#/components/shell/app-frame";
 import { OfflineScreen } from "#/components/shell/offline-screen";
 import { UndoProvider } from "#/components/shell/undo-provider";
 import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
+import { FIRST_OPEN_SCRIPT } from "#/lib/first-open";
 import { drawnColorScheme, THEME_INIT_SCRIPT } from "#/lib/theme";
 import { useIsOnline } from "#/lib/use-online";
 import { sessionQuery } from "#/queries/session";
@@ -217,6 +218,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				 */}
 				{/** biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed string built at module scope, with no input in it. */}
 				<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+				{/* Back from Today on a fresh open goes to the Checklists; see `FIRST_OPEN_SCRIPT`. */}
+				{/** biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed string built at module scope, with no input in it. */}
+				<script dangerouslySetInnerHTML={{ __html: FIRST_OPEN_SCRIPT }} />
 			</head>
 			<body>
 				{children}

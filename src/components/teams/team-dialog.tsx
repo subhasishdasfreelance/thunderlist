@@ -8,7 +8,6 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { useToast } from "@astryxdesign/core/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	Check,
@@ -29,6 +28,7 @@ import {
 } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
 import { playSound } from "#/lib/sounds";
+import { useToast } from "#/lib/toasts";
 import { useSpaceChanged } from "#/lib/use-space-changed";
 import { queryKeys } from "#/queries/keys";
 import {

@@ -96,7 +96,7 @@ describe("formatSchedule", () => {
 	it("says when something is due", () => {
 		expect(
 			formatSchedule({ deadline: "2026-10-08", deadlineTime: "09:00" }),
-		).toBe("due 8th Oct, 2026, 9:00 am");
+		).toBe("Due 8th Oct, 2026, 9:00 am");
 	});
 
 	it("says which hours something repeats in", () => {
@@ -105,7 +105,7 @@ describe("formatSchedule", () => {
 				deadline: null,
 				dailyWindow: { from: "06:00", to: "22:00" },
 			}),
-		).toBe("daily 6:00 am – 10:00 pm");
+		).toBe("Daily 6:00 am – 10:00 pm");
 	});
 
 	it("says nothing for a schedule that asks for nothing", () => {

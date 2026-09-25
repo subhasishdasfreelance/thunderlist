@@ -10,7 +10,7 @@
  */
 
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import { checklistStages, stageOf } from "#/schemas/checklist";
+import { checklistStages, type Stage, stageOf } from "#/schemas/checklist";
 import type { Task } from "#/schemas/task";
 import type { TrackerType } from "#/schemas/tracker";
 import { ensureBacklog, ensureInbox } from "./checklist.server";
@@ -21,12 +21,15 @@ export type SearchIndex = {
 		checklistId: string;
 		title: string;
 		description: string;
+		/** Absent for the two it starts with; see `checklistStages`. */
+		stages?: Array<Stage>;
 	}>;
 	trackers: Array<{
 		trackerId: string;
 		title: string;
 		type: TrackerType;
 		author: string | null;
+		caption?: string;
 	}>;
 	/**
 	 * Every task, whole, with the checklist it lives in: the Priority screen
@@ -72,7 +75,16 @@ export async function getSearchIndex(
 		current.trackers
 			.find(
 				{ userId },
-				{ projection: { _id: 0, trackerId: 1, title: 1, type: 1, author: 1 } },
+				{
+					projection: {
+						_id: 0,
+						trackerId: 1,
+						title: 1,
+						type: 1,
+						author: 1,
+						caption: 1,
+					},
+				},
 			)
 			.toArray(),
 		current.tasks.find({ userId }, { projection: DOMAIN_FIELDS }).toArray(),
@@ -87,10 +99,12 @@ export async function getSearchIndex(
 	);
 
 	return {
-		checklists: visible.map(({ checklistId, title, description }) => ({
+		// With their stages, so a task found by search can say where it is.
+		checklists: visible.map(({ checklistId, title, description, stages }) => ({
 			checklistId,
 			title,
 			description,
+			stages,
 		})),
 		trackers: trackers.filter(
 			(tracker) => !hidden.trackerIds.has(tracker.trackerId),

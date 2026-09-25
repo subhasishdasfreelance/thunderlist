@@ -16,6 +16,10 @@ import {
 } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
+import {
+	ReminderField,
+	useReminderDraft,
+} from "#/components/common/reminder-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import {
 	draftTagIds,
@@ -25,7 +29,7 @@ import {
 } from "#/components/tags/tags-field";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
-import type { TrackerValues } from "#/lib/changes";
+import { type TrackerValues, useApplyChange } from "#/lib/changes";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
 import { todayDateOnly } from "#/schemas/common";
@@ -60,6 +64,7 @@ export function TrackerFormDialog({
 	onSubmit: (values: TrackerValues) => void;
 }) {
 	const [title, setTitle] = useState("");
+	const [caption, setCaption] = useState("");
 	const [unit, setUnit] = useState("pages");
 	const [startValue, setStartValue] = useState<number | null>(null);
 	const [targetValue, setTargetValue] = useState<number | null>(null);
@@ -91,6 +96,7 @@ export function TrackerFormDialog({
 	useEffect(() => {
 		if (!isOpen) return;
 		setTitle(tracker?.title ?? "");
+		setCaption(tracker?.caption ?? "");
 		setUnit(tracker?.unit ?? TRACKER_TYPE_DEFAULT_UNITS.book);
 		setStartValue(tracker?.startValue ?? 0);
 		setTargetValue(tracker?.targetValue ?? null);
@@ -143,11 +149,21 @@ export function TrackerFormDialog({
 							: null;
 	const isValid = problem === null;
 
+	// Your own daily reminder about it, saved with the rest; see `ReminderField`.
+	const reminder = useReminderDraft(
+		isOpen,
+		"tracker",
+		tracker?.trackerId ?? null,
+	);
+	const { apply: applyReminder } = useApplyChange();
+
 	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
+		reminder.save(applyReminder);
 		onSubmit({
 			title: trimmedTitle,
+			caption: caption.trim(),
 			type: tracker?.type ?? "custom",
 			unit: unit.trim(),
 			targetValue,
@@ -211,6 +227,16 @@ export function TrackerFormDialog({
 					value={title}
 					onChange={setTitle}
 					placeholder="Dune"
+				/>
+
+				<TextInput
+					autoComplete="off"
+					label="Caption"
+					isOptional
+					description="A line under the title, saying what it is."
+					value={caption}
+					onChange={setCaption}
+					placeholder="For the book club"
 				/>
 
 				<FieldRow>
@@ -290,6 +316,11 @@ export function TrackerFormDialog({
 						value={assignees}
 						onChange={setAssignees}
 					/>
+				)}
+
+				{/* Only once it exists: a reminder is about something. */}
+				{tracker === undefined ? null : (
+					<ReminderField value={reminder.time} onChange={reminder.setTime} />
 				)}
 
 				<AccessField noun="tracker" value={access} onChange={setAccess} />

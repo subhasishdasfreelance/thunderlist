@@ -135,11 +135,14 @@ export function TodayButton({
 }
 
 /**
- * A shortcut beside a menu entry, drawn as the key it is — the same cap the
- * shortcuts panel draws; see `.thunderlist-key`.
+ * A shortcut beside a menu entry or a place in the side bar, drawn as the key
+ * it is — the same cap the shortcuts panel draws; see `.thunderlist-key`.
+ *
+ * From `md` up only: a phone has no keyboard to press it on, and a key there
+ * is a promise nothing can keep.
  */
 export function ShortcutKey({ label }: { label: string }) {
-	return <kbd className="thunderlist-key">{label}</kbd>;
+	return <kbd className="thunderlist-key hidden md:inline-flex">{label}</kbd>;
 }
 
 /**

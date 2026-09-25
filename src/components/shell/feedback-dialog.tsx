@@ -1,12 +1,12 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
-import { useToast } from "@astryxdesign/core/Toast";
 import { Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { sendFeedbackFn } from "#/functions/feedback.functions";
 import { errorMessage } from "#/lib/errors";
+import { useToast } from "#/lib/toasts";
 
 /**
  * Tell the person who makes Thunderlist what you think.

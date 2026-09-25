@@ -9,7 +9,6 @@
  * two — which is what makes retrying after a dropped connection safe.
  */
 
-import { useToast } from "@astryxdesign/core/Toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { applyChangeFn } from "#/functions/change.functions";
@@ -24,6 +23,7 @@ import {
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
 import { captionFromChecklist } from "#/lib/tasks/tasks";
+import { useToast } from "#/lib/toasts";
 import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
@@ -31,9 +31,9 @@ import type { Change } from "#/schemas/change";
 import type { Stage } from "#/schemas/checklist";
 import type { DailyWindow } from "#/schemas/common";
 import {
+	PICKABLE_COLORS,
 	type SpecialTag,
 	specialTag,
-	TAG_COLORS,
 	type Tag,
 	type TagColor,
 } from "#/schemas/tag";
@@ -64,8 +64,53 @@ function checklistNeeded(change: Change): string | null {
 	}
 }
 
+/**
+ * The last change sent for each task, still on its way.
+ *
+ * Several changes to one task can be made at once — parking it is an edit and
+ * then a move, undoing a delete is the task and then the rest of it — and each
+ * is drawn the moment it is made. Only the sending waits: a change to a task
+ * goes once the one before it has landed, since two requests can arrive in
+ * either order and the second may name a task the first has yet to write.
+ */
+const sendingTasks = new Map<string, Promise<unknown>>();
+
+/** The task a change is about, if it is about one. */
+function taskOf(change: Change): string | null {
+	switch (change.kind) {
+		case "task.create":
+		case "task.update":
+		case "task.delete":
+		case "task.move":
+			return change.taskId;
+		default:
+			return null;
+	}
+}
+
+/** Send one change, after any change to the same task before it. */
+function send(change: Change): Promise<void> {
+	const taskId = taskOf(change);
+	if (taskId === null) return sendNow(change);
+
+	const before = sendingTasks.get(taskId);
+	const sending = (async () => {
+		// Whatever became of the one before, this one is still asked for.
+		await before?.catch(() => {});
+		await sendNow(change);
+	})();
+
+	sendingTasks.set(taskId, sending);
+	void sending
+		.catch(() => {})
+		.finally(() => {
+			if (sendingTasks.get(taskId) === sending) sendingTasks.delete(taskId);
+		});
+	return sending;
+}
+
 /** Send one change, once any checklist it depends on has been written. */
-async function send(change: Change): Promise<void> {
+async function sendNow(change: Change): Promise<void> {
 	const needed = checklistNeeded(change);
 	if (needed !== null) await creatingChecklists.get(needed);
 
@@ -354,9 +399,10 @@ export function setSpecialTag(
  * list sit together, and without the note the one thing you need to put a task
  * back — where it came from — is the one thing the move throws away.
  *
- * The move waits for the first change to land. Two requests can arrive in
- * either order, and the move takes off the tags the task only had from the
- * checklist it leaves, which an update landing after it would put back.
+ * Both are drawn at once. Only the sending waits: the move takes off the tags
+ * the task only had from the checklist it leaves, which an update landing
+ * after it would put back, so the move goes once the edit has landed; see
+ * `sendingTasks`.
  */
 export async function moveToBacklog(
 	applyAsync: ApplyChangeAsync,
@@ -390,20 +436,18 @@ export async function moveToBacklog(
 	};
 
 	try {
-		if (Object.keys(patch).length > 0) {
-			await applyAsync({
-				kind: "task.update",
+		await Promise.all([
+			...(Object.keys(patch).length > 0
+				? [applyAsync({ kind: "task.update", taskId: task.taskId, patch })]
+				: []),
+			applyAsync({
+				kind: "task.move",
 				taskId: task.taskId,
-				patch,
-			});
-		}
-		await applyAsync({
-			kind: "task.move",
-			taskId: task.taskId,
-			checklistId: backlogId,
-		});
+				checklistId: backlogId,
+			}),
+		]);
 	} catch {
-		// Already reported by `useApplyChange`, and nothing after it is tried.
+		// Already reported by `useApplyChange`.
 	}
 }
 
@@ -419,6 +463,8 @@ export async function createTracker(
 
 export type TrackerValues = {
 	title: string;
+	/** A line under the title; see `Tracker.caption`. */
+	caption: string;
 	type: Tracker["type"];
 	unit: string;
 	targetValue: number;
@@ -476,7 +522,7 @@ export function createTag(apply: ApplyChange, values: TagValues): string {
 
 /** The colour a tag written inline gets; recolour it on the Tags screen. */
 function randomTagColor(): TagColor {
-	return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+	return PICKABLE_COLORS[Math.floor(Math.random() * PICKABLE_COLORS.length)];
 }
 
 /**

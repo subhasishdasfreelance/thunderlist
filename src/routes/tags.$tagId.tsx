@@ -1,4 +1,5 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
@@ -7,10 +8,14 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { MoreHorizontal, Pencil, Trash2, ZapOff } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
@@ -69,7 +74,7 @@ import {
 	type SortOrder,
 	shortTitle,
 } from "#/lib/tasks/tasks";
-import { useFocusTask } from "#/lib/use-focus-task";
+import { useArrival, useFocusTask } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE, usePages } from "#/lib/use-pages";
@@ -94,8 +99,11 @@ import {
 } from "#/schemas/checklist";
 import { todayDateOnly } from "#/schemas/common";
 import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
-import type { Task, TaskFilter } from "#/schemas/task";
+import type { Task, TaskFilter, TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
+
+/** Every open task on a tag at once, for clearing Today in one go. */
+const ALL_OPEN: TaskPageView = { sort: "newest", limit: 1000 };
 
 export const Route = createFileRoute("/tags/$tagId")({
 	/** `?task=` names a task to scroll to and ring; see `useFocusTask`. */
@@ -163,6 +171,9 @@ function TagDetailPage() {
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	const [isDeletingTag, setIsDeletingTag] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
+	// Taking Today off every task on it, asked about first; see `clearToday`.
+	const [isClearingToday, setIsClearingToday] = useState(false);
+	const queryClient = useQueryClient();
 	const [sort, setSort] = useState<SortOrder>("newest");
 	// Picked by hand; until then, the page `?task=` is on, or the first.
 	const [page, setPage] = useState<number | undefined>(undefined);
@@ -171,6 +182,20 @@ function TagDetailPage() {
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	// One kind of work rather than every kind; see `TypeFilter`.
 	const [typeId, setTypeId] = useState<string | undefined>(undefined);
+
+	/*
+	 * Sent to a task on this page while already here — from search, say — the
+	 * page goes back to where `?task=` would have opened it, with no filter
+	 * hiding it; see the same on a checklist's page.
+	 */
+	const arrival = useArrival();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
+	useEffect(() => {
+		if (focusTaskId === undefined) return;
+		setPage(undefined);
+		setAssignee(undefined);
+		setTypeId(undefined);
+	}, [arrival, focusTaskId]);
 
 	const filter: TaskFilter = { assignee, type: typeId };
 	const isFiltered = assignee !== undefined || typeId !== undefined;
@@ -464,6 +489,22 @@ function TagDetailPage() {
 		}
 	}
 
+	/**
+	 * Start the day afresh: Today taken off every task on it, open and done
+	 * alike. Each stays in its checklist. The whole of Today is read first —
+	 * the screen holds one page of it — and each task is then untagged the way
+	 * the bolt would, so it is drawn at once.
+	 */
+	async function clearToday() {
+		const [openAll, doneAll] = await Promise.all([
+			queryClient.fetchQuery(tagOpenQuery(tagId, ALL_OPEN)),
+			queryClient.fetchQuery(tagCompletedQuery(tagId)),
+		]);
+		for (const entry of [...openAll.items, ...doneAll]) {
+			setSpecialTag(apply, entry.task, "today", false, tags);
+		}
+	}
+
 	/** One task row, used by both the open and the completed sections. */
 
 	const taskRow = (entry: TagTaskEntry) => {
@@ -496,6 +537,7 @@ function TagDetailPage() {
 						? null
 						: {
 								title: checklistTitle,
+								isBacklog: checklistId === backlog?.checklistId,
 								// Straight to the task, not just the checklist it lives in.
 								onOpen: () =>
 									void navigate({
@@ -630,9 +672,7 @@ function TagDetailPage() {
 								? undefined
 								: formatExpectedTasks(pace.elapsed, progress.total)
 						}
-						footnote={`${progress.completed} / ${progress.total} ${
-							progress.total === 1 ? "task" : "tasks"
-						}${scheduleNote === null ? "" : ` · ${scheduleNote}`}`}
+						footnote={scheduleNote}
 					/>
 					{filterNote === null ? null : (
 						<Text type="supporting">{filterNote}</Text>
@@ -687,9 +727,23 @@ function TagDetailPage() {
 
 			{detail.progress.total === 0 ? null : (
 				<HStack gap={2} hAlign="between" vAlign="center">
-					<Text type="label" weight="semibold" color="secondary">
-						{openTotal} to do
-					</Text>
+					<HStack gap={2} vAlign="center">
+						<Text type="label" weight="semibold" color="secondary">
+							{openTotal} to do
+						</Text>
+						{special === "today" &&
+						canUpdateTasks &&
+						detail.progress.total > 0 ? (
+							<Button
+								label={`Clear #${detail.name}`}
+								tooltip={`Take #${detail.name} off every task on it`}
+								variant="ghost"
+								size="sm"
+								icon={<ZapOff aria-hidden />}
+								onClick={() => setIsClearingToday(true)}
+							/>
+						) : null}
+					</HStack>
 					<HStack gap={1} vAlign="center">
 						<MemberFilter
 							value={assignee}
@@ -1025,6 +1079,20 @@ function TagDetailPage() {
 				onAction={() => {
 					clearCompleted();
 					setIsClearingCompleted(false);
+				}}
+			/>
+
+			<AlertDialog
+				isOpen={isClearingToday}
+				onOpenChange={setIsClearingToday}
+				title={`Clear #${detail.name}?`}
+				description={`#${detail.name} is taken off all ${detail.progress.total} ${
+					detail.progress.total === 1 ? "task" : "tasks"
+				} on it, done or not. They stay in their checklists.`}
+				actionLabel="Clear"
+				onAction={() => {
+					void clearToday();
+					setIsClearingToday(false);
 				}}
 			/>
 

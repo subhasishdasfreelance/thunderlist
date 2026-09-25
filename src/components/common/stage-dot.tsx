@@ -6,7 +6,7 @@ import type { TagColor } from "#/schemas/tag";
  * its tasks' checkboxes are drawn from.
  *
  * The colour itself, undiluted: a dot on a bar a few pixels tall is read
- * against the page and nothing else. All sixteen are picked to clear 3.3:1
+ * against the page and nothing else. All of them are picked to clear 3:1
  * there in both schemes; see `--thunderlist-color-*` in `styles.css`.
  */
 export function stageColorStyle(color: TagColor): CSSProperties {

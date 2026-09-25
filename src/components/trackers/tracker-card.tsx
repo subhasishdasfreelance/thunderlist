@@ -2,6 +2,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { FadeImage } from "#/components/common/fade-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
@@ -86,10 +87,9 @@ export function TrackerCard({
 		>
 			<HStack gap={3} vAlign="center">
 				{tracker.coverUrl ? (
-					<img
+					<FadeImage
 						src={tracker.coverUrl}
 						alt=""
-						loading="lazy"
 						className="h-16 w-12 shrink-0 rounded-sm border border-border object-cover"
 					/>
 				) : null}

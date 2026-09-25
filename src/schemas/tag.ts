@@ -70,6 +70,38 @@ export const TAG_COLORS = [
 
 export type TagColor = (typeof TAG_COLORS)[number];
 
+/**
+ * The colours offered when one is picked: eight that stay clearly apart from
+ * each other and from the track of a bar. The rest of `TAG_COLORS` are still
+ * accepted, for whatever wears one from before, and draw as the nearest of
+ * these; see `--thunderlist-color-*` in `styles.css`.
+ */
+export const PICKABLE_COLORS = [
+	"red",
+	"orange",
+	"yellow",
+	"green",
+	"teal",
+	"blue",
+	"purple",
+	"pink",
+] as const satisfies ReadonlyArray<TagColor>;
+
+const NEAREST_PICKABLE: Partial<Record<TagColor, TagColor>> = {
+	rose: "red",
+	brown: "orange",
+	lime: "green",
+	cyan: "teal",
+	slate: "blue",
+	indigo: "purple",
+	magenta: "pink",
+};
+
+/** A colour as the picker shows it: a retired one as the one it draws as. */
+export function pickableColor(color: TagColor): TagColor {
+	return NEAREST_PICKABLE[color] ?? color;
+}
+
 const tagColorSchema = v.picklist(TAG_COLORS);
 
 /**

@@ -35,6 +35,10 @@ const GROUPS: Array<Group> = [
 		],
 	},
 	{
+		title: "On a tracker reading you point at",
+		rows: [{ keys: [TASK_SHORTCUTS.edit], what: "Edit" }],
+	},
+	{
 		title: "Several tasks at once",
 		rows: [
 			{
@@ -69,7 +73,10 @@ const GROUPS: Array<Group> = [
 		rows: [
 			{ keys: ["Ctrl", "K"], what: "Search everything" },
 			{ keys: ["Ctrl", "Z"], what: "Undo the last thing you did to a task" },
-			{ keys: ["Esc"], what: "Close this, or drop what is picked" },
+			{
+				keys: ["Esc"],
+				what: "Leave a field, then close a popup, then close messages",
+			},
 			{ keys: ["?"], what: "This" },
 		],
 	},
@@ -192,11 +199,12 @@ export function HelpDialog({
 										paddingBlock={1}
 									>
 										<Text>{row.what}</Text>
-										<HStack gap={1} vAlign="center">
+										{/* Never squeezed: the description wraps instead. */}
+										<span className="flex shrink-0 items-center gap-1">
 											{row.keys.map((key) => (
 												<Key key={key} label={key} />
 											))}
-										</HStack>
+										</span>
 									</HStack>
 								</div>
 							))}

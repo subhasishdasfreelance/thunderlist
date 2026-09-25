@@ -77,26 +77,19 @@ export function checklistStages(checklist: {
 
 /**
  * The colours stages start in, counted back from done: green for done, blue
- * for the stage before it, and on. Checked so that stages side by side on the
- * progress bar stay apart for colour-blind eyes too, in both schemes, for the
- * first five; past that they are only different.
- *
- * Twelve of them, which is as many stages as a checklist may have, so the
- * fullest possible checklist still has a colour of its own for every stage.
+ * for the stage before it, and on — the eight that can be picked, so a stage
+ * never starts in a colour its own picker does not offer. A checklist with
+ * more than eight stages goes round them again.
  */
 const DEFAULT_STAGE_COLORS: ReadonlyArray<TagColor> = [
 	"green",
 	"blue",
-	"pink",
-	"purple",
-	"teal",
 	"orange",
-	"cyan",
-	"red",
+	"purple",
+	"pink",
+	"teal",
 	"yellow",
-	"gray",
-	"brown",
-	"indigo",
+	"red",
 ];
 
 /**

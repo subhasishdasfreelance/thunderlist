@@ -34,19 +34,22 @@ export function TagTasks({
 	const { apply } = useApplyChange();
 
 	/**
-	 * Put the tag on all of them, or — where that is a single task already
-	 * carrying it — take it off again.
+	 * A toggle, for one task or several: the tag goes on every one of them —
+	 * the ones still without it — unless every one already carries it, when
+	 * it comes off them all.
 	 *
-	 * One task is a toggle, because the tick beside it says it is on and
-	 * pressing something that says "on" should turn it off. Several is always
-	 * adding: they need not agree about it, and giving them all the same tag is
-	 * the only reason to have picked them out.
+	 * The tick beside a tag says exactly that — on all of them — so pressing
+	 * something ticked turns it off, and pressing it again puts it back.
 	 */
 	function put(tag: Pick<Tag, "tagId" | "name">) {
 		if (tasks === null) return;
 
-		const isOn = tasks.length === 1 && tasks[0].tagIds.includes(tag.tagId);
-		for (const task of tasks) setTag(apply, task, tag, !isOn);
+		const isOnAll = tasks.every((task) => task.tagIds.includes(tag.tagId));
+		for (const task of tasks) {
+			if (task.tagIds.includes(tag.tagId) !== !isOnAll) {
+				setTag(apply, task, tag, !isOnAll);
+			}
+		}
 		onClose();
 	}
 

@@ -1,6 +1,7 @@
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import type { CSSProperties } from "react";
 import { clampPercent } from "#/lib/progress";
 import type { StagePart } from "#/schemas/checklist";
@@ -23,22 +24,34 @@ function countTasks(count: number): string {
 	return `${count} ${count === 1 ? "task" : "tasks"}`;
 }
 
+/** A part's share of the whole, as the hover over it says it: "30% Done". */
+function shareOf(count: number, total: number, name: string): string {
+	const percent = total === 0 ? 0 : Math.round((count / total) * 100);
+	return `${percent}% ${name} · ${countTasks(count)}`;
+}
+
 /**
  * A checklist's bar in parts, a part a stage: done from the left, then each
  * stage before it, each as wide as its share of the tasks — so where each part
  * ends reads as "this many at least this far along". What is left of the
  * track is the first stage, the work not started. See `.thunderlist-stage-bar`.
+ *
+ * Pointing at a part, the track included, says its share of the whole.
  */
 function StageBar({
 	label,
 	percent,
 	parts,
 	total,
+	firstName,
+	notStarted,
 }: {
 	label: string;
 	percent: number;
 	parts: ReadonlyArray<StagePart>;
 	total: number;
+	firstName: string;
+	notStarted: number;
 }) {
 	const drawn = total === 0 ? [] : parts.filter((part) => part.count > 0);
 
@@ -58,17 +71,33 @@ function StageBar({
 			].join(", ")}
 			className="thunderlist-stage-bar"
 		>
-			{drawn.map((part) => (
-				<span
+			{drawn.map((part, index) => (
+				<Tooltip
 					key={part.stageId}
-					title={`${part.name}: ${countTasks(part.count)}`}
-					className="thunderlist-stage-bar-part"
-					style={{
-						...stageColorStyle(part.color),
-						flexBasis: `${(part.count / total) * 100}%`,
-					}}
-				/>
+					content={shareOf(part.count, total, part.name)}
+					delay={0}
+					touchTrigger="tap"
+				>
+					<span
+						className="thunderlist-stage-bar-part"
+						data-last={index === drawn.length - 1}
+						style={{
+							...stageColorStyle(part.color),
+							flexBasis: `${(part.count / total) * 100}%`,
+						}}
+					/>
+				</Tooltip>
 			))}
+			{/* The empty track: the work not started, pointed at like the rest. */}
+			{total === 0 || notStarted <= 0 ? null : (
+				<Tooltip
+					content={shareOf(notStarted, total, firstName)}
+					delay={0}
+					touchTrigger="tap"
+				>
+					<span className="thunderlist-stage-bar-rest" />
+				</Tooltip>
+			)}
 		</div>
 	);
 }
@@ -116,7 +145,8 @@ export function ProgressMeter({
 	 * percentage, so the target says what to reach and not only how far along.
 	 */
 	expectedReading?: string;
-	footnote: string;
+	/** A line under the bar, such as when it is due. Nothing for none. */
+	footnote?: string | null;
 	/**
 	 * A checklist's stages, done first, and how many tasks it has in all: the
 	 * bar is drawn in their colours; see `stageParts`.
@@ -142,6 +172,7 @@ export function ProgressMeter({
 	const expected =
 		expectedPercent === null ? null : clampPercent(expectedPercent);
 	const reading = expectedReading === undefined ? "" : ` (${expectedReading})`;
+	const hasFootnote = footnote != null && footnote !== "";
 
 	return (
 		<VStack gap={1.5}>
@@ -155,6 +186,8 @@ export function ProgressMeter({
 						percent={percent}
 						parts={stages.parts}
 						total={stages.total}
+						firstName={stages.firstName ?? "Not started"}
+						notStarted={notStarted}
 					/>
 				)}
 				{expectedPercent === null ? null : (
@@ -176,20 +209,13 @@ export function ProgressMeter({
 
 			{/*
 			 * The key: a stage's colour is never the only thing naming it, and
-			 * every stage is counted — the first one last, where the bar leaves it,
-			 * drawn as the empty ring its empty track deserves.
+			 * every stage is counted. It reads in the order a task travels — the
+			 * first stage, drawn as the empty ring its empty track deserves, then
+			 * each after it, done last — whatever order the bar draws them in.
 			 */}
 			{stages === undefined ||
 			(stages.firstName === undefined && stages.parts.length < 2) ? null : (
 				<HStack gap={3} vAlign="center" wrap="wrap">
-					{stages.parts.map((part) => (
-						<HStack key={part.stageId} gap={1} vAlign="center">
-							<StageDot color={part.color} />
-							<Text type="supporting">
-								{part.name} {part.count}
-							</Text>
-						</HStack>
-					))}
 					{stages.firstName === undefined ? null : (
 						<HStack gap={1} vAlign="center">
 							<StageDot color={null} />
@@ -198,27 +224,37 @@ export function ProgressMeter({
 							</Text>
 						</HStack>
 					)}
+					{[...stages.parts].reverse().map((part) => (
+						<HStack key={part.stageId} gap={1} vAlign="center">
+							<StageDot color={part.color} />
+							<Text type="supporting">
+								{part.name} {part.count}
+							</Text>
+						</HStack>
+					))}
 				</HStack>
 			)}
 
-			<HStack gap={1.5} hAlign="between" vAlign="center" wrap="wrap">
-				<Text type="supporting">{footnote}</Text>
+			{!hasFootnote && expected === null ? null : (
+				<HStack gap={1.5} hAlign="between" vAlign="center" wrap="wrap">
+					{hasFootnote ? <Text type="supporting">{footnote}</Text> : <span />}
 
-				{expected === null ? null : (
-					<HStack gap={1} vAlign="center">
-						<img
-							src="/logo.svg"
-							alt=""
-							width={14}
-							height={14}
-							className="thunderlist-meter-key"
-						/>
-						<Text type="supporting">
-							{expected}%{reading} expected by now
-						</Text>
-					</HStack>
-				)}
-			</HStack>
+					{expected === null ? null : (
+						<HStack gap={1} vAlign="center">
+							<img
+								src="/logo.svg"
+								alt=""
+								width={14}
+								height={14}
+								className="thunderlist-meter-key"
+							/>
+							<Text type="supporting">
+								{expected}%{reading} expected by now
+							</Text>
+						</HStack>
+					)}
+				</HStack>
+			)}
 		</VStack>
 	);
 }

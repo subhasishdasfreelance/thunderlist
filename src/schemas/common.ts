@@ -48,11 +48,8 @@ export const descriptionSchema = v.pipe(
 	v.maxLength(500, "Description must be 500 characters or fewer"),
 );
 
-export const noteSchema = v.pipe(
-	v.string(),
-	v.trim(),
-	v.maxLength(500, "Note must be 500 characters or fewer"),
-);
+/** No upper limit, like a title: a reading's notes are as long as they need. */
+export const noteSchema = v.pipe(v.string(), v.trim());
 
 /** A calendar day with no timezone, e.g. `2026-09-07`. */
 export const dateOnlySchema = v.pipe(

@@ -8,28 +8,47 @@ import { Token } from "@astryxdesign/core/Token";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import {
+	ReminderField,
+	useReminderDraft,
+} from "#/components/common/reminder-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { StageDot } from "#/components/common/stage-dot";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
-import type { TagValues } from "#/lib/changes";
+import { type TagValues, useApplyChange } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
-import { TAG_COLORS, type Tag, type TagColor } from "#/schemas/tag";
+import {
+	PICKABLE_COLORS,
+	pickableColor,
+	type Tag,
+	type TagColor,
+} from "#/schemas/tag";
 
 /**
- * The sixteen colours as options to pick from; stages and task types use the
- * same list.
+ * The colours as options to pick from — the eight, and gray for something
+ * that wants no colour of its own. Task types use the same list; stages leave
+ * gray out; see `STAGE_COLOR_OPTIONS`.
  *
- * Each carries its own dot, because sixteen names is a list you read and
- * sixteen dots is one you look at — and "teal" and "cyan" are not words that
- * tell them apart.
+ * Each carries its own dot, because a list of names is one you read and a
+ * row of dots is one you look at.
  */
-export const COLOR_OPTIONS = TAG_COLORS.map((color) => ({
-	value: color,
-	label: `${color.charAt(0).toUpperCase()}${color.slice(1)}`,
-	icon: <StageDot color={color} />,
-}));
+export const COLOR_OPTIONS = [...PICKABLE_COLORS, "gray" as const].map(
+	(color) => ({
+		value: color,
+		label: `${color.charAt(0).toUpperCase()}${color.slice(1)}`,
+		icon: <StageDot color={color} />,
+	}),
+);
+
+/**
+ * The colours a stage can be: the eight, without gray, which would read as
+ * the track of the bar — the work not done.
+ */
+export const STAGE_COLOR_OPTIONS = COLOR_OPTIONS.filter(
+	(option) => option.value !== "gray",
+);
 
 /**
  * Create or edit a tag.
@@ -108,8 +127,13 @@ export function TagFormDialog({
 		!isUnwritable &&
 		(dailyWindow === null || dailyWindow.to > dailyWindow.from);
 
+	// Your own daily reminder about it, saved with the rest; see `ReminderField`.
+	const reminder = useReminderDraft(isOpen, "tag", tag?.tagId ?? null);
+	const { apply: applyReminder } = useApplyChange();
+
 	function save() {
 		if (!isValid) return;
+		reminder.save(applyReminder);
 		onSubmit({
 			name: trimmed,
 			color,
@@ -176,7 +200,7 @@ export function TagFormDialog({
 				<Selector
 					label="Colour"
 					options={COLOR_OPTIONS}
-					value={color}
+					value={pickableColor(color)}
 					onChange={(next) => setColor(next as TagColor)}
 				/>
 
@@ -209,6 +233,11 @@ export function TagFormDialog({
 					onDailyWindowChange={setDailyWindow}
 					isStartDateOptional
 				/>
+
+				{/* Only once it exists: a reminder is about something. */}
+				{tag === undefined ? null : (
+					<ReminderField value={reminder.time} onChange={reminder.setTime} />
+				)}
 
 				{/* Today is everyone's, in a team as anywhere. */}
 				{tag?.special != null ? null : (
