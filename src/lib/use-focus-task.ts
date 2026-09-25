@@ -20,8 +20,12 @@
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-/** How long to keep trying before assuming the row is never coming. */
-const GIVE_UP_AFTER_MS = 3000;
+/**
+ * How long to keep trying before assuming the row is never coming. Long
+ * enough for a slow answer: the page holding the task, or the finished tasks
+ * it is among, may still be on its way.
+ */
+const GIVE_UP_AFTER_MS = 10_000;
 
 /** Frames the row must stay in view before this stops watching it. */
 const SETTLED_FRAMES = 20;
@@ -52,9 +56,12 @@ export function useFocusTask(taskId: string | undefined): void {
 		let hasRung = false;
 
 		const step = () => {
-			const row = document.querySelector<HTMLElement>(
+			const found = document.querySelector<HTMLElement>(
 				`[data-task-id="${taskId}"]`,
 			);
+			// A row in a folded section is there but not yet on show; it is
+			// waited for until its section has opened.
+			const row = found?.closest("[inert]") ? null : found;
 
 			if (row) {
 				// The ring plays once per arrival: restarted, so a row already

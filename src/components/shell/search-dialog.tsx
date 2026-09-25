@@ -128,9 +128,9 @@ export function SearchDialog({
 						label: item.title,
 						context:
 							item.checklistTitle !== null
-								? `Task in ${item.checklistTitle}`
+								? item.checklistTitle
 								: home !== null
-									? `Task in #${home.name}`
+									? `#${home.name}`
 									: "Task",
 						to,
 						taskId: item.taskId,

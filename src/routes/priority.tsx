@@ -39,6 +39,7 @@ import {
 	type SortOrder,
 	shortTitle,
 } from "#/lib/tasks/tasks";
+import { useHeld } from "#/lib/use-held";
 import { usePages } from "#/lib/use-pages";
 import { useTaskTypes } from "#/lib/use-task-types";
 import { usePermissions, useSpace } from "#/lib/use-team";
@@ -113,6 +114,8 @@ function PriorityPage() {
 
 	const [renaming, setRenaming] = useState<TaggedTask | null>(null);
 	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
+	// Its title stays on the question while it closes; see `useHeld`.
+	const shownDelete = useHeld(pendingDelete);
 	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
 	const [typing, setTyping] = useState<TaggedTask | null>(null);
 	// The tasks a tag is being put on: the one pointed at, or every one
@@ -443,7 +446,7 @@ function PriorityPage() {
 				onOpenChange={(open) => {
 					if (!open) setPendingDelete(null);
 				}}
-				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
+				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {

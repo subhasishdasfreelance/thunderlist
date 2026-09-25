@@ -36,6 +36,7 @@ import { firstPage } from "#/lib/use-pages";
 import { usePermissions } from "#/lib/use-team";
 import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
+import { arrangementsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
 
@@ -65,7 +66,12 @@ export const Route = createFileRoute("/checklists/")({
 		// Only the new-checklist form needs the tags, and not on the first frame.
 		deferQuery(context.queryClient, tagsQuery());
 
-		return primeQuery(context.queryClient, checklistsQuery());
+		// The order and groups are the space's, and read with the list, so it
+		// is drawn in them from the start rather than rearranged after.
+		return Promise.all([
+			primeQuery(context.queryClient, checklistsQuery()),
+			primeQuery(context.queryClient, arrangementsQuery()),
+		]).then(() => undefined);
 	},
 	component: ChecklistsPage,
 });

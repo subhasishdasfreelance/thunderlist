@@ -10,16 +10,26 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronRight, Plus, Shapes, User, Users } from "lucide-react";
+import {
+	ChevronRight,
+	Eraser,
+	Megaphone,
+	Plus,
+	Shapes,
+	User,
+	Users,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { NotificationSettings } from "#/components/shell/notification-settings";
 import { TaskTypesDialog } from "#/components/tasks/task-types-dialog";
+import { MessageDialog } from "#/components/teams/message-dialog";
 import { NewTeamDialog } from "#/components/teams/new-team-dialog";
 import { RoleToken } from "#/components/teams/role-token";
 import { TeamDialog } from "#/components/teams/team-dialog";
 import { selectSpaceFn } from "#/functions/team.functions";
+import { clearDeviceData } from "#/lib/device-data";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
 import { useSpaceChanged } from "#/lib/use-space-changed";
@@ -47,7 +57,8 @@ function Section({
 	title: string;
 	description: string;
 	action?: ReactNode;
-	children: ReactNode;
+	/** Left out where the action is the whole of it. */
+	children?: ReactNode;
 }) {
 	return (
 		<section>
@@ -90,6 +101,7 @@ function SettingsPage() {
 	const { canManageContent } = usePermissions();
 	const [isCreating, setIsCreating] = useState(false);
 	const [isManagingTypes, setIsManagingTypes] = useState(false);
+	const [isMessaging, setIsMessaging] = useState(false);
 	const [openTeamId, setOpenTeamId] = useState<string | null>(null);
 	// The space being moved into, while the move is on its way.
 	const [movingTo, setMovingTo] = useState<string | null | undefined>(
@@ -265,6 +277,50 @@ function SettingsPage() {
 				<NotificationSettings />
 			</Section>
 
+			{/* A team's project managers, and its admin, can message its people. */}
+			{space?.team == null || !canManageContent ? null : (
+				<Section
+					title="Team messages"
+					description={`A notification in the installed app of people in ${space.team.name}: everyone, everyone with a role, or one person. Anyone offline gets it when they are back.`}
+					action={
+						<Button
+							label="New message"
+							icon={<Megaphone aria-hidden />}
+							variant="secondary"
+							onClick={() => setIsMessaging(true)}
+						/>
+					}
+				/>
+			)}
+
+			<Section
+				title="On this device"
+				description="Kept in this browser so the app opens as you left it, even offline: the order each list is shown in, your space's own order and groups, and the installed app's copy of the pages it last opened."
+			>
+				<Card padding={4}>
+					<HStack gap={3} hAlign="between" vAlign="center" wrap="wrap">
+						<Text type="supporting">
+							Clearing it loses nothing saved. Lists go back to their default
+							order until they are read again.
+						</Text>
+						<Button
+							label="Clear"
+							icon={<Eraser aria-hidden />}
+							variant="secondary"
+							onClick={() =>
+								void clearDeviceData().then(() =>
+									toast({
+										body: "Cleared what this device kept.",
+										type: "info",
+										uniqueID: "device-data",
+									}),
+								)
+							}
+						/>
+					</HStack>
+				</Card>
+			</Section>
+
 			<TaskTypesDialog
 				isOpen={isManagingTypes}
 				onOpenChange={setIsManagingTypes}
@@ -277,6 +333,7 @@ function SettingsPage() {
 				onClose={() => setOpenTeamId(null)}
 			/>
 			<NewTeamDialog isOpen={isCreating} onOpenChange={setIsCreating} />
+			<MessageDialog isOpen={isMessaging} onOpenChange={setIsMessaging} />
 		</VStack>
 	);
 }

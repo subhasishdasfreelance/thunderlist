@@ -159,3 +159,31 @@ export const memberRoleInputSchema = v.object({
 	email: emailSchema,
 	role: v.picklist(TEAM_ROLES),
 });
+
+/**
+ * A message from a team's project managers to the installed app of people in
+ * it: everyone, everyone with one role, or one person; see
+ * `sendTeamMessage`.
+ */
+export const teamMessageInputSchema = v.object({
+	to: v.variant("kind", [
+		v.object({ kind: v.literal("team") }),
+		v.object({ kind: v.literal("role"), role: v.picklist(TEAM_ROLES) }),
+		v.object({ kind: v.literal("person"), email: emailSchema }),
+	]),
+	title: v.pipe(
+		v.string(),
+		v.trim(),
+		v.minLength(1, "A title is required"),
+		v.maxLength(60, "The title must be 60 characters or fewer"),
+	),
+	body: v.pipe(
+		v.string(),
+		v.trim(),
+		v.minLength(1, "A message is required"),
+		v.maxLength(300, "The message must be 300 characters or fewer"),
+	),
+});
+
+export type TeamMessageInput = v.InferOutput<typeof teamMessageInputSchema>;
+export type MessageRecipients = TeamMessageInput["to"];

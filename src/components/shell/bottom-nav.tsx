@@ -72,7 +72,7 @@ export function BottomNav() {
 						alignment="end"
 						label="More places"
 						content={
-							<ul className="m-0 flex min-w-44 list-none flex-col p-1">
+							<ul className="thunderlist-more-list m-0 flex min-w-44 list-none flex-col p-1">
 								{IN_MORE.map((item) => {
 									const isActive = isNavItemActive(pathname, item.to);
 

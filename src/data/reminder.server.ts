@@ -13,6 +13,7 @@
 import webpush from "web-push";
 import { collections } from "#/lib/mongo/client.server";
 import { isDue, type Reminder, type ReminderTarget } from "#/schemas/reminder";
+import { storedRole, type TeamMessageInput } from "#/schemas/team";
 
 /** The server's push keys, or `null` while none are configured. */
 function pushKeys(): { publicKey: string; privateKey: string } | null {
@@ -107,8 +108,15 @@ type Message = { title: string; body: string; url: string };
 /**
  * Send one message to every device a person has, forgetting any device the
  * push service says is gone. Returns how many took it.
+ *
+ * `ttl` is how long, in seconds, the push service holds it for a device that
+ * is off: a reminder is stale within the hour; a message is not.
  */
-async function sendTo(email: string, message: Message): Promise<number> {
+async function sendTo(
+	email: string,
+	message: Message,
+	ttl = 60 * 60,
+): Promise<number> {
 	const keys = pushKeys();
 	if (keys === null) return 0;
 
@@ -129,7 +137,7 @@ async function sendTo(email: string, message: Message): Promise<number> {
 			await webpush.sendNotification(
 				{ endpoint: device.endpoint, keys: device.keys },
 				JSON.stringify(message),
-				{ TTL: 60 * 60 },
+				{ TTL: ttl },
 			);
 			sent += 1;
 		} catch (error) {
@@ -145,6 +153,49 @@ async function sendTo(email: string, message: Message): Promise<number> {
 		}
 	}
 	return sent;
+}
+
+/** As long as the push services will hold a message: four weeks. */
+const MESSAGE_TTL = 60 * 60 * 24 * 28;
+
+/**
+ * A message from a project manager to the people of their team it names, on
+ * every device each of them has turned notifications on for. One that is off
+ * gets it once it is back on, within four weeks. Returns how many people and
+ * how many devices took it — a person with no device has nothing to take it.
+ */
+export async function sendTeamMessage(
+	teamId: string,
+	input: TeamMessageInput,
+): Promise<{ people: number; devices: number }> {
+	const current = await collections();
+	const members = await current.members
+		.find({ teamId }, { projection: { _id: 0, email: 1, role: 1 } })
+		.toArray();
+
+	const { to } = input;
+	const recipients = members
+		.filter((member) =>
+			to.kind === "team"
+				? true
+				: to.kind === "role"
+					? storedRole(member.role) === to.role
+					: member.email === to.email,
+		)
+		.map((member) => member.email);
+
+	let people = 0;
+	let devices = 0;
+	for (const email of recipients) {
+		const sent = await sendTo(
+			email,
+			{ title: input.title, body: input.body, url: "/tags/today" },
+			MESSAGE_TTL,
+		);
+		if (sent > 0) people += 1;
+		devices += sent;
+	}
+	return { people, devices };
 }
 
 /** A notification now, to check this person's devices get them. */

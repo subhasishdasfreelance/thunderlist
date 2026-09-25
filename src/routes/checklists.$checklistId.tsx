@@ -71,6 +71,7 @@ import {
 	shortTitle,
 } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
+import { useHeld } from "#/lib/use-held";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE } from "#/lib/use-pages";
@@ -106,8 +107,17 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 	 * stage. Keeping it in the URL rather than in memory means the trip survives
 	 * a reload and a shared link lands in the same place.
 	 */
-	validateSearch: (search: Record<string, unknown>) => ({
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { task: string | undefined; stage?: string; page?: number } => ({
 		task: typeof search.task === "string" ? search.task : undefined,
+		// The stage and page on show, so leaving and coming back — Back, say —
+		// lands on the same tab, and the router puts the scroll back on it.
+		stage: typeof search.stage === "string" ? search.stage : undefined,
+		page:
+			typeof search.page === "number" && search.page > 1
+				? search.page
+				: undefined,
 	}),
 	loaderDeps: ({ search }) => ({ task: search.task }),
 	loader: async ({ context, params, deps }) => {
@@ -164,12 +174,14 @@ function ChecklistDetailPage() {
 	const [assigning, setAssigning] = useState<Task | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+	// Its title stays on the question while it closes; see `useHeld`.
+	const shownDelete = useHeld(pendingDelete);
 	const [isDeletingChecklist, setIsDeletingChecklist] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
-	// Picked by hand; until then, where `?task=` is, or the first of each.
-	const [stageId, setStageId] = useState<string | undefined>(undefined);
-	const [page, setPage] = useState<number | undefined>(undefined);
+	// Picked by hand, and kept in the URL; until then, where `?task=` is, or
+	// the first of each.
+	const { stage: stageId, page } = Route.useSearch();
 	const [view, setView] = useState<ProgressView>("list");
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const [tagId, setTagId] = useState<string | undefined>(undefined);
@@ -185,8 +197,6 @@ function ChecklistDetailPage() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
 	useEffect(() => {
 		if (focusTaskId === undefined) return;
-		setStageId(undefined);
-		setPage(undefined);
 		setAssignee(undefined);
 		setTagId(undefined);
 		setTypeId(undefined);
@@ -306,6 +316,23 @@ function ChecklistDetailPage() {
 	// What the figures count: everything, or what the filter lets through.
 	const figures = isFiltered ? (filteredResult.data ?? detail) : detail;
 	const { progress } = figures;
+
+	/**
+	 * Show another stage or page. It replaces the address rather than adding
+	 * to it, so Back leaves the checklist instead of going through every tab,
+	 * and keeps the scroll where it is, as a tab does. A task arrived at is
+	 * let go: it was only ever where the list opened.
+	 */
+	function show(next: { stage?: string; page?: number }) {
+		void navigate({
+			to: ".",
+			search: (previous) => ({ ...previous, task: undefined, ...next }),
+			replace: true,
+			resetScroll: false,
+		});
+	}
+	const setPage = (next: number | undefined) =>
+		show({ stage: stageId, page: next });
 
 	/** Back to the first page, for a different list shown in its place. */
 	const turn =
@@ -677,10 +704,7 @@ function ChecklistDetailPage() {
 						stages={stages}
 						value={shownStage.stageId}
 						counts={counts}
-						onChange={(next) => {
-							setStageId(next);
-							setPage(undefined);
-						}}
+						onChange={(next) => show({ stage: next, page: undefined })}
 					/>
 
 					{pageResult.data === undefined ? (
@@ -857,7 +881,7 @@ function ChecklistDetailPage() {
 				onOpenChange={(open) => {
 					if (!open) setPendingDelete(null);
 				}}
-				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
+				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {

@@ -4,6 +4,8 @@ import {
 	listTaskTypesFn,
 } from "#/functions/settings.functions";
 import { getSpaceFn, listTeamsFn } from "#/functions/team.functions";
+import { readStored, writeStored } from "#/lib/device-data";
+import type { Arrangements } from "#/schemas/arrangement";
 import { queryKeys } from "./keys";
 
 /**
@@ -48,6 +50,30 @@ export const taskTypesQuery = () =>
 export const arrangementsQuery = () =>
 	queryOptions({
 		queryKey: queryKeys.arrangements,
-		queryFn: () => listArrangementsFn(),
+		queryFn: async () => {
+			const arrangements = await listArrangementsFn();
+			writeStored(ARRANGEMENTS_KEY, JSON.stringify(arrangements));
+			return arrangements;
+		},
+		// The copy kept from last time, so a list opens in its own order at once
+		// rather than in the default one and then jumping — even with the app
+		// just opened. Counted as old, so it is read again behind it. Never on
+		// the server, which reads the real thing before drawing the page.
+		initialData: storedArrangements,
+		initialDataUpdatedAt: 0,
 		staleTime: 60_000,
 	});
+
+/** Where the space's arrangement is kept in this browser; see above. */
+export const ARRANGEMENTS_KEY = "thunderlist.arrangements.v1";
+
+function storedArrangements(): Arrangements | undefined {
+	if (typeof window === "undefined") return undefined;
+	const saved = readStored(ARRANGEMENTS_KEY);
+	if (saved === null) return undefined;
+	try {
+		return JSON.parse(saved) as Arrangements;
+	} catch {
+		return undefined;
+	}
+}

@@ -3,7 +3,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { ChevronRight, Trash2 } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 
 /**
@@ -28,6 +28,7 @@ export function CompletedSection({
 	onClear,
 	onOpen,
 	chart,
+	reveal,
 	children,
 }: {
 	count: number;
@@ -39,11 +40,21 @@ export function CompletedSection({
 	onOpen?: () => void;
 	/** The same history as a graph. Without one there is nothing to toggle. */
 	chart?: ReactNode;
+	/**
+	 * Set when the page was sent to a task that is in here — from search, say
+	 * — and new for each such arrival. The section opens for it: folded, its
+	 * rows are `inert`, so the task could be neither seen nor pointed at.
+	 */
+	reveal?: string;
 	children: ReactNode;
 }) {
 	const [view, setView] = useState<ProgressView>("list");
 	const [isOpen, setIsOpen] = useState(false);
 	const contentId = useId();
+
+	useEffect(() => {
+		if (reveal !== undefined) setIsOpen(true);
+	}, [reveal]);
 
 	if (count === 0) return null;
 

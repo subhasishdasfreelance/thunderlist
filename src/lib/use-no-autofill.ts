@@ -3,12 +3,14 @@
  * cards.
  *
  * Every field already says `autoComplete="off"`; see
- * `src/types/astryx-autofill.d.ts`. Chrome's own password manager does not
- * take that as a no, and neither do the password extensions people add to
- * it, each of which listens for an attribute of its own. Rather than repeat
- * all of them on every field — and miss the date, time and number fields that
- * Astryx draws itself — each field is given them the moment it takes focus,
- * before anything can offer to fill it.
+ * `src/types/astryx-autofill.d.ts`. Chrome does not take "off" as a no — on
+ * Android least of all, where the installed app still offered addresses,
+ * cards and passwords above the keyboard. What Chrome does honour is a value
+ * it does not recognise: such a field is left out of its suggestions. The
+ * password extensions people add each listen for an attribute of their own.
+ * Rather than repeat all of them on every field — and miss the date, time and
+ * number fields that Astryx draws itself — each field is given them the
+ * moment it enters the page, before the browser has looked at it.
  *
  * A field that asks for real autofill by name (`email`, the address a team
  * member is added by) is left as it is: there, the browser knowing the answer
@@ -16,6 +18,9 @@
  */
 
 import { useEffect } from "react";
+
+/** A value no browser recognises, which is what makes Chrome stand down. */
+const NOT_FOR_AUTOFILL = "thunderlist-off";
 
 /** What each of the common managers reads as "not for me". */
 const IGNORED_BY_MANAGERS: ReadonlyArray<[string, string]> = [
@@ -25,29 +30,37 @@ const IGNORED_BY_MANAGERS: ReadonlyArray<[string, string]> = [
 	["data-form-type", "other"], // Dashlane
 ];
 
+function stamp(field: HTMLInputElement | HTMLTextAreaElement) {
+	const asked = field.getAttribute("autocomplete");
+	if (asked !== null && asked !== "off") return;
+
+	field.setAttribute("autocomplete", NOT_FOR_AUTOFILL);
+	for (const [name, value] of IGNORED_BY_MANAGERS) {
+		field.setAttribute(name, value);
+	}
+}
+
+function stampWithin(node: Node) {
+	if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+		stamp(node);
+		return;
+	}
+	if (!(node instanceof Element)) return;
+	for (const field of node.querySelectorAll("input, textarea")) {
+		stamp(field as HTMLInputElement | HTMLTextAreaElement);
+	}
+}
+
 export function useNoAutofill(): void {
 	useEffect(() => {
-		function onFocus(event: FocusEvent) {
-			const field = event.target;
-			if (
-				!(field instanceof HTMLInputElement) &&
-				!(field instanceof HTMLTextAreaElement)
-			) {
-				return;
+		stampWithin(document.body);
+
+		const observer = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				for (const node of mutation.addedNodes) stampWithin(node);
 			}
-
-			const asked = field.getAttribute("autocomplete");
-			if (asked !== null && asked !== "off") return;
-
-			field.setAttribute("autocomplete", "off");
-			for (const [name, value] of IGNORED_BY_MANAGERS) {
-				field.setAttribute(name, value);
-			}
-		}
-
-		// Capture: focus does not bubble, and this has to land before any
-		// manager's own focus handler decides to offer something.
-		document.addEventListener("focus", onFocus, true);
-		return () => document.removeEventListener("focus", onFocus, true);
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		return () => observer.disconnect();
 	}, []);
 }

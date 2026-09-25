@@ -83,6 +83,7 @@ export function ProgressHistory({
 						{paging.shown.map((entry) => (
 							<ListItem
 								key={entry.entryId}
+								className="thunderlist-entry-row"
 								onMouseEnter={() => setHovered(entry)}
 								onMouseLeave={() => setHovered(null)}
 								label={`${entry.value} ${unit}`}

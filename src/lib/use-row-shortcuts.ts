@@ -43,6 +43,16 @@ export function useRowShortcuts(
 			// Only once the key is known to be one of ours, so nothing else on the
 			// page loses a keystroke to a shortcut that was never going to fire.
 			event.preventDefault();
+
+			/*
+			 * The key is about the row under the pointer, not wherever focus was
+			 * left — a stage tab clicked a moment ago, say. Left there, a keypress
+			 * is what makes the browser draw its focus ring, so the tab would
+			 * light up as if the key had sent you to it.
+			 */
+			if (document.activeElement instanceof HTMLElement) {
+				document.activeElement.blur();
+			}
 			run();
 		}
 

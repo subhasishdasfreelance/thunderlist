@@ -15,7 +15,9 @@ import { useState } from "react";
 import { RoleToken } from "#/components/teams/role-token";
 import type { SignedInUser } from "#/lib/auth.server";
 import { authClient } from "#/lib/auth-client";
+import { forgetStored } from "#/lib/device-data";
 import { useSpace } from "#/lib/use-team";
+import { ARRANGEMENTS_KEY } from "#/queries/space";
 import { FeedbackDialog } from "./feedback-dialog";
 
 /**
@@ -56,6 +58,8 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 			// The installed app keeps a copy of Today to open on, and that copy is
 			// this account's; see `public/sw.js`.
 			if ("caches" in window) void caches.delete("thunderlist-pages-v1");
+			// So is the kept arrangement of its lists; see `arrangementsQuery`.
+			forgetStored(ARRANGEMENTS_KEY);
 			// A router invalidation re-runs the root guard, which sees no session
 			// and sends this browser to the login page.
 			await router.invalidate();

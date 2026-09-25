@@ -4,12 +4,15 @@ import {
 	pushPublicKey,
 	removePushSubscription,
 	savePushSubscription,
+	sendTeamMessage,
 	sendTestPush,
 } from "#/data/reminder.server";
+import { AppError } from "#/lib/errors";
 import {
 	pushEndpointInputSchema,
 	pushSubscriptionInputSchema,
 } from "#/schemas/reminder";
+import { roleCan, teamMessageInputSchema } from "#/schemas/team";
 import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
 import { requireScope } from "./scope";
@@ -57,3 +60,22 @@ export const removePushSubscriptionFn = createServerFn({ method: "POST" })
 export const sendTestPushFn = createServerFn({ method: "POST" }).handler(() =>
 	guard("sendTestPush", async () => sendTestPush((await requireScope()).email)),
 );
+
+/**
+ * A message to people in the team being worked in; see `sendTeamMessage`.
+ * Its project managers only — and its admin, who can do all they can.
+ */
+export const sendTeamMessageFn = createServerFn({ method: "POST" })
+	.validator(validator(teamMessageInputSchema))
+	.handler(({ data }) =>
+		guard("sendTeamMessage", async () => {
+			const scope = await requireScope();
+			if (scope.team === null || !roleCan(scope.team.role, "manageContent")) {
+				throw new AppError(
+					"invalid_data",
+					"Only the team's project managers can send it messages.",
+				);
+			}
+			return sendTeamMessage(scope.team.teamId, data);
+		}),
+	);

@@ -36,6 +36,7 @@ import { isAssignedTo } from "#/lib/tasks/tasks";
 import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
+import { arrangementsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import { trackerQuery, trackersQuery } from "#/queries/trackers";
 import { manualOrder } from "#/schemas/arrangement";
@@ -65,7 +66,12 @@ export const Route = createFileRoute("/trackers/")({
 		// The tags on each card, and for the form; the trackers are the screen.
 		deferQuery(context.queryClient, tagsQuery());
 
-		return primeQuery(context.queryClient, trackersQuery());
+		// The order and groups are the space's, and read with the list, so it
+		// is drawn in them from the start rather than rearranged after.
+		return Promise.all([
+			primeQuery(context.queryClient, trackersQuery()),
+			primeQuery(context.queryClient, arrangementsQuery()),
+		]).then(() => undefined);
 	},
 	component: TrackersPage,
 });

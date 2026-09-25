@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef } from "react";
+import { forgetStored } from "#/lib/device-data";
 import { useToast } from "#/lib/toasts";
-import { spaceQuery } from "#/queries/space";
+import { queryKeys } from "#/queries/keys";
+import { ARRANGEMENTS_KEY, spaceQuery } from "#/queries/space";
 
 /**
  * Catch up with a change of space: into a team, out of one — leaving it, or it
@@ -27,6 +29,9 @@ export function useSpaceChanged(): () => Promise<void> {
 	return useCallback(async () => {
 		await queryClient.cancelQueries();
 		if ("caches" in window) void caches.delete("thunderlist-pages-v1");
+		// The kept arrangement is the old space's; see `arrangementsQuery`.
+		forgetStored(ARRANGEMENTS_KEY);
+		queryClient.removeQueries({ queryKey: queryKeys.arrangements });
 
 		const reset = queryClient.resetQueries();
 		await router.navigate({

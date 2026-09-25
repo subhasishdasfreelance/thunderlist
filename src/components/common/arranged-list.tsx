@@ -13,8 +13,9 @@ import {
 	type LucideIcon,
 	TriangleAlert,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import type { ApplyChange } from "#/lib/changes";
+import { readStored, writeStored } from "#/lib/device-data";
 import { arrangementsQuery } from "#/queries/space";
 import {
 	type ArrangedList,
@@ -35,6 +36,19 @@ const ORDERS: Array<{ order: ListOrder; label: string; icon: LucideIcon }> = [
 /** Where each list's order is remembered, in this browser. */
 const storageKey = (list: ArrangedList) => `thunderlist.order.${list}.v1`;
 
+/** Every list shown on screen, told when one of their orders is picked. */
+const orderListeners = new Set<() => void>();
+
+function subscribeToOrders(listener: () => void): () => void {
+	orderListeners.add(listener);
+	return () => orderListeners.delete(listener);
+}
+
+function storedOrder(list: ArrangedList): ListOrder {
+	const saved = readStored(storageKey(list));
+	return saved === "newest" || saved === "behind" ? saved : "manual";
+}
+
 /**
  * How one list of cards is ordered — by hand, newest first, or most behind
  * first.
@@ -42,33 +56,26 @@ const storageKey = (list: ArrangedList) => `thunderlist.order.${list}.v1`;
  * Remembered in this browser rather than saved: it is a way of looking at the
  * list, and someone else in the team may want to look at it another way. The
  * order picked by hand is the space's, and saved; see `Arrangement`.
+ *
+ * Read as the list is drawn, so it opens in the order picked rather than in
+ * the default one first. Only the page the server drew starts in the default:
+ * the server cannot see this browser's storage, and the browser's first draw
+ * has to match it.
  */
 function useListOrder(
 	list: ArrangedList,
 ): [ListOrder, (next: ListOrder) => void] {
-	const [order, setOrder] = useState<ListOrder>("manual");
-
-	// Read after the first paint, so the server's page and the browser's agree.
-	useEffect(() => {
-		try {
-			const saved = window.localStorage.getItem(storageKey(list));
-			if (saved === "manual" || saved === "newest" || saved === "behind") {
-				setOrder(saved);
-			}
-		} catch {
-			// No storage — a private window — is the default order.
-		}
-	}, [list]);
+	const order = useSyncExternalStore(
+		subscribeToOrders,
+		() => storedOrder(list),
+		() => "manual" as const,
+	);
 
 	return [
 		order,
 		(next) => {
-			setOrder(next);
-			try {
-				window.localStorage.setItem(storageKey(list), next);
-			} catch {
-				// Kept for this visit only.
-			}
+			writeStored(storageKey(list), next);
+			for (const listener of orderListeners) listener();
 		},
 	];
 }

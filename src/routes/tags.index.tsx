@@ -26,6 +26,7 @@ import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
+import { arrangementsQuery } from "#/queries/space";
 import { searchIndexQuery } from "#/queries/system";
 import { tagSummariesQuery } from "#/queries/tags";
 import { type TagSummary, tagStartDate } from "#/schemas/tag";
@@ -54,7 +55,12 @@ export const Route = createFileRoute("/tags/")({
 		// The untagged card after the tags; the tags are what the screen is.
 		deferQuery(context.queryClient, searchIndexQuery());
 
-		return primeQuery(context.queryClient, tagSummariesQuery());
+		// The order and groups are the space's, and read with the list, so it
+		// is drawn in them from the start rather than rearranged after.
+		return Promise.all([
+			primeQuery(context.queryClient, tagSummariesQuery()),
+			primeQuery(context.queryClient, arrangementsQuery()),
+		]).then(() => undefined);
 	},
 	component: TagsPage,
 });

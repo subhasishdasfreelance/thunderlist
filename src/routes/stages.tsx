@@ -39,6 +39,7 @@ import {
 } from "#/lib/changes";
 import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { type SortOrder, shortTitle } from "#/lib/tasks/tasks";
+import { useHeld } from "#/lib/use-held";
 import { PAGE_SIZE } from "#/lib/use-pages";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { acrossQuery } from "#/queries/across";
@@ -57,6 +58,18 @@ const FIRST_VIEW: AcrossPageView = {
 };
 
 export const Route = createFileRoute("/stages")({
+	// The cut, the tab and the page on show, so leaving and coming back —
+	// Back, say — lands on the same tab, and the router puts the scroll back.
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { by?: GroupBy; group?: string; page?: number } => ({
+		by: search.by === "type" ? "type" : undefined,
+		group: typeof search.group === "string" ? search.group : undefined,
+		page:
+			typeof search.page === "number" && search.page > 1
+				? search.page
+				: undefined,
+	}),
 	loader: async ({ context }) => {
 		// Tags colour the rows and light their Today buttons; the checklists say
 		// where each task lives, and answer a `&` line typed into quick-add, as
@@ -100,6 +113,8 @@ function StagesPage() {
 
 	const [renaming, setRenaming] = useState<AcrossTask | null>(null);
 	const [pendingDelete, setPendingDelete] = useState<AcrossTask | null>(null);
+	// Its title stays on the question while it closes; see `useHeld`.
+	const shownDelete = useHeld(pendingDelete);
 	const [assigning, setAssigning] = useState<AcrossTask | null>(null);
 	const [typing, setTyping] = useState<AcrossTask | null>(null);
 	// The tasks a tag is being put on: the one pointed at, or every one
@@ -108,10 +123,24 @@ function StagesPage() {
 		null,
 	);
 	const [moving, setMoving] = useState<AcrossTask | null>(null);
-	const [groupBy, setGroupBy] = useState<GroupBy>("stage");
-	// Picked by hand; until then, the first group of whichever cut is shown.
-	const [group, setGroup] = useState<string | undefined>(undefined);
-	const [page, setPage] = useState<number | undefined>(undefined);
+	// Picked by hand, and kept in the URL; until then, by stage, and the first
+	// group of whichever cut is shown.
+	const { by: groupBy = "stage", group, page } = Route.useSearch();
+
+	/**
+	 * Show another cut, tab or page. It replaces the address rather than adding
+	 * to it, so Back leaves the screen instead of going through every tab, and
+	 * keeps the scroll where it is, as a tab does.
+	 */
+	function show(next: { by?: GroupBy; group?: string; page?: number }) {
+		void navigate({
+			to: ".",
+			search: (previous) => ({ ...previous, ...next }),
+			replace: true,
+			resetScroll: false,
+		});
+	}
+	const setPage = (next: number | undefined) => show({ page: next });
 	const [sort, setSort] = useState<SortOrder>("newest");
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	const [tagId, setTagId] = useState<string | undefined>(undefined);
@@ -305,13 +334,15 @@ function StagesPage() {
 						<HStack gap={1} vAlign="center" wrap="wrap">
 							<GroupByToggle
 								value={groupBy}
-								onChange={(next) => {
-									setGroupBy(next);
+								onChange={(next) =>
 									// The groups are named differently now, so whatever was
 									// picked under the old cut no longer means anything.
-									setGroup(undefined);
-									setPage(undefined);
-								}}
+									show({
+										by: next === "stage" ? undefined : next,
+										group: undefined,
+										page: undefined,
+									})
+								}
 							/>
 							<MemberFilter value={assignee} onChange={turn(setAssignee)} />
 							<TagFilter tags={tags} value={tagId} onChange={turn(setTagId)} />
@@ -338,8 +369,7 @@ function StagesPage() {
 							data.groups.map((each) => [each.key, each.count]),
 						)}
 						onChange={(key) => {
-							setGroup(key);
-							setPage(undefined);
+							show({ group: key, page: undefined });
 						}}
 					/>
 
@@ -457,7 +487,7 @@ function StagesPage() {
 				onOpenChange={(open) => {
 					if (!open) setPendingDelete(null);
 				}}
-				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
+				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {

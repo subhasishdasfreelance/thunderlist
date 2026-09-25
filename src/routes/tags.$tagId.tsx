@@ -8,11 +8,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import {
-	keepPreviousData,
-	useQuery,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, Pencil, Trash2, ZapOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -46,6 +42,10 @@ import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
+	getTagCompletedFn,
+	getTagOpenTasksFn,
+} from "#/functions/tag.functions";
+import {
 	createTagResolver,
 	createTask,
 	moveToBacklog,
@@ -75,6 +75,7 @@ import {
 	shortTitle,
 } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
+import { useHeld } from "#/lib/use-held";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { firstPage, PAGE_SIZE, usePages } from "#/lib/use-pages";
@@ -173,7 +174,6 @@ function TagDetailPage() {
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	// Taking Today off every task on it, asked about first; see `clearToday`.
 	const [isClearingToday, setIsClearingToday] = useState(false);
-	const queryClient = useQueryClient();
 	const [sort, setSort] = useState<SortOrder>("newest");
 	// Picked by hand; until then, the page `?task=` is on, or the first.
 	const [page, setPage] = useState<number | undefined>(undefined);
@@ -291,6 +291,20 @@ function TagDetailPage() {
 		[openResult.data, completedResult.data, sort, assignee, typeId, types],
 	);
 
+	/*
+	 * A task sent to that is not among the open ones is a finished one: its
+	 * section is read and opened, so it can be seen and worked; see
+	 * `CompletedSection`.
+	 */
+	const isRevealingCompleted =
+		focusTaskId !== undefined &&
+		openResult.data !== undefined &&
+		!openResult.isPlaceholderData &&
+		!open.some((entry) => entry.task.taskId === focusTaskId);
+	useEffect(() => {
+		if (isRevealingCompleted) setWantsCompleted(true);
+	}, [isRevealingCompleted]);
+
 	// Twenty rows a page, opening on the one a `?task=` link was sent to.
 	const completedPages = usePages(
 		completed,
@@ -302,6 +316,15 @@ function TagDetailPage() {
 	const checklists = checklistsResult.data ?? [];
 	// Somewhere to park a task; see `moveToBacklog`.
 	const backlog = specialChecklist(checklists, "backlog");
+
+	// What the confirmations say, kept while they close; see `useHeld`.
+	const shownDelete = useHeld(pendingDelete);
+	const shownCompletedCount = useHeld(
+		isClearingCompleted ? completed.length : null,
+	);
+	const shownTodayTotal = useHeld(
+		isClearingToday ? (data?.progress.total ?? null) : null,
+	);
 
 	useFocusTask(focusTaskId);
 	const now = useNow();
@@ -491,18 +514,30 @@ function TagDetailPage() {
 
 	/**
 	 * Start the day afresh: Today taken off every task on it, open and done
-	 * alike. Each stays in its checklist. The whole of Today is read first —
-	 * the screen holds one page of it — and each task is then untagged the way
-	 * the bolt would, so it is drawn at once.
+	 * alike. Each stays in its checklist, and each is untagged the way the bolt
+	 * would, so it is drawn at once.
+	 *
+	 * What is on screen goes first, without waiting. The screen holds only a
+	 * page of Today, so the whole of it is then read and the rest follows. That
+	 * read goes straight to the server rather than through the cache: every
+	 * change drawn above cancels the queries in flight.
 	 */
 	async function clearToday() {
+		const cleared = new Set<string>();
+		const untag = (entries: ReadonlyArray<TagTaskEntry>) => {
+			for (const { task } of entries) {
+				if (cleared.has(task.taskId)) continue;
+				cleared.add(task.taskId);
+				setSpecialTag(apply, task, "today", false, tags);
+			}
+		};
+
+		untag([...(openResult.data?.items ?? []), ...(completedResult.data ?? [])]);
 		const [openAll, doneAll] = await Promise.all([
-			queryClient.fetchQuery(tagOpenQuery(tagId, ALL_OPEN)),
-			queryClient.fetchQuery(tagCompletedQuery(tagId)),
+			getTagOpenTasksFn({ data: { tagId, ...ALL_OPEN } }),
+			getTagCompletedFn({ data: { tagId } }),
 		]);
-		for (const entry of [...openAll.items, ...doneAll]) {
-			setSpecialTag(apply, entry.task, "today", false, tags);
-		}
+		untag([...openAll.items, ...doneAll]);
 	}
 
 	/** One task row, used by both the open and the completed sections. */
@@ -725,8 +760,16 @@ function TagDetailPage() {
 				/>
 			) : null}
 
+			{/* On a phone, Today's clear button leaves the filters no room beside
+			    it, so the count and the filters take a line each there. */}
 			{detail.progress.total === 0 ? null : (
-				<HStack gap={2} hAlign="between" vAlign="center">
+				<div
+					className={
+						special === "today"
+							? "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+							: "flex flex-row items-center justify-between gap-2"
+					}
+				>
 					<HStack gap={2} vAlign="center">
 						<Text type="label" weight="semibold" color="secondary">
 							{openTotal} to do
@@ -768,7 +811,7 @@ function TagDetailPage() {
 							}}
 						/>
 					</HStack>
-				</HStack>
+				</div>
 			)}
 
 			{/* Its progress counts its trackers too; this is no task carrying it. */}
@@ -855,6 +898,7 @@ function TagDetailPage() {
 						: () => setIsClearingCompleted(true)
 				}
 				onOpen={() => setWantsCompleted(true)}
+				reveal={isRevealingCompleted ? `${arrival}:${focusTaskId}` : undefined}
 				chart={
 					// Drawn from the finished tasks against the viewer's clock, so only
 					// once the browser has both.
@@ -1051,7 +1095,7 @@ function TagDetailPage() {
 				onOpenChange={(isOpen) => {
 					if (!isOpen) setPendingDelete(null);
 				}}
-				title={`Delete "${shortTitle(pendingDelete?.title ?? "")}"?`}
+				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
 				description="This task will be deleted."
 				actionLabel="Delete"
 				onAction={() => {
@@ -1067,8 +1111,8 @@ function TagDetailPage() {
 				onOpenChange={setIsClearingCompleted}
 				title={
 					special === null
-						? `Delete ${completed.length} completed ${completed.length === 1 ? "task" : "tasks"}?`
-						: `Clear ${completed.length} completed from #${detail.name}?`
+						? `Delete ${shownCompletedCount} completed ${shownCompletedCount === 1 ? "task" : "tasks"}?`
+						: `Clear ${shownCompletedCount} completed from #${detail.name}?`
 				}
 				description={
 					special === null
@@ -1086,8 +1130,8 @@ function TagDetailPage() {
 				isOpen={isClearingToday}
 				onOpenChange={setIsClearingToday}
 				title={`Clear #${detail.name}?`}
-				description={`#${detail.name} is taken off all ${detail.progress.total} ${
-					detail.progress.total === 1 ? "task" : "tasks"
+				description={`#${detail.name} is taken off all ${shownTodayTotal} ${
+					shownTodayTotal === 1 ? "task" : "tasks"
 				} on it, done or not. They stay in their checklists.`}
 				actionLabel="Clear"
 				onAction={() => {

@@ -51,31 +51,26 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	);
 
 	/*
-	 * Drawn at once, like any change, and said to be done once it has landed.
+	 * Drawn at once, like any change, and said to be done at once too: the
+	 * history is kept here in the browser, so there is nothing to wait for
+	 * before saying so. The save follows behind, as for anything else.
 	 *
 	 * Putting a deleted task back is two changes — the task, then the rest of
 	 * what it carried — and the second names a task the first has to have
 	 * written already. Both are drawn now; the second is only sent once the
-	 * first has landed; see `sendingTasks`.
-	 *
-	 * A failure has already been reported by `useApplyChange`, so nothing is
-	 * said here beyond not claiming it worked.
+	 * first has landed; see `sendingTasks`. A failure puts the screen back and
+	 * is reported by `useApplyChange`.
 	 */
 	const run = useCallback(
 		(step: UndoStep) => {
-			void (async () => {
-				try {
-					await Promise.all(step.changes.map((change) => applyAsync(change)));
-				} catch {
-					return;
-				}
-
-				toast({
-					body: `Undone: ${step.label.toLowerCase()}.`,
-					type: "info",
-					uniqueID: "undo",
-				});
-			})();
+			for (const change of step.changes) {
+				applyAsync(change).catch(() => {});
+			}
+			toast({
+				body: `Undone: ${step.label.toLowerCase()}.`,
+				type: "info",
+				uniqueID: "undo",
+			});
 		},
 		[applyAsync, toast],
 	);
