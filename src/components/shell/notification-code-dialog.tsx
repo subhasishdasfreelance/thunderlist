@@ -5,7 +5,7 @@ import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { Check, KeyRound, Send, Trash2, X } from "lucide-react";
+import { KeyRound, Send, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { PeopleField } from "#/components/teams/people-field";
@@ -225,20 +225,12 @@ export function CodeDialog({
 								variant="ghost"
 								onClick={() => setIsConfirming(true)}
 							/>
-							<HStack gap={2}>
-								<Button
-									label="Send notification"
-									icon={<Send aria-hidden />}
-									variant="secondary"
-									onClick={() => setIsSending(true)}
-								/>
-								<Button
-									label="Done"
-									icon={<Check aria-hidden />}
-									variant="primary"
-									onClick={onClose}
-								/>
-							</HStack>
+							<Button
+								label="Send notification"
+								icon={<Send aria-hidden />}
+								variant="secondary"
+								onClick={() => setIsSending(true)}
+							/>
 						</HStack>
 					)
 				}
