@@ -503,12 +503,16 @@ function TagDetailPage() {
 	const special = detail.special;
 
 	function clearCompleted() {
+		if (special === null) {
+			if (completed.length === 0) return;
+			apply({
+				kind: "task.deleteMany",
+				taskIds: completed.map((entry) => entry.task.taskId),
+			});
+			return;
+		}
 		for (const entry of completed) {
-			if (special === null) {
-				apply({ kind: "task.delete", taskId: entry.task.taskId });
-			} else {
-				setSpecialTag(apply, entry.task, special, false, tags);
-			}
+			setSpecialTag(apply, entry.task, special, false, tags);
 		}
 	}
 
@@ -838,7 +842,10 @@ function TagDetailPage() {
 					<SectionSpinner label="Loading tasks…" />
 				)
 			) : (
-				<ListLoading isLoading={openResult.isPlaceholderData}>
+				<ListLoading
+					isLoading={openResult.isPlaceholderData}
+					isEmpty={open.length === 0}
+				>
 					{open.length === 0 ? (
 						<EmptyState
 							title={

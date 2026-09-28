@@ -1,9 +1,11 @@
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
+import type { ReactNode } from "react";
 
 export type Stat = {
 	label: string;
-	value: string;
+	/** Text, or a spinner while the figure is still being worked out. */
+	value: ReactNode;
 	/** Shown under the value when the number alone does not explain itself. */
 	hint?: string;
 };

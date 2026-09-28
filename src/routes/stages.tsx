@@ -221,19 +221,21 @@ function StagesPage() {
 
 	/**
 	 * Delete every finished task in the tab shown, not only the page on screen.
-	 * The page goes first, without waiting; then the whole tab is read and the
-	 * rest follows. That read goes straight to the server rather than through
-	 * the cache: every change drawn above cancels the queries in flight.
+	 * The page goes first, in one batch, without waiting; then the whole tab is
+	 * read and the rest follows in a second. That read goes straight to the
+	 * server rather than through the cache: every change drawn above cancels
+	 * the queries in flight.
 	 */
 	async function clearDone() {
 		if (data === null) return;
 		const deleted = new Set<string>();
 		const remove = (tasks: ReadonlyArray<AcrossTask>) => {
-			for (const task of tasks) {
-				if (!task.completed || deleted.has(task.taskId)) continue;
-				deleted.add(task.taskId);
-				apply({ kind: "task.delete", taskId: task.taskId });
-			}
+			const taskIds = tasks
+				.filter((task) => task.completed && !deleted.has(task.taskId))
+				.map((task) => task.taskId);
+			if (taskIds.length === 0) return;
+			for (const taskId of taskIds) deleted.add(taskId);
+			apply({ kind: "task.deleteMany", taskIds });
 		};
 
 		remove(data.items);
@@ -433,7 +435,10 @@ function StagesPage() {
 						}}
 					/>
 
-					<ListLoading isLoading={result.isPlaceholderData}>
+					<ListLoading
+						isLoading={result.isPlaceholderData}
+						isEmpty={data.items.length === 0}
+					>
 						{data.items.length === 0 ? (
 							<EmptyState
 								isCompact

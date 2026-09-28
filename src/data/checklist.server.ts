@@ -1250,6 +1250,15 @@ export async function deleteTask(
 	await current.tasks.deleteOne({ taskId, userId });
 }
 
+/** Delete several tasks at once; any already gone are simply skipped. */
+export async function deleteTasks(
+	userId: string,
+	taskIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	await current.tasks.deleteMany({ taskId: { $in: [...taskIds] }, userId });
+}
+
 /**
  * Strip a tag from every task carrying it.
  *

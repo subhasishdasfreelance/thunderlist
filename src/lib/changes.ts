@@ -75,36 +75,40 @@ function checklistNeeded(change: Change): string | null {
  */
 const sendingTasks = new Map<string, Promise<unknown>>();
 
-/** The task a change is about, if it is about one. */
-function taskOf(change: Change): string | null {
+/** The tasks a change is about, if it is about any. */
+function tasksOf(change: Change): ReadonlyArray<string> {
 	switch (change.kind) {
 		case "task.create":
 		case "task.update":
 		case "task.delete":
 		case "task.move":
-			return change.taskId;
+			return [change.taskId];
+		case "task.deleteMany":
+			return change.taskIds;
 		default:
-			return null;
+			return [];
 	}
 }
 
-/** Send one change, after any change to the same task before it. */
+/** Send one change, after any change to the same tasks before it. */
 function send(change: Change): Promise<void> {
-	const taskId = taskOf(change);
-	if (taskId === null) return sendNow(change);
+	const taskIds = tasksOf(change);
+	if (taskIds.length === 0) return sendNow(change);
 
-	const before = sendingTasks.get(taskId);
+	const before = taskIds.map((taskId) => sendingTasks.get(taskId));
 	const sending = (async () => {
-		// Whatever became of the one before, this one is still asked for.
-		await before?.catch(() => {});
+		// Whatever became of the ones before, this one is still asked for.
+		await Promise.all(before.map((each) => each?.catch(() => {})));
 		await sendNow(change);
 	})();
 
-	sendingTasks.set(taskId, sending);
+	for (const taskId of taskIds) sendingTasks.set(taskId, sending);
 	void sending
 		.catch(() => {})
 		.finally(() => {
-			if (sendingTasks.get(taskId) === sending) sendingTasks.delete(taskId);
+			for (const taskId of taskIds) {
+				if (sendingTasks.get(taskId) === sending) sendingTasks.delete(taskId);
+			}
 		});
 	return sending;
 }

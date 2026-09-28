@@ -1,3 +1,4 @@
+import { Spinner } from "@astryxdesign/core/Spinner";
 import { dayPace, formatHoursLeft, formatTimeOfDay } from "#/lib/day-pace";
 import { formatClock } from "#/lib/format-date";
 import { todayWindow } from "#/lib/progress";
@@ -50,7 +51,7 @@ export function DayStats({
 			<StatGrid
 				stats={PENDING_LABELS.map((label) => ({
 					label,
-					value: "—",
+					value: <Spinner size="sm" aria-label={`Loading ${label}`} />,
 					hint: label === "Current speed" ? " " : undefined,
 				}))}
 			/>

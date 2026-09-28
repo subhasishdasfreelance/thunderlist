@@ -149,6 +149,7 @@ function soundFor(change: Change): Sound {
 			return "add";
 		case "checklist.delete":
 		case "task.delete":
+		case "task.deleteMany":
 		case "tracker.delete":
 		case "entry.delete":
 		case "tag.delete":

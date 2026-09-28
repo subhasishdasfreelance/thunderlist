@@ -24,6 +24,7 @@ import {
 import {
 	createTaskInputSchema,
 	deleteTaskInputSchema,
+	deleteTasksInputSchema,
 	moveTaskInputSchema,
 	updateTaskInputSchema,
 } from "./task";
@@ -74,6 +75,10 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("task.delete"),
 		...deleteTaskInputSchema.entries,
+	}),
+	v.object({
+		kind: v.literal("task.deleteMany"),
+		...deleteTasksInputSchema.entries,
 	}),
 	v.object({
 		kind: v.literal("task.move"),

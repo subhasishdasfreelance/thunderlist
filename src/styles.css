@@ -1407,6 +1407,17 @@ body {
 		transition-delay: 120ms;
 	}
 
+	/* The same mark, in the empty state's place rather than over it. */
+	.thunderlist-list-loading-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding-block: 2rem;
+		animation: thunderlist-fade var(--duration-fast) var(--ease-standard) 120ms
+			both;
+	}
+
 	.thunderlist-list-loading-mark {
 		position: absolute;
 		inset-block-start: 2rem;

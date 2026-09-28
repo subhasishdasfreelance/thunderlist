@@ -52,14 +52,40 @@ export function LoadingState({ label = "Please wait…" }: { label?: string }) {
  * The rows already there stay put, faded, with the same bolt and spinner over
  * them, so the list neither jumps nor passes the old rows off as the new ones;
  * see `.thunderlist-list-loading`.
+ *
+ * With no rows on screen there is nothing worth keeping: the empty state would
+ * claim the list being fetched is empty, and sit under the mark. So the mark
+ * takes its place instead.
  */
 export function ListLoading({
 	isLoading,
+	isEmpty = false,
 	children,
 }: {
 	isLoading: boolean;
+	/** Whether `children` is the empty state rather than rows. */
+	isEmpty?: boolean;
 	children: ReactNode;
 }) {
+	const mark = (
+		<>
+			<span className="thunderlist-loading-mark">
+				<svg width="28" height="28" viewBox="0 0 280 280" aria-hidden="true">
+					<path d={BOLT_PATH} fill="currentColor" />
+				</svg>
+			</span>
+			<Spinner size="sm" aria-label="Loading" />
+		</>
+	);
+
+	if (isLoading && isEmpty) {
+		return (
+			<div className="thunderlist-list-loading-empty" aria-busy>
+				{mark}
+			</div>
+		);
+	}
+
 	return (
 		<div
 			className="thunderlist-list-loading"
@@ -68,19 +94,7 @@ export function ListLoading({
 		>
 			{children}
 			{isLoading ? (
-				<div className="thunderlist-list-loading-mark">
-					<span className="thunderlist-loading-mark">
-						<svg
-							width="28"
-							height="28"
-							viewBox="0 0 280 280"
-							aria-hidden="true"
-						>
-							<path d={BOLT_PATH} fill="currentColor" />
-						</svg>
-					</span>
-					<Spinner size="sm" aria-label="Loading" />
-				</div>
+				<div className="thunderlist-list-loading-mark">{mark}</div>
 			) : null}
 		</div>
 	);

@@ -80,6 +80,33 @@ function restOfTask(task: Task): TaskPatch | null {
 	return Object.keys(rest).length === 0 ? null : rest;
 }
 
+/** The changes that write a deleted task back as it was. */
+function putBack(task: Task, checklistId: string | null): Array<Change> {
+	const rest = restOfTask(task);
+
+	return [
+		{
+			kind: "task.create",
+			checklistId,
+			// Its own id, so it comes back as the task it was rather than as a
+			// copy of it; see `changeSchema`.
+			taskId: task.taskId,
+			title: task.title,
+			addedAt: task.addedAt,
+			tagIds: [...task.tagIds],
+			trackerId: task.trackerId ?? null,
+			linkedChecklistId: task.linkedChecklistId ?? null,
+			urgent: task.urgent,
+			important: task.important,
+		},
+		// Adding a task is one line of typing, so the rest of what it carried
+		// is a second change; see `restOfTask`.
+		...(rest === null
+			? []
+			: [{ kind: "task.update" as const, taskId: task.taskId, patch: rest }]),
+	];
+}
+
 /**
  * What would put `change` back, read off the caches as they are before it is
  * applied. `null` for a change nothing here can reverse.
@@ -137,40 +164,29 @@ export function invertChange(
 			const found = findCachedTask(client, change.taskId);
 			if (found === null) return null;
 
-			const { task, checklistId } = found;
-			const rest = restOfTask(task);
-			const title = shortTitle(task.title);
+			const title = shortTitle(found.task.title);
 
 			return {
 				label: `Deleting "${title}"`,
-				changes: [
-					{
-						kind: "task.create",
-						checklistId,
-						// Its own id, so it comes back as the task it was rather than
-						// as a copy of it; see `changeSchema`.
-						taskId: task.taskId,
-						title: task.title,
-						addedAt: task.addedAt,
-						tagIds: [...task.tagIds],
-						trackerId: task.trackerId ?? null,
-						linkedChecklistId: task.linkedChecklistId ?? null,
-						urgent: task.urgent,
-						important: task.important,
-					},
-					// Adding a task is one line of typing, so the rest of what it
-					// carried is a second change; see `restOfTask`.
-					...(rest === null
-						? []
-						: [
-								{
-									kind: "task.update" as const,
-									taskId: task.taskId,
-									patch: rest,
-								},
-							]),
-				],
+				changes: putBack(found.task, found.checklistId),
 				question: `Undo deleting "${title}"? The task will be put back.`,
+			};
+		}
+
+		// Only the tasks this browser has seen can be put back; a list's
+		// other pages were never read, so there is nothing to write back.
+		case "task.deleteMany": {
+			const found = change.taskIds
+				.map((taskId) => findCachedTask(client, taskId))
+				.filter((each) => each !== null);
+			if (found.length === 0) return null;
+
+			const count = `${found.length} ${found.length === 1 ? "task" : "tasks"}`;
+
+			return {
+				label: `Deleting ${count}`,
+				changes: found.flatMap((each) => putBack(each.task, each.checklistId)),
+				question: `Undo deleting ${count}? They will be put back.`,
 			};
 		}
 

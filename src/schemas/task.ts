@@ -257,6 +257,18 @@ export const updateTaskInputSchema = v.object({
 
 export const deleteTaskInputSchema = v.object({ taskId: idSchema });
 
+/**
+ * Deleting many tasks in one request: every finished task in a list, say.
+ * As many as a list can hold, since "all" is what was asked for.
+ */
+export const deleteTasksInputSchema = v.object({
+	taskIds: v.pipe(
+		v.array(idSchema),
+		v.minLength(1, "Pick at least one task"),
+		v.maxLength(10_000, "Too many tasks at once"),
+	),
+});
+
 /** Moving a task into another checklist; see `moveTask`. */
 export const moveTaskInputSchema = v.object({
 	taskId: idSchema,

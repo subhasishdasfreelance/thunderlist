@@ -42,6 +42,7 @@ import {
 	checklistStages,
 	DEFAULT_STAGES,
 	type Stage,
+	specialChecklist,
 	stageOf,
 	underwayStage,
 } from "#/schemas/checklist";
@@ -911,6 +912,10 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			dropTask(client, change.taskId);
 			return;
 
+		case "task.deleteMany":
+			for (const taskId of change.taskIds) dropTask(client, taskId);
+			return;
+
 		case "task.move": {
 			/*
 			 * Out of the list it left and into the one it joined, in one go.
@@ -1005,16 +1010,28 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 		}
 
 		case "task.create": {
+			// One asked for in no checklist lands in the Inbox, at the Inbox's
+			// first stage, as the server files it; see `ensureInbox`. Drawn in the
+			// default stages instead, it would sit under a tab that is not there.
+			const checklistId =
+				change.checklistId ??
+				specialChecklist(
+					client.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists) ??
+						[],
+					"inbox",
+				)?.checklistId ??
+				null;
+
 			// A task added to a checklist carries its tags as well, just as the
 			// server will store it; see `createTask`.
 			const inherited =
-				change.checklistId === null
+				checklistId === null
 					? []
 					: (client.getQueryData<ChecklistSummary>(
-							queryKeys.checklist(change.checklistId),
+							queryKeys.checklist(checklistId),
 						)?.tagIds ?? []);
 
-			const first = stagesOf(client, change.checklistId)[0].stageId;
+			const first = stagesOf(client, checklistId)[0].stageId;
 			const task: Task = {
 				taskId: change.taskId,
 				title: change.title,
@@ -1029,9 +1046,9 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				stageId: first,
 			};
 
-			if (change.checklistId !== null) {
+			if (checklistId !== null) {
 				client.setQueryData<ChecklistSummary>(
-					queryKeys.checklist(change.checklistId),
+					queryKeys.checklist(checklistId),
 					(checklist) =>
 						checklist
 							? {
@@ -1043,14 +1060,14 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 								}
 							: checklist,
 				);
-				addToChecklistPages(client, change.checklistId, task);
+				addToChecklistPages(client, checklistId, task);
 			}
 
 			// The Across lists screen gathers every task, so one just added is one
 			// of them whichever checklist it went into.
 			addToAcrossPages(client, {
 				...task,
-				checklistId: change.checklistId,
+				checklistId,
 				// Left to the refetch, as on a tag's page: a title for a checklist
 				// this browser may not hold — or the Inbox it lands in — is not
 				// something to guess.
@@ -1072,7 +1089,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 				});
 				addToTagPages(client, String(key[1]), {
 					task,
-					checklistId: change.checklistId,
+					checklistId,
 					// Left to the refetch: a title for a checklist this browser may
 					// not have loaded — or the Inbox it lands in — is not something
 					// to guess.

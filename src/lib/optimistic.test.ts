@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
+import type { AcrossPage } from "#/data/across.server";
 import type { Page, StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { Arrangements } from "#/schemas/arrangement";
@@ -419,6 +420,67 @@ describe("applyOptimistically", () => {
 		expect(toDo(queryClient)?.items).toEqual([]);
 		expect(toDo(queryClient)?.total).toBe(0);
 		expect(toDo(queryClient)?.counts.todo).toBe(0);
+	});
+
+	it("takes every task in a batch delete out at once", () => {
+		const queryClient = client();
+
+		applyOptimistically(queryClient, {
+			kind: "task.deleteMany",
+			taskIds: ["tsk_1", "tsk_gone"],
+		});
+
+		expect(toDo(queryClient)?.items).toEqual([]);
+		expect(toDo(queryClient)?.total).toBe(0);
+	});
+
+	it("draws a task typed into no checklist on the Across screen's Inbox stage", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			{
+				...summary("chk_inbox"),
+				special: "inbox",
+				stages: [
+					{ stageId: "stg_todo", name: "Todo" },
+					{ stageId: "stg_done", name: "Done" },
+				],
+			},
+		]);
+		const view = {
+			groupBy: "stage" as const,
+			sort: "newest" as const,
+			limit: 20,
+		};
+		queryClient.setQueryData<AcrossPage>(queryKeys.acrossPage(view), {
+			items: [],
+			total: 0,
+			page: 1,
+			key: "todo",
+			groups: [
+				{ key: "todo", name: "Todo", count: 0 },
+				{ key: "done", name: "Done", count: 0 },
+			],
+		});
+
+		applyOptimistically(queryClient, {
+			kind: "task.create",
+			checklistId: null,
+			taskId: "tsk_new",
+			title: "New",
+			addedAt: "2026-01-02T00:00:00.000Z",
+			tagIds: [],
+			trackerId: null,
+			linkedChecklistId: null,
+			urgent: false,
+			important: false,
+		});
+
+		const page = queryClient.getQueryData<AcrossPage>(
+			queryKeys.acrossPage(view),
+		);
+		expect(page?.items.map((each) => each.taskId)).toEqual(["tsk_new"]);
+		expect(page?.items[0]?.checklistId).toBe("chk_inbox");
+		expect(page?.groups[0]?.count).toBe(1);
 	});
 
 	it("takes a moved task out of the checklist it left", () => {

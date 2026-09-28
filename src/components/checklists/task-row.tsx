@@ -114,8 +114,8 @@ export function TaskRow({
 	stages?: ReadonlyArray<Stage>;
 	/**
 	 * Say which of its checklist's stages it is at, on a screen that does not —
-	 * a tag's. Only for a checklist with stages of its own: with just the two it
-	 * starts with, the checkbox already says it.
+	 * a tag's. Every checklist's task says it, the two-stage ones included, so
+	 * rows from different checklists read alike.
 	 */
 	isStageShown?: boolean;
 }) {
@@ -154,8 +154,6 @@ export function TaskRow({
 		movable === null
 			? null
 			: (reachable.find((_, at) => at > stageIndex) ?? null);
-	const shownStage =
-		isStageShown && movable !== null ? movable[stageIndex] : null;
 
 	/**
 	 * The colour of the stage it is at, worn by its checkbox — none at the
@@ -165,6 +163,10 @@ export function TaskRow({
 		stages === undefined
 			? -1
 			: stages.findIndex((stage) => stage.stageId === stageOf(task, stages));
+	const shownStage =
+		isStageShown && stages !== undefined && tintIndex >= 0
+			? stages[tintIndex]
+			: null;
 	const tint =
 		stages === undefined || tintIndex <= 0
 			? null

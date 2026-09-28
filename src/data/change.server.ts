@@ -28,6 +28,7 @@ import {
 	createTask,
 	deleteChecklist,
 	deleteTask,
+	deleteTasks,
 	moveTask,
 	updateChecklist,
 	updateTask,
@@ -81,6 +82,10 @@ async function run(
 
 		case "task.delete":
 			await deleteTask(userId, change.taskId);
+			return;
+
+		case "task.deleteMany":
+			await deleteTasks(userId, change.taskIds);
 			return;
 
 		case "task.move":
@@ -270,6 +275,15 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 
 		case "task.delete":
 			await assertTaskAllowed(scope, change.taskId, "full");
+			return;
+
+		// All or nothing: one task they may not delete refuses the lot.
+		case "task.deleteMany":
+			await Promise.all(
+				change.taskIds.map((taskId) =>
+					assertTaskAllowed(scope, taskId, "full"),
+				),
+			);
 			return;
 
 		case "task.update":

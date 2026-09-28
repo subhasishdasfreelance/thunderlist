@@ -731,7 +731,10 @@ function ChecklistDetailPage() {
 					) : isDoneStage && view === "chart" && chart !== null ? (
 						<Card padding={3}>{chart}</Card>
 					) : (
-						<ListLoading isLoading={pageResult.isPlaceholderData}>
+						<ListLoading
+							isLoading={pageResult.isPlaceholderData}
+							isEmpty={rows.length === 0}
+						>
 							{rows.length === 0 ? (
 								<EmptyState
 									isCompact
@@ -921,9 +924,10 @@ function ChecklistDetailPage() {
 				}
 				actionLabel="Delete"
 				onAction={() => {
-					for (const task of completed) {
-						apply({ kind: "task.delete", taskId: task.taskId });
-					}
+					apply({
+						kind: "task.deleteMany",
+						taskIds: completed.map((task) => task.taskId),
+					});
 					setIsClearingCompleted(false);
 				}}
 			/>
