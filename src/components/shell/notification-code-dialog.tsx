@@ -218,7 +218,7 @@ export function CodeDialog({
 				width={600}
 				actions={() =>
 					code === null ? null : (
-						<HStack gap={2} hAlign="between" wrap="wrap">
+						<HStack gap={2} hAlign="between" wrap="wrap" width="100%">
 							<Button
 								label="Delete"
 								icon={<Trash2 aria-hidden />}
@@ -243,7 +243,12 @@ export function CodeDialog({
 								Keep it like a password: anyone who has it can notify{" "}
 								{recipient}.
 							</Text>
-							<CodeBlock code={code.code} hasCopyButton size="sm" />
+							<CodeBlock
+								code={code.code}
+								hasCopyButton
+								size="sm"
+								width="100%"
+							/>
 						</VStack>
 						<VStack gap={1.5}>
 							<Text weight="semibold">Send with it</Text>
@@ -256,6 +261,7 @@ export function CodeDialog({
 								language="javascript"
 								hasCopyButton
 								size="sm"
+								width="100%"
 							/>
 						</VStack>
 					</VStack>
