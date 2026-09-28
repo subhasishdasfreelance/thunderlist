@@ -46,3 +46,12 @@ function randomSuffix(length: number): string {
 export function createId(prefix: IdPrefix): string {
 	return `${prefix}_${Date.now().toString(36)}${randomSuffix(6)}`;
 }
+
+/**
+ * A notification code; see `NotificationCode`. A secret rather than an id, so
+ * all of it is random — no timestamp to narrow it down — and long enough that
+ * it cannot be guessed.
+ */
+export function createNotificationCode(): string {
+	return `ntf_${randomSuffix(32)}`;
+}

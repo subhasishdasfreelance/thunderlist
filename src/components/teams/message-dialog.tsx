@@ -23,7 +23,7 @@ import {
 type Audience = MessageRecipients["kind"];
 
 /** What the answer says: who took it, or that nobody could. */
-function sentNote(people: number, devices: number): string {
+export function sentNote(people: number, devices: number): string {
 	if (devices === 0) {
 		return "Sent, but nobody it went to has notifications on yet.";
 	}

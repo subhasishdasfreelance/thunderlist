@@ -221,6 +221,7 @@ settings     what a space has chosen for itself: task types, list layouts
 plans        one long Markdown document per plan
 reminders    one daily reminder per person per thing
 pushSubscriptions  one device per document, that notifications go to
+notificationCodes  one code per document, that lets a request notify someone
 taskRefs     the old Today and Backlog lists, moved onto tags on first read
 ```
 
@@ -351,6 +352,11 @@ the list reads everything but it.
 and for each device, `endpoint`, `email`, `keys`, `createdAt`. See
 [Reminders](#reminders).
 
+### `notificationCodes`
+
+`code`, `label`, `to`, `createdBy`, `teamId`, `createdAt`, `lastUsedAt`. See
+[Notification codes](#notification-codes).
+
 ### `taskRefs`
 
 `itemId`, `list`, `taskId`, `sortOrder`, `addedAt`.
@@ -378,6 +384,7 @@ app-minted id is unique; the rest are the lookups every screen makes.
 | `plans` | `planId` unique; `userId, updatedAt` |
 | `reminders` | `email, ownerId, target, targetId` unique |
 | `pushSubscriptions` | `endpoint` unique; `email` |
+| `notificationCodes` | `code` unique; `userId, createdBy` |
 | `taskRefs` | `itemId` unique; `userId, taskId`; `userId, list, sortOrder` |
 
 ---
@@ -808,6 +815,44 @@ five minutes or so:
 
 Without the push keys, Settings says notifications are not set up; without a
 scheduler, reminders are saved but never sent.
+
+### Notification codes
+
+A notification code lets anything that can make a web request — a script, a
+deploy, a form on another site — notify people without signing in. Each is
+made in Settings, under "Notification codes", and notifies one of:
+
+| Kind | Notifies | Who can make it |
+|---|---|---|
+| Only this device | the browser it was made on | anyone in their own space; a team's project managers and admin |
+| One person, everywhere | every device they turned notifications on for | in your own space, you; in a team, its project managers and admin, for anyone in it |
+| Everyone in the team | everyone in it when the code is used | a team's project managers and admin |
+
+A team's code stops working once whoever made it is no longer a project
+manager or the admin there, and reaches only the people in the team at the
+time. Codes are secrets: anyone holding one can use it, so delete and replace
+one that leaks.
+
+There is one endpoint for all of them:
+
+```js
+await fetch("https://your-app/api/notify", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    code: "ntf_…",                       // required
+    title: "Deploy finished",            // required, up to 100 characters
+    body: "main is live in production.", // optional, up to 500
+    image: "https://example.com/a.png",  // optional, shown large where supported
+    url: "/tags/today",                  // optional: an app page, or any http(s) link
+  }),
+});
+```
+
+It answers `200 { people, devices }` — how many took it — or `{ error }` with
+400 for what was sent, 403 for a team's code whose maker can no longer message
+the team, 404 for no such code, and 503 while the push keys are missing. It
+allows any origin, like `/api/reminders`. There is no rate limit.
 
 ---
 

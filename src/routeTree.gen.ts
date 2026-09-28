@@ -17,6 +17,7 @@ import { Route as PriorityRouteImport } from './routes/priority'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StagesRouteImport } from './routes/stages'
 import { Route as TodayRouteImport } from './routes/today'
+import { Route as ApiNotifyRouteImport } from './routes/api/notify'
 import { Route as ApiRemindersRouteImport } from './routes/api/reminders'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
@@ -67,6 +68,11 @@ const StagesRoute = StagesRouteImport.update({
 const TodayRoute = TodayRouteImport.update({
   id: '/today',
   path: '/today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiNotifyRoute = ApiNotifyRouteImport.update({
+  id: '/api/notify',
+  path: '/api/notify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRemindersRoute = ApiRemindersRouteImport.update({
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
     | '/plans/$planId'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
     | '/plans/$planId'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
     | '/plans/$planId'
@@ -264,6 +276,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StagesRoute: typeof StagesRoute
   TodayRoute: typeof TodayRoute
+  ApiNotifyRoute: typeof ApiNotifyRoute
   ApiRemindersRoute: typeof ApiRemindersRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   PlansPlanIdRoute: typeof PlansPlanIdRoute
@@ -333,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/today'
       fullPath: '/today'
       preLoaderRoute: typeof TodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/notify': {
+      id: '/api/notify'
+      path: '/api/notify'
+      fullPath: '/api/notify'
+      preLoaderRoute: typeof ApiNotifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/reminders': {
@@ -424,6 +444,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StagesRoute: StagesRoute,
   TodayRoute: TodayRoute,
+  ApiNotifyRoute: ApiNotifyRoute,
   ApiRemindersRoute: ApiRemindersRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   PlansPlanIdRoute: PlansPlanIdRoute,

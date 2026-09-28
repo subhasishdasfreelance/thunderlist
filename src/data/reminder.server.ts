@@ -106,7 +106,8 @@ export async function removePushSubscription(
 	await current.pushSubscriptions.deleteOne({ email, endpoint });
 }
 
-type Message = { title: string; body: string; url: string };
+/** What the service worker shows; `image` is a picture shown large. */
+type Message = { title: string; body: string; url: string; image?: string };
 
 /**
  * Send one message to every device a person has — or just the one `endpoint`
@@ -116,7 +117,7 @@ type Message = { title: string; body: string; url: string };
  * `ttl` is how long, in seconds, the push service holds it for a device that
  * is off: a reminder is stale within the hour; a message is not.
  */
-async function sendTo(
+export async function sendTo(
 	devices: { email: string; endpoint?: string },
 	message: Message,
 	ttl = 60 * 60,
@@ -160,7 +161,7 @@ async function sendTo(
 }
 
 /** As long as the push services will hold a message: four weeks. */
-const MESSAGE_TTL = 60 * 60 * 24 * 28;
+export const MESSAGE_TTL = 60 * 60 * 24 * 28;
 
 /**
  * A message from a project manager to the people of their team it names, on

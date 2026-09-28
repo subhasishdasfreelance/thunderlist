@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { listNotificationCodesFn } from "#/functions/notification-code.functions";
 import { getPushKeyFn, listRemindersFn } from "#/functions/reminder.functions";
 import { queryKeys } from "./keys";
 
@@ -16,4 +17,12 @@ export const pushKeyQuery = () =>
 		queryKey: ["push-key"] as const,
 		queryFn: () => getPushKeyFn(),
 		staleTime: Number.POSITIVE_INFINITY,
+	});
+
+/** Your notification codes in this space; see `NotificationCode`. */
+export const notificationCodesQuery = () =>
+	queryOptions({
+		queryKey: queryKeys.notificationCodes,
+		queryFn: () => listNotificationCodesFn(),
+		staleTime: 60_000,
 	});

@@ -21,6 +21,7 @@ import { AppError } from "#/lib/errors";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Checklist } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
+import type { CodeRecipients } from "#/schemas/notification-code";
 import type { Plan } from "#/schemas/plan";
 import type { ReminderTarget } from "#/schemas/reminder";
 import type { Tag } from "#/schemas/tag";
@@ -98,6 +99,21 @@ export type PushSubscriptionDoc = {
 	createdAt: string;
 };
 
+/**
+ * A notification code; see `NotificationCode`. Owned by the space it was made
+ * in, and kept to whoever made it: `createdBy`. `teamId` is that space's team,
+ * or `null` for someone's own.
+ */
+export type NotificationCodeDoc = Owned & {
+	code: string;
+	label: string;
+	to: CodeRecipients;
+	createdBy: string;
+	teamId: string | null;
+	createdAt: string;
+	lastUsedAt: string | null;
+};
+
 export type TaskDoc = Task & Owned & { checklistId: string | null };
 
 /**
@@ -172,6 +188,7 @@ export type Collections = {
 	countdowns: Collection<CountdownDoc>;
 	reminders: Collection<ReminderDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
+	notificationCodes: Collection<NotificationCodeDoc>;
 	teams: Collection<TeamDoc>;
 	members: Collection<MemberDoc>;
 	users: Collection<AuthUserDoc>;
@@ -221,6 +238,8 @@ function collectionsOf(database: Db): Collections {
 		reminders: database.collection<ReminderDoc>("reminders"),
 		pushSubscriptions:
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
+		notificationCodes:
+			database.collection<NotificationCodeDoc>("notificationCodes"),
 		teams: database.collection<TeamDoc>("teams"),
 		members: database.collection<MemberDoc>("members"),
 		// Better Auth's own name for its accounts; see `authDatabase`.
@@ -261,6 +280,8 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		),
 		current.pushSubscriptions.createIndex({ endpoint: 1 }, { unique: true }),
 		current.pushSubscriptions.createIndex({ email: 1 }),
+		current.notificationCodes.createIndex({ code: 1 }, { unique: true }),
+		current.notificationCodes.createIndex({ userId: 1, createdBy: 1 }),
 		current.trackers.createIndex({ trackerId: 1 }, { unique: true }),
 		current.trackers.createIndex({ userId: 1 }),
 		current.tags.createIndex({ tagId: 1 }, { unique: true }),

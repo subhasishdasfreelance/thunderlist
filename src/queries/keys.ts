@@ -58,6 +58,8 @@ export const queryKeys = {
 	tagSummaries: ["tag-summaries"] as const,
 	/** This person's daily reminders here; see `Reminder`. */
 	reminders: ["reminders"] as const,
+	/** Your notification codes here; see `NotificationCode`. */
+	notificationCodes: ["notification-codes"] as const,
 	/** Every plan, without its body; see `PlanSummary`. */
 	plans: ["plans"] as const,
 	plan: (planId: string) => ["plans", planId] as const,

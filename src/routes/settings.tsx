@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	ChevronRight,
+	KeyRound,
 	Megaphone,
 	Plus,
 	Shapes,
@@ -21,6 +22,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
+import { NotificationCodes } from "#/components/shell/notification-codes";
 import { NotificationSettings } from "#/components/shell/notification-settings";
 import { TaskTypesDialog } from "#/components/tasks/task-types-dialog";
 import { MessageDialog } from "#/components/teams/message-dialog";
@@ -100,6 +102,7 @@ function SettingsPage() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [isManagingTypes, setIsManagingTypes] = useState(false);
 	const [isMessaging, setIsMessaging] = useState(false);
+	const [isMakingCode, setIsMakingCode] = useState(false);
 	const [openTeamId, setOpenTeamId] = useState<string | null>(null);
 	// The space being moved into, while the move is on its way.
 	const [movingTo, setMovingTo] = useState<string | null | undefined>(
@@ -289,6 +292,27 @@ function SettingsPage() {
 						/>
 					}
 				/>
+			)}
+
+			{/* Your own space, and a team's project managers and its admin. */}
+			{space == null || (space.team !== null && !canManageContent) ? null : (
+				<Section
+					title="Notification codes"
+					description="Let a script, a server or another site notify this device, a person on all their devices, or the whole team — with one request and a code."
+					action={
+						<Button
+							label="New code"
+							icon={<KeyRound aria-hidden />}
+							variant="secondary"
+							onClick={() => setIsMakingCode(true)}
+						/>
+					}
+				>
+					<NotificationCodes
+						isCreating={isMakingCode}
+						onCreatingChange={setIsMakingCode}
+					/>
+				</Section>
 			)}
 
 			<TaskTypesDialog
