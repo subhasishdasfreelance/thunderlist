@@ -512,6 +512,8 @@ export type TagValues = {
 	 * their role allows; see `accessSchema`.
 	 */
 	access: Array<AccessEntry> | null;
+	/** Editing only: each stage's colour on its bar; see `Tag.stageColors`. */
+	stageColors?: Record<string, TagColor>;
 };
 
 export function createTag(apply: ApplyChange, values: TagValues): string {

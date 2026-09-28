@@ -41,13 +41,20 @@ import {
 	type ChecklistSummary,
 	checklistStages,
 	DEFAULT_STAGES,
-	isUnderway,
 	type Stage,
 	stageOf,
+	underwayStage,
 } from "#/schemas/checklist";
+import type { Countdown } from "#/schemas/countdown";
 import type { Plan, PlanSummary } from "#/schemas/plan";
 import type { Reminder } from "#/schemas/reminder";
-import type { Tag, TagDetail, TagSummary, TagTaskEntry } from "#/schemas/tag";
+import {
+	shiftTagStages,
+	type Tag,
+	type TagDetail,
+	type TagSummary,
+	type TagTaskEntry,
+} from "#/schemas/tag";
 import type {
 	AcrossPageView,
 	Task,
@@ -367,10 +374,12 @@ function patchTags(
 
 		const after = next(before, detail.tagId);
 		const task = after === null ? null : after.task;
-		// Moving along its stages moves it in and out of the part under way.
+		// Moving along its stages moves it from one part of the bar to another.
 		const stages = stagesOf(client, before.checklistId);
-		const underway = (each: Task | null) =>
-			each !== null && isUnderway(each, stages) ? 1 : 0;
+		const stageAt = (each: Task | null) =>
+			each === null ? null : underwayStage(each, stages);
+		const from = stageAt(before.task);
+		const to = stageAt(task);
 		client.setQueryData<TagDetail>(key, {
 			...detail,
 			progress: {
@@ -378,9 +387,10 @@ function patchTags(
 				inProgress: Math.max(
 					0,
 					(detail.progress.inProgress ?? 0) +
-						underway(task) -
-						underway(before.task),
+						(to === null ? 0 : 1) -
+						(from === null ? 0 : 1),
 				),
+				stages: shiftTagStages(detail.progress.stages ?? [], from, to),
 			},
 		});
 		for (const [pageKey, page] of pages) {
@@ -1281,6 +1291,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 										completed: 0,
 										percent: 0,
 										inProgress: 0,
+										stages: [],
 									},
 								},
 							],
@@ -1363,6 +1374,38 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			});
 			return;
 		}
+
+		case "countdown.create": {
+			const now = new Date().toISOString();
+			const { kind: _kind, ...fields } = change;
+			const countdown: Countdown = {
+				...fields,
+				createdAt: now,
+				updatedAt: now,
+			};
+			client.setQueryData<Array<Countdown>>(queryKeys.countdowns, (list) =>
+				list === undefined ? list : [...list, countdown],
+			);
+			return;
+		}
+
+		case "countdown.update": {
+			const updatedAt = new Date().toISOString();
+			client.setQueryData<Array<Countdown>>(queryKeys.countdowns, (list) =>
+				list?.map((each) =>
+					each.countdownId === change.countdownId
+						? { ...each, ...change.patch, updatedAt }
+						: each,
+				),
+			);
+			return;
+		}
+
+		case "countdown.delete":
+			client.setQueryData<Array<Countdown>>(queryKeys.countdowns, (list) =>
+				list?.filter((each) => each.countdownId !== change.countdownId),
+			);
+			return;
 
 		case "plan.delete":
 			client.setQueryData<Array<PlanSummary>>(queryKeys.plans, (list) =>

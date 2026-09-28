@@ -696,7 +696,7 @@ function TagDetailPage() {
 						label={`${detail.name} progress`}
 						percent={progress.percent}
 						stages={{
-							parts: tagStageParts(progress),
+							parts: tagStageParts(progress, detail.stageColors),
 							total: progress.total,
 							// Every stage counted under the bar, the not-started ones too.
 							firstName: "To do",
@@ -772,7 +772,7 @@ function TagDetailPage() {
 				>
 					<HStack gap={2} vAlign="center">
 						<Text type="label" weight="semibold" color="secondary">
-							{openTotal} to do
+							{openTotal} yet to complete
 						</Text>
 						{special === "today" &&
 						canUpdateTasks &&
@@ -1082,6 +1082,7 @@ function TagDetailPage() {
 				isOpen={isEditOpen}
 				onOpenChange={setIsEditOpen}
 				tag={detail}
+				stages={detail.progress.stages}
 				existingNames={tags.map((tag) => tag.name)}
 				onSubmit={(values) => {
 					// The address may be `today` rather than the tag's id.

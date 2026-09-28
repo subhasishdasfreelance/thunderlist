@@ -6,6 +6,11 @@ import {
 	updateChecklistInputSchema,
 } from "./checklist";
 import {
+	countdownIdInputSchema,
+	createCountdownInputSchema,
+	updateCountdownInputSchema,
+} from "./countdown";
+import {
 	createPlanInputSchema,
 	planIdInputSchema,
 	updatePlanInputSchema,
@@ -124,6 +129,19 @@ const changeSchema = v.variant("kind", [
 		...updatePlanInputSchema.entries,
 	}),
 	v.object({ kind: v.literal("plan.delete"), ...planIdInputSchema.entries }),
+
+	v.object({
+		kind: v.literal("countdown.create"),
+		...createCountdownInputSchema.entries,
+	}),
+	v.object({
+		kind: v.literal("countdown.update"),
+		...updateCountdownInputSchema.entries,
+	}),
+	v.object({
+		kind: v.literal("countdown.delete"),
+		...countdownIdInputSchema.entries,
+	}),
 
 	v.object({
 		kind: v.literal("reminder.set"),

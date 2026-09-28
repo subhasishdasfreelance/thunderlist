@@ -1,5 +1,5 @@
 import { Divider } from "@astryxdesign/core/Divider";
-import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useNavigate } from "@tanstack/react-router";
 import type { TaggedTask } from "#/queries/system";
@@ -63,18 +63,17 @@ export function TaggedTaskRow({
 		/>
 	);
 
+	// Where it lives goes under the title, as a badge, apart from its caption.
 	const content = (
-		<HStack gap={2} hAlign="between" vAlign="center" paddingBlock={1.5}>
+		<VStack gap={0} paddingBlock={1.5}>
+			{title}
 			{task.caption ? (
-				<VStack gap={0}>
-					{title}
-					<Text type="supporting">{task.caption}</Text>
-				</VStack>
-			) : (
-				title
-			)}
-			{home === null ? null : <Text type="supporting">{home}</Text>}
-		</HStack>
+				<Text type="supporting">
+					<span data-task-caption>{task.caption}</span>
+				</Text>
+			) : null}
+			{home === null ? null : <span className="thunderlist-crumb">{home}</span>}
+		</VStack>
 	);
 
 	return (

@@ -6,7 +6,7 @@ import { HStack } from "@astryxdesign/core/Stack";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { Theme } from "@astryxdesign/core/theme";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { MessageCircleQuestionMark, ScanSearch } from "lucide-react";
+import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
@@ -203,26 +203,19 @@ export function AppFrame({
 												variant="ghost"
 												size="md"
 												icon={
-													<ScanSearch
-														aria-hidden
-														size={24}
-														absoluteStrokeWidth
-													/>
+													<Search aria-hidden size={22} absoluteStrokeWidth />
 												}
 												onClick={() => setIsSearchOpen(true)}
 											/>
-											{/* Search and help are both drawn edge to edge, like the
-											   monitor beside them, so all three read as one size — the
-											   scan frame at 24, since its corners stop short of the
-											   box. A bare magnifier or a ring leaves the corners empty
-											   and looks smaller however it is sized. */}
+											{/* The familiar magnifier and question mark, at one size so
+											   they read as a pair. */}
 											<IconButton
 												label="Shortcuts and help"
 												tooltip="Shortcuts (?)"
 												variant="ghost"
 												size="md"
 												icon={
-													<MessageCircleQuestionMark
+													<CircleQuestionMark
 														aria-hidden
 														size={22}
 														absoluteStrokeWidth

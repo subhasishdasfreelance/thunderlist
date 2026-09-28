@@ -11,9 +11,12 @@
  */
 
 import webpush from "web-push";
+import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
+import { levelFor } from "#/schemas/access";
 import { isDue, type Reminder, type ReminderTarget } from "#/schemas/reminder";
 import { storedRole, type TeamMessageInput } from "#/schemas/team";
+import { type Hidden, withAccess } from "./visibility.server";
 
 /** The server's push keys, or `null` while none are configured. */
 function pushKeys(): { publicKey: string; privateKey: string } | null {
@@ -163,10 +166,14 @@ const MESSAGE_TTL = 60 * 60 * 24 * 28;
  * every device each of them has turned notifications on for. One that is off
  * gets it once it is back on, within four weeks. Returns how many people and
  * how many devices took it — a person with no device has nothing to take it.
+ *
+ * Sent to a checklist, it goes to everyone who can see that checklist, and
+ * opens it; see `levelFor`.
  */
 export async function sendTeamMessage(
 	teamId: string,
 	input: TeamMessageInput,
+	hidden: Hidden,
 ): Promise<{ people: number; devices: number }> {
 	const current = await collections();
 	const members = await current.members
@@ -174,22 +181,46 @@ export async function sendTeamMessage(
 		.toArray();
 
 	const { to } = input;
+	const checklist =
+		to.kind === "checklist" && !hidden.checklistIds.has(to.checklistId)
+			? await current.checklists.findOne(
+					{ userId: teamId, checklistId: to.checklistId },
+					{ projection: { _id: 0, access: 1, visibleTo: 1, special: 1 } },
+				)
+			: null;
+	if (to.kind === "checklist" && checklist === null) {
+		throw new AppError("not_found", "That checklist no longer exists.");
+	}
+	// The Inbox and the Backlog are everyone's, whatever they say.
+	const canSee = (member: { email: string; role: string }) =>
+		checklist === null ||
+		checklist.special != null ||
+		levelFor(
+			storedRole(member.role),
+			member.email,
+			withAccess(checklist).access,
+		) !== null;
+
 	const recipients = members
 		.filter((member) =>
 			to.kind === "team"
 				? true
 				: to.kind === "role"
 					? storedRole(member.role) === to.role
-					: member.email === to.email,
+					: to.kind === "checklist"
+						? canSee(member)
+						: member.email === to.email,
 		)
 		.map((member) => member.email);
+	const url =
+		to.kind === "checklist" ? `/checklists/${to.checklistId}` : "/tags/today";
 
 	let people = 0;
 	let devices = 0;
 	for (const email of recipients) {
 		const sent = await sendTo(
 			email,
-			{ title: input.title, body: input.body, url: "/tags/today" },
+			{ title: input.title, body: input.body, url },
 			MESSAGE_TTL,
 		);
 		if (sent > 0) people += 1;

@@ -23,6 +23,8 @@ export const ID_PREFIX = {
 	group: "grp",
 	/** A long Markdown document; see `Plan`. */
 	plan: "pln",
+	/** A day counted down to; see `Countdown`. */
+	countdown: "cdn",
 	/** Minted on the server, which is the only place a team is made. */
 	team: "team",
 	/** Identifies a queued change in the browser; never written to the database. */

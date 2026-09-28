@@ -32,6 +32,11 @@ import {
 	updateChecklist,
 	updateTask,
 } from "./checklist.server";
+import {
+	createCountdown,
+	deleteCountdown,
+	updateCountdown,
+} from "./countdown.server";
 import { createPlan, deletePlan, updatePlan } from "./plan.server";
 import { setReminder } from "./reminder.server";
 import { setArrangement, setTaskTypes } from "./settings.server";
@@ -142,6 +147,18 @@ async function run(
 
 		case "plan.delete":
 			await deletePlan(userId, change.planId);
+			return;
+
+		case "countdown.create":
+			await createCountdown(userId, change);
+			return;
+
+		case "countdown.update":
+			await updateCountdown(userId, change.countdownId, change.patch);
+			return;
+
+		case "countdown.delete":
+			await deleteCountdown(userId, change.countdownId);
 			return;
 
 		case "reminder.set":

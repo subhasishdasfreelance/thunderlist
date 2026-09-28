@@ -77,7 +77,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 					label={`${tag.name} progress`}
 					percent={progress.percent}
 					stages={{
-						parts: tagStageParts(progress),
+						parts: tagStageParts(progress, tag.stageColors),
 						total: progress.total,
 						firstName: "To do",
 					}}

@@ -1,4 +1,5 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
@@ -7,6 +8,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
@@ -25,6 +27,7 @@ import { TypeFilter } from "#/components/tasks/type-filter";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
 import type { AcrossTask } from "#/data/across.server";
+import { getAcrossTasksFn } from "#/functions/across.functions";
 import {
 	createTagResolver,
 	createTask,
@@ -123,6 +126,7 @@ function StagesPage() {
 		null,
 	);
 	const [moving, setMoving] = useState<AcrossTask | null>(null);
+	const [isClearingDone, setIsClearingDone] = useState(false);
 	// Picked by hand, and kept in the URL; until then, by stage, and the first
 	// group of whichever cut is shown.
 	const { by: groupBy = "stage", group, page } = Route.useSearch();
@@ -203,6 +207,50 @@ function StagesPage() {
 
 	const data = result.data ?? null;
 	const shown = data?.groups.find((each) => each.key === data.key) ?? null;
+
+	/*
+	 * A done tab: the stage finished tasks are at, where they can all be
+	 * deleted at once. Deleting them is shaping the work; see `Capability`.
+	 */
+	const isDoneTab =
+		groupBy === "stage" &&
+		data !== null &&
+		data.items.length > 0 &&
+		data.items.every((task) => task.completed);
+	const canClearDone = isDoneTab && canManageContent;
+
+	/**
+	 * Delete every finished task in the tab shown, not only the page on screen.
+	 * The page goes first, without waiting; then the whole tab is read and the
+	 * rest follows. That read goes straight to the server rather than through
+	 * the cache: every change drawn above cancels the queries in flight.
+	 */
+	async function clearDone() {
+		if (data === null) return;
+		const deleted = new Set<string>();
+		const remove = (tasks: ReadonlyArray<AcrossTask>) => {
+			for (const task of tasks) {
+				if (!task.completed || deleted.has(task.taskId)) continue;
+				deleted.add(task.taskId);
+				apply({ kind: "task.delete", taskId: task.taskId });
+			}
+		};
+
+		remove(data.items);
+		const all = await getAcrossTasksFn({
+			data: {
+				groupBy,
+				group: data.key,
+				sort,
+				limit: 10_000,
+				page: 1,
+				assignee,
+				tag: tagId,
+				type: shownType,
+			},
+		});
+		remove(all.items);
+	}
 
 	/**
 	 * Add a pasted block of tasks. Belonging to no list yet, they go into the
@@ -359,6 +407,18 @@ function StagesPage() {
 						/>
 					</HStack>
 
+					{canClearDone ? (
+						<HStack hAlign="end">
+							<Button
+								label={`Delete all ${shown.name.toLowerCase()}`}
+								icon={<Trash2 aria-hidden />}
+								variant="ghost"
+								size="sm"
+								onClick={() => setIsClearingDone(true)}
+							/>
+						</HStack>
+					) : null}
+
 					<StageTabs
 						stages={data.groups.map((each) => ({
 							stageId: each.key,
@@ -479,6 +539,18 @@ function StagesPage() {
 						});
 					}
 					setRenaming(null);
+				}}
+			/>
+
+			<AlertDialog
+				isOpen={isClearingDone}
+				onOpenChange={setIsClearingDone}
+				title={`Delete ${shown?.count ?? 0} ${shown?.name.toLowerCase() ?? "done"} ${shown?.count === 1 ? "task" : "tasks"}?`}
+				description="They will be deleted from every checklist they live in."
+				actionLabel="Delete"
+				onAction={() => {
+					void clearDone();
+					setIsClearingDone(false);
 				}}
 			/>
 

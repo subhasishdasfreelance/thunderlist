@@ -10,7 +10,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Megaphone, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
@@ -42,6 +42,7 @@ import { TypeFilter } from "#/components/tasks/type-filter";
 import { AccessButton } from "#/components/teams/access-button";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
+import { MessageDialog } from "#/components/teams/message-dialog";
 import {
 	type ChecklistValues,
 	createTagResolver,
@@ -177,6 +178,7 @@ function ChecklistDetailPage() {
 	// Its title stays on the question while it closes; see `useHeld`.
 	const shownDelete = useHeld(pendingDelete);
 	const [isDeletingChecklist, setIsDeletingChecklist] = useState(false);
+	const [isMessaging, setIsMessaging] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	const [sort, setSort] = useState<SortOrder>("newest");
 	// Picked by hand, and kept in the URL; until then, where `?task=` is, or
@@ -586,6 +588,16 @@ function ChecklistDetailPage() {
 								icon: Pencil,
 								onClick: () => setIsEditOpen(true),
 							},
+							// A notification to everyone who can see it; see `MessageDialog`.
+							...(team === null
+								? []
+								: [
+										{
+											label: "Message its people…",
+											icon: Megaphone,
+											onClick: () => setIsMessaging(true),
+										},
+									]),
 							// Every space has these two: tasks with nowhere else to go are
 							// put in the Inbox, and parked work in the Backlog.
 							...(special !== null
@@ -874,6 +886,12 @@ function ChecklistDetailPage() {
 					apply({ kind: "checklist.update", checklistId, patch: values });
 					setIsEditOpen(false);
 				}}
+			/>
+
+			<MessageDialog
+				isOpen={isMessaging}
+				onOpenChange={setIsMessaging}
+				checklistId={checklistId}
 			/>
 
 			<AlertDialog

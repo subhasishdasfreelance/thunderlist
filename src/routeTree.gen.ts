@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BacklogRouteImport } from './routes/backlog'
+import { Route as CountdownsRouteImport } from './routes/countdowns'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PriorityRouteImport } from './routes/priority'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const BacklogRoute = BacklogRouteImport.update({
   id: '/backlog',
   path: '/backlog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CountdownsRoute = CountdownsRouteImport.update({
+  id: '/countdowns',
+  path: '/countdowns',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -122,6 +128,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/countdowns': typeof CountdownsRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/countdowns': typeof CountdownsRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/backlog': typeof BacklogRoute
+  '/countdowns': typeof CountdownsRoute
   '/login': typeof LoginRoute
   '/priority': typeof PriorityRoute
   '/settings': typeof SettingsRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/backlog'
+    | '/countdowns'
     | '/login'
     | '/priority'
     | '/settings'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/backlog'
+    | '/countdowns'
     | '/login'
     | '/priority'
     | '/settings'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/backlog'
+    | '/countdowns'
     | '/login'
     | '/priority'
     | '/settings'
@@ -246,6 +258,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BacklogRoute: typeof BacklogRoute
+  CountdownsRoute: typeof CountdownsRoute
   LoginRoute: typeof LoginRoute
   PriorityRoute: typeof PriorityRoute
   SettingsRoute: typeof SettingsRoute
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       path: '/backlog'
       fullPath: '/backlog'
       preLoaderRoute: typeof BacklogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/countdowns': {
+      id: '/countdowns'
+      path: '/countdowns'
+      fullPath: '/countdowns'
+      preLoaderRoute: typeof CountdownsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -398,6 +418,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BacklogRoute: BacklogRoute,
+  CountdownsRoute: CountdownsRoute,
   LoginRoute: LoginRoute,
   PriorityRoute: PriorityRoute,
   SettingsRoute: SettingsRoute,

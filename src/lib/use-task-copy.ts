@@ -3,7 +3,10 @@ import { useEffect } from "react";
 /** Marks a task's title text; set by `TaggedTitle`. */
 const TITLE = "[data-task-title]";
 
-/** Between two copied titles: one blank line. */
+/** Marks a task's caption, the line under its title; set by the task rows. */
+const CAPTION = "[data-task-caption]";
+
+/** Between two copied tasks: one blank line. */
 const SEPARATOR = "\n\n";
 
 /** The part of a title that falls inside the selection. */
@@ -23,14 +26,14 @@ function selectedPart(title: Element, range: Range): string {
 }
 
 /**
- * Copying tasks copies their titles, and only their titles.
+ * Copying tasks copies their titles and captions, and nothing else.
  *
  * A row is more than its title — a checkbox, flag buttons, a divider, a menu —
  * and the browser turns each of those boxes into a line break of its own, so a
  * few copied tasks pasted as titles scattered down a page of blank lines. When a
  * selection runs across two or more titles, the clipboard gets the selected
- * text of each, one blank line apart. A selection inside a single title is left
- * to the browser.
+ * text of each, one blank line apart, with a task's caption on the line under
+ * its title. A selection inside a single title is left to the browser.
  */
 export function useTaskCopy(): void {
 	useEffect(() => {
@@ -46,10 +49,20 @@ export function useTaskCopy(): void {
 			);
 			if (titles.length < 2) return;
 
-			const text = titles
-				.map((title) => selectedPart(title, range))
-				.filter((part) => part !== "")
-				.join(SEPARATOR);
+			// Titles and captions in page order; a caption joins the task above it.
+			const tasks: Array<string> = [];
+			for (const part of document.querySelectorAll(`${TITLE}, ${CAPTION}`)) {
+				if (!range.intersectsNode(part)) continue;
+				const text = selectedPart(part, range);
+				if (text === "") continue;
+				if (part.matches(CAPTION) && tasks.length > 0) {
+					tasks[tasks.length - 1] += `
+${text}`;
+				} else {
+					tasks.push(text);
+				}
+			}
+			const text = tasks.join(SEPARATOR);
 
 			event.clipboardData?.setData("text/plain", text);
 			event.preventDefault();

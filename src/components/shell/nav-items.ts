@@ -1,4 +1,5 @@
 import {
+	Hourglass,
 	ListChecks,
 	NotebookText,
 	SquareKanban,
@@ -12,7 +13,8 @@ import {
  *
  * Checklists are where work lives, the Inbox and the Backlog among them;
  * Priority, Across lists, Tags and Trackers are ways of looking across all
- * of it; Plans are the documents the work follows.
+ * of it; Plans are the documents the work follows; Countdowns are the days
+ * it is heading for.
  * Today is a tag, so it is reached from the Tags screen rather than having an
  * entry of its own — and Today is where the app opens. Detail routes live
  * underneath these and are deliberately not entries either, and neither is the
@@ -71,6 +73,14 @@ export const NAV_ITEMS: ReadonlyArray<{
 		shortLabel: "Plans",
 		icon: NotebookText,
 		key: "7",
+		isInMore: true,
+	},
+	{
+		to: "/countdowns",
+		label: "Countdowns",
+		shortLabel: "Countdowns",
+		icon: Hourglass,
+		key: "8",
 		isInMore: true,
 	},
 ];

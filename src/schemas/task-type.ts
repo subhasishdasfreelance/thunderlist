@@ -25,15 +25,21 @@ const taskTypeSchema = v.object({
 export type TaskType = v.InferOutput<typeof taskTypeSchema>;
 
 /**
- * The list a space starts with. Their ids are fixed rather than minted, so
- * every space's untouched list is the same and nothing has to be written until
- * someone changes it.
+ * The list a space starts with: kinds of work any project has, not only
+ * software. Their ids are fixed rather than minted, so every space's untouched
+ * list is the same and nothing has to be written until someone changes it.
+ *
+ * The first four keep the ids of the list before this one — bug, feature,
+ * story, chore — so a task typed under it keeps the nearest type here.
  */
 export const DEFAULT_TASK_TYPES: ReadonlyArray<TaskType> = [
-	{ typeId: "bug", name: "Bug", color: "red" },
-	{ typeId: "feature", name: "Feature", color: "blue" },
-	{ typeId: "story", name: "Story", color: "purple" },
-	{ typeId: "chore", name: "Chore", color: "gray" },
+	{ typeId: "feature", name: "Deliverable", color: "blue" },
+	{ typeId: "story", name: "Milestone", color: "purple" },
+	{ typeId: "bug", name: "Issue", color: "red" },
+	{ typeId: "chore", name: "Routine", color: "gray" },
+	{ typeId: "meeting", name: "Meeting", color: "teal" },
+	{ typeId: "followup", name: "Follow-up", color: "orange" },
+	{ typeId: "idea", name: "Idea", color: "yellow" },
 ];
 
 /** One kind of work across every checklist; see `tasksByType`. */

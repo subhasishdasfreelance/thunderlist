@@ -42,18 +42,20 @@ import {
 import type { AccessEntry } from "#/schemas/access";
 import {
 	checklistStages,
-	isUnderway,
 	type Stage,
 	stageOf,
 	stageProgress,
+	underwayStage,
 } from "#/schemas/checklist";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
 import {
+	countTagStages,
 	SPECIAL_TAGS,
 	type SpecialTag,
 	type Tag,
 	type TagColor,
 	type TagDetail,
+	type TagStage,
 	type TagSummary,
 	type TagTaskEntry,
 } from "#/schemas/tag";
@@ -106,25 +108,27 @@ function withSchedule(tag: Tag): Tag {
 /**
  * A tag with its progress: the share of the tasks carrying it that are done,
  * counted exactly as a checklist's are, and how many of the rest are under
- * way; see `isUnderway`. Its pace is judged in the browser, on the viewer's
+ * way, at each stage; see `underwayStage`. Its pace is judged in the browser, on the viewer's
  * own clock, which this server does not know; see `usePace`.
  */
 function summarise(
 	tag: Tag,
-	items: ReadonlyArray<{ completed: boolean; isUnderway?: boolean }>,
+	items: ReadonlyArray<{ completed: boolean; stage?: TagStage | null }>,
 ): TagSummary {
+	const stages = items.map((item) => item.stage ?? null);
 	return {
 		...tag,
 		progress: {
 			...calculateChecklistProgress(items),
-			inProgress: items.filter((item) => item.isUnderway === true).length,
+			inProgress: stages.filter((stage) => stage !== null).length,
+			stages: countTagStages(stages),
 		},
 	};
 }
 
 /**
- * Tasks with whether each is under way, which takes the stages of the
- * checklists they live in; see `isUnderway`.
+ * Tasks with the stage each is under way at, which takes the stages of the
+ * checklists they live in; see `underwayStage`.
  */
 async function withUnderway<
 	T extends Pick<TaskDoc, "checklistId" | "stageId" | "completed">,
@@ -132,7 +136,7 @@ async function withUnderway<
 	current: Collections,
 	userId: string,
 	tasks: ReadonlyArray<T>,
-): Promise<Array<T & { isUnderway: boolean }>> {
+): Promise<Array<T & { stage: TagStage | null }>> {
 	const checklistIds = [
 		...new Set(
 			tasks.flatMap((task) =>
@@ -155,7 +159,7 @@ async function withUnderway<
 
 	return tasks.map((task) => ({
 		...task,
-		isUnderway: isUnderway(
+		stage: underwayStage(
 			task,
 			checklistStages(
 				(task.checklistId === null ? undefined : byId.get(task.checklistId)) ??
@@ -408,7 +412,7 @@ export async function listTagSummaries(
 
 	const byTag = new Map<
 		string,
-		Array<{ completed: boolean; isUnderway?: boolean }>
+		Array<{ completed: boolean; stage?: TagStage | null }>
 	>();
 	for (const item of items) {
 		for (const tagId of item.tagIds) {
@@ -773,6 +777,7 @@ export async function updateTag(
 		deadlineTime?: string | null;
 		dailyWindow?: DailyWindow | null;
 		access?: Array<AccessEntry> | null;
+		stageColors?: Record<string, TagColor>;
 	},
 ): Promise<Tag> {
 	const current = await collections();

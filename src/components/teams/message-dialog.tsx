@@ -3,6 +3,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { useQuery } from "@tanstack/react-query";
 import { Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -10,6 +11,7 @@ import { sendTeamMessageFn } from "#/functions/reminder.functions";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
 import { useTeam } from "#/lib/use-team";
+import { checklistsQuery } from "#/queries/checklists";
 import {
 	type MessageRecipients,
 	memberName,
@@ -32,7 +34,9 @@ function sentNote(people: number, devices: number): string {
 
 /**
  * A message to people in the team being worked in, shown by their installed
- * app as a notification: everyone, everyone with one role, or one person.
+ * app as a notification: everyone, everyone with one role, everyone who can
+ * see one checklist, or one person. Opened from a checklist, it starts
+ * addressed to that checklist's people.
  * Someone whose device is off gets it once it is back on.
  *
  * Only for the team's project managers; the server checks that too. The
@@ -42,38 +46,48 @@ function sentNote(people: number, devices: number): string {
 export function MessageDialog({
 	isOpen,
 	onOpenChange,
+	checklistId: startChecklistId,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
+	/** The checklist it is opened from, whose people it starts addressed to. */
+	checklistId?: string;
 }) {
 	const team = useTeam();
 	const toast = useToast();
 	const [audience, setAudience] = useState<Audience>("team");
 	const [role, setRole] = useState<TeamRole>("collaborator");
 	const [email, setEmail] = useState("");
+	const [checklistId, setChecklistId] = useState("");
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 
 	const members = team?.members ?? [];
+	const checklists = useQuery({ ...checklistsQuery(), enabled: isOpen }).data;
 
-	// A fresh message each time, to everyone.
+	// A fresh message each time, to everyone — or to the checklist it is from.
 	useEffect(() => {
 		if (!isOpen) return;
-		setAudience("team");
+		setAudience(startChecklistId === undefined ? "team" : "checklist");
 		setRole("collaborator");
 		setEmail("");
+		setChecklistId(startChecklistId ?? "");
 		setTitle("");
 		setBody("");
-	}, [isOpen]);
+	}, [isOpen, startChecklistId]);
 
 	const to: MessageRecipients | null =
 		audience === "team"
 			? { kind: "team" }
 			: audience === "role"
 				? { kind: "role", role }
-				: email === ""
-					? null
-					: { kind: "person", email };
+				: audience === "checklist"
+					? checklistId === ""
+						? null
+						: { kind: "checklist", checklistId }
+					: email === ""
+						? null
+						: { kind: "person", email };
 	const canSend = to !== null && title.trim() !== "" && body.trim() !== "";
 
 	function send() {
@@ -128,6 +142,7 @@ export function MessageDialog({
 					options={[
 						{ value: "team", label: `Everyone in ${team?.name ?? "the team"}` },
 						{ value: "role", label: "Everyone with a role" },
+						{ value: "checklist", label: "Everyone on a checklist" },
 						{ value: "person", label: "One person" },
 					]}
 					value={audience}
@@ -142,6 +157,18 @@ export function MessageDialog({
 						}))}
 						value={role}
 						onChange={(next) => setRole(next as TeamRole)}
+					/>
+				) : null}
+				{audience === "checklist" ? (
+					<Selector
+						label="Checklist"
+						placeholder="Pick a checklist"
+						options={(checklists ?? []).map((checklist) => ({
+							value: checklist.checklistId,
+							label: checklist.title,
+						}))}
+						value={checklistId}
+						onChange={setChecklistId}
 					/>
 				) : null}
 				{audience === "person" ? (

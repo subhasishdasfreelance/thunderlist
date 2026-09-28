@@ -61,4 +61,6 @@ export const queryKeys = {
 	/** Every plan, without its body; see `PlanSummary`. */
 	plans: ["plans"] as const,
 	plan: (planId: string) => ["plans", planId] as const,
+	/** Every countdown; see `Countdown`. */
+	countdowns: ["countdowns"] as const,
 };

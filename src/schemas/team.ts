@@ -162,13 +162,14 @@ export const memberRoleInputSchema = v.object({
 
 /**
  * A message from a team's project managers to the installed app of people in
- * it: everyone, everyone with one role, or one person; see
- * `sendTeamMessage`.
+ * it: everyone, everyone with one role, everyone who can see one checklist,
+ * or one person; see `sendTeamMessage`.
  */
 export const teamMessageInputSchema = v.object({
 	to: v.variant("kind", [
 		v.object({ kind: v.literal("team") }),
 		v.object({ kind: v.literal("role"), role: v.picklist(TEAM_ROLES) }),
+		v.object({ kind: v.literal("checklist"), checklistId: idSchema }),
 		v.object({ kind: v.literal("person"), email: emailSchema }),
 	]),
 	title: v.pipe(

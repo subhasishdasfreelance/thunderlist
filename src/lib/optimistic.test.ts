@@ -276,7 +276,13 @@ describe("applyOptimistically", () => {
 		expect(tagTasks(queryClient, "tag_1")?.items[0]?.task.completed).toBe(true);
 		expect(
 			queryClient.getQueryData<TagDetail>(queryKeys.tag("tag_1"))?.progress,
-		).toEqual({ total: 1, completed: 1, percent: 100, inProgress: 0 });
+		).toEqual({
+			total: 1,
+			completed: 1,
+			percent: 100,
+			inProgress: 0,
+			stages: [],
+		});
 	});
 
 	it("counts a task on a tag's page as under way between its first stage and done", () => {
@@ -312,6 +318,9 @@ describe("applyOptimistically", () => {
 			completed: 0,
 			percent: 0,
 			inProgress: 1,
+			stages: [
+				{ key: "review", name: "Review", color: "blue", rank: 0.5, count: 1 },
+			],
 		});
 
 		applyOptimistically(queryClient, {
@@ -324,6 +333,7 @@ describe("applyOptimistically", () => {
 			completed: 1,
 			percent: 100,
 			inProgress: 0,
+			stages: [],
 		});
 	});
 
@@ -460,7 +470,13 @@ describe("applyOptimistically", () => {
 		expect(tagTasks(queryClient, "today")?.items).toEqual([]);
 		expect(
 			queryClient.getQueryData<TagDetail>(queryKeys.tag("today"))?.progress,
-		).toEqual({ total: 0, completed: 0, percent: 0, inProgress: 0 });
+		).toEqual({
+			total: 0,
+			completed: 0,
+			percent: 0,
+			inProgress: 0,
+			stages: [],
+		});
 	});
 
 	it("shows a task typed on a tag's page there at once", () => {

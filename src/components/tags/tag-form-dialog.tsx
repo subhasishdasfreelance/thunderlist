@@ -2,6 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
@@ -20,10 +21,12 @@ import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
 import {
+	DONE_STAGE_KEY,
 	PICKABLE_COLORS,
 	pickableColor,
 	type Tag,
 	type TagColor,
+	type TagStage,
 } from "#/schemas/tag";
 
 /**
@@ -58,17 +61,23 @@ export const STAGE_COLOR_OPTIONS = COLOR_OPTIONS.filter(
  *
  * The description and dates are a checklist's, and all of them are optional: a
  * tag without dates still counts its tasks, it just has no pace to keep.
+ *
+ * Editing one, each stage its tasks are at can be given a colour of its own on
+ * the tag's bar; left alone, a stage keeps the colour its checklist gives it.
  */
 export function TagFormDialog({
 	isOpen,
 	onOpenChange,
 	tag,
+	stages = [],
 	existingNames,
 	onSubmit,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	tag?: Tag;
+	/** The stages its tasks are under way at, to colour; see `TagStage`. */
+	stages?: ReadonlyArray<TagStage>;
 	/** Every other tag name, so a duplicate is caught before it is queued. */
 	existingNames: ReadonlyArray<string>;
 	onSubmit: (values: TagValues) => void;
@@ -94,6 +103,7 @@ export function TagFormDialog({
 	 */
 	const ownAlone = useOwnAlone();
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
+	const [stageColors, setStageColors] = useState<Record<string, TagColor>>({});
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -104,6 +114,7 @@ export function TagFormDialog({
 		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(tag?.deadlineTime ?? undefined);
 		setDailyWindow(tag?.dailyWindow ?? null);
+		setStageColors(tag?.stageColors ?? {});
 		setAccess(
 			tag === null || tag === undefined
 				? ownAlone
@@ -147,8 +158,16 @@ export function TagFormDialog({
 					: null,
 			dailyWindow,
 			access,
+			// Only a tag that exists has stages to colour.
+			...(tag === undefined ? {} : { stageColors }),
 		});
 	}
+
+	// Done first, then the stages under way, as the bar draws them.
+	const colorable = [
+		{ key: DONE_STAGE_KEY, name: "Done", color: "green" as TagColor },
+		...stages,
+	];
 
 	return (
 		<FormDialog
@@ -233,6 +252,28 @@ export function TagFormDialog({
 					onDailyWindowChange={setDailyWindow}
 					isStartDateOptional
 				/>
+
+				{tag === undefined ? null : (
+					<VStack gap={2}>
+						<Text type="label" weight="semibold">
+							Stage colours
+						</Text>
+						{colorable.map((stage) => (
+							<Selector
+								key={stage.key}
+								label={stage.name}
+								options={STAGE_COLOR_OPTIONS}
+								value={pickableColor(stageColors[stage.key] ?? stage.color)}
+								onChange={(next) =>
+									setStageColors((held) => ({
+										...held,
+										[stage.key]: next as TagColor,
+									}))
+								}
+							/>
+						))}
+					</VStack>
+				)}
 
 				{/* Only once it exists: a reminder is about something. */}
 				{tag === undefined ? null : (

@@ -336,7 +336,9 @@ export function TaskRow({
 					<VStack gap={0}>
 						{title}
 						{task.caption ? (
-							<Text type="supporting">{task.caption}</Text>
+							<Text type="supporting">
+								<span data-task-caption>{task.caption}</span>
+							</Text>
 						) : null}
 						{crumb === null && type === null ? null : (
 							<HStack gap={1} vAlign="center" wrap="wrap">
@@ -367,7 +369,10 @@ export function TaskRow({
 									</button>
 								)}
 								{shownStage === null || crumb === null ? null : (
-									<Text type="supporting">· {shownStage.name}</Text>
+									<span className="thunderlist-stage-badge">
+										<StageDot color={tint} />
+										{shownStage.name}
+									</span>
 								)}
 							</HStack>
 						)}

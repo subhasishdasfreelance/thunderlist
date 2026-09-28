@@ -12,7 +12,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	ChevronRight,
-	Eraser,
 	Megaphone,
 	Plus,
 	Shapes,
@@ -29,7 +28,6 @@ import { NewTeamDialog } from "#/components/teams/new-team-dialog";
 import { RoleToken } from "#/components/teams/role-token";
 import { TeamDialog } from "#/components/teams/team-dialog";
 import { selectSpaceFn } from "#/functions/team.functions";
-import { clearDeviceData } from "#/lib/device-data";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
 import { useSpaceChanged } from "#/lib/use-space-changed";
@@ -292,34 +290,6 @@ function SettingsPage() {
 					}
 				/>
 			)}
-
-			<Section
-				title="On this device"
-				description="Kept in this browser so the app opens as you left it, even offline: the order each list is shown in, your space's own order and groups, and the installed app's copy of the pages it last opened."
-			>
-				<Card padding={4}>
-					<HStack gap={3} hAlign="between" vAlign="center" wrap="wrap">
-						<Text type="supporting">
-							Clearing it loses nothing saved. Lists go back to their default
-							order until they are read again.
-						</Text>
-						<Button
-							label="Clear"
-							icon={<Eraser aria-hidden />}
-							variant="secondary"
-							onClick={() =>
-								void clearDeviceData().then(() =>
-									toast({
-										body: "Cleared what this device kept.",
-										type: "info",
-										uniqueID: "device-data",
-									}),
-								)
-							}
-						/>
-					</HStack>
-				</Card>
-			</Section>
 
 			<TaskTypesDialog
 				isOpen={isManagingTypes}

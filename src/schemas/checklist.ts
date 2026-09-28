@@ -9,7 +9,7 @@ import {
 	timeOfDaySchema,
 	titleSchema,
 } from "./common";
-import { TAG_COLORS, type TagColor } from "./tag";
+import { TAG_COLORS, type TagColor, type TagStage } from "./tag";
 import { taskFilterSchema } from "./task";
 
 const PACE_STATUSES = ["ahead", "on_track", "behind"] as const;
@@ -168,6 +168,28 @@ export function isUnderway(
 	stages: ReadonlyArray<Stage>,
 ): boolean {
 	return !task.completed && stageOf(task, stages) !== stages[0].stageId;
+}
+
+/**
+ * The stage a task is under way at, as a tag's bar counts it: by its name,
+ * lowercased, since names are what checklists share — "Review" in two lists
+ * is one part of the bar. `null` for a task not under way; see `isUnderway`.
+ */
+export function underwayStage(
+	task: { stageId?: string | null; completed: boolean },
+	stages: ReadonlyArray<Stage>,
+): TagStage | null {
+	if (!isUnderway(task, stages)) return null;
+
+	const index = stages.findIndex(
+		(stage) => stage.stageId === stageOf(task, stages),
+	);
+	return {
+		key: stages[index].name.toLowerCase(),
+		name: stages[index].name,
+		color: stageColor(stages, index),
+		rank: index / (stages.length - 1),
+	};
 }
 
 /**

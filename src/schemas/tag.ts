@@ -125,6 +125,11 @@ const tagNameSchema = v.pipe(
 	v.maxLength(40, "Tag name must be 40 characters or fewer"),
 );
 
+const stageColorsSchema = v.record(
+	v.pipe(v.string(), v.maxLength(30)),
+	tagColorSchema,
+);
+
 /**
  * A tag.
  *
@@ -160,6 +165,12 @@ const tagSchema = v.object({
 	 * set on Today, which is everyone's. See `accessSchema`.
 	 */
 	access: v.optional(accessSchema),
+	/**
+	 * The colour each stage is drawn in on its bar, by the stage's name
+	 * lowercased, `done` for done; see `tagStageParts`. A stage not listed
+	 * keeps the colour its checklist gives it.
+	 */
+	stageColors: v.optional(stageColorsSchema),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -209,54 +220,106 @@ export function tagParam(tag: Pick<Tag, "tagId" | "special">): string {
 }
 
 /**
- * A tag's progress: counted as a checklist's is, and how many of its open
- * tasks are under way — past the first stage of their checklist; see
- * `isUnderway`.
+ * A stage tasks under a tag are under way at — past the first stage of their
+ * checklist and not yet done; see `underwayStage`.
  */
-export type TagProgress = ChecklistProgress & { inProgress: number };
+export type TagStage = {
+	/** Its name lowercased: stages of the same name share a part of the bar. */
+	key: string;
+	name: string;
+	/** Its checklist's colour for it; a tag can draw it in another. */
+	color: TagColor;
+	/** How far through its checklist it is, from 0 to 1; see `stageProgress`. */
+	rank: number;
+};
+
+/**
+ * A tag's progress: counted as a checklist's is, and how many of its open
+ * tasks are under way, in total and at each stage.
+ */
+export type TagProgress = ChecklistProgress & {
+	inProgress: number;
+	/** Absent on a summary read before it carried them. */
+	stages?: Array<TagStage & { count: number }>;
+};
 
 /** A tag with its progress; its pace is judged in the browser, see `usePace`. */
 export type TagSummary = Tag & {
 	progress: TagProgress;
 };
 
+/** The key a tag's `stageColors` holds done's colour under. */
+export const DONE_STAGE_KEY = "done";
+
 /**
- * A tag's bar in parts, drawn the way a checklist's is: done, then every task
- * under way as one part, whatever its stage — review, QA — since the
- * checklists a tag gathers from each have stages of their own. What is left of
- * the track is the work not started. Under way is left out while nothing is,
- * so a tag whose tasks only ever go from to do to done reads as a plain bar.
+ * Tasks under way, counted by stage, the furthest along first — the order a
+ * tag's bar draws them in.
+ */
+export function countTagStages(
+	stages: ReadonlyArray<TagStage | null>,
+): Array<TagStage & { count: number }> {
+	const byKey = new Map<string, TagStage & { count: number }>();
+	for (const stage of stages) {
+		if (stage === null) continue;
+		const existing = byKey.get(stage.key);
+		if (existing) existing.count += 1;
+		else byKey.set(stage.key, { ...stage, count: 1 });
+	}
+	return [...byKey.values()].sort((a, b) => b.rank - a.rank);
+}
+
+/**
+ * A tag's stage counts with one task moved from one stage to another; either
+ * may be `null`, for a task that was not, or is no longer, under way.
+ */
+export function shiftTagStages(
+	counts: ReadonlyArray<TagStage & { count: number }>,
+	from: TagStage | null,
+	to: TagStage | null,
+): Array<TagStage & { count: number }> {
+	if (from?.key === to?.key) return [...counts];
+
+	const next = counts
+		.map((stage) =>
+			stage.key === from?.key ? { ...stage, count: stage.count - 1 } : stage,
+		)
+		.filter((stage) => stage.count > 0);
+	if (to === null) return next;
+
+	const at = next.find((stage) => stage.key === to.key);
+	return at
+		? next.map((stage) =>
+				stage === at ? { ...stage, count: stage.count + 1 } : stage,
+			)
+		: [...next, { ...to, count: 1 }].sort((a, b) => b.rank - a.rank);
+}
+
+/**
+ * A tag's bar in parts, drawn the way a checklist's is: done, then each stage
+ * its tasks are under way at, the furthest along first. Stages of the same
+ * name in different checklists are one part, in the colour the tag gives it
+ * or else the colour its checklist does. What is left of the track is the
+ * work not started.
  */
 export function tagStageParts(
-	// No `inProgress` on a summary read before it carried one: a page kept from
-	// the last version of the app draws what is done rather than breaking.
-	progress: Pick<ChecklistProgress, "completed"> & { inProgress?: number },
+	progress: Pick<TagProgress, "completed" | "stages">,
+	stageColors: Readonly<Record<string, TagColor>> = {},
 ): Array<StagePart> {
-	const inProgress = progress.inProgress ?? 0;
-
 	return [
 		{
-			stageId: "done",
+			stageId: DONE_STAGE_KEY,
 			name: "Done",
-			color: "green",
+			color: stageColors[DONE_STAGE_KEY] ?? "green",
 			count: progress.completed,
 		},
-		...(inProgress === 0
-			? []
-			: [
-					{
-						/*
-						 * Amber for under way against green for done, the way a signal
-						 * reads. Blue sat too close to the green beside it on a bar a
-						 * few pixels tall — and too close to the app's own accent, which
-						 * means something else entirely.
-						 */
-						stageId: "underway",
-						name: "In progress",
-						color: "orange" as const,
-						count: inProgress,
-					},
-				]),
+		// Absent on a summary read before it carried them: a page kept from the
+		// last version of the app draws what is done rather than breaking.
+		...(progress.stages ?? []).map((stage) => ({
+			stageId: stage.key,
+			name: stage.name,
+			color: stageColors[stage.key] ?? stage.color,
+			count: stage.count,
+		})),
 	];
 }
 
@@ -308,6 +371,7 @@ export const updateTagInputSchema = v.object({
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 			access: v.optional(accessSchema),
+			stageColors: v.optional(stageColorsSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

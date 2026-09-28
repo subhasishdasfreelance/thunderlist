@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import type { ApplyChange } from "#/lib/changes";
-import { readStored, writeStored } from "#/lib/device-data";
 import { arrangementsQuery } from "#/queries/space";
 import {
 	type ArrangedList,
@@ -33,8 +32,11 @@ const ORDERS: Array<{ order: ListOrder; label: string; icon: LucideIcon }> = [
 	{ order: "behind", label: "Most behind first", icon: TriangleAlert },
 ];
 
-/** Where each list's order is remembered, in this browser. */
-const storageKey = (list: ArrangedList) => `thunderlist.order.${list}.v1`;
+/**
+ * The order picked for each list, for as long as the app is open. Not kept in
+ * this browser: nothing is kept on a device that is not saved as well.
+ */
+const pickedOrders = new Map<ArrangedList, ListOrder>();
 
 /** Every list shown on screen, told when one of their orders is picked. */
 const orderListeners = new Set<() => void>();
@@ -44,37 +46,27 @@ function subscribeToOrders(listener: () => void): () => void {
 	return () => orderListeners.delete(listener);
 }
 
-function storedOrder(list: ArrangedList): ListOrder {
-	const saved = readStored(storageKey(list));
-	return saved === "newest" || saved === "behind" ? saved : "manual";
-}
-
 /**
  * How one list of cards is ordered — by hand, newest first, or most behind
  * first.
  *
- * Remembered in this browser rather than saved: it is a way of looking at the
- * list, and someone else in the team may want to look at it another way. The
- * order picked by hand is the space's, and saved; see `Arrangement`.
- *
- * Read as the list is drawn, so it opens in the order picked rather than in
- * the default one first. Only the page the server drew starts in the default:
- * the server cannot see this browser's storage, and the browser's first draw
- * has to match it.
+ * Remembered while the app is open rather than saved: it is a way of looking
+ * at the list, and someone else in the team may want to look at it another
+ * way. The order picked by hand is the space's, and saved; see `Arrangement`.
  */
 function useListOrder(
 	list: ArrangedList,
 ): [ListOrder, (next: ListOrder) => void] {
 	const order = useSyncExternalStore(
 		subscribeToOrders,
-		() => storedOrder(list),
+		() => pickedOrders.get(list) ?? "manual",
 		() => "manual" as const,
 	);
 
 	return [
 		order,
 		(next) => {
-			writeStored(storageKey(list), next);
+			pickedOrders.set(list, next);
 			for (const listener of orderListeners) listener();
 		},
 	];

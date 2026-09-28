@@ -230,7 +230,7 @@ function TypeRow({
 					isLabelHidden
 					value={type.name}
 					onChange={onRename}
-					placeholder="Bug"
+					placeholder="Milestone"
 					width="100%"
 				/>
 			</span>

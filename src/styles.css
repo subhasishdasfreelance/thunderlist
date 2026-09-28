@@ -823,16 +823,17 @@ body {
 	/*
 	 * The checklist a task came from, which is also the way into it.
 	 *
-	 * Sized like the supporting text it replaces so the row does not grow to
-	 * carry it: a button that reads as a caption until you reach for it.
+	 * A small italic badge in the accent, so it never reads as a caption
+	 * someone wrote under the task.
 	 */
 	.thunderlist-crumb {
 		align-self: flex-start;
-		margin-inline-start: -0.25rem;
-		padding-inline: 0.25rem;
-		border-radius: var(--radius-inner, 0.25rem);
-		color: var(--color-text-secondary);
+		padding-inline: 0.5rem;
+		border-radius: var(--radius-full);
+		background-color: var(--color-accent-muted);
+		color: var(--color-text-accent);
 		font-size: var(--font-size-sm, 0.8125rem);
+		font-style: italic;
 		line-height: 1.4;
 		cursor: pointer;
 		transition:
@@ -843,6 +844,99 @@ body {
 	.thunderlist-crumb:hover {
 		background-color: var(--color-overlay-hover);
 		color: var(--color-text-accent);
+	}
+
+	/*
+	 * Countdowns: a tile each, the number of days large and in the
+	 * countdown's colour over a wash of it, so the screen reads at a glance.
+	 */
+	.thunderlist-countdown-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	.thunderlist-countdown {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.125rem;
+		min-width: 0;
+		padding: 1rem;
+		border: 1px solid var(--color-border);
+		border-top: 4px solid var(--thunderlist-stage-color);
+		border-radius: var(--radius-container, 0.75rem);
+		background: linear-gradient(
+			160deg,
+			color-mix(in srgb, var(--thunderlist-stage-color) 16%, transparent),
+			var(--color-background-surface) 70%
+		);
+		text-align: left;
+		transition:
+			transform var(--duration-fast) var(--ease-standard),
+			box-shadow var(--duration-fast) var(--ease-standard);
+	}
+
+	button.thunderlist-countdown {
+		cursor: pointer;
+	}
+
+	button.thunderlist-countdown:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 6px 16px var(--color-shadow);
+	}
+
+	.thunderlist-countdown[data-past="true"] {
+		opacity: 0.6;
+	}
+
+	.thunderlist-countdown-number {
+		font-size: 2.75rem;
+		font-weight: 800;
+		line-height: 1;
+		letter-spacing: -0.03em;
+		font-variant-numeric: tabular-nums;
+		color: var(--thunderlist-stage-color);
+	}
+
+	.thunderlist-countdown-unit {
+		font-size: var(--font-size-sm, 0.8125rem);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-secondary);
+	}
+
+	.thunderlist-countdown-title {
+		margin-top: 0.5rem;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 600;
+		color: var(--color-text-primary);
+	}
+
+	.thunderlist-countdown-date {
+		font-size: var(--font-size-sm, 0.8125rem);
+		color: var(--color-text-secondary);
+	}
+
+	/*
+	 * The stage a task is at, on a screen that gathers tasks from many lists:
+	 * an outlined badge with the stage's dot, apart from the caption above it.
+	 */
+	.thunderlist-stage-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding-inline: 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-full);
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm, 0.8125rem);
+		font-style: italic;
+		line-height: 1.4;
 	}
 
 	/*

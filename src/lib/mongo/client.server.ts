@@ -20,6 +20,7 @@ import {
 import { AppError } from "#/lib/errors";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Checklist } from "#/schemas/checklist";
+import type { Countdown } from "#/schemas/countdown";
 import type { Plan } from "#/schemas/plan";
 import type { ReminderTarget } from "#/schemas/reminder";
 import type { Tag } from "#/schemas/tag";
@@ -72,6 +73,7 @@ export type TagDoc = Tag & Owned & Shared;
 
 /** `checklistId` is null for a task that belongs to no checklist. */
 export type PlanDoc = Plan & Owned;
+export type CountdownDoc = Countdown & Owned;
 
 /**
  * One person's daily reminder; see `Reminder`. `ownerId` is the space it
@@ -167,6 +169,7 @@ export type Collections = {
 	tags: Collection<TagDoc>;
 	settings: Collection<SettingsDoc>;
 	plans: Collection<PlanDoc>;
+	countdowns: Collection<CountdownDoc>;
 	reminders: Collection<ReminderDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
 	teams: Collection<TeamDoc>;
@@ -214,6 +217,7 @@ function collectionsOf(database: Db): Collections {
 		tags: database.collection<TagDoc>("tags"),
 		settings: database.collection<SettingsDoc>("settings"),
 		plans: database.collection<PlanDoc>("plans"),
+		countdowns: database.collection<CountdownDoc>("countdowns"),
 		reminders: database.collection<ReminderDoc>("reminders"),
 		pushSubscriptions:
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
@@ -248,6 +252,8 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.settings.createIndex({ userId: 1 }, { unique: true }),
 		current.plans.createIndex({ planId: 1 }, { unique: true }),
 		current.plans.createIndex({ userId: 1, updatedAt: -1 }),
+		current.countdowns.createIndex({ countdownId: 1 }, { unique: true }),
+		current.countdowns.createIndex({ userId: 1, date: 1 }),
 		// One reminder per person per thing, however often it is set.
 		current.reminders.createIndex(
 			{ email: 1, ownerId: 1, target: 1, targetId: 1 },

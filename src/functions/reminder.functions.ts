@@ -76,6 +76,6 @@ export const sendTeamMessageFn = createServerFn({ method: "POST" })
 					"Only the team's project managers can send it messages.",
 				);
 			}
-			return sendTeamMessage(scope.team.teamId, data);
+			return sendTeamMessage(scope.team.teamId, data, scope.hidden);
 		}),
 	);
