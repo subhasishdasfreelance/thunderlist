@@ -109,14 +109,15 @@ export async function removePushSubscription(
 type Message = { title: string; body: string; url: string };
 
 /**
- * Send one message to every device a person has, forgetting any device the
- * push service says is gone. Returns how many took it.
+ * Send one message to every device a person has — or just the one `endpoint`
+ * names — forgetting any device the push service says is gone. Returns how
+ * many took it.
  *
  * `ttl` is how long, in seconds, the push service holds it for a device that
  * is off: a reminder is stale within the hour; a message is not.
  */
 async function sendTo(
-	email: string,
+	devices: { email: string; endpoint?: string },
 	message: Message,
 	ttl = 60 * 60,
 ): Promise<number> {
@@ -124,7 +125,7 @@ async function sendTo(
 	if (keys === null) return 0;
 
 	const current = await collections();
-	const devices = await current.pushSubscriptions.find({ email }).toArray();
+	const found = await current.pushSubscriptions.find(devices).toArray();
 
 	webpush.setVapidDetails(
 		process.env.VAPID_SUBJECT?.trim() ||
@@ -135,7 +136,7 @@ async function sendTo(
 	);
 
 	let sent = 0;
-	for (const device of devices) {
+	for (const device of found) {
 		try {
 			await webpush.sendNotification(
 				{ endpoint: device.endpoint, keys: device.keys },
@@ -219,7 +220,7 @@ export async function sendTeamMessage(
 	let devices = 0;
 	for (const email of recipients) {
 		const sent = await sendTo(
-			email,
+			{ email },
 			{ title: input.title, body: input.body, url },
 			MESSAGE_TTL,
 		);
@@ -229,13 +230,19 @@ export async function sendTeamMessage(
 	return { people, devices };
 }
 
-/** A notification now, to check this person's devices get them. */
-export async function sendTestPush(email: string): Promise<number> {
-	return sendTo(email, {
-		title: "Thunderlist",
-		body: "Notifications are on. Your reminders will arrive like this.",
-		url: "/settings",
-	});
+/** A notification now, to check this one device of this person's gets them. */
+export async function sendTestPush(
+	email: string,
+	endpoint: string,
+): Promise<number> {
+	return sendTo(
+		{ email, endpoint },
+		{
+			title: "Thunderlist",
+			body: "Notifications are on. Your reminders will arrive like this.",
+			url: "/settings",
+		},
+	);
 }
 
 /** What a reminder says, and where it opens. */
@@ -325,7 +332,7 @@ export async function sendDueReminders(
 			{ _id: reminder._id },
 			{ $set: { lastSentOn: today } },
 		);
-		sent += await sendTo(reminder.email, message);
+		sent += await sendTo({ email: reminder.email }, message);
 	}
 
 	return { due, sent };

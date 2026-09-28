@@ -100,10 +100,16 @@ export function NotificationSettings() {
 										isDisabled={isBusy}
 										onClick={() =>
 											void run(async () => {
-												const sent = await sendTestPushFn();
+												const subscription = await currentSubscription();
+												const sent =
+													subscription === null
+														? 0
+														: await sendTestPushFn({
+																data: { endpoint: subscription.endpoint },
+															});
 												if (sent === 0) {
 													toast({
-														body: "No device took it. Turn notifications off and on again here.",
+														body: "This device didn't take it. Turn notifications off and on again here.",
 														type: "error",
 														uniqueID: "push",
 													});

@@ -56,10 +56,15 @@ export const removePushSubscriptionFn = createServerFn({ method: "POST" })
 		}),
 	);
 
-/** A notification now, to every device of this person's. How many took it. */
-export const sendTestPushFn = createServerFn({ method: "POST" }).handler(() =>
-	guard("sendTestPush", async () => sendTestPush((await requireScope()).email)),
-);
+/** A notification now, to this device only. How many took it: 0 or 1. */
+export const sendTestPushFn = createServerFn({ method: "POST" })
+	.validator(validator(pushEndpointInputSchema))
+	.handler(({ data }) =>
+		guard("sendTestPush", async () => {
+			const scope = await requireScope();
+			return sendTestPush(scope.email, data.endpoint);
+		}),
+	);
 
 /**
  * A message to people in the team being worked in; see `sendTeamMessage`.
