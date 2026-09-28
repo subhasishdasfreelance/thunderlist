@@ -8,6 +8,18 @@ function rate(value: number): string {
 	return `${Math.round(value * 10) / 10} tasks/hr`;
 }
 
+/** The labels of the figures below, in their order, drawn while the clock loads. */
+const PENDING_LABELS = [
+	"Starts",
+	"Planned time",
+	"Time passed",
+	"Time left",
+	"Current speed",
+	"Expected speed",
+	"Needed from now",
+	"Finishing",
+];
+
 /**
  * How today is going, against the clock: the figures for something paced to a
  * daily window, in place of the ones counted in days.
@@ -17,7 +29,7 @@ function rate(value: number): string {
  * out afresh on every minute's tick, so tomorrow simply measures against
  * tomorrow's.
  *
- * Nothing is drawn until the browser has the time; see `useNow`.
+ * Only the labels are drawn until the browser has the time; see `useNow`.
  */
 export function DayStats({
 	total,
@@ -31,7 +43,19 @@ export function DayStats({
 	now: number | null;
 }) {
 	const moments = now === null ? null : todayWindow(window, now);
-	if (now === null || moments === null) return null;
+	// The grid is held open with its labels, so nothing below it jumps when
+	// the figures arrive. The Current speed hint's line is held too.
+	if (now === null || moments === null) {
+		return (
+			<StatGrid
+				stats={PENDING_LABELS.map((label) => ({
+					label,
+					value: "—",
+					hint: label === "Current speed" ? " " : undefined,
+				}))}
+			/>
+		);
+	}
 
 	const pace = dayPace({
 		total,

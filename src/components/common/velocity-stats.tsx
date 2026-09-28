@@ -136,6 +136,18 @@ export function velocitySummary(
 		: `${pace} · finishing ${formatDate(velocity.projectedFinish)}`;
 }
 
+/** The labels of `velocityStats`, in its order, drawn while the clock loads. */
+const PENDING_LABELS = [
+	"Started",
+	"Planned time",
+	"Time passed",
+	"Time left",
+	"Current speed",
+	"Expected speed",
+	"Needed from now",
+	"Finishing",
+];
+
 export function VelocityStats({
 	velocity,
 	unit,
@@ -144,7 +156,7 @@ export function VelocityStats({
 }: {
 	/**
 	 * Worked out on the viewer's own clock, so `null` until the browser has it
-	 * — and nothing is drawn until then; see `useNow`.
+	 * — and only the labels are drawn until then; see `useNow`.
 	 */
 	velocity: Velocity | null;
 	unit: string;
@@ -152,7 +164,19 @@ export function VelocityStats({
 	/** The day the work began; every other figure is measured from it. */
 	startDate: string;
 }) {
-	if (velocity === null) return null;
+	// The grid is held open with its labels, so nothing below it jumps when
+	// the figures arrive. The Current speed hint's line is held too.
+	if (velocity === null) {
+		return (
+			<StatGrid
+				stats={PENDING_LABELS.map((label) => ({
+					label,
+					value: "—",
+					hint: label === "Current speed" ? " " : undefined,
+				}))}
+			/>
+		);
+	}
 
 	return (
 		<StatGrid stats={velocityStats(velocity, unit, isComplete, startDate)} />

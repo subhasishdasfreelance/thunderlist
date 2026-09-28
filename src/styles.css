@@ -823,27 +823,19 @@ body {
 	/*
 	 * The checklist a task came from, which is also the way into it.
 	 *
-	 * A small italic badge in the accent, so it never reads as a caption
-	 * someone wrote under the task.
+	 * Plain small text in the accent, so it never reads as a caption someone
+	 * wrote under the task.
 	 */
 	.thunderlist-crumb {
 		align-self: flex-start;
-		padding-inline: 0.5rem;
-		border-radius: var(--radius-full);
-		background-color: var(--color-accent-muted);
 		color: var(--color-text-accent);
 		font-size: var(--font-size-sm, 0.8125rem);
-		font-style: italic;
 		line-height: 1.4;
 		cursor: pointer;
-		transition:
-			color var(--duration-fast) var(--ease-standard),
-			background-color var(--duration-fast) var(--ease-standard);
 	}
 
 	.thunderlist-crumb:hover {
-		background-color: var(--color-overlay-hover);
-		color: var(--color-text-accent);
+		text-decoration: underline;
 	}
 
 	/*
