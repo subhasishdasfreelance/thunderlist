@@ -32,7 +32,7 @@ export const Route = createFileRoute("/countdowns")({
 	component: CountdownsPage,
 });
 
-/** A unit, after one number alone: "days to go". */
+/** A unit, after its number: "3 months", "1 day". */
 const UNIT_NAMES: Record<CountdownUnit, [one: string, many: string]> = {
 	years: ["year", "years"],
 	months: ["month", "months"],
@@ -43,18 +43,10 @@ const UNIT_NAMES: Record<CountdownUnit, [one: string, many: string]> = {
 	seconds: ["second", "seconds"],
 };
 
-/** A unit, under one number of several. */
-const UNIT_SHORT: Record<CountdownUnit, string> = {
-	years: "yrs",
-	months: "mos",
-	weeks: "wks",
-	days: "days",
-	hours: "hrs",
-	minutes: "min",
-	seconds: "sec",
-};
+const unitName = (part: { unit: CountdownUnit; value: number }) =>
+	UNIT_NAMES[part.unit][part.value === 1 ? 0 : 1];
 
-/** The clock's units, which read as a clock: 04, not 4. */
+/** The clock's units, which read as a clock: 04:12:09. */
 const CLOCK_UNITS = new Set<CountdownUnit>(["hours", "minutes", "seconds"]);
 
 /**
@@ -112,6 +104,11 @@ function CountdownTile({
 			? []
 			: countdownParts(countdown.date, now, countdown.format ?? "seconds");
 	const ahead = days !== null && days > 0 ? "to go" : "ago";
+	const calendar = parts.filter((part) => !CLOCK_UNITS.has(part.unit));
+	const clock = parts
+		.filter((part) => CLOCK_UNITS.has(part.unit))
+		.map((part) => String(part.value).padStart(2, "0"))
+		.join(":");
 
 	const content = (
 		<>
@@ -125,25 +122,28 @@ function CountdownTile({
 							? ""
 							: days === 0
 								? "It is the day"
-								: `${UNIT_NAMES[parts[0].unit][parts[0].value === 1 ? 0 : 1]} ${ahead}`}
+								: `${unitName(parts[0])} ${ahead}`}
 					</span>
 				</>
 			) : (
 				<>
-					<span className="thunderlist-countdown-parts">
-						{parts.map((part) => (
-							<span key={part.unit} className="thunderlist-countdown-part">
-								<span className="thunderlist-countdown-number">
-									{CLOCK_UNITS.has(part.unit)
-										? String(part.value).padStart(2, "0")
-										: part.value}
+					{calendar.length === 0 ? null : (
+						<span className="thunderlist-countdown-parts">
+							{calendar.map((part) => (
+								<span key={part.unit} className="thunderlist-countdown-part">
+									<span className="thunderlist-countdown-number">
+										{part.value}
+									</span>
+									<span className="thunderlist-countdown-part-unit">
+										{unitName(part)}
+									</span>
 								</span>
-								<span className="thunderlist-countdown-part-unit">
-									{UNIT_SHORT[part.unit]}
-								</span>
-							</span>
-						))}
-					</span>
+							))}
+						</span>
+					)}
+					{clock === "" ? null : (
+						<span className="thunderlist-countdown-clock">{clock}</span>
+					)}
 					<span className="thunderlist-countdown-unit">{ahead}</span>
 				</>
 			)}

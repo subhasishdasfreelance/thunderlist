@@ -891,17 +891,21 @@ body {
 		color: var(--thunderlist-stage-color);
 	}
 
-	/* Years to seconds, each number over its unit; see `countdownParts`. */
+	/*
+	 * Years to days, read as words: "1 year 2 months 3 days", each number
+	 * followed by its unit. The hours to seconds follow as a clock. See
+	 * `countdownParts`.
+	 */
 	.thunderlist-countdown-parts {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.25rem 0.75rem;
+		gap: 0.25rem 0.625rem;
 	}
 
 	.thunderlist-countdown-part {
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
+		align-items: baseline;
+		gap: 0.25rem;
 	}
 
 	.thunderlist-countdown-parts .thunderlist-countdown-number {
@@ -909,11 +913,17 @@ body {
 	}
 
 	.thunderlist-countdown-part-unit {
-		font-size: 0.6875rem;
+		font-size: var(--font-size-md, 0.9375rem);
 		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
 		color: var(--color-text-secondary);
+	}
+
+	.thunderlist-countdown-clock {
+		font-size: 1.25rem;
+		font-weight: 700;
+		line-height: 1.2;
+		font-variant-numeric: tabular-nums;
+		color: var(--thunderlist-stage-color);
 	}
 
 	.thunderlist-countdown-unit {

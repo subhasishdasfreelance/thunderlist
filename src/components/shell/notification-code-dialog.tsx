@@ -8,12 +8,9 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, KeyRound, Send, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
-import { sentNote } from "#/components/teams/message-dialog";
 import { PeopleField } from "#/components/teams/people-field";
-import { errorMessage } from "#/lib/errors";
 import { createNotificationCode } from "#/lib/ids";
 import { canPush, currentSubscription } from "#/lib/push";
-import { useToast } from "#/lib/toasts";
 import { useSpace } from "#/lib/use-team";
 import type {
 	CodeKind,
@@ -21,6 +18,7 @@ import type {
 	CreateNotificationCodeInput,
 	NotificationCode,
 } from "#/schemas/notification-code";
+import { SendNotificationDialog } from "./notification-send-dialog";
 
 /**
  * Make a notification code: a name for it, and who it notifies — this device,
@@ -190,7 +188,7 @@ function fetchExample(code: string): string {
 
 /**
  * One code, opened from its row: who it notifies, the code to copy, and how to
- * send with it. A test sends through the very endpoint the example calls.
+ * send with it — from a script, or from here; see `SendNotificationDialog`.
  * Deleting it asks first, since whatever still sends with it stops working.
  */
 export function CodeDialog({
@@ -205,41 +203,8 @@ export function CodeDialog({
 	onClose: () => void;
 	onDelete: (code: string) => void;
 }) {
-	const toast = useToast();
-	const [isTesting, setIsTesting] = useState(false);
+	const [isSending, setIsSending] = useState(false);
 	const [isConfirming, setIsConfirming] = useState(false);
-
-	async function sendTest(value: NotificationCode) {
-		setIsTesting(true);
-		try {
-			const response = await fetch("/api/notify", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					code: value.code,
-					title: value.label,
-					body: "A test from Thunderlist. This code works.",
-				}),
-			});
-			const answer = (await response.json()) as
-				| { people: number; devices: number }
-				| { error: string };
-			if ("error" in answer) throw new Error(answer.error);
-			toast({
-				body: sentNote(answer.people, answer.devices),
-				type: "info",
-				uniqueID: "notification-code",
-			});
-		} catch (error) {
-			toast({
-				body: errorMessage(error),
-				type: "error",
-				uniqueID: "notification-code",
-			});
-		} finally {
-			setIsTesting(false);
-		}
-	}
 
 	return (
 		<>
@@ -262,11 +227,10 @@ export function CodeDialog({
 							/>
 							<HStack gap={2}>
 								<Button
-									label="Send a test"
+									label="Send notification"
 									icon={<Send aria-hidden />}
 									variant="secondary"
-									isLoading={isTesting}
-									onClick={() => void sendTest(code)}
+									onClick={() => setIsSending(true)}
 								/>
 								<Button
 									label="Done"
@@ -305,6 +269,14 @@ export function CodeDialog({
 					</VStack>
 				)}
 			</FormDialog>
+
+			{code === null ? null : (
+				<SendNotificationDialog
+					code={code}
+					isOpen={isSending}
+					onOpenChange={setIsSending}
+				/>
+			)}
 
 			<AlertDialog
 				isOpen={isConfirming}
