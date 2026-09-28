@@ -2,6 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
+import { useForm } from "@tanstack/react-form";
 import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -15,6 +16,22 @@ import { TaskTitleField } from "./task-title-field";
 
 /** The type field's value for a task with none. */
 const NO_TYPE = "none";
+
+/** What the fields open on: the task as it is, or blank while there is none. */
+function fieldsOf(task: Task | null) {
+	return {
+		// The title already holds its tags, exactly where they were typed.
+		title: task?.title ?? "",
+		caption: task?.caption ?? "",
+		notes: task?.notes ?? "",
+		typeId: task?.typeId ?? NO_TYPE,
+	};
+}
+
+/** The title as it will be saved: one line, its tags read out of it. */
+function parseTitle(title: string): ParsedTitle {
+	return parseInlineTags(title.replace(/\s*\n\s*/g, " "));
+}
 
 /**
  * The optional fields only this dialog writes — empty means none — and a
@@ -59,36 +76,40 @@ export function TaskRenameDialog({
 	tags: ReadonlyArray<Tag>;
 	onSubmit: (parsed: ParsedTitle, details: TaskDetails) => void;
 }) {
-	const [value, setValue] = useState("");
-	const [caption, setCaption] = useState("");
-	const [notes, setNotes] = useState("");
-	const [typeId, setTypeId] = useState(NO_TYPE);
 	const [notesView, setNotesView] = useState<NotesView>("write");
 	const types = useTaskTypes();
 
+	/*
+	 * The fields live in a form rather than in this component's state, so a
+	 * keystroke draws the field being typed in and nothing else: not the
+	 * dialog around it, its buttons, or the other fields. Held here, every
+	 * letter drew the whole dialog again, and on a phone that was felt.
+	 */
+	const form = useForm({
+		defaultValues: fieldsOf(task),
+		onSubmit: ({ value }) => {
+			const parsed = parseTitle(value.title);
+			if (parsed.title === "") return;
+			onSubmit(parsed, {
+				// One line, however it was typed or pasted; see the field below.
+				caption: value.caption.replace(/\s*\n\s*/g, " ").trim(),
+				notes: value.notes.trim(),
+				typeId: value.typeId === NO_TYPE ? null : value.typeId,
+				...(parsed.urgent ? { urgent: true } : {}),
+				...(parsed.important ? { important: true } : {}),
+			});
+		},
+	});
+
 	useEffect(() => {
 		if (!isOpen || !task) return;
-		// The title already holds its tags, exactly where they were typed.
-		setValue(task.title);
-		setCaption(task.caption ?? "");
-		setNotes(task.notes ?? "");
-		setTypeId(task.typeId ?? NO_TYPE);
+		form.reset(fieldsOf(task));
 		// Notes are only ever shown here, so ones that exist open ready to read.
 		setNotesView(task.notes ? "preview" : "write");
-	}, [isOpen, task]);
-
-	const parsed = parseInlineTags(value.replace(/\s*\n\s*/g, " "));
+	}, [isOpen, task, form]);
 
 	function save() {
-		if (parsed.title === "") return;
-		onSubmit(parsed, {
-			// One line, however it was typed or pasted; see the field below.
-			caption: caption.replace(/\s*\n\s*/g, " ").trim(),
-			notes: notes.trim(),
-			typeId: typeId === NO_TYPE ? null : typeId,
-			...(parsed.urgent ? { urgent: true } : {}),
-			...(parsed.important ? { important: true } : {}),
-		});
+		void form.handleSubmit();
 	}
 
 	return (
@@ -105,31 +126,50 @@ export function TaskRenameDialog({
 						variant="ghost"
 						onClick={() => onOpenChange(false)}
 					/>
-					<Button
-						label="Save"
-						icon={<Check aria-hidden />}
-						variant="primary"
-						isDisabled={parsed.title === ""}
-						onClick={save}
-					/>
+					{/* Redrawn only when the title turns empty, or stops being. */}
+					<form.Subscribe
+						selector={(state) => parseTitle(state.values.title).title === ""}
+					>
+						{(isEmpty) => (
+							<Button
+								label="Save"
+								icon={<Check aria-hidden />}
+								variant="primary"
+								isDisabled={isEmpty}
+								onClick={save}
+							/>
+						)}
+					</form.Subscribe>
 				</HStack>
 			)}
 		>
 			<VStack gap={4}>
-				<TaskTitleField
-					label="Title"
-					value={value}
-					onChange={setValue}
-					onSubmit={save}
-					tags={tags}
-					hasAutoFocus
-					hint="Write tags inline, like #shopping. Removing one here takes it off the task. End with -u, -i or -ui to flag it."
-				/>
+				<form.Field name="title">
+					{(field) => (
+						<TaskTitleField
+							label="Title"
+							value={field.state.value}
+							onChange={field.handleChange}
+							onSubmit={save}
+							tags={tags}
+							hasAutoFocus
+							hint="Write tags inline, like #shopping. Removing one here takes it off the task. End with -u, -i or -ui to flag it."
+						/>
+					)}
+				</form.Field>
 
-				{/* A type the list no longer has still reads as none, not as blank. */}
-				{types.length === 0 && typeId === NO_TYPE ? null : (
-					<TypeField types={types} value={typeId} onChange={setTypeId} />
-				)}
+				<form.Field name="typeId">
+					{(field) =>
+						// A type the list no longer has still reads as none, not as blank.
+						types.length === 0 && field.state.value === NO_TYPE ? null : (
+							<TypeField
+								types={types}
+								value={field.state.value}
+								onChange={field.handleChange}
+							/>
+						)
+					}
+				</form.Field>
 
 				{/*
 				 * A text area rather than a one-line input, and not for the room: a
@@ -138,30 +178,38 @@ export function TaskRenameDialog({
 				 * it. Nothing offers to fill a text area, so the keyboard stays a
 				 * keyboard. Whatever is typed is still one line when it is saved.
 				 */}
-				<TextArea
-					autoComplete="off"
-					label="Caption"
-					isOptional
-					description="Shown in small text under the title."
-					rows={2}
-					value={caption}
-					onChange={setCaption}
-					// Enter saves here too, as it does in the title.
-					onKeyDown={(event) => {
-						if (event.key === "Enter" && !event.shiftKey) {
-							event.preventDefault();
-							save();
-						}
-					}}
-					width="100%"
-				/>
+				<form.Field name="caption">
+					{(field) => (
+						<TextArea
+							autoComplete="off"
+							label="Caption"
+							isOptional
+							description="Shown in small text under the title."
+							rows={2}
+							value={field.state.value}
+							onChange={field.handleChange}
+							// Enter saves here too, as it does in the title.
+							onKeyDown={(event) => {
+								if (event.key === "Enter" && !event.shiftKey) {
+									event.preventDefault();
+									save();
+								}
+							}}
+							width="100%"
+						/>
+					)}
+				</form.Field>
 
-				<TaskNotesField
-					value={notes}
-					onChange={setNotes}
-					view={notesView}
-					onViewChange={setNotesView}
-				/>
+				<form.Field name="notes">
+					{(field) => (
+						<TaskNotesField
+							value={field.state.value}
+							onChange={field.handleChange}
+							view={notesView}
+							onViewChange={setNotesView}
+						/>
+					)}
+				</form.Field>
 			</VStack>
 		</FormDialog>
 	);

@@ -219,6 +219,23 @@ function ChecklistDetailPage() {
 	});
 
 	/*
+	 * Where `?task=` opened the list, held for the rest of that arrival. The
+	 * task is found once: ticked on to its next stage, the list read again would
+	 * otherwise follow it there and ring it a second time.
+	 */
+	const [opened, setOpened] = useState<{
+		arrival: string;
+		stageId: string;
+		page: number;
+	} | null>(null);
+	const held = opened?.arrival === arrival ? opened : null;
+	const isRevealing =
+		focusTaskId !== undefined &&
+		stageId === undefined &&
+		page === undefined &&
+		held === null;
+
+	/*
 	 * A page of one stage. The rows on screen stay up while another page, stage
 	 * or order is on its way.
 	 */
@@ -226,16 +243,25 @@ function ChecklistDetailPage() {
 		...checklistPageQuery(checklistId, {
 			sort,
 			limit: PAGE_SIZE,
-			page,
-			stageId,
-			reveal:
-				stageId === undefined && page === undefined ? focusTaskId : undefined,
+			page: page ?? held?.page,
+			stageId: stageId ?? held?.stageId,
+			reveal: isRevealing ? focusTaskId : undefined,
 			assignee,
 			tag: tagId,
 			type: typeId,
 		}),
 		placeholderData: keepPreviousData,
 	});
+
+	// Only a fresh answer says where the task is now, not where it last was.
+	const revealed =
+		isRevealing && !pageResult.isPlaceholderData && !pageResult.isFetching
+			? pageResult.data
+			: undefined;
+	useEffect(() => {
+		if (revealed === undefined) return;
+		setOpened({ arrival, stageId: revealed.stageId, page: revealed.page });
+	}, [revealed, arrival]);
 
 	const detail = data ?? null;
 
