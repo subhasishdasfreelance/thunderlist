@@ -1,8 +1,8 @@
 /**
  * Daily reminders, and the devices they are sent to. Server only.
  *
- * A reminder is one person's: the day's is the same in every space, and one
- * about a checklist, tracker or tag belongs to the space that thing is in. A
+ * A reminder is one person's, about a checklist, tracker or tag, and belongs
+ * to the space that thing is in. A
  * device is a push subscription, kept per person, so a reminder reaches every
  * device they turned notifications on for.
  *
@@ -30,7 +30,7 @@ export function pushPublicKey(): string | null {
 	return pushKeys()?.publicKey ?? null;
 }
 
-/** This person's reminders: the day's, and the ones in this space. */
+/** This person's reminders in this space. */
 export async function listReminders(
 	ownerId: string,
 	email: string,
@@ -38,7 +38,7 @@ export async function listReminders(
 	const current = await collections();
 	const found = await current.reminders
 		.find(
-			{ email, $or: [{ ownerId }, { ownerId: null }] },
+			{ email, ownerId },
 			{ projection: { _id: 0, target: 1, targetId: 1, time: 1 } },
 		)
 		.toArray();
@@ -56,7 +56,7 @@ export async function setReminder(
 	email: string,
 	input: {
 		target: ReminderTarget;
-		targetId: string | null;
+		targetId: string;
 		time: string | null;
 		timeZone: string;
 	},
@@ -64,8 +64,7 @@ export async function setReminder(
 	const current = await collections();
 	const key = {
 		email,
-		// The day's is the person's everywhere; the rest are the space's.
-		ownerId: input.target === "day" ? null : ownerId,
+		ownerId,
 		target: input.target,
 		targetId: input.targetId,
 	};
@@ -248,23 +247,17 @@ export async function sendTestPush(
 
 /** What a reminder says, and where it opens. */
 async function messageFor(reminder: {
-	ownerId: string | null;
+	ownerId: string;
 	target: ReminderTarget;
-	targetId: string | null;
+	targetId: string;
 }): Promise<Message | null> {
 	const current = await collections();
 	const { ownerId, targetId } = reminder;
 
 	switch (reminder.target) {
-		case "day":
-			return {
-				title: "Time to review your day",
-				body: "See what is on Today, and what is left.",
-				url: "/tags/today",
-			};
 		case "checklist": {
 			const found = await current.checklists.findOne(
-				{ userId: ownerId ?? "", checklistId: targetId ?? "" },
+				{ userId: ownerId, checklistId: targetId },
 				{ projection: { _id: 0, title: 1 } },
 			);
 			return found === null
@@ -277,7 +270,7 @@ async function messageFor(reminder: {
 		}
 		case "tracker": {
 			const found = await current.trackers.findOne(
-				{ userId: ownerId ?? "", trackerId: targetId ?? "" },
+				{ userId: ownerId, trackerId: targetId },
 				{ projection: { _id: 0, title: 1 } },
 			);
 			return found === null
@@ -290,7 +283,7 @@ async function messageFor(reminder: {
 		}
 		case "tag": {
 			const found = await current.tags.findOne(
-				{ userId: ownerId ?? "", tagId: targetId ?? "" },
+				{ userId: ownerId, tagId: targetId },
 				{ projection: { _id: 0, name: 1, special: 1 } },
 			);
 			return found === null
@@ -301,6 +294,9 @@ async function messageFor(reminder: {
 						url: `/tags/${found.special === "today" ? "today" : targetId}`,
 					};
 		}
+		// The daily review, no longer offered: deleted as it comes due.
+		default:
+			return null;
 	}
 }
 

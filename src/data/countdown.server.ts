@@ -7,7 +7,7 @@
 
 import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
-import type { Countdown } from "#/schemas/countdown";
+import type { Countdown, CountdownFormat } from "#/schemas/countdown";
 import type { TagColor } from "#/schemas/tag";
 
 /** Every countdown, by the day each counts down to. */
@@ -22,7 +22,13 @@ export async function listCountdowns(
 
 export async function createCountdown(
 	userId: string,
-	input: { countdownId: string; title: string; date: string; color: TagColor },
+	input: {
+		countdownId: string;
+		title: string;
+		date: string;
+		color: TagColor;
+		format: CountdownFormat;
+	},
 ): Promise<Countdown> {
 	const current = await collections();
 
@@ -39,6 +45,7 @@ export async function createCountdown(
 		title: input.title,
 		date: input.date,
 		color: input.color,
+		format: input.format,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -50,7 +57,12 @@ export async function createCountdown(
 export async function updateCountdown(
 	userId: string,
 	countdownId: string,
-	patch: { title?: string; date?: string; color?: TagColor },
+	patch: {
+		title?: string;
+		date?: string;
+		color?: TagColor;
+		format?: CountdownFormat;
+	},
 ): Promise<void> {
 	const current = await collections();
 

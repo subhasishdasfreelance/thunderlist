@@ -9,15 +9,15 @@ import { emailSchema } from "./common";
  * There are three, by who they reach:
  *
  * - `device` — the one browser it was made on, and nothing else.
- * - `person` — one person, on every device they turned notifications on for.
- *   In your own space that is you; in a team, anyone in it.
+ * - `people` — the people picked, on every device they turned notifications on
+ *   for. In your own space that is you; in a team, any of the people in it.
  * - `team` — everyone in the team, as it is when the code is used.
  *
  * In your own space anyone can make them. In a team only its project managers
  * and its admin can, as only they can message it, and a team's code stops
  * working once whoever made it no longer can.
  */
-export const CODE_KINDS = ["device", "person", "team"] as const;
+export const CODE_KINDS = ["device", "people", "team"] as const;
 
 export type CodeKind = (typeof CODE_KINDS)[number];
 
@@ -34,7 +34,14 @@ export const codeRecipientsSchema = v.variant("kind", [
 		/** The push subscription of the device it was made on. */
 		endpoint: v.pipe(v.string(), v.url(), v.maxLength(2048)),
 	}),
-	v.object({ kind: v.literal("person"), email: emailSchema }),
+	v.object({
+		kind: v.literal("people"),
+		emails: v.pipe(
+			v.array(emailSchema),
+			v.minLength(1, "Pick at least one person"),
+			v.maxLength(200, "Too many people"),
+		),
+	}),
 	v.object({ kind: v.literal("team") }),
 ]);
 

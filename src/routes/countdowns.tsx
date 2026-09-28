@@ -6,13 +6,13 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoadingState } from "#/components/common/loading-state";
 import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
 import { CountdownFormDialog } from "#/components/countdowns/countdown-form-dialog";
 import { useApplyChange } from "#/lib/changes";
-import { formatDateWithWeekday } from "#/lib/format-date";
+import { formatDate, formatDateWithWeekday } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
@@ -21,6 +21,8 @@ import { primeQuery } from "#/queries/prime";
 import { todayDateOnly } from "#/schemas/common";
 import {
 	type Countdown,
+	type CountdownUnit,
+	countdownParts,
 	daysUntil,
 	orderCountdowns,
 } from "#/schemas/countdown";
@@ -30,38 +32,128 @@ export const Route = createFileRoute("/countdowns")({
 	component: CountdownsPage,
 });
 
-/** What the big number is followed by. */
-function daysLabel(days: number): string {
-	if (days === 0) return "It is the day";
-	const count = Math.abs(days);
-	const unit = count === 1 ? "day" : "days";
-	return days > 0 ? `${unit} to go` : `${unit} ago`;
+/** A unit, after one number alone: "days to go". */
+const UNIT_NAMES: Record<CountdownUnit, [one: string, many: string]> = {
+	years: ["year", "years"],
+	months: ["month", "months"],
+	weeks: ["week", "weeks"],
+	days: ["day", "days"],
+	hours: ["hour", "hours"],
+	minutes: ["minute", "minutes"],
+	seconds: ["second", "seconds"],
+};
+
+/** A unit, under one number of several. */
+const UNIT_SHORT: Record<CountdownUnit, string> = {
+	years: "yrs",
+	months: "mos",
+	weeks: "wks",
+	days: "days",
+	hours: "hrs",
+	minutes: "min",
+	seconds: "sec",
+};
+
+/** The clock's units, which read as a clock: 04, not 4. */
+const CLOCK_UNITS = new Set<CountdownUnit>(["hours", "minutes", "seconds"]);
+
+/**
+ * The time now, every second while `isTicking` — something on screen counts
+ * seconds — and otherwise to the minute, as `useNow`. `null` until the
+ * browser has it.
+ */
+function useTicking(isTicking: boolean): number | null {
+	const minute = useNow();
+	const [second, setSecond] = useState<number | null>(null);
+
+	useEffect(() => {
+		if (!isTicking) return;
+		const tick = () => setSecond(Date.now());
+		tick();
+		const timer = setInterval(tick, 1000);
+		return () => clearInterval(timer);
+	}, [isTicking]);
+
+	return isTicking ? (second ?? minute) : minute;
 }
 
-/** One countdown as a tile: the number of days, large, in its colour. */
+/**
+ * Since when it has been counted — the day it was made — and how far along
+ * that is: "Since 12th Sep, 2026 · 16 of 36 days" while it is ahead, the
+ * whole stretch once it has come. Nothing for one made on or after its day.
+ */
+function sinceLabel(countdown: Countdown, today: string): string | null {
+	const start = todayDateOnly(new Date(countdown.createdAt));
+	const total = daysUntil(countdown.date, start);
+	if (total <= 0) return null;
+
+	const unit = total === 1 ? "day" : "days";
+	return today < countdown.date
+		? `Since ${formatDate(start)} · ${daysUntil(today, start)} of ${total} ${unit}`
+		: `${total} ${unit}, counted from ${formatDate(start)}`;
+}
+
+/** One countdown as a tile: the time left, large, in its colour. */
 function CountdownTile({
 	countdown,
-	today,
+	now,
 	onOpen,
 }: {
 	countdown: Countdown;
-	/** `null` until the browser knows the viewer's day; see `useNow`. */
-	today: string | null;
+	/** `null` until the browser knows the viewer's clock; see `useNow`. */
+	now: number | null;
 	onOpen?: () => void;
 }) {
+	const today = now === null ? null : todayDateOnly(new Date(now));
 	const days = today === null ? null : daysUntil(countdown.date, today);
+	const since = today === null ? null : sinceLabel(countdown, today);
+	const parts =
+		now === null
+			? []
+			: countdownParts(countdown.date, now, countdown.format ?? "seconds");
+	const ahead = days !== null && days > 0 ? "to go" : "ago";
+
 	const content = (
 		<>
-			<span className="thunderlist-countdown-number">
-				{days === null ? "–" : days === 0 ? "Today" : Math.abs(days)}
-			</span>
-			<span className="thunderlist-countdown-unit">
-				{days === null ? "" : daysLabel(days)}
-			</span>
+			{days === null || parts.length <= 1 ? (
+				<>
+					<span className="thunderlist-countdown-number">
+						{days === null ? "–" : days === 0 ? "Today" : parts[0].value}
+					</span>
+					<span className="thunderlist-countdown-unit">
+						{days === null
+							? ""
+							: days === 0
+								? "It is the day"
+								: `${UNIT_NAMES[parts[0].unit][parts[0].value === 1 ? 0 : 1]} ${ahead}`}
+					</span>
+				</>
+			) : (
+				<>
+					<span className="thunderlist-countdown-parts">
+						{parts.map((part) => (
+							<span key={part.unit} className="thunderlist-countdown-part">
+								<span className="thunderlist-countdown-number">
+									{CLOCK_UNITS.has(part.unit)
+										? String(part.value).padStart(2, "0")
+										: part.value}
+								</span>
+								<span className="thunderlist-countdown-part-unit">
+									{UNIT_SHORT[part.unit]}
+								</span>
+							</span>
+						))}
+					</span>
+					<span className="thunderlist-countdown-unit">{ahead}</span>
+				</>
+			)}
 			<span className="thunderlist-countdown-title">{countdown.title}</span>
 			<span className="thunderlist-countdown-date">
 				{formatDateWithWeekday(countdown.date)}
 			</span>
+			{since === null ? null : (
+				<span className="thunderlist-countdown-date">{since}</span>
+			)}
 		</>
 	);
 
@@ -98,12 +190,13 @@ function CountdownsPage() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [editing, setEditing] = useState<Countdown | null>(null);
 
-	const now = useNow();
-	const today = now === null ? null : todayDateOnly(new Date(now));
-
 	const { data, isPending, isError, error, refetch } = useQuery(
 		countdownsQuery(),
 	);
+	const now = useTicking(
+		(data ?? []).some((each) => (each.format ?? "seconds") === "seconds"),
+	);
+	const today = now === null ? null : todayDateOnly(new Date(now));
 	const { upcoming, past } = orderCountdowns(
 		data ?? [],
 		today ?? todayDateOnly(),
@@ -146,7 +239,7 @@ function CountdownsPage() {
 								<CountdownTile
 									key={countdown.countdownId}
 									countdown={countdown}
-									today={today}
+									now={now}
 									onOpen={open(countdown)}
 								/>
 							))}
@@ -162,7 +255,7 @@ function CountdownsPage() {
 									<CountdownTile
 										key={countdown.countdownId}
 										countdown={countdown}
-										today={today}
+										now={now}
 										onOpen={open(countdown)}
 									/>
 								))}

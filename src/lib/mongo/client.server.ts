@@ -78,13 +78,13 @@ export type CountdownDoc = Countdown & Owned;
 
 /**
  * One person's daily reminder; see `Reminder`. `ownerId` is the space it
- * is about, or `null` for the day's, which is the same in every space.
+ * is about.
  */
 export type ReminderDoc = {
 	email: string;
-	ownerId: string | null;
+	ownerId: string;
 	target: ReminderTarget;
-	targetId: string | null;
+	targetId: string;
 	time: string;
 	timeZone: string;
 	/** The day, on its own clock, it last went out. */

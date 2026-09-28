@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { SectionSpinner } from "#/components/common/section-spinner";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
@@ -62,6 +63,8 @@ export function SearchDialog({
 	});
 	// Where a task in no checklist is shown: the page of a tag it carries.
 	const tags = useQuery({ ...tagsQuery(), enabled: isOpen });
+	// Until both are here, no result is not the same as no match.
+	const isSearching = isOpen && (isPending || tags.isPending);
 
 	const results = useMemo<Array<Result>>(() => {
 		const needle = query.trim().toLowerCase();
@@ -204,7 +207,7 @@ export function SearchDialog({
 					value={query}
 					onChange={setQuery}
 					onKeyDown={onKeyDown}
-					isLoading={isOpen && isPending}
+					isLoading={isSearching}
 					role="combobox"
 					aria-expanded={results.length > 0}
 					aria-controls={listId}
@@ -219,6 +222,8 @@ export function SearchDialog({
 						Type to search across checklists, tasks and trackers. ↑ ↓ to move,
 						Enter to open.
 					</Text>
+				) : isSearching ? (
+					<SectionSpinner label="Searching…" />
 				) : results.length === 0 ? (
 					<EmptyState
 						isCompact

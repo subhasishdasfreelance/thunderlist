@@ -1,6 +1,5 @@
 import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
@@ -16,6 +15,7 @@ import {
 } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
+import { NumberField } from "#/components/common/number-field";
 import {
 	ReminderField,
 	useReminderDraft,
@@ -248,8 +248,7 @@ export function TrackerFormDialog({
 						onChange={setUnit}
 						placeholder="pages"
 					/>
-					<NumberInput
-						autoComplete="off"
+					<NumberField
 						label="Target"
 						isRequired
 						min={1}
@@ -259,8 +258,7 @@ export function TrackerFormDialog({
 					/>
 				</FieldRow>
 
-				<NumberInput
-					autoComplete="off"
+				<NumberField
 					label="Starting from"
 					isOptional
 					description="Where you already are. Leave at 0 to start from scratch."

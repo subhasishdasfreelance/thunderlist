@@ -891,6 +891,31 @@ body {
 		color: var(--thunderlist-stage-color);
 	}
 
+	/* Years to seconds, each number over its unit; see `countdownParts`. */
+	.thunderlist-countdown-parts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.75rem;
+	}
+
+	.thunderlist-countdown-part {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.thunderlist-countdown-parts .thunderlist-countdown-number {
+		font-size: 1.75rem;
+	}
+
+	.thunderlist-countdown-part-unit {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-secondary);
+	}
+
 	.thunderlist-countdown-unit {
 		font-size: var(--font-size-sm, 0.8125rem);
 		font-weight: 600;
@@ -2056,4 +2081,16 @@ body {
 			animation-delay: 0ms;
 		}
 	}
+}
+
+/*
+ * Number fields are search fields to the browser (see `NumberField`), which
+ * would otherwise draw one as a rounded search box with a clear button.
+ */
+input[data-number-field] {
+	appearance: none;
+}
+
+input[data-number-field]::-webkit-search-cancel-button {
+	display: none;
 }

@@ -483,6 +483,55 @@ describe("applyOptimistically", () => {
 		expect(page?.groups[0]?.count).toBe(1);
 	});
 
+	it("puts a task typed on the Across screen at the top, newest first", () => {
+		const queryClient = new QueryClient();
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			{ ...summary("chk_inbox"), title: "Inbox", special: "inbox" },
+		]);
+		const view = {
+			groupBy: "stage" as const,
+			sort: "newest" as const,
+			limit: 2,
+		};
+		const older = (taskId: string) => ({
+			...task({ taskId }),
+			checklistId: "chk_inbox",
+			checklistTitle: "Inbox",
+			caption: "",
+		});
+		queryClient.setQueryData<AcrossPage>(queryKeys.acrossPage(view), {
+			items: [older("tsk_2"), older("tsk_1")],
+			total: 2,
+			page: 1,
+			key: "to do",
+			groups: [{ key: "to do", name: "To do", count: 2 }],
+		});
+
+		applyOptimistically(queryClient, {
+			kind: "task.create",
+			checklistId: null,
+			taskId: "tsk_new",
+			title: "New",
+			addedAt: "2026-01-02T00:00:00.000Z",
+			tagIds: [],
+			trackerId: null,
+			linkedChecklistId: null,
+			urgent: false,
+			important: false,
+		});
+
+		const page = queryClient.getQueryData<AcrossPage>(
+			queryKeys.acrossPage(view),
+		);
+		// Still a page of two: the oldest moves on to the next.
+		expect(page?.items.map((each) => each.taskId)).toEqual([
+			"tsk_new",
+			"tsk_2",
+		]);
+		expect(page?.items[0]?.checklistTitle).toBe("Inbox");
+		expect(page?.total).toBe(3);
+	});
+
 	it("takes a moved task out of the checklist it left", () => {
 		const queryClient = client();
 
@@ -1046,7 +1095,7 @@ describe("applyOptimistically, on the rest", () => {
 	it("sets, moves and takes away a reminder at once", () => {
 		const queryClient = new QueryClient();
 		queryClient.setQueryData<Array<Reminder>>(queryKeys.reminders, [
-			{ target: "day", targetId: null, time: "08:00" },
+			{ target: "tag", targetId: "tag_1", time: "08:00" },
 		]);
 		const change = {
 			kind: "reminder.set" as const,
@@ -1062,7 +1111,7 @@ describe("applyOptimistically, on the rest", () => {
 		expect(reminders()?.map((each) => each.time)).toEqual(["08:00", "19:30"]);
 
 		applyOptimistically(queryClient, { ...change, time: null });
-		expect(reminders()?.map((each) => each.target)).toEqual(["day"]);
+		expect(reminders()?.map((each) => each.target)).toEqual(["tag"]);
 	});
 
 	it("lays a list out again at once, leaving the others as they were", () => {

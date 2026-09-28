@@ -2,7 +2,6 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { CodeBlock } from "@astryxdesign/core/CodeBlock";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
-import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -10,6 +9,7 @@ import { Check, KeyRound, Send, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { sentNote } from "#/components/teams/message-dialog";
+import { PeopleField } from "#/components/teams/people-field";
 import { errorMessage } from "#/lib/errors";
 import { createNotificationCode } from "#/lib/ids";
 import { canPush, currentSubscription } from "#/lib/push";
@@ -21,12 +21,11 @@ import type {
 	CreateNotificationCodeInput,
 	NotificationCode,
 } from "#/schemas/notification-code";
-import { memberName } from "#/schemas/team";
 
 /**
  * Make a notification code: a name for it, and who it notifies — this device,
- * one person on all their devices, or the whole team. In your own space the
- * one person is you, and there is no team.
+ * the people picked on all their devices, or the whole team. In your own
+ * space the only person is you, and there is no team.
  *
  * It closes as soon as it is made; the code opens straight after, to copy.
  */
@@ -43,8 +42,8 @@ export function NewCodeDialog({
 	const team = space?.team ?? null;
 	const me = space?.email ?? "";
 	const [label, setLabel] = useState("");
-	const [kind, setKind] = useState<CodeKind>("person");
-	const [email, setEmail] = useState("");
+	const [kind, setKind] = useState<CodeKind>("people");
+	const [emails, setEmails] = useState<Array<string>>([]);
 	// This device's subscription: `undefined` while it is being read.
 	const [endpoint, setEndpoint] = useState<string | null | undefined>();
 
@@ -52,8 +51,8 @@ export function NewCodeDialog({
 	useEffect(() => {
 		if (!isOpen) return;
 		setLabel("");
-		setKind(team === null ? "person" : "team");
-		setEmail("");
+		setKind(team === null ? "people" : "team");
+		setEmails([]);
 		setEndpoint(undefined);
 		void currentSubscription().then((subscription) =>
 			setEndpoint(subscription?.endpoint ?? null),
@@ -68,10 +67,10 @@ export function NewCodeDialog({
 			: kind === "team"
 				? { kind: "team" }
 				: team === null
-					? { kind: "person", email: me }
-					: email === ""
+					? { kind: "people", emails: [me] }
+					: emails.length === 0
 						? null
-						: { kind: "person", email };
+						: { kind: "people", emails };
 	const canCreate = to !== null && label.trim() !== "";
 
 	function create() {
@@ -141,12 +140,12 @@ export function NewCodeDialog({
 						isDisabled={endpoint == null}
 					/>
 					<RadioListItem
-						value="person"
-						label={team === null ? "You, everywhere" : "One person, everywhere"}
+						value="people"
+						label={team === null ? "You, everywhere" : "Specific people"}
 						description={
 							team === null
 								? "Every device you have turned notifications on for."
-								: "Every device they have turned notifications on for."
+								: "The people you pick, on every device they have turned notifications on for."
 						}
 					/>
 					{team === null ? null : (
@@ -157,16 +156,12 @@ export function NewCodeDialog({
 						/>
 					)}
 				</RadioList>
-				{kind === "person" && team !== null ? (
-					<Selector
-						label="Person"
-						placeholder="Pick someone"
-						options={team.members.map((member) => ({
-							value: member.email,
-							label: member.email === me ? "You" : memberName(member),
-						}))}
-						value={email}
-						onChange={setEmail}
+				{kind === "people" && team !== null ? (
+					<PeopleField
+						label="People"
+						members={team.members}
+						value={emails}
+						onChange={setEmails}
 					/>
 				) : null}
 			</VStack>

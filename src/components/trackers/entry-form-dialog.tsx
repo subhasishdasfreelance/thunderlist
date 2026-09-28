@@ -1,13 +1,13 @@
 import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { NumberField } from "#/components/common/number-field";
 import type { EntryValues } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { todayDateOnly } from "#/schemas/common";
@@ -132,8 +132,7 @@ export function EntryFormDialog({
 			)}
 		>
 			<VStack gap={4}>
-				<NumberInput
-					autoComplete="off"
+				<NumberField
 					label={valueLabel}
 					isRequired
 					description={`You were at ${previousValue} ${tracker.unit}.`}

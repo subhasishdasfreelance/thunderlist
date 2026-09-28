@@ -34,7 +34,7 @@ import type {
 import { memberName } from "#/schemas/team";
 import { CodeDialog, NewCodeDialog } from "./notification-code-dialog";
 
-const KIND_ICONS = { device: MonitorSmartphone, person: User, team: Users };
+const KIND_ICONS = { device: MonitorSmartphone, people: User, team: Users };
 
 /**
  * Your notification codes in the space being worked in: each one's name, who
@@ -72,12 +72,19 @@ export function NotificationCodes({
 				return to.endpoint === endpoint
 					? "this device only"
 					: "another device of yours only";
-			case "person": {
-				if (to.email === space?.email) return "you, on every device";
-				const member = space?.team?.members.find(
-					(each) => each.email === to.email,
-				);
-				return `${member ? memberName(member) : to.email}, on every device`;
+			case "people": {
+				const names = to.emails.map((email) => {
+					if (email === space?.email) return "you";
+					const member = space?.team?.members.find(
+						(each) => each.email === email,
+					);
+					return member ? memberName(member) : email;
+				});
+				const who =
+					names.length <= 2
+						? names.join(" and ")
+						: `${names[0]}, ${names[1]} and ${names.length - 2} more`;
+				return `${who}, on every device`;
 			}
 			case "team":
 				return `everyone in ${space?.team?.name ?? "the team"}`;

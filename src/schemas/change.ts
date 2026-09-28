@@ -150,7 +150,7 @@ const changeSchema = v.variant("kind", [
 
 	v.object({
 		kind: v.literal("reminder.set"),
-		...setReminderInputSchema.pipe[0].entries,
+		...setReminderInputSchema.entries,
 	}),
 ]);
 

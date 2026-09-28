@@ -11,6 +11,7 @@
 import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
 import type {
+	CodeRecipients,
 	CreateNotificationCodeInput,
 	NotificationCode,
 	NotifyInput,
@@ -18,13 +19,23 @@ import type {
 import { roleCan, storedRole } from "#/schemas/team";
 import { MESSAGE_TTL, pushPublicKey, sendTo } from "./reminder.server";
 
+/**
+ * Who a stored code notifies. One made before a code could name several
+ * people named one, as `{ kind: "person", email }`.
+ */
+function storedRecipients(
+	to: CodeRecipients | { kind: "person"; email: string },
+): CodeRecipients {
+	return to.kind === "person" ? { kind: "people", emails: [to.email] } : to;
+}
+
 /** This person's codes in this space, newest first. */
 export async function listNotificationCodes(
 	ownerId: string,
 	email: string,
 ): Promise<Array<NotificationCode>> {
 	const current = await collections();
-	return current.notificationCodes
+	const found = await current.notificationCodes
 		.find(
 			{ userId: ownerId, createdBy: email },
 			{
@@ -40,6 +51,7 @@ export async function listNotificationCodes(
 		)
 		.sort({ createdAt: -1 })
 		.toArray();
+	return found.map((code) => ({ ...code, to: storedRecipients(code.to) }));
 }
 
 /**
@@ -61,14 +73,14 @@ export async function createNotificationCode(
 			"A code for a whole team is made while working in that team.",
 		);
 	}
-	if (to.kind === "person") {
+	if (to.kind === "people") {
 		const reachable = team === null ? [email] : team.emails;
-		if (!reachable.includes(to.email)) {
+		if (!to.emails.every((each) => reachable.includes(each))) {
 			throw new AppError(
 				"invalid_data",
 				team === null
 					? "In your own space, a code can only notify you."
-					: "That person is not in this team.",
+					: "Someone picked is not in this team.",
 			);
 		}
 	}
@@ -154,14 +166,16 @@ export async function notifyWithCode(
 		teamEmails = members.map((member) => member.email);
 	}
 
-	const { to } = found;
+	const to = storedRecipients(found.to);
 	const recipients: Array<{ email: string; endpoint?: string }> =
 		to.kind === "device"
 			? [{ email: found.createdBy, endpoint: to.endpoint }]
-			: to.kind === "person"
-				? found.teamId === null || teamEmails.includes(to.email)
-					? [{ email: to.email }]
-					: []
+			: to.kind === "people"
+				? to.emails
+						.filter(
+							(email) => found.teamId === null || teamEmails.includes(email),
+						)
+						.map((email) => ({ email }))
 				: teamEmails.map((email) => ({ email }));
 
 	const message = {

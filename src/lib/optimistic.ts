@@ -31,7 +31,12 @@ import {
 	withDeltas,
 } from "#/lib/progress";
 import { unwrittenTags } from "#/lib/tags/inline-tags";
-import { matchesFilter, type Page, type StagePage } from "#/lib/tasks/tasks";
+import {
+	matchesFilter,
+	orderByTask,
+	type Page,
+	type StagePage,
+} from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { TaggedTask } from "#/queries/system";
 import type { Arrangements } from "#/schemas/arrangement";
@@ -44,6 +49,7 @@ import {
 	type Stage,
 	specialChecklist,
 	stageOf,
+	stageProgress,
 	underwayStage,
 } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
@@ -479,7 +485,8 @@ function patchAcross(
 
 /**
  * A task arriving, on every page of the Across lists screen: counted under the
- * tab it belongs to, and drawn when that is the tab being read.
+ * tab it belongs to, and drawn when that is the tab being read — on its first
+ * page, where the server's order puts it, which newest first is the top.
  */
 function addToAcrossPages(client: QueryClient, task: AcrossTask): void {
 	for (const [key, page] of client.getQueriesData<AcrossPage>({
@@ -497,11 +504,21 @@ function addToAcrossPages(client: QueryClient, task: AcrossTask): void {
 			stagesOf(client, task.checklistId),
 		);
 		const isHere = group === page.key;
+		const items =
+			isHere && page.page === 1
+				? orderByTask(
+						[...page.items, task],
+						view.sort,
+						(each) => each,
+						(each) => stageProgress(each, stagesOf(client, each.checklistId)),
+						client.getQueryData<Array<TaskType>>(queryKeys.taskTypes),
+					).slice(0, view.limit)
+				: page.items;
 
 		client.setQueryData<AcrossPage>(key, {
 			...page,
 			groups: moveGroup(page.groups, null, group),
-			items: isHere && page.page === 1 ? [...page.items, task] : page.items,
+			items,
 			total: isHere ? page.total + 1 : page.total,
 		});
 	}
@@ -1068,10 +1085,12 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			addToAcrossPages(client, {
 				...task,
 				checklistId,
-				// Left to the refetch, as on a tag's page: a title for a checklist
-				// this browser may not hold — or the Inbox it lands in — is not
-				// something to guess.
-				checklistTitle: null,
+				// Named when this browser holds the checklist — the Inbox, for one
+				// typed here — and otherwise left to the refetch.
+				checklistTitle:
+					client
+						.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+						?.find((each) => each.checklistId === checklistId)?.title ?? null,
 				caption: "",
 			});
 

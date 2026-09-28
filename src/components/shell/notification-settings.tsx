@@ -1,18 +1,11 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
-import { Divider } from "@astryxdesign/core/Divider";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, BellOff, Send } from "lucide-react";
 import { useEffect, useState } from "react";
-import {
-	ReminderField,
-	setReminder,
-	useReminderTime,
-} from "#/components/common/reminder-field";
 import { sendTestPushFn } from "#/functions/reminder.functions";
-import { useApplyChange } from "#/lib/changes";
 import { errorMessage } from "#/lib/errors";
 import {
 	canPush,
@@ -26,17 +19,13 @@ import { pushKeyQuery } from "#/queries/reminders";
 type DeviceState = "checking" | "unavailable" | "off" | "on" | "denied";
 
 /**
- * Notifications: whether this device gets them, and the daily review.
- *
- * The daily review is a person's, and follows them to every space. Reminders
- * about one checklist, tracker or tag are set from its edit dialog; they all
- * arrive on the devices turned on here.
+ * Notifications: whether this device gets them. Reminders about one
+ * checklist, tracker or tag are set from its edit dialog; they all arrive on
+ * the devices turned on here.
  */
 export function NotificationSettings() {
-	const { apply } = useApplyChange();
 	const toast = useToast();
 	const key = useQuery(pushKeyQuery());
-	const dayTime = useReminderTime("day", null);
 	const [device, setDevice] = useState<DeviceState>("checking");
 	const [isBusy, setIsBusy] = useState(false);
 
@@ -155,15 +144,6 @@ export function NotificationSettings() {
 						</HStack>
 					</HStack>
 				)}
-
-				<Divider />
-
-				<ReminderField
-					label="Daily review"
-					description="A reminder each day to go over Today and what is left. Clear it to stop."
-					value={dayTime}
-					onChange={(time) => setReminder(apply, "day", null, time)}
-				/>
 			</VStack>
 		</Card>
 	);

@@ -794,11 +794,10 @@ usually within a day, with no reinstall.
 
 ### Reminders
 
-The installed app can be sent a notification every day at a set time: a
-**daily review** from Settings, and one for any checklist, tracker or tag from
-its edit dialog. Each is the person's own, on their own clock (the browser's
-time zone when they set it), and goes to every device they turned
-notifications on for in Settings. On an iPhone that means the app added to the
+The installed app can be sent a notification every day at a set time, for any
+checklist, tracker or tag, from its edit dialog. Each is the person's own, on
+their own clock (the browser's time zone when they set it), and goes to every
+device they turned notifications on for in Settings. On an iPhone that means the app added to the
 home screen.
 
 A notification with the app closed has to be pushed by the server, and the
@@ -825,7 +824,7 @@ made in Settings, under "Notification codes", and notifies one of:
 | Kind | Notifies | Who can make it |
 |---|---|---|
 | Only this device | the browser it was made on | anyone in their own space; a team's project managers and admin |
-| One person, everywhere | every device they turned notifications on for | in your own space, you; in a team, its project managers and admin, for anyone in it |
+| Specific people, everywhere | every device of each person picked that they turned notifications on for | in your own space, you; in a team, its project managers and admin, for anyone in it |
 | Everyone in the team | everyone in it when the code is used | a team's project managers and admin |
 
 A team's code stops working once whoever made it is no longer a project

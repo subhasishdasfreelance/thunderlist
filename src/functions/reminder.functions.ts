@@ -17,7 +17,7 @@ import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
 import { requireScope } from "./scope";
 
-/** This person's reminders: the day's, and the ones in this space. */
+/** This person's reminders in this space. */
 export const listRemindersFn = createServerFn().handler(() =>
 	guard("listReminders", async () => {
 		const scope = await requireScope();

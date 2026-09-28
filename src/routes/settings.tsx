@@ -273,7 +273,7 @@ function SettingsPage() {
 
 			<Section
 				title="Notifications"
-				description="Reminders from the installed app, at the times you choose — a daily review here, and one for any checklist, tracker or tag from its edit dialog."
+				description="Reminders from the installed app, at the times you choose, for any checklist, tracker or tag from its edit dialog."
 			>
 				<NotificationSettings />
 			</Section>

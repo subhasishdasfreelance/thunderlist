@@ -212,10 +212,7 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 	// A reminder is the person's own, whatever their role: reading the thing
 	// it is about is all it takes.
 	if (change.kind === "reminder.set") {
-		if (change.target !== "day" && change.targetId !== null) {
-			const kind = `${change.target}s` as const;
-			assertLevel(scope, kind, change.targetId, "read");
-		}
+		assertLevel(scope, `${change.target}s`, change.targetId, "read");
 		return;
 	}
 

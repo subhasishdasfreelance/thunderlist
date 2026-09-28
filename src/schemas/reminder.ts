@@ -2,24 +2,21 @@ import * as v from "valibot";
 import { idSchema, timeOfDaySchema } from "./common";
 
 /**
- * A daily notification, to one person, at a time of their day.
- *
- * `day` is the one about everything — "time to review your day", set on the
- * Settings screen and the same in every space. The rest are about one
- * checklist, tracker or tag, set from its edit dialog, and belong to the
- * space it is in.
+ * A daily notification, to one person, at a time of their day, about one
+ * checklist, tracker or tag. It is set from that thing's edit dialog, and
+ * belongs to the space it is in.
  *
  * Each is the person's own: a reminder on a team's checklist reminds whoever
  * set it, not the team.
  */
-export const REMINDER_TARGETS = ["day", "checklist", "tracker", "tag"] as const;
+export const REMINDER_TARGETS = ["checklist", "tracker", "tag"] as const;
 
 export type ReminderTarget = (typeof REMINDER_TARGETS)[number];
 
 export type Reminder = {
 	target: ReminderTarget;
-	/** The checklist, tracker or tag; `null` for the day's. */
-	targetId: string | null;
+	/** The checklist, tracker or tag. */
+	targetId: string;
 	/** `HH:MM` on the person's own clock. */
 	time: string;
 };
@@ -30,18 +27,12 @@ export type Reminder = {
  * `timeZone` is the browser's, so "08:00" is eight in the morning wherever
  * the person is when they set it.
  */
-export const setReminderInputSchema = v.pipe(
-	v.object({
-		target: v.picklist(REMINDER_TARGETS),
-		targetId: v.nullable(idSchema),
-		time: v.nullable(timeOfDaySchema),
-		timeZone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-	}),
-	v.check(
-		(input) => (input.target === "day") === (input.targetId === null),
-		"A reminder is about the day, or about one thing",
-	),
-);
+export const setReminderInputSchema = v.object({
+	target: v.picklist(REMINDER_TARGETS),
+	targetId: idSchema,
+	time: v.nullable(timeOfDaySchema),
+	timeZone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+});
 
 /** A push subscription, as the browser hands it over. */
 export const pushSubscriptionInputSchema = v.object({

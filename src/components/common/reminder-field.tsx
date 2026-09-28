@@ -23,7 +23,7 @@ export function useReminderTime(
 export function setReminder(
 	apply: ApplyChange,
 	target: ReminderTarget,
-	targetId: string | null,
+	targetId: string,
 	time: string | null,
 ): void {
 	apply({
