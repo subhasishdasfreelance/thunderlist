@@ -11,6 +11,11 @@ import {
 	updateCountdownInputSchema,
 } from "./countdown";
 import {
+	createGroupInputSchema,
+	groupIdInputSchema,
+	updateGroupInputSchema,
+} from "./group";
+import {
 	createPlanInputSchema,
 	planIdInputSchema,
 	updatePlanInputSchema,
@@ -124,6 +129,16 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("arrangement.set"),
 		...arrangementInputSchema.entries,
 	}),
+
+	v.object({
+		kind: v.literal("group.create"),
+		...createGroupInputSchema.entries,
+	}),
+	v.object({
+		kind: v.literal("group.update"),
+		...updateGroupInputSchema.entries,
+	}),
+	v.object({ kind: v.literal("group.delete"), ...groupIdInputSchema.entries }),
 
 	v.object({
 		kind: v.literal("plan.create"),

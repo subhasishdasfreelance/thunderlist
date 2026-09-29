@@ -13,10 +13,6 @@ import {
 	useState,
 } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
-import {
-	ReminderField,
-	useReminderDraft,
-} from "#/components/common/reminder-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import {
 	draftTagIds,
@@ -25,7 +21,7 @@ import {
 	tagsDraft,
 } from "#/components/tags/tags-field";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
-import { type ChecklistValues, useApplyChange } from "#/lib/changes";
+import type { ChecklistValues } from "#/lib/changes";
 import type { AccessEntry } from "#/schemas/access";
 import {
 	type Checklist,
@@ -144,14 +140,6 @@ export function ChecklistFormDialog({
 		(dailyWindow === null || dailyWindow.to > dailyWindow.from) &&
 		stagesProblem(stages) === null;
 
-	// Your own daily reminder about it, saved with the rest; see `ReminderField`.
-	const reminder = useReminderDraft(
-		isOpen,
-		"checklist",
-		checklist?.checklistId ?? null,
-	);
-	const { apply: applyReminder } = useApplyChange();
-
 	function save() {
 		if (!isValid || startDate === undefined) return;
 
@@ -162,7 +150,6 @@ export function ChecklistFormDialog({
 			name: stage.name.trim(),
 		}));
 
-		reminder.save(applyReminder);
 		onSubmit({
 			title: trimmedTitle,
 			description: description.trim(),
@@ -259,11 +246,6 @@ export function ChecklistFormDialog({
 					onChange={setTagDraft}
 					onSubmit={saveFromTags}
 				/>
-				{/* Only once it exists: a reminder is about something. */}
-				{checklist === undefined ? null : (
-					<ReminderField value={reminder.time} onChange={reminder.setTime} />
-				)}
-
 				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
 				{checklist?.special != null ? null : (
 					<AccessField noun="checklist" value={access} onChange={setAccess} />

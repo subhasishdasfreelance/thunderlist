@@ -1,5 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { listArrangements, listTaskTypes } from "#/data/settings.server";
+import {
+	listArrangements,
+	listGroups,
+	listTaskTypes,
+} from "#/data/settings.server";
 import { guard } from "./guard";
 import { requireScope } from "./scope";
 
@@ -10,9 +14,14 @@ export const listTaskTypesFn = createServerFn().handler(() =>
 	),
 );
 
-/** How the space being worked in lays out its lists; see `Arrangement`. */
+/** How the space being worked in orders its lists; see `Arrangement`. */
 export const listArrangementsFn = createServerFn().handler(() =>
 	guard("listArrangements", async () =>
 		listArrangements((await requireScope()).ownerId),
 	),
+);
+
+/** The groups of the space being worked in; see `Group`. */
+export const listGroupsFn = createServerFn().handler(() =>
+	guard("listGroups", async () => listGroups((await requireScope()).ownerId)),
 );

@@ -13,6 +13,7 @@
 @import "tailwindcss/preflight.css" layer(base);
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
+
 /* Maps bg-surface, text-primary, border-border, rounded-lg... to Astryx tokens. */
 @import "@astryxdesign/core/tailwind-theme.css";
 /*
@@ -23,6 +24,15 @@
  */
 @import "./theme/thunderlist.css";
 @import "tailwindcss/utilities.css" layer(utilities);
+
+/* The wordmark's face; see `.thunderlist-brand-name`. */
+@font-face {
+	font-family: "Thunderlist Wordmark";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("/fonts/fredoka-wordmark.woff2") format("woff2");
+}
 
 /*
  * Astryx colours are declared with `light-dark()`, which needs a `color-scheme`
@@ -35,6 +45,138 @@ html,
 body,
 #app {
 	min-height: 100%;
+}
+
+/*
+ * The scenery behind every screen: soft glows of colour, a scatter of
+ * sparkles in the corner, and gentle hills along the foot of the page. It
+ * takes its two colours from the part of the app on screen — gold for Today,
+ * blue for checklists, green for trackers — so each place feels like its own
+ * room of one house; see `sectionOf`.
+ *
+ * Drawn by the browser from gradients and two tiny inline SVGs: nothing to
+ * download, nothing moving, and fixed in place, so scrolling never repaints
+ * it. The hills are a mask over a gradient, which is what lets one drawing
+ * wear every section's colours. Both are the app's own, so there is no
+ * licence to keep.
+ */
+.thunderlist-shell {
+	--deco-1: #3b82f6;
+	--deco-2: #efc75e;
+	--deco-glow-1: light-dark(
+		color-mix(in srgb, var(--deco-1) 30%, transparent),
+		color-mix(in srgb, var(--deco-1) 24%, transparent)
+	);
+	--deco-glow-2: light-dark(
+		color-mix(in srgb, var(--deco-2) 30%, transparent),
+		color-mix(in srgb, var(--deco-2) 16%, transparent)
+	);
+	--deco-hills: 0.22;
+	isolation: isolate;
+	background-color: transparent;
+}
+
+.thunderlist-shell[data-section="today"] {
+	--deco-1: #efc75e;
+	--deco-2: #e8590c;
+}
+.thunderlist-shell[data-section="checklists"] {
+	--deco-1: #3b82f6;
+	--deco-2: #0d9a8b;
+}
+.thunderlist-shell[data-section="priority"] {
+	--deco-1: #ef5350;
+	--deco-2: #efc75e;
+}
+.thunderlist-shell[data-section="stages"] {
+	--deco-1: #9b6be8;
+	--deco-2: #3b82f6;
+}
+.thunderlist-shell[data-section="tags"] {
+	--deco-1: #e0559f;
+	--deco-2: #9b6be8;
+}
+.thunderlist-shell[data-section="trackers"] {
+	--deco-1: #2e9e62;
+	--deco-2: #0d9a8b;
+}
+.thunderlist-shell[data-section="groups"] {
+	--deco-1: #9b6be8;
+	--deco-2: #e0559f;
+}
+.thunderlist-shell[data-section="plans"] {
+	--deco-1: #0d9a8b;
+	--deco-2: #3b82f6;
+}
+.thunderlist-shell[data-section="countdowns"] {
+	--deco-1: #e8590c;
+	--deco-2: #e0559f;
+}
+.thunderlist-shell[data-section="settings"] {
+	--deco-1: #798196;
+	--deco-2: #3b82f6;
+}
+
+.thunderlist-shell::before,
+.thunderlist-shell::after {
+	content: "";
+	position: fixed;
+	z-index: -1;
+	pointer-events: none;
+	transition: opacity var(--duration-medium, 240ms) var(--ease-standard, ease);
+}
+
+/* The glows, and the sparkles in the top corner. */
+.thunderlist-shell::before {
+	inset: 0;
+	background:
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 240'%3E%3Cpath transform='translate(300 40) scale(1.6)' fill='%23efc75e' fill-opacity='0.55' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(250 95) scale(0.8)' fill='%233b82f6' fill-opacity='0.45' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(330 120) scale(0.7)' fill='%23efc75e' fill-opacity='0.5' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(200 30) scale(0.55)' fill='%239b6be8' fill-opacity='0.4' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(275 175) scale(0.5)' fill='%230d9a8b' fill-opacity='0.35' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(150 70) scale(0.4)' fill='%23efc75e' fill-opacity='0.35' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Ccircle cx='228' cy='58' r='3' fill='%23e0559f' fill-opacity='.35'/%3E%3Ccircle cx='318' cy='205' r='2.5' fill='%233b82f6' fill-opacity='.35'/%3E%3Ccircle cx='175' cy='140' r='2' fill='%23efc75e' fill-opacity='.45'/%3E%3C/svg%3E") right 1.5rem top 4.5rem / min(360px, 70vw) auto no-repeat,
+		radial-gradient(60vw 55vh at 0% 0%, var(--deco-glow-1), transparent 70%),
+		radial-gradient(50vw 50vh at 100% 8%, var(--deco-glow-2), transparent 70%),
+		radial-gradient(55vw 45vh at 85% 100%, var(--deco-glow-2), transparent 70%),
+		radial-gradient(45vw 40vh at 10% 95%, var(--deco-glow-1), transparent 70%);
+}
+
+/* The hills along the foot. */
+.thunderlist-shell::after {
+	inset: auto 0 0 0;
+	height: min(26vh, 240px);
+	opacity: var(--deco-hills);
+	background: linear-gradient(90deg, var(--deco-1), var(--deco-2));
+	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.45' d='M0 150c180-60 360-70 540-20s360 90 540 40 270-110 360-100v250H0z'/%3E%3Cpath fill-opacity='.7' d='M0 220c200-50 380-40 560 5s380 60 560 10 240-70 320-60v145H0z'/%3E%3Cpath d='M0 275c240-30 470-25 700 0s460 30 740-5v50H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.45' d='M0 150c180-60 360-70 540-20s360 90 540 40 270-110 360-100v250H0z'/%3E%3Cpath fill-opacity='.7' d='M0 220c200-50 380-40 560 5s380 60 560 10 240-70 320-60v145H0z'/%3E%3Cpath d='M0 275c240-30 470-25 700 0s460 30 740-5v50H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
+}
+
+/* Hills over a dark page read as mud; there they are a faint horizon. */
+[data-theme="dark"] .thunderlist-shell {
+	--deco-hills: 0.11;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .thunderlist-shell {
+		--deco-hills: 0.11;
+	}
+}
+
+/* The content area and the side nav let the scenery through. */
+#astryx-app-shell-main {
+	background-color: transparent;
+}
+
+.astryx-app-shell-sidenav {
+	background-color: color-mix(
+		in srgb,
+		var(--color-background-body) 55%,
+		transparent
+	);
+}
+
+/* Asked for more contrast, the scenery steps back to a hint of colour. */
+@media (prefers-contrast: more) {
+	.thunderlist-shell::before,
+	.thunderlist-shell::after {
+		opacity: 0.35;
+	}
 }
 
 /*
@@ -793,31 +935,50 @@ body {
 	}
 
 	/*
-	 * The wordmark: a bolt and a name, and nothing drawn around them.
+	 * The wordmark, as a sticker: the gold bolt and the name in the brand blue,
+	 * die-cut together with a white edge and lifted off the bar by a soft
+	 * shadow, set at a slight tilt the way a sticker is put on by hand.
 	 *
-	 * No patch, no edge, no hover — a panel behind it reads as a button, and the
-	 * one thing in the bar that is not pressable should not be the thing that
-	 * looks most pressable. What makes it a mark instead of a label is the type:
-	 * heavier and tighter than anything else on the screen, with the bolt set
-	 * slightly large beside it.
+	 * Still no panel behind it — a patch reads as a button, and the one thing in
+	 * the bar that is not pressable should not look the most pressable. The edge
+	 * follows the letters, so it reads as a mark.
+	 *
+	 * The face is Fredoka, cut down to the eleven letters of the name (2 KB,
+	 * SIL Open Font License) and kept with the app so it draws offline too.
+	 * The edge is four hard drop-shadows, which follow a gradient fill where a
+	 * text stroke would not.
 	 */
 	.thunderlist-brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.3125rem;
+		transform: rotate(-2deg);
+		filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff)
+			drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff)
+			drop-shadow(0 2px 3px rgb(15 23 42 / 0.28));
 	}
 
-	.thunderlist-brand img {
-		/* A touch of lift, so the bolt has an edge against the bar. */
-		filter: drop-shadow(0 1px 1px var(--color-shadow));
+	/* The same, as the sign-in page's title. */
+	.thunderlist-brand-hero {
+		margin: 0;
+	}
+
+	.thunderlist-brand-hero .thunderlist-brand-name {
+		font-size: 2.5rem;
 	}
 
 	.thunderlist-brand-name {
-		font-size: 1.125rem;
-		font-weight: 800;
-		letter-spacing: -0.02em;
-		color: var(--color-text-primary);
+		font-family: "Thunderlist Wordmark", var(--font-family-body, sans-serif);
+		font-size: 1.3125rem;
+		font-weight: 700;
+		letter-spacing: 0.005em;
+		line-height: 1;
 		white-space: nowrap;
+		color: #2563eb;
+		background: linear-gradient(180deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
 	}
 
 	/*
@@ -1096,6 +1257,67 @@ body {
 		background-color: transparent;
 		box-shadow: inset 0 0 0 1px var(--color-border-emphasized);
 		color: var(--color-text-secondary);
+	}
+
+	/* A group's mark: a folder in its colour, on a wash of it. */
+	.thunderlist-group-badge {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: var(--radius-inner, 0.5rem);
+		color: var(--thunderlist-stage-color);
+		background-color: color-mix(
+			in srgb,
+			var(--thunderlist-stage-color) 16%,
+			transparent
+		);
+	}
+
+	.thunderlist-group-badge[data-size="lg"] {
+		width: 3rem;
+		height: 3rem;
+	}
+
+	.thunderlist-group-badge svg {
+		width: 55%;
+		height: 55%;
+	}
+
+	/* The first few things in a group, as small chips under its bar. */
+	.thunderlist-group-preview {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+	}
+
+	.thunderlist-group-preview > span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3125rem;
+		max-width: 100%;
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-full);
+		background-color: var(--color-overlay-hover);
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm, 0.8125rem);
+	}
+
+	/* A result to pick rather than open: its kind, its words, and a tick. */
+	.thunderlist-pick-result {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.thunderlist-pick-text {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
 	}
 
 	/* The tag suggestions, which appear under the caret as you type. */

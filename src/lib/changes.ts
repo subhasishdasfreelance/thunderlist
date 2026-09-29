@@ -12,6 +12,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { applyChangeFn } from "#/functions/change.functions";
+import { whyBlocked } from "#/lib/depends";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
@@ -220,22 +221,40 @@ export function useApplyChange() {
 		},
 	});
 
+	/*
+	 * A task finished before what it waits on is refused here, before it is
+	 * drawn or heard, rather than drawn and then taken back; see `whyBlocked`.
+	 */
+	const refusal = useCallback(
+		(change: Change) => {
+			const reason = whyBlocked(queryClient, change);
+			if (reason !== null) {
+				toast({ body: reason, type: "error", uniqueID: "depends" });
+			}
+			return reason;
+		},
+		[queryClient, toast],
+	);
+
 	// Heard the moment it is made, as it is drawn; the save follows behind.
 	const apply = useCallback(
 		(change: Change) => {
+			if (refusal(change) !== null) return;
 			playChangeSound(change);
 			mutation.mutate(change);
 		},
-		[mutation.mutate],
+		[mutation.mutate, refusal],
 	);
 
 	/** For a caller that needs one change to land before it makes the next. */
 	const applyAsync = useCallback(
 		(change: Change) => {
+			const reason = refusal(change);
+			if (reason !== null) return Promise.reject(new Error(reason));
 			playChangeSound(change);
 			return mutation.mutateAsync(change);
 		},
-		[mutation.mutateAsync],
+		[mutation.mutateAsync, refusal],
 	);
 
 	return { apply, applyAsync, isSaving: mutation.isPending };

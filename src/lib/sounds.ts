@@ -146,6 +146,7 @@ function soundFor(change: Change): Sound {
 		case "task.create":
 		case "tracker.create":
 		case "tag.create":
+		case "group.create":
 			return "add";
 		case "checklist.delete":
 		case "task.delete":
@@ -153,6 +154,7 @@ function soundFor(change: Change): Sound {
 		case "tracker.delete":
 		case "entry.delete":
 		case "tag.delete":
+		case "group.delete":
 			return "delete";
 		// A reading is not a thing added to a list; it is the climb going on.
 		case "entry.create":

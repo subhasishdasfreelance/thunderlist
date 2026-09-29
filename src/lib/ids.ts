@@ -19,7 +19,7 @@ export const ID_PREFIX = {
 	stage: "stg",
 	/** One of a space's task types; see `TaskType`. */
 	taskType: "typ",
-	/** A group of checklists, trackers or tags; see `Arrangement`. */
+	/** A group of checklists, trackers and tags; see `Group`. */
 	group: "grp",
 	/** A long Markdown document; see `Plan`. */
 	plan: "pln",

@@ -6,8 +6,10 @@ import { useForm } from "@tanstack/react-form";
 import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { DependsField } from "#/components/tasks/depends-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
+import type { ItemRef } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -25,6 +27,7 @@ function fieldsOf(task: Task | null) {
 		caption: task?.caption ?? "",
 		notes: task?.notes ?? "",
 		typeId: task?.typeId ?? NO_TYPE,
+		dependsOn: task?.dependsOn ?? ([] as Array<ItemRef>),
 	};
 }
 
@@ -44,6 +47,8 @@ export type TaskDetails = {
 	notes: string;
 	/** What kind of work it is, or `null` for none; see `TaskType`. */
 	typeId: string | null;
+	/** Only when it changed; see `Task.dependsOn`. */
+	dependsOn?: Array<ItemRef>;
 	urgent?: boolean;
 	important?: boolean;
 };
@@ -95,6 +100,10 @@ export function TaskRenameDialog({
 				caption: value.caption.replace(/\s*\n\s*/g, " ").trim(),
 				notes: value.notes.trim(),
 				typeId: value.typeId === NO_TYPE ? null : value.typeId,
+				...(JSON.stringify(value.dependsOn) ===
+				JSON.stringify(task?.dependsOn ?? [])
+					? {}
+					: { dependsOn: value.dependsOn }),
 				...(parsed.urgent ? { urgent: true } : {}),
 				...(parsed.important ? { important: true } : {}),
 			});
@@ -210,6 +219,18 @@ export function TaskRenameDialog({
 						/>
 					)}
 				</form.Field>
+
+				{task === null ? null : (
+					<form.Field name="dependsOn">
+						{(field) => (
+							<DependsField
+								task={task}
+								value={field.state.value}
+								onChange={field.handleChange}
+							/>
+						)}
+					</form.Field>
+				)}
 			</VStack>
 		</FormDialog>
 	);

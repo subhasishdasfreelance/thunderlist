@@ -56,6 +56,7 @@ function previousPatch(task: Task, patch: TaskPatch): TaskPatch | null {
 	if ("notes" in patch) previous.notes = task.notes ?? "";
 	if ("assignees" in patch) previous.assignees = [...(task.assignees ?? [])];
 	if ("typeId" in patch) previous.typeId = task.typeId ?? null;
+	if ("dependsOn" in patch) previous.dependsOn = [...(task.dependsOn ?? [])];
 
 	if ("stageId" in patch || "completed" in patch) {
 		if (task.stageId) previous.stageId = task.stageId;
@@ -73,6 +74,7 @@ function restOfTask(task: Task): TaskPatch | null {
 	if (task.notes) rest.notes = task.notes;
 	if (task.assignees?.length) rest.assignees = [...task.assignees];
 	if (task.typeId) rest.typeId = task.typeId;
+	if (task.dependsOn?.length) rest.dependsOn = [...task.dependsOn];
 	// A task comes back at the stage it was taken from, which says whether it
 	// was done as well; see `previousPatch`.
 	if (task.stageId) rest.stageId = task.stageId;

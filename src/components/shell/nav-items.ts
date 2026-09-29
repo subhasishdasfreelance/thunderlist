@@ -1,4 +1,5 @@
 import {
+	Folders,
 	Hourglass,
 	ListChecks,
 	NotebookText,
@@ -13,8 +14,8 @@ import {
  *
  * Checklists are where work lives, the Inbox and the Backlog among them;
  * Priority, Across lists, Tags and Trackers are ways of looking across all
- * of it; Plans are the documents the work follows; Countdowns are the days
- * it is heading for.
+ * of it; Groups gather any of those that belong together; Plans are the
+ * documents the work follows; Countdowns are the days it is heading for.
  * Today is a tag, so it is reached from the Tags screen rather than having an
  * entry of its own — and Today is where the app opens. Detail routes live
  * underneath these and are deliberately not entries either, and neither is the
@@ -68,11 +69,19 @@ export const NAV_ITEMS: ReadonlyArray<{
 		key: "6",
 	},
 	{
+		to: "/groups",
+		label: "Groups",
+		shortLabel: "Groups",
+		icon: Folders,
+		key: "7",
+		isInMore: true,
+	},
+	{
 		to: "/plans",
 		label: "Plans",
 		shortLabel: "Plans",
 		icon: NotebookText,
-		key: "7",
+		key: "8",
 		isInMore: true,
 	},
 	{
@@ -80,7 +89,7 @@ export const NAV_ITEMS: ReadonlyArray<{
 		label: "Countdowns",
 		shortLabel: "Countdowns",
 		icon: Hourglass,
-		key: "8",
+		key: "9",
 		isInMore: true,
 	},
 ];

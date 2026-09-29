@@ -255,19 +255,6 @@ async function messageFor(reminder: {
 	const { ownerId, targetId } = reminder;
 
 	switch (reminder.target) {
-		case "checklist": {
-			const found = await current.checklists.findOne(
-				{ userId: ownerId, checklistId: targetId },
-				{ projection: { _id: 0, title: 1 } },
-			);
-			return found === null
-				? null
-				: {
-						title: `Review ${found.title}`,
-						body: "Open it to see what is left.",
-						url: `/checklists/${targetId}`,
-					};
-		}
 		case "tracker": {
 			const found = await current.trackers.findOne(
 				{ userId: ownerId, trackerId: targetId },
@@ -294,7 +281,8 @@ async function messageFor(reminder: {
 						url: `/tags/${found.special === "today" ? "today" : targetId}`,
 					};
 		}
-		// The daily review, no longer offered: deleted as it comes due.
+		// The daily review and a checklist's reminder, no longer offered:
+		// deleted as they come due.
 		default:
 			return null;
 	}

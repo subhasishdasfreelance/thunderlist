@@ -14,7 +14,7 @@ import { useMemo, useState } from "react";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
-	ArrangedSections,
+	ArrangedCards,
 	ListOrderMenu,
 	saveArrangement,
 	useArrangedList,
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/trackers/")({
 		// The tags on each card, and for the form; the trackers are the screen.
 		deferQuery(context.queryClient, tagsQuery());
 
-		// The order and groups are the space's, and read with the list, so it
+		// The order is the space's, and read with the list, so it
 		// is drawn in them from the start rather than rearranged after.
 		return Promise.all([
 			primeQuery(context.queryClient, trackersQuery()),
@@ -109,8 +109,7 @@ function TrackersPage() {
 	 * needs me", and that is an ordering of the cards rather than a row of
 	 * figures above them.
 	 */
-	// Your order, newest first or most behind first, and in your groups; see
-	// `useArrangedList`. Behind is judged on the viewer's clock, so only once
+	// Your order, newest first or most behind first; see `useArrangedList`. Behind is judged on the viewer's clock, so only once
 	// the browser has it.
 	const now = useNow();
 	const behind = useMemo(
@@ -137,10 +136,12 @@ function TrackersPage() {
 		if (isCreating) return;
 		setIsCreating(true);
 
+		// The form closes at once and the loading screen stands in while the
+		// server writes it, rather than the form waiting on the answer.
+		setIsFormOpen(false);
+		setIsOpening(true);
 		try {
 			const trackerId = await createTracker(applyAsync, values);
-			setIsFormOpen(false);
-			setIsOpening(true);
 
 			const destination = {
 				to: "/trackers/$trackerId",
@@ -152,7 +153,9 @@ function TrackersPage() {
 			]);
 			void navigate(destination);
 		} catch {
-			// Already reported by `useApplyChange`; the form stays open to retry.
+			// Already reported by `useApplyChange`; back to the list it was not
+			// added to.
+			setIsOpening(false);
 		} finally {
 			setIsCreating(false);
 		}
@@ -207,8 +210,8 @@ function TrackersPage() {
 							description="No tracker is assigned to them."
 						/>
 					) : null}
-					<ArrangedSections
-						sections={arranged.sections}
+					<ArrangedCards
+						items={arranged.ordered}
 						idOf={trackerIdOf}
 						render={(tracker) => <TrackerCard tracker={tracker} tags={tags} />}
 					/>

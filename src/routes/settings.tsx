@@ -128,9 +128,12 @@ function SettingsPage() {
 		}
 	}
 
-	/** Where a row's space stands: worked in now, or a button to move there. */
+	/**
+	 * Where a row's space stands: worked in now, or a button to move there. The
+	 * space being moved into already says so while the move is on its way.
+	 */
 	function workHere(teamId: string | null, name: string) {
-		return teamId === here ? (
+		return teamId === (movingTo === undefined ? here : movingTo) ? (
 			<Token size="sm" color="blue" label="Working here" />
 		) : (
 			<Button
@@ -273,7 +276,7 @@ function SettingsPage() {
 
 			<Section
 				title="Notifications"
-				description="Reminders from the installed app, at the times you choose, for any checklist, tracker or tag from its edit dialog."
+				description="Reminders from the installed app, at the times you choose, for any tracker or tag from its edit dialog."
 			>
 				<NotificationSettings />
 			</Section>

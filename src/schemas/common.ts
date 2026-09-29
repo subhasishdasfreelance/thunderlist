@@ -98,3 +98,19 @@ export function todayDateOnly(now: Date = new Date()): string {
 	const day = String(now.getDate()).padStart(2, "0");
 	return `${year}-${month}-${day}`;
 }
+
+/**
+ * The kinds of thing one thing can point at: a group holds checklists,
+ * trackers and tags, and a task can wait on any of the four.
+ */
+export const ITEM_KINDS = ["task", "checklist", "tracker", "tag"] as const;
+
+export type ItemKind = (typeof ITEM_KINDS)[number];
+
+export const itemRefSchema = v.object({
+	kind: v.picklist(ITEM_KINDS),
+	id: idSchema,
+});
+
+/** One thing, by its kind and its id. */
+export type ItemRef = v.InferOutput<typeof itemRefSchema>;

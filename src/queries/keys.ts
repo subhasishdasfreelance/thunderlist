@@ -11,8 +11,10 @@ export const queryKeys = {
 	teams: ["teams"] as const,
 	/** The space's task types; see `taskTypesQuery`. */
 	taskTypes: ["task-types"] as const,
-	/** How the space lays out its lists; see `arrangementsQuery`. */
+	/** How the space orders its lists; see `arrangementsQuery`. */
 	arrangements: ["arrangements"] as const,
+	/** The space's groups; see `groupsQuery`. */
+	groups: ["groups"] as const,
 	searchIndex: ["search-index"] as const,
 	/** Every page of every group the Across lists screen reads, under one key. */
 	across: ["across"] as const,

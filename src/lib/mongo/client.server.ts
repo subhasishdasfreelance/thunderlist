@@ -21,6 +21,7 @@ import { AppError } from "#/lib/errors";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Checklist } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
+import type { Group } from "#/schemas/group";
 import type { CodeRecipients } from "#/schemas/notification-code";
 import type { Plan } from "#/schemas/plan";
 import type { ReminderTarget } from "#/schemas/reminder";
@@ -151,8 +152,27 @@ export type TeamDoc = { teamId: string; name: string; createdAt: string };
  */
 export type SettingsDoc = Owned & {
 	taskTypes: Array<TaskType>;
-	/** How its lists are laid out; see `Arrangement`. Absent for none. */
-	arrangements?: Arrangements;
+	/**
+	 * How its lists are ordered; see `Arrangement`. Absent for none.
+	 *
+	 * Each list once kept groups of its own too, before groups could mix
+	 * checklists, trackers and tags. They are read once into `groups`; see
+	 * `listGroups`.
+	 */
+	arrangements?: Partial<
+		Record<
+			keyof Arrangements,
+			Arrangements[keyof Arrangements] & {
+				groups?: Array<{
+					groupId: string;
+					name: string;
+					itemIds: Array<string>;
+				}>;
+			}
+		>
+	>;
+	/** Its groups; see `Group`. Absent until they are first read. */
+	groups?: Array<Group>;
 	updatedAt: string;
 };
 

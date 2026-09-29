@@ -16,7 +16,7 @@ import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dial
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
-	ArrangedSections,
+	ArrangedCards,
 	ListOrderMenu,
 	saveArrangement,
 	useArrangedList,
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/checklists/")({
 		// Only the new-checklist form needs the tags, and not on the first frame.
 		deferQuery(context.queryClient, tagsQuery());
 
-		// The order and groups are the space's, and read with the list, so it
+		// The order is the space's, and read with the list, so it
 		// is drawn in them from the start rather than rearranged after.
 		return Promise.all([
 			primeQuery(context.queryClient, checklistsQuery()),
@@ -96,8 +96,8 @@ function ChecklistsPage() {
 	const tags = tagsResult.data ?? [];
 
 	/*
-	 * In your own order, newest first, or most behind first — and in your
-	 * groups; see `useArrangedList`.
+	 * In your own order, newest first, or most behind first; see
+	 * `useArrangedList`.
 	 *
 	 * A page of totals answered "how is all of this going" with one number that
 	 * was true of nothing in particular. The useful version of that question is
@@ -132,10 +132,12 @@ function ChecklistsPage() {
 		if (isCreating) return;
 		setIsCreating(true);
 
+		// The form closes at once and the loading screen stands in while the
+		// server writes it, rather than the form waiting on the answer.
+		setIsFormOpen(false);
+		setIsOpening(true);
 		try {
 			const checklistId = await createChecklist(applyAsync, values);
-			setIsFormOpen(false);
-			setIsOpening(true);
 
 			const destination = {
 				to: "/checklists/$checklistId",
@@ -150,7 +152,9 @@ function ChecklistsPage() {
 			]);
 			void navigate(destination);
 		} catch {
-			// Already reported by `useApplyChange`; the form stays open to retry.
+			// Already reported by `useApplyChange`; back to the list it was not
+			// added to.
+			setIsOpening(false);
 		} finally {
 			setIsCreating(false);
 		}
@@ -198,8 +202,8 @@ function ChecklistsPage() {
 							) : null}
 						</HStack>
 					</HStack>
-					<ArrangedSections
-						sections={arranged.sections}
+					<ArrangedCards
+						items={arranged.ordered}
 						idOf={checklistIdOf}
 						render={(checklist) => <ChecklistCard checklist={checklist} />}
 					/>

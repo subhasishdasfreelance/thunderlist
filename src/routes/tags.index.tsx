@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
-	ArrangedSections,
+	ArrangedCards,
 	ListOrderMenu,
 	saveArrangement,
 	useArrangedList,
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/tags/")({
 		// The untagged card after the tags; the tags are what the screen is.
 		deferQuery(context.queryClient, searchIndexQuery());
 
-		// The order and groups are the space's, and read with the list, so it
+		// The order is the space's, and read with the list, so it
 		// is drawn in them from the start rather than rearranged after.
 		return Promise.all([
 			primeQuery(context.queryClient, tagSummariesQuery()),
@@ -95,8 +95,7 @@ function TagsPage() {
 		[index.data],
 	);
 
-	// Your order, newest first or most behind first, and in your groups; see
-	// `useArrangedList`. Behind is judged on the viewer's clock, so only once
+	// Your order, newest first or most behind first; see `useArrangedList`. Behind is judged on the viewer's clock, so only once
 	// the browser has it.
 	const now = useNow();
 	const behind = useMemo(
@@ -156,8 +155,8 @@ function TagsPage() {
 									) : null}
 								</HStack>
 							</HStack>
-							<ArrangedSections
-								sections={arranged.sections}
+							<ArrangedCards
+								items={arranged.ordered}
 								idOf={tagIdOf}
 								render={(tag) => <TagCard tag={tag} />}
 							/>

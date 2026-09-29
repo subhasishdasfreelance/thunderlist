@@ -28,6 +28,7 @@ import type {
 	TrackerType,
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
+import { clearDependencies } from "./checklist.server";
 import { type Hidden, withAccess } from "./visibility.server";
 
 /** An entry document holds the link to its tracker; a reading does not. */
@@ -275,6 +276,7 @@ export async function deleteTracker(
 
 	await current.entries.deleteMany({ trackerId, userId });
 	await current.trackers.deleteOne({ trackerId, userId });
+	await clearDependencies(userId, "tracker", [trackerId]);
 }
 
 /* -------------------------------------------------------------------------- */

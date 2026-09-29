@@ -37,8 +37,10 @@ import {
 	memberName,
 	ROLE_LABELS,
 	ROLE_SUMMARIES,
+	type SpaceView,
 	type TeamDetail,
 	type TeamMember,
+	type TeamRole,
 } from "#/schemas/team";
 import { RoleToken } from "./role-token";
 import { RolesGuide } from "./roles-guide";
@@ -91,16 +93,55 @@ export function TeamDialog({
 	const isAdmin = team.role === "admin";
 
 	/**
-	 * One change to a team, then the teams read again — or, for one that takes
-	 * this person out of the team they are working in, the move back to their
-	 * own space.
+	 * One change to a team: drawn at once, like every change in the app, then
+	 * sent, then the teams read again — or, for one that takes this person out
+	 * of the team they are working in, the move back to their own space.
+	 *
+	 * `draw` is the team as it will be, or `null` for gone. Refused, the teams
+	 * are put back exactly as they were.
 	 */
-	async function run(change: () => Promise<unknown>, isLeaving = false) {
+	async function run(
+		change: () => Promise<unknown>,
+		draw: (team: TeamDetail) => TeamDetail | null,
+		isLeaving = false,
+	) {
 		setIsBusy(true);
+		await Promise.all([
+			queryClient.cancelQueries({ queryKey: queryKeys.teams }),
+			queryClient.cancelQueries({ queryKey: queryKeys.space }),
+		]);
+		const teamsBefore = queryClient.getQueryData<Array<TeamDetail>>(
+			queryKeys.teams,
+		);
+		const spaceBefore = queryClient.getQueryData<SpaceView>(queryKeys.space);
+
+		queryClient.setQueryData<Array<TeamDetail>>(queryKeys.teams, (teams) =>
+			teams?.flatMap((each) => {
+				if (each.teamId !== teamId) return [each];
+				const drawn = draw(each);
+				return drawn === null ? [] : [drawn];
+			}),
+		);
+		queryClient.setQueryData<SpaceView>(queryKeys.space, (space) => {
+			if (space === undefined) return space;
+			const drawn =
+				space.team?.teamId === teamId ? draw(space.team) : space.team;
+			return {
+				...space,
+				team: drawn,
+				teams: space.teams.flatMap((each) =>
+					each.teamId !== teamId
+						? [each]
+						: drawn === null
+							? []
+							: [{ ...each, role: drawn.role }],
+				),
+			};
+		});
+		if (isLeaving) onClose();
 
 		try {
 			await change();
-			if (isLeaving) onClose();
 			if (isLeaving && isCurrent) {
 				await spaceChanged();
 			} else {
@@ -111,6 +152,8 @@ export function TeamDialog({
 			}
 			return true;
 		} catch (error) {
+			queryClient.setQueryData(queryKeys.teams, teamsBefore);
+			queryClient.setQueryData(queryKeys.space, spaceBefore);
 			toast({ body: errorMessage(error), type: "error", uniqueID: "team" });
 			return false;
 		} finally {
@@ -118,15 +161,49 @@ export function TeamDialog({
 		}
 	}
 
+	/** The team with one person's role changed. */
+	const withRole =
+		(email: string, role: TeamRole) =>
+		(each: TeamDetail): TeamDetail => ({
+			...each,
+			members: each.members.map((member) =>
+				member.email === email ? { ...member, role } : member,
+			),
+		});
+
+	/** The team without one person — or gone, for the person looking. */
+	const without =
+		(email: string) =>
+		(each: TeamDetail): TeamDetail | null =>
+			email === me
+				? null
+				: {
+						...each,
+						members: each.members.filter((member) => member.email !== email),
+					};
+
 	async function add() {
 		const address = email.trim();
 		if (address === "" || isBusy) return;
 
 		playSound("join");
-		const isAdded = await run(() =>
-			addMemberFn({ data: { teamId, email: address, role } }),
+		setEmail("");
+		const isAdded = await run(
+			() => addMemberFn({ data: { teamId, email: address, role } }),
+			(each) => ({
+				...each,
+				members: each.members.some(
+					(member) => member.email === address.toLowerCase(),
+				)
+					? each.members
+					: [
+							...each.members,
+							{ email: address.toLowerCase(), name: null, image: null, role },
+						],
+			}),
 		);
-		if (isAdded) setEmail("");
+		// Refused, the address is back in the box to be put right.
+		if (!isAdded) setEmail(address);
 	}
 
 	const tick = (isOn: boolean) =>
@@ -159,10 +236,12 @@ export function TeamDialog({
 							endContent: tick(member.role === each),
 							onClick: () => {
 								playSound("role");
-								void run(() =>
-									setMemberRoleFn({
-										data: { teamId, email: member.email, role: each },
-									}),
+								void run(
+									() =>
+										setMemberRoleFn({
+											data: { teamId, email: member.email, role: each },
+										}),
+									withRole(member.email, each),
 								);
 							},
 						})),
@@ -341,7 +420,11 @@ export function TeamDialog({
 				onAction={() => {
 					setConfirming(null);
 					playSound("delete");
-					void run(() => removeMemberFn({ data: { teamId, email: me } }), true);
+					void run(
+						() => removeMemberFn({ data: { teamId, email: me } }),
+						without(me),
+						true,
+					);
 				}}
 			/>
 
@@ -356,7 +439,11 @@ export function TeamDialog({
 				onAction={() => {
 					setConfirming(null);
 					playSound("delete");
-					void run(() => deleteTeamFn({ data: { teamId } }), true);
+					void run(
+						() => deleteTeamFn({ data: { teamId } }),
+						() => null,
+						true,
+					);
 				}}
 			/>
 
@@ -377,8 +464,9 @@ export function TeamDialog({
 					const { member } = confirming;
 					setConfirming(null);
 					playSound("delete");
-					void run(() =>
-						removeMemberFn({ data: { teamId, email: member.email } }),
+					void run(
+						() => removeMemberFn({ data: { teamId, email: member.email } }),
+						without(member.email),
 					);
 				}}
 			/>
@@ -400,9 +488,16 @@ export function TeamDialog({
 					const { member } = confirming;
 					setConfirming(null);
 					playSound("role");
-					void run(() =>
-						setMemberRoleFn({
-							data: { teamId, email: member.email, role: "admin" },
+					// The admin hands over: they are admin now, and this person a
+					// project manager; see `setMemberRole`.
+					void run(
+						() =>
+							setMemberRoleFn({
+								data: { teamId, email: member.email, role: "admin" },
+							}),
+						(each) => ({
+							...withRole(me, "manager")(withRole(member.email, "admin")(each)),
+							role: "manager",
 						}),
 					);
 				}}

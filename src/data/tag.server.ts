@@ -61,6 +61,7 @@ import {
 } from "#/schemas/tag";
 import type { TaskFilter, TaskPageView } from "#/schemas/task";
 import {
+	clearDependencies,
 	ensureBacklog,
 	ensureInbox,
 	removeTagFromTasks,
@@ -898,4 +899,5 @@ export async function deleteTag(userId: string, tagId: string): Promise<void> {
 	]);
 	// Already gone is the outcome this asked for, not a failure.
 	await current.tags.deleteOne({ tagId, userId });
+	await clearDependencies(userId, "tag", [tagId]);
 }

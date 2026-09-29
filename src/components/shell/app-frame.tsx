@@ -37,6 +37,16 @@ function SpaceWatch() {
 }
 
 /**
+ * Which part of the app a path is in, for the colours of the scenery behind
+ * it; see `.thunderlist-shell`. Today is a tag, but it is the app's home, so
+ * it has colours of its own.
+ */
+function sectionOf(pathname: string): string {
+	if (pathname === "/" || pathname.startsWith("/tags/today")) return "today";
+	return pathname.split("/")[1] || "today";
+}
+
+/**
  * The application frame: top bar, navigation and the content region.
  *
  * Navigation is side nav from `md` up and a bottom bar below it, so the phone
@@ -181,6 +191,8 @@ export function AppFrame({
 			<RouteProgress />
 			<LinkProvider component={RouterLink}>
 				<AppShell
+					className="thunderlist-shell"
+					data-section={sectionOf(pathname)}
 					data-scrolled={isScrolled}
 					height="auto"
 					variant="wash"

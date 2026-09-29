@@ -136,9 +136,10 @@ describe("applyOptimistically", () => {
 	 * `["checklists"]` is the summary list's own key and the first segment of
 	 * every other checklist key, so a prefix match hands back an array with no
 	 * `progress` on it. Patching that as a checklist threw, which failed the
-	 * mutation before it was ever sent: nothing could be changed at all.
+	 * mutation before it was ever sent: nothing could be changed at all. The
+	 * list is patched as a list instead, so its bars move with the tick.
 	 */
-	it("leaves the checklist summaries alone", () => {
+	it("moves the checklist summaries as a list", () => {
 		const queryClient = client();
 
 		applyOptimistically(queryClient, {
@@ -147,9 +148,14 @@ describe("applyOptimistically", () => {
 			patch: { completed: true },
 		});
 
-		expect(
-			queryClient.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists),
-		).toEqual([summary("chk_1")]);
+		const [listed] =
+			queryClient.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists) ??
+			[];
+		expect(listed.progress).toMatchObject({
+			total: 1,
+			completed: 1,
+			percent: 100,
+		});
 	});
 
 	it("moves a ticked task to the last stage, and counts it done", () => {
@@ -1099,8 +1105,8 @@ describe("applyOptimistically, on the rest", () => {
 		]);
 		const change = {
 			kind: "reminder.set" as const,
-			target: "checklist" as const,
-			targetId: "chk_1",
+			target: "tracker" as const,
+			targetId: "trk_1",
 			timeZone: "UTC",
 		};
 		const reminders = () =>
@@ -1116,13 +1122,10 @@ describe("applyOptimistically, on the rest", () => {
 
 	it("lays a list out again at once, leaving the others as they were", () => {
 		const queryClient = new QueryClient();
-		const tags = { order: ["tag_1"], groups: [] };
+		const tags = { order: ["tag_1"] };
 		queryClient.setQueryData<Arrangements>(queryKeys.arrangements, { tags });
 
-		const checklists = {
-			order: ["chk_2", "chk_1"],
-			groups: [{ groupId: "grp_1", name: "Work", itemIds: ["chk_2"] }],
-		};
+		const checklists = { order: ["chk_2", "chk_1"] };
 		applyOptimistically(queryClient, {
 			kind: "arrangement.set",
 			list: "checklists",

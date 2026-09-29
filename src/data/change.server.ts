@@ -40,7 +40,13 @@ import {
 } from "./countdown.server";
 import { createPlan, deletePlan, updatePlan } from "./plan.server";
 import { setReminder } from "./reminder.server";
-import { setArrangement, setTaskTypes } from "./settings.server";
+import {
+	createGroup,
+	deleteGroup,
+	setArrangement,
+	setTaskTypes,
+	updateGroup,
+} from "./settings.server";
 import { createTag, deleteTag, updateTag } from "./tag.server";
 import type { Scope } from "./team.server";
 import {
@@ -140,6 +146,18 @@ async function run(
 
 		case "arrangement.set":
 			await setArrangement(userId, change.list, change.arrangement);
+			return;
+
+		case "group.create":
+			await createGroup(userId, change);
+			return;
+
+		case "group.update":
+			await updateGroup(userId, change.groupId, change.patch);
+			return;
+
+		case "group.delete":
+			await deleteGroup(userId, change.groupId);
 			return;
 
 		case "plan.create":

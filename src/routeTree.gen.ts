@@ -21,6 +21,8 @@ import { Route as ApiNotifyRouteImport } from './routes/api/notify'
 import { Route as ApiRemindersRouteImport } from './routes/api/reminders'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
+import { Route as GroupsIndexRouteImport } from './routes/groups.index'
+import { Route as GroupsGroupIdRouteImport } from './routes/groups.$groupId'
 import { Route as PlansIndexRouteImport } from './routes/plans.index'
 import { Route as PlansPlanIdRouteImport } from './routes/plans.$planId'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
@@ -90,6 +92,16 @@ const ChecklistsChecklistIdRoute = ChecklistsChecklistIdRouteImport.update({
   path: '/checklists/$checklistId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GroupsIndexRoute = GroupsIndexRouteImport.update({
+  id: '/groups/',
+  path: '/groups/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GroupsGroupIdRoute = GroupsGroupIdRouteImport.update({
+  id: '/groups/$groupId',
+  path: '/groups/$groupId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlansIndexRoute = PlansIndexRouteImport.update({
   id: '/plans/',
   path: '/plans/',
@@ -143,11 +155,13 @@ export interface FileRoutesByFullPath {
   '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
   '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
+  '/groups/': typeof GroupsIndexRoute
   '/plans/': typeof PlansIndexRoute
   '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
@@ -165,11 +179,13 @@ export interface FileRoutesByTo {
   '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
   '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists': typeof ChecklistsIndexRoute
+  '/groups': typeof GroupsIndexRoute
   '/plans': typeof PlansIndexRoute
   '/tags': typeof TagsIndexRoute
   '/trackers': typeof TrackersIndexRoute
@@ -188,11 +204,13 @@ export interface FileRoutesById {
   '/api/notify': typeof ApiNotifyRoute
   '/api/reminders': typeof ApiRemindersRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
+  '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
   '/tags/$tagId': typeof TagsTagIdRoute
   '/tags/untagged': typeof TagsUntaggedRoute
   '/trackers/$trackerId': typeof TrackersTrackerIdRoute
   '/checklists/': typeof ChecklistsIndexRoute
+  '/groups/': typeof GroupsIndexRoute
   '/plans/': typeof PlansIndexRoute
   '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
@@ -212,11 +230,13 @@ export interface FileRouteTypes {
     | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
+    | '/groups/$groupId'
     | '/plans/$planId'
     | '/tags/$tagId'
     | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists/'
+    | '/groups/'
     | '/plans/'
     | '/tags/'
     | '/trackers/'
@@ -234,11 +254,13 @@ export interface FileRouteTypes {
     | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
+    | '/groups/$groupId'
     | '/plans/$planId'
     | '/tags/$tagId'
     | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists'
+    | '/groups'
     | '/plans'
     | '/tags'
     | '/trackers'
@@ -256,11 +278,13 @@ export interface FileRouteTypes {
     | '/api/notify'
     | '/api/reminders'
     | '/checklists/$checklistId'
+    | '/groups/$groupId'
     | '/plans/$planId'
     | '/tags/$tagId'
     | '/tags/untagged'
     | '/trackers/$trackerId'
     | '/checklists/'
+    | '/groups/'
     | '/plans/'
     | '/tags/'
     | '/trackers/'
@@ -279,11 +303,13 @@ export interface RootRouteChildren {
   ApiNotifyRoute: typeof ApiNotifyRoute
   ApiRemindersRoute: typeof ApiRemindersRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
+  GroupsGroupIdRoute: typeof GroupsGroupIdRoute
   PlansPlanIdRoute: typeof PlansPlanIdRoute
   TagsTagIdRoute: typeof TagsTagIdRoute
   TagsUntaggedRoute: typeof TagsUntaggedRoute
   TrackersTrackerIdRoute: typeof TrackersTrackerIdRoute
   ChecklistsIndexRoute: typeof ChecklistsIndexRoute
+  GroupsIndexRoute: typeof GroupsIndexRoute
   PlansIndexRoute: typeof PlansIndexRoute
   TagsIndexRoute: typeof TagsIndexRoute
   TrackersIndexRoute: typeof TrackersIndexRoute
@@ -376,6 +402,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChecklistsChecklistIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/groups/': {
+      id: '/groups/'
+      path: '/groups'
+      fullPath: '/groups/'
+      preLoaderRoute: typeof GroupsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/groups/$groupId': {
+      id: '/groups/$groupId'
+      path: '/groups/$groupId'
+      fullPath: '/groups/$groupId'
+      preLoaderRoute: typeof GroupsGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/plans/': {
       id: '/plans/'
       path: '/plans'
@@ -447,11 +487,13 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotifyRoute: ApiNotifyRoute,
   ApiRemindersRoute: ApiRemindersRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
+  GroupsGroupIdRoute: GroupsGroupIdRoute,
   PlansPlanIdRoute: PlansPlanIdRoute,
   TagsTagIdRoute: TagsTagIdRoute,
   TagsUntaggedRoute: TagsUntaggedRoute,
   TrackersTrackerIdRoute: TrackersTrackerIdRoute,
   ChecklistsIndexRoute: ChecklistsIndexRoute,
+  GroupsIndexRoute: GroupsIndexRoute,
   PlansIndexRoute: PlansIndexRoute,
   TagsIndexRoute: TagsIndexRoute,
   TrackersIndexRoute: TrackersIndexRoute,

@@ -3,19 +3,19 @@ import { idSchema, timeOfDaySchema } from "./common";
 
 /**
  * A daily notification, to one person, at a time of their day, about one
- * checklist, tracker or tag. It is set from that thing's edit dialog, and
- * belongs to the space it is in.
+ * tracker or tag. It is set from that thing's edit dialog, and belongs to the
+ * space it is in.
  *
- * Each is the person's own: a reminder on a team's checklist reminds whoever
- * set it, not the team.
+ * Each is the person's own: a reminder on a team's tag reminds whoever set it,
+ * not the team.
  */
-export const REMINDER_TARGETS = ["checklist", "tracker", "tag"] as const;
+export const REMINDER_TARGETS = ["tracker", "tag"] as const;
 
 export type ReminderTarget = (typeof REMINDER_TARGETS)[number];
 
 export type Reminder = {
 	target: ReminderTarget;
-	/** The checklist, tracker or tag. */
+	/** The tracker or tag. */
 	targetId: string;
 	/** `HH:MM` on the person's own clock. */
 	time: string;

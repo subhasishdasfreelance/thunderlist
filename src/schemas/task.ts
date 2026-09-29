@@ -3,6 +3,7 @@ import {
 	assigneesSchema,
 	emailSchema,
 	idSchema,
+	itemRefSchema,
 	tagIdsSchema,
 	titleSchema,
 } from "./common";
@@ -98,9 +99,24 @@ const taskSchema = v.object({
 	stageId: v.optional(v.nullable(idSchema)),
 	/** What kind of work it is — a bug, a feature; see `TaskType`. Optional. */
 	typeId: v.optional(v.nullable(idSchema)),
+	/**
+	 * What has to be done before this can be: other tasks, checklists,
+	 * trackers or tags, from anywhere. Absent or empty for nothing.
+	 *
+	 * A task is done once ticked; a checklist or a tag once it has tasks and
+	 * every one is done; a tracker once it reaches its target. Until each is,
+	 * this task cannot be completed. Deleting any of them takes it off here.
+	 */
+	dependsOn: v.optional(v.array(itemRefSchema)),
 });
 
 export type Task = v.InferOutput<typeof taskSchema>;
+
+/** What a task waits on, as an edit sends it; see `Task.dependsOn`. */
+const dependsOnSchema = v.pipe(
+	v.array(itemRefSchema),
+	v.maxLength(50, "A task can wait on at most 50 things"),
+);
 
 /** Where a task sits in the urgent/important grid, best first. */
 export const PRIORITY_RANKS = [
@@ -244,6 +260,7 @@ const taskPatchSchema = v.pipe(
 		/** Moving it along its checklist's stages; see `Checklist.stages`. */
 		stageId: v.optional(idSchema),
 		typeId: v.optional(v.nullable(idSchema)),
+		dependsOn: v.optional(dependsOnSchema),
 	}),
 	v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 );

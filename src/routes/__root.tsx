@@ -89,6 +89,15 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 				rel: "stylesheet",
 				href: appCss,
 			},
+			// The wordmark's face, 2 KB, asked for with the page so the name
+			// never draws in a stand-in first; see `.thunderlist-brand-name`.
+			{
+				rel: "preload",
+				href: "/fonts/fredoka-wordmark.woff2",
+				as: "font",
+				type: "font/woff2",
+				crossOrigin: "anonymous",
+			},
 			// The bolt, as the tab icon. SVG first for the sharp one, PNG for the
 			// browsers and platforms that still want a raster.
 			{ rel: "icon", type: "image/svg+xml", href: "/logo.svg" },

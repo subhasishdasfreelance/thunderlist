@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
 	listArrangementsFn,
+	listGroupsFn,
 	listTaskTypesFn,
 } from "#/functions/settings.functions";
 import { getSpaceFn, listTeamsFn } from "#/functions/team.functions";
@@ -44,8 +45,8 @@ export const taskTypesQuery = () =>
 	});
 
 /**
- * How the space lays out its checklists, trackers and tags: the order picked
- * by hand, and the groups. Rarely changed, and read again by whatever does.
+ * How the space orders its checklists, trackers and tags by hand. Rarely
+ * changed, and read again by whatever does.
  */
 export const arrangementsQuery = () =>
 	queryOptions({
@@ -62,6 +63,13 @@ export const arrangementsQuery = () =>
 		initialData: storedArrangements,
 		initialDataUpdatedAt: 0,
 		staleTime: 60_000,
+	});
+
+/** The space's groups of checklists, trackers and tags; see `Group`. */
+export const groupsQuery = () =>
+	queryOptions({
+		queryKey: queryKeys.groups,
+		queryFn: () => listGroupsFn(),
 	});
 
 /** Where the space's arrangement is kept in this browser; see above. */

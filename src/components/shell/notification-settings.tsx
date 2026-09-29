@@ -19,9 +19,9 @@ import { pushKeyQuery } from "#/queries/reminders";
 type DeviceState = "checking" | "unavailable" | "off" | "on" | "denied";
 
 /**
- * Notifications: whether this device gets them. Reminders about one
- * checklist, tracker or tag are set from its edit dialog; they all arrive on
- * the devices turned on here.
+ * Notifications: whether this device gets them. Reminders about one tracker
+ * or tag are set from its edit dialog; they all arrive on the devices turned
+ * on here.
  */
 export function NotificationSettings() {
 	const toast = useToast();

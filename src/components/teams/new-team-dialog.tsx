@@ -39,10 +39,12 @@ export function NewTeamDialog({
 		setIsSaving(true);
 		playSound("add");
 
+		// Closed at once: what follows is the move into it, which the screens
+		// show as they load; a refusal says so.
+		onOpenChange(false);
 		try {
 			// The server moves this browser into the new team as it makes it.
 			await createTeamFn({ data: { name: trimmed } });
-			onOpenChange(false);
 			await spaceChanged();
 		} catch (error) {
 			toast({ body: errorMessage(error), type: "error", uniqueID: "team" });

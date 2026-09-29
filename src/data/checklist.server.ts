@@ -42,6 +42,7 @@ import {
 	orderTasks,
 	pageOf,
 	type StagePage,
+	shortTitle,
 } from "#/lib/tasks/tasks";
 import type { AccessEntry } from "#/schemas/access";
 import {
@@ -54,7 +55,12 @@ import {
 	type Stage,
 	stageOf,
 } from "#/schemas/checklist";
-import { type DailyWindow, todayDateOnly } from "#/schemas/common";
+import {
+	type DailyWindow,
+	type ItemKind,
+	type ItemRef,
+	todayDateOnly,
+} from "#/schemas/common";
 import { SPECIAL_TAGS } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView, TaskPatch } from "#/schemas/task";
 import { listTaskTypes } from "./settings.server";
@@ -912,8 +918,126 @@ export async function deleteChecklist(
 		);
 	}
 
+	const gone = await current.tasks
+		.find({ checklistId, userId }, { projection: { _id: 0, taskId: 1 } })
+		.toArray();
 	await current.tasks.deleteMany({ checklistId, userId });
 	await current.checklists.deleteOne({ checklistId, userId });
+	await clearDependencies(userId, "checklist", [checklistId]);
+	await clearDependencies(
+		userId,
+		"task",
+		gone.map((task) => task.taskId),
+	);
+}
+
+/**
+ * Take deleted things off every task waiting on them; see `Task.dependsOn`.
+ * Waiting on something that no longer exists would be waiting forever.
+ */
+export async function clearDependencies(
+	userId: string,
+	kind: ItemKind,
+	ids: ReadonlyArray<string>,
+): Promise<void> {
+	if (ids.length === 0) return;
+	const current = await collections();
+
+	await current.tasks.updateMany(
+		{ userId, dependsOn: { $elemMatch: { kind, id: { $in: [...ids] } } } },
+		// The driver's types do not follow a condition inside `$pull`.
+		{ $pull: { dependsOn: { kind, id: { $in: [...ids] } } as never } },
+	);
+}
+
+/**
+ * The first thing on a task's list that is not done yet, named the way the
+ * refusal says it — `task "Write the brief"` — or `null` when all are done.
+ * Done is judged as everywhere else: a tracker by its target, a checklist or
+ * a tag once it has tasks and every one is done; see `withTrackedCompletion`.
+ */
+async function firstUndone(
+	current: Collections,
+	userId: string,
+	refs: ReadonlyArray<ItemRef>,
+): Promise<string | null> {
+	const idsOf = (kind: ItemKind) =>
+		refs.filter((ref) => ref.kind === kind).map((ref) => ref.id);
+
+	const taskIds = idsOf("task");
+	if (taskIds.length > 0) {
+		const tasks = await withTrackedCompletion(
+			current,
+			userId,
+			await current.tasks
+				.find(
+					{ userId, taskId: { $in: taskIds } },
+					{
+						projection: {
+							_id: 0,
+							title: 1,
+							completed: 1,
+							trackerId: 1,
+							linkedChecklistId: 1,
+						},
+					},
+				)
+				.toArray(),
+		);
+		const open = tasks.find((task) => !task.completed);
+		if (open) return `task "${shortTitle(open.title, 40)}"`;
+	}
+
+	const checklistIds = idsOf("checklist");
+	if (checklistIds.length > 0) {
+		const finished = await checklistsFinished(
+			current,
+			userId,
+			checklistIds,
+			new Set(),
+		);
+		const open = checklistIds.find((id) => finished.get(id) !== true);
+		if (open !== undefined) {
+			const found = await current.checklists.findOne(
+				{ userId, checklistId: open },
+				{ projection: { _id: 0, title: 1 } },
+			);
+			if (found) return `checklist "${shortTitle(found.title, 40)}"`;
+		}
+	}
+
+	const trackerIds = idsOf("tracker");
+	if (trackerIds.length > 0) {
+		const reached = await trackersReached(current, userId, trackerIds);
+		const open = trackerIds.find((id) => reached.get(id) === false);
+		if (open !== undefined) {
+			const found = await current.trackers.findOne(
+				{ userId, trackerId: open },
+				{ projection: { _id: 0, title: 1 } },
+			);
+			if (found) return `tracker "${shortTitle(found.title, 40)}"`;
+		}
+	}
+
+	for (const tagId of idsOf("tag")) {
+		const tag = await current.tags.findOne(
+			{ userId, tagId },
+			{ projection: { _id: 0, name: 1 } },
+		);
+		if (!tag) continue;
+		const tasks = await withTrackedCompletion(
+			current,
+			userId,
+			await current.tasks
+				.find({ userId, tagIds: tagId }, { projection: PROGRESS_FIELDS })
+				.toArray(),
+		);
+		if (tasks.length === 0 || tasks.some((task) => !task.completed)) {
+			return `tag #${tag.name}`;
+		}
+	}
+
+	return null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1048,6 +1172,7 @@ export async function updateTask(
 							linkedChecklistId: 1,
 							checklistId: 1,
 							completed: 1,
+							dependsOn: 1,
 						},
 					},
 				);
@@ -1110,6 +1235,21 @@ export async function updateTask(
 		}
 	}
 
+	// Nothing is finished before what it waits on; see `Task.dependsOn`.
+	if (moved?.completed && !existing?.completed) {
+		const undone = await firstUndone(
+			current,
+			userId,
+			existing?.dependsOn ?? [],
+		);
+		if (undone !== null) {
+			throw new AppError(
+				"invalid_data",
+				`Can't complete this yet: ${undone} is not done.`,
+			);
+		}
+	}
+
 	/*
 	 * Finishing a task stamps the moment; reopening it clears it.
 	 *
@@ -1158,9 +1298,10 @@ export async function updateTask(
  * Its tags go with the move: the tags of the checklist it leaves come off,
  * except any its title writes as `#name` — see `untypedTags` — and the tags of
  * the checklist it joins go on, as they would for a task added there. It
- * starts at the new checklist's first stage, or its last if it is done. A task
- * standing for a checklist cannot be moved into that checklist, or into one
- * inside it; see `assertCanContain`.
+ * starts at the new checklist's first stage, or its last if it is done, and at
+ * the top of it: a list reads newest first, so arriving counts as being added.
+ * A task standing for a checklist cannot be moved into that checklist, or into
+ * one inside it; see `assertCanContain`.
  */
 export async function moveTask(
 	userId: string,
@@ -1230,6 +1371,7 @@ export async function moveTask(
 				checklistId,
 				// Its stage was the old checklist's; see `stageOf`.
 				stageId: null,
+				addedAt: new Date().toISOString(),
 				tagIds: [
 					...new Set([
 						...task.tagIds.filter((tagId) => !dropped.includes(tagId)),
@@ -1248,6 +1390,7 @@ export async function deleteTask(
 ): Promise<void> {
 	const current = await collections();
 	await current.tasks.deleteOne({ taskId, userId });
+	await clearDependencies(userId, "task", [taskId]);
 }
 
 /** Delete several tasks at once; any already gone are simply skipped. */
@@ -1257,6 +1400,7 @@ export async function deleteTasks(
 ): Promise<void> {
 	const current = await collections();
 	await current.tasks.deleteMany({ taskId: { $in: [...taskIds] }, userId });
+	await clearDependencies(userId, "task", taskIds);
 }
 
 /**

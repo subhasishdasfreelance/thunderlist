@@ -1,14 +1,13 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { Text } from "@astryxdesign/core/Text";
+import { VStack } from "@astryxdesign/core/Stack";
 import { useQuery } from "@tanstack/react-query";
 import {
 	ArrowDownWideNarrow,
+	ArrowUpDown,
 	Check,
 	Clock,
-	FolderTree,
 	GripVertical,
 	type LucideIcon,
 	TriangleAlert,
@@ -21,9 +20,7 @@ import {
 	type Arrangement,
 	EMPTY_ARRANGEMENT,
 	type ListOrder,
-	type ListSection,
 	manualOrder,
-	sectionsOf,
 } from "#/schemas/arrangement";
 
 const ORDERS: Array<{ order: ListOrder; label: string; icon: LucideIcon }> = [
@@ -73,7 +70,7 @@ function useListOrder(
 }
 
 /**
- * One list laid out: in the order picked, cut into its groups.
+ * One list laid out, in the order picked.
  *
  * `compareBehind` answers "which needs me first" on the viewer's clock, and is
  * `null` until the browser has read it — the list keeps its hand-picked order
@@ -97,7 +94,8 @@ export function useArrangedList<T>({
 	setOrder: (next: ListOrder) => void;
 	/** Every item, in the order the hand-picked list puts them. */
 	byHand: Array<T>;
-	sections: Array<ListSection<T>>;
+	/** Every item, in the order picked. */
+	ordered: Array<T>;
 } {
 	const [order, setOrder] = useListOrder(list);
 	const arrangement =
@@ -120,12 +118,7 @@ export function useArrangedList<T>({
 		return byHand;
 	}, [order, items, byHand, createdAt, compareBehind]);
 
-	const sections = useMemo(
-		() => sectionsOf(ordered, idOf, arrangement.groups),
-		[ordered, idOf, arrangement.groups],
-	);
-
-	return { arrangement, order, setOrder, byHand, sections };
+	return { arrangement, order, setOrder, byHand, ordered };
 }
 
 /** The order a list is in, picked from a menu; see `useArrangedList`. */
@@ -169,40 +162,20 @@ export function ListOrderMenu({
 	);
 }
 
-/**
- * The cards of a list, a group at a time: each group under its name, and the
- * ones in no group after them — under a heading of their own only when there
- * are groups to tell them apart from.
- */
-export function ArrangedSections<T>({
-	sections,
+/** The cards of a list, in the order picked; see `useArrangedList`. */
+export function ArrangedCards<T>({
+	items,
 	idOf,
 	render,
 }: {
-	sections: ReadonlyArray<ListSection<T>>;
+	items: ReadonlyArray<T>;
 	idOf: (item: T) => string;
 	render: (item: T) => ReactNode;
 }) {
-	const hasGroups = sections.some((section) => section.group !== null);
-
 	return (
-		<VStack gap={4}>
-			{sections.map((section) => (
-				<VStack key={section.group?.groupId ?? "ungrouped"} gap={2}>
-					{section.group === null && !hasGroups ? null : (
-						<HStack gap={2} vAlign="center">
-							<Text type="label" weight="semibold" color="secondary">
-								{section.group?.name ?? "Not in a group"}
-							</Text>
-							<Text type="supporting">{section.items.length}</Text>
-						</HStack>
-					)}
-					<VStack gap={3}>
-						{section.items.map((item) => (
-							<div key={idOf(item)}>{render(item)}</div>
-						))}
-					</VStack>
-				</VStack>
+		<VStack gap={3}>
+			{items.map((item) => (
+				<div key={idOf(item)}>{render(item)}</div>
 			))}
 		</VStack>
 	);
@@ -217,15 +190,15 @@ export function saveArrangement(
 	apply({ kind: "arrangement.set", list, arrangement });
 }
 
-/** Opens `ArrangeDialog`: the list's order by hand, and its groups. */
+/** Opens `ArrangeDialog`: the list's order by hand. */
 export function ArrangeButton({ onClick }: { onClick: () => void }) {
 	return (
 		<IconButton
-			label="Arrange and group"
-			tooltip="Arrange and group"
+			label="Arrange"
+			tooltip="Arrange"
 			variant="ghost"
 			size="sm"
-			icon={<FolderTree aria-hidden />}
+			icon={<ArrowUpDown aria-hidden />}
 			onClick={onClick}
 		/>
 	);

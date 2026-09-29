@@ -1,6 +1,6 @@
 /**
- * What a space chooses for itself: its task types, and how its lists are
- * laid out. Server only.
+ * What a space chooses for itself: its task types, how its lists are ordered,
+ * and its groups. Server only.
  *
  * One document per owner, absent until something is changed — so a space that
  * never touched its types reads the defaults, and nothing is written for it.
@@ -12,6 +12,8 @@ import type {
 	Arrangement,
 	Arrangements,
 } from "#/schemas/arrangement";
+import type { Group, GroupItem, GroupItemKind } from "#/schemas/group";
+import { TAG_COLORS } from "#/schemas/tag";
 import { DEFAULT_TASK_TYPES, type TaskType } from "#/schemas/task-type";
 
 export async function listTaskTypes(userId: string): Promise<Array<TaskType>> {
@@ -51,7 +53,7 @@ export async function setTaskTypes(
 	);
 }
 
-/** How the space lays out its lists; see `Arrangement`. Nothing for none. */
+/** How the space orders its lists; see `Arrangement`. Nothing for none. */
 export async function listArrangements(userId: string): Promise<Arrangements> {
 	const current = await collections();
 	const settings = await current.settings.findOne(
@@ -62,7 +64,10 @@ export async function listArrangements(userId: string): Promise<Arrangements> {
 	return settings?.arrangements ?? {};
 }
 
-/** Replace one list's whole arrangement: its order and its groups. */
+/**
+ * Replace one list's order. Only the order is written: anything else kept
+ * under the list — its groups from before — is left for `listGroups` to read.
+ */
 export async function setArrangement(
 	userId: string,
 	list: ArrangedList,
@@ -74,10 +79,135 @@ export async function setArrangement(
 		{ userId },
 		{
 			$set: {
-				[`arrangements.${list}`]: arrangement,
+				[`arrangements.${list}.order`]: arrangement.order,
 				updatedAt: new Date().toISOString(),
 			},
 		},
 		{ upsert: true },
+	);
+}
+
+const KIND_OF_LIST: Record<keyof Arrangements, GroupItemKind> = {
+	checklists: "checklist",
+	trackers: "tracker",
+	tags: "tag",
+};
+
+/**
+ * The space's groups.
+ *
+ * The first read writes them: groups used to belong to one list each, and those
+ * become groups here — a list's "Work" and another's "Work" one group holding
+ * both — so nothing arranged before is lost. After that the old ones are never
+ * read again.
+ */
+export async function listGroups(userId: string): Promise<Array<Group>> {
+	const current = await collections();
+	const settings = await current.settings.findOne(
+		{ userId },
+		{ projection: { _id: 0, groups: 1, arrangements: 1 } },
+	);
+	if (settings?.groups !== undefined) return settings.groups;
+
+	const now = new Date().toISOString();
+	const byName = new Map<string, Group>();
+	for (const [list, arrangement] of Object.entries(
+		settings?.arrangements ?? {},
+	)) {
+		const kind = KIND_OF_LIST[list as keyof Arrangements];
+		for (const old of arrangement?.groups ?? []) {
+			const key = old.name.toLowerCase();
+			const group = byName.get(key) ?? {
+				groupId: old.groupId,
+				name: old.name,
+				color: TAG_COLORS[byName.size % TAG_COLORS.length],
+				items: [],
+				createdAt: now,
+				updatedAt: now,
+			};
+			const items: Array<GroupItem> = old.itemIds.map((id) => ({ kind, id }));
+			group.items.push(...items);
+			byName.set(key, group);
+		}
+	}
+	const groups = [...byName.values()];
+
+	// Only where none have been written yet, so two first reads agree. Two
+	// first reads of a space with no settings at all can both try to make the
+	// document; the one that loses finds it made, which is the same outcome.
+	try {
+		await current.settings.updateOne(
+			{ userId, groups: { $exists: false } },
+			{ $set: { groups } },
+			{ upsert: settings === null },
+		);
+	} catch (error) {
+		if ((error as { code?: number }).code !== 11000) throw error;
+	}
+	return groups;
+}
+
+/** Add a group. Already there is the outcome this asked for. */
+export async function createGroup(
+	userId: string,
+	input: Omit<Group, "createdAt" | "updatedAt">,
+): Promise<void> {
+	const current = await collections();
+	await listGroups(userId);
+
+	const now = new Date().toISOString();
+	await current.settings.updateOne(
+		{ userId, "groups.groupId": { $ne: input.groupId } },
+		{
+			$push: {
+				groups: {
+					groupId: input.groupId,
+					name: input.name,
+					color: input.color,
+					items: input.items,
+					createdAt: now,
+					updatedAt: now,
+				},
+			},
+		},
+	);
+}
+
+/** Rename, recolour or refill a group. Gone already is not a failure. */
+export async function updateGroup(
+	userId: string,
+	groupId: string,
+	patch: Partial<Pick<Group, "name" | "color" | "items">>,
+): Promise<void> {
+	const current = await collections();
+	await listGroups(userId);
+
+	await current.settings.updateOne(
+		{ userId, "groups.groupId": groupId },
+		{
+			$set: {
+				...Object.fromEntries(
+					Object.entries(patch).map(([field, value]) => [
+						`groups.$.${field}`,
+						value,
+					]),
+				),
+				"groups.$.updatedAt": new Date().toISOString(),
+			},
+		},
+	);
+}
+
+/** Delete a group. What was in it stays, in no group. */
+export async function deleteGroup(
+	userId: string,
+	groupId: string,
+): Promise<void> {
+	const current = await collections();
+	await listGroups(userId);
+
+	await current.settings.updateOne(
+		{ userId },
+		{ $pull: { groups: { groupId } } },
 	);
 }

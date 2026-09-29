@@ -43,10 +43,9 @@ function typesProblem(types: ReadonlyArray<TaskType>): string | null {
 export function TaskTypesEditor() {
 	const result = useQuery(taskTypesQuery());
 	const { canManageContent } = usePermissions();
-	const { applyAsync } = useApplyChange();
+	const { apply } = useApplyChange();
 	// The list being edited; `null` until something is changed.
 	const [draft, setDraft] = useState<Array<TaskType> | null>(null);
-	const [isSaving, setIsSaving] = useState(false);
 
 	if (result.isError) {
 		return (
@@ -68,21 +67,15 @@ export function TaskTypesEditor() {
 			types.map((type, at) => (at === index ? { ...type, ...change } : type)),
 		);
 
-	async function save() {
+	// Drawn at once, like every change: the saved list is the new one before
+	// the server has it, and a refusal puts the old one back.
+	function save() {
 		if (!isChanged || problem !== null) return;
-		setIsSaving(true);
-
-		try {
-			await applyAsync({
-				kind: "taskTypes.set",
-				types: types.map((type) => ({ ...type, name: type.name.trim() })),
-			});
-			setDraft(null);
-		} catch {
-			// Already reported by `useApplyChange`; the edits stay to try again.
-		} finally {
-			setIsSaving(false);
-		}
+		apply({
+			kind: "taskTypes.set",
+			types: types.map((type) => ({ ...type, name: type.name.trim() })),
+		});
+		setDraft(null);
 	}
 
 	if (!canManageContent) {
@@ -159,7 +152,7 @@ export function TaskTypesEditor() {
 						label="Discard"
 						variant="ghost"
 						size="sm"
-						isDisabled={!isChanged || isSaving}
+						isDisabled={!isChanged}
 						onClick={() => setDraft(null)}
 					/>
 					<Button
@@ -167,8 +160,7 @@ export function TaskTypesEditor() {
 						variant="primary"
 						size="sm"
 						isDisabled={!isChanged || problem !== null}
-						isLoading={isSaving}
-						onClick={() => void save()}
+						onClick={save}
 					/>
 				</HStack>
 			</HStack>

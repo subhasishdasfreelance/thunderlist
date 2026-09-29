@@ -1,7 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Center } from "@astryxdesign/core/Center";
-import { Heading } from "@astryxdesign/core/Heading";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { createFileRoute } from "@tanstack/react-router";
@@ -47,7 +46,10 @@ function LoginPage() {
 				<img src="/logo.svg" alt="" width={56} height={56} aria-hidden />
 
 				<VStack gap={1} hAlign="center">
-					<Heading level={1}>Thunderlist</Heading>
+					{/* The wordmark, large; see `.thunderlist-brand`. */}
+					<h1 className="thunderlist-brand thunderlist-brand-hero">
+						<span className="thunderlist-brand-name">Thunderlist</span>
+					</h1>
 					<Text color="secondary">Your day, your lists, your pace.</Text>
 				</VStack>
 
