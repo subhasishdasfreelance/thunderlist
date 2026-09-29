@@ -2,6 +2,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { ItemNumber } from "#/components/common/item-number";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	formatExpectedTasks,
@@ -67,6 +68,7 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 							/>
 						)}
 						<Text weight="medium" maxLines={1}>
+							<ItemNumber kind="checklist" number={checklist.number} />
 							{checklist.title}{" "}
 							<Text color="secondary" weight="normal">
 								({progress.percent}%)

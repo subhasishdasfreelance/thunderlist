@@ -86,6 +86,7 @@ export function GroupFormDialog({
 			<FormDialog
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
+				number={{ kind: "group", number: group?.number }}
 				title={group ? "Edit group" : "New group"}
 				onSubmit={submit}
 				actions={(formId) => (

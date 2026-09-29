@@ -23,6 +23,7 @@ import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
 import { DayStats } from "#/components/common/day-stats";
+import { ItemNumber } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
@@ -660,7 +661,10 @@ function TagDetailPage() {
 				<VStack gap={0.5}>
 					<HStack gap={2} vAlign="center">
 						{Mark === null ? null : <Icon icon={Mark} color="secondary" />}
-						<Heading level={1}>{detail.name}</Heading>
+						<Heading level={1}>
+							<ItemNumber kind="tag" number={detail.number} />
+							{detail.name}
+						</Heading>
 					</HStack>
 					{subtitle === "" ? null : (
 						// Formatted in the viewer's locale, so server and client can differ.

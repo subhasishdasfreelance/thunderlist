@@ -29,6 +29,7 @@ import type {
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
 import { clearDependencies } from "./checklist.server";
+import { nextNumber } from "./numbers.server";
 import { type Hidden, withAccess } from "./visibility.server";
 
 /** An entry document holds the link to its tracker; a reading does not. */
@@ -209,6 +210,7 @@ export async function createTracker(
 		updatedAt: now,
 	};
 
+	tracker.number = await nextNumber(current, userId, "tracker");
 	await current.trackers.insertOne({ ...tracker, userId });
 
 	return tracker;
@@ -361,6 +363,7 @@ export async function createProgressEntry(
 		userId,
 		trackerId: input.trackerId,
 		entryId: input.entryId,
+		number: await nextNumber(current, userId, "entry"),
 		recordedAt: input.recordedAt,
 		value: input.value,
 		note: input.note,

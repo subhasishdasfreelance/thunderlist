@@ -12,21 +12,24 @@ import { useToast } from "#/lib/toasts";
 import { queryKeys } from "#/queries/keys";
 import { backdropsQuery } from "#/queries/preferences";
 import {
+	type Backdrop,
 	type Backdrops,
 	backdropOf,
-	ILLUSTRATIONS,
-	type IllustrationId,
-	illustrationUrl,
+	paletteColors,
 	SECTION_LABELS,
+	SECTION_PALETTES,
 	type Section,
 } from "#/schemas/backdrop";
+import { DESIGNS, PALETTES } from "#/schemas/backdrop-designs";
+import { BackdropArt } from "./backdrop-art";
 
 /**
- * Pick the illustration at the foot of one part of the app. It is this
- * person's own: the same on every device, and nobody else's.
+ * Pick how one part of the app is drawn behind its screens: its colours, and
+ * its design or none. It is this person's own — the same on every device,
+ * and nobody else's.
  *
- * A pick is drawn at once, behind the dialog, so the choice can be seen in
- * place before it is kept; the saving follows.
+ * A pick is drawn at once, behind the dialog, so it can be seen in place
+ * before it is kept; the saving follows.
  */
 export function BackdropDialog({
 	section,
@@ -41,34 +44,34 @@ export function BackdropDialog({
 	const toast = useToast();
 	const backdrops = useQuery(backdropsQuery()).data;
 	const current = backdropOf(backdrops, section);
+	const colors = paletteColors(current, section);
 
-	function pick(illustrationId: IllustrationId | null) {
-		if (illustrationId === current) return;
+	function pick(change: Partial<Backdrop>) {
+		const next = { ...current, ...change };
 		const key = queryKeys.backdrops;
 		const before = queryClient.getQueryData<Backdrops>(key);
 		queryClient.setQueryData<Backdrops>(key, (all) => ({
 			...all,
-			[section]: illustrationId,
+			[section]: next,
 		}));
 
-		setBackdropFn({ data: { section, illustrationId } }).catch((error) => {
+		setBackdropFn({ data: { section, ...next } }).catch((error) => {
 			queryClient.setQueryData<Backdrops>(key, before);
 			toast({ body: errorMessage(error), type: "error", uniqueID: "backdrop" });
 		});
 	}
 
-	const choices: Array<{
-		illustrationId: IllustrationId | null;
-		title: string;
-	}> = [{ illustrationId: null, title: "None" }, ...ILLUSTRATIONS];
+	const own = PALETTES.find(
+		(each) => each.paletteId === SECTION_PALETTES[section],
+	);
 
 	return (
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			title={`Illustration for ${SECTION_LABELS[section]}`}
+			title={`Background for ${SECTION_LABELS[section]}`}
 			subtitle="Just for you, on every device."
-			width={640}
+			width={720}
 			actions={() => (
 				<Button
 					label="Done"
@@ -78,30 +81,79 @@ export function BackdropDialog({
 				/>
 			)}
 		>
-			<Grid columns={{ minWidth: 132 }} gap={2}>
-				{choices.map((choice) => (
-					<SelectableCard
-						key={choice.illustrationId ?? "none"}
-						label={choice.title}
-						isSelected={choice.illustrationId === current}
-						onChange={() => pick(choice.illustrationId)}
-						padding={2}
-					>
-						<VStack gap={1.5}>
-							<div className="thunderlist-art-thumb">
-								{choice.illustrationId === null ? null : (
-									<img
-										src={illustrationUrl(choice.illustrationId)}
-										alt=""
-										loading="lazy"
-									/>
-								)}
-							</div>
-							<Text type="supporting">{choice.title}</Text>
-						</VStack>
-					</SelectableCard>
-				))}
-			</Grid>
+			<VStack gap={4}>
+				<VStack gap={2}>
+					<Text type="label" weight="semibold">
+						Colours
+					</Text>
+					<Grid columns={{ minWidth: 104 }} gap={2}>
+						{[
+							{
+								paletteId: null,
+								name: "Page colours",
+								colors: own?.colors ?? colors,
+							},
+							...PALETTES,
+						].map((palette) => (
+							<SelectableCard
+								key={palette.paletteId ?? "own"}
+								label={palette.name}
+								isSelected={palette.paletteId === current.palette}
+								onChange={() => pick({ palette: palette.paletteId })}
+								padding={2}
+							>
+								<VStack gap={1.5}>
+									<span className="thunderlist-palette-swatch">
+										{palette.colors.map((color) => (
+											<span key={color} style={{ backgroundColor: color }} />
+										))}
+									</span>
+									<Text type="supporting" maxLines={1}>
+										{palette.name}
+									</Text>
+								</VStack>
+							</SelectableCard>
+						))}
+					</Grid>
+				</VStack>
+
+				<VStack gap={2}>
+					<Text type="label" weight="semibold">
+						Design
+					</Text>
+					<Grid columns={{ minWidth: 132 }} gap={2}>
+						<SelectableCard
+							label="None"
+							isSelected={current.design === null}
+							onChange={() => pick({ design: null })}
+							padding={2}
+						>
+							<VStack gap={1.5}>
+								<div className="thunderlist-art-thumb" />
+								<Text type="supporting">None</Text>
+							</VStack>
+						</SelectableCard>
+						{DESIGNS.map((design) => (
+							<SelectableCard
+								key={design.designId}
+								label={design.name}
+								isSelected={design.designId === current.design}
+								onChange={() => pick({ design: design.designId })}
+								padding={2}
+							>
+								<VStack gap={1.5}>
+									<div className="thunderlist-art-thumb">
+										<BackdropArt designId={design.designId} colors={colors} />
+									</div>
+									<Text type="supporting" maxLines={1}>
+										{design.name}
+									</Text>
+								</VStack>
+							</SelectableCard>
+						))}
+					</Grid>
+				</VStack>
+			</VStack>
 		</FormDialog>
 	);
 }

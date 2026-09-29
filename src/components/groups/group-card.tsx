@@ -3,6 +3,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Folder } from "lucide-react";
+import { ItemNumber } from "#/components/common/item-number";
 import { ITEM_KIND_ICONS } from "#/components/common/item-picker-dialog";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { stageColorStyle } from "#/components/common/stage-dot";
@@ -75,6 +76,7 @@ export function GroupCard({
 					<GroupBadge group={group} />
 					<VStack gap={0}>
 						<Text weight="medium" maxLines={1}>
+							<ItemNumber kind="group" number={group.number} />
 							{group.name}
 							{contents.percent === null ? null : (
 								<Text color="secondary" weight="normal">

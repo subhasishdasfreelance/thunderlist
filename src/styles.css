@@ -48,9 +48,9 @@ body,
 }
 
 /*
- * The scenery behind every screen; see `Scenery`. A few big, flat shapes — a
- * disc, a blob, an arch and a capsule — in three colours that change with the
- * part of the app on screen, and at the foot the illustration picked for it.
+ * The background behind every screen; see `Scenery`. One of the designs in
+ * `DESIGNS` — big, flat shapes in three colours — laid over a wash of the
+ * first of them.
  *
  * The top of the page stays clear and nearly white, where the bar and a
  * page's heading sit. Nothing small or dotted is drawn anywhere, so nothing
@@ -58,15 +58,11 @@ body,
  * blurred glows, and they multiply where they cross, so each overlap makes a
  * colour of its own.
  *
- * Plain elements and gradients, fixed in place: nothing to download but the
- * picture, and scrolling never repaints it.
+ * Plain elements, fixed in place: nothing to download, and scrolling never
+ * repaints it.
  */
 .thunderlist-scenery {
-	--deco-1: #7c8cff;
-	--deco-2: #4fd1e8;
-	--deco-3: #ffb38a;
 	--deco-shape: 0.42;
-	--deco-art: 0.88;
 	--deco-blend: multiply;
 	--deco-top: light-dark(
 		color-mix(in srgb, var(--color-background-body) 40%, #fff),
@@ -88,108 +84,25 @@ body,
 	);
 }
 
-/* Today warm, checklists cool, and every other part a mix of its own. */
-.thunderlist-scenery[data-section="today"] {
-	--deco-1: #ffd166;
-	--deco-2: #ff8a5b;
-	--deco-3: #ff8fc7;
-}
-.thunderlist-scenery[data-section="checklists"] {
-	--deco-1: #7c8cff;
-	--deco-2: #4fd1e8;
-	--deco-3: #9ef0c9;
-}
-.thunderlist-scenery[data-section="priority"] {
-	--deco-1: #ff6b6b;
-	--deco-2: #ffd166;
-	--deco-3: #ff9f7a;
-}
-.thunderlist-scenery[data-section="stages"] {
-	--deco-1: #a78bfa;
-	--deco-2: #7c8cff;
-	--deco-3: #f9a8d4;
-}
-.thunderlist-scenery[data-section="tags"] {
-	--deco-1: #ff7eb6;
-	--deco-2: #a78bfa;
-	--deco-3: #ffc58a;
-}
-.thunderlist-scenery[data-section="trackers"] {
-	--deco-1: #3ddc97;
-	--deco-2: #c6f16d;
-	--deco-3: #4fd1e8;
-}
-.thunderlist-scenery[data-section="groups"] {
-	--deco-1: #b794f6;
-	--deco-2: #ff7eb6;
-	--deco-3: #6ee7f2;
-}
-.thunderlist-scenery[data-section="plans"] {
-	--deco-1: #4fd1e8;
-	--deco-2: #9ef0c9;
-	--deco-3: #7c8cff;
-}
-.thunderlist-scenery[data-section="countdowns"] {
-	--deco-1: #ff9f6b;
-	--deco-2: #ff6b9a;
-	--deco-3: #a78bfa;
-}
-.thunderlist-scenery[data-section="settings"] {
-	--deco-1: #a5b4cf;
-	--deco-2: #7c8cff;
-	--deco-3: #9ef0c9;
+/*
+ * One design, filling whatever holds it; see `BackdropArt`. A container, so
+ * its shapes can be sized by its longer side in `cqmax` — which is what makes
+ * the page and its thumbnail the same drawing.
+ */
+.thunderlist-backdrop {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	container-type: size;
 }
 
 .thunderlist-shape {
 	position: absolute;
+	height: auto;
+	translate: -50% -50%;
+	overflow: visible;
 	opacity: var(--deco-shape);
 	mix-blend-mode: var(--deco-blend);
-	transition: background var(--duration-medium, 240ms)
-		var(--ease-standard, ease);
-}
-
-/* A sun rising out of the bottom left. */
-.thunderlist-shape-disc {
-	width: 64vmax;
-	aspect-ratio: 1;
-	left: -20vmax;
-	bottom: -34vmax;
-	border-radius: 50%;
-	background: linear-gradient(35deg, var(--deco-1), var(--deco-2));
-}
-
-/* A pebble leaning in from the right. */
-.thunderlist-shape-blob {
-	width: 46vmax;
-	aspect-ratio: 1.2;
-	right: -15vmax;
-	top: 42vh;
-	border-radius: 58% 42% 38% 62% / 46% 58% 42% 54%;
-	background: linear-gradient(160deg, var(--deco-3), var(--deco-2));
-	rotate: -14deg;
-}
-
-/* A thick ring, half sunk below the foot of the page. */
-.thunderlist-shape-arch {
-	width: 38vmax;
-	aspect-ratio: 1;
-	left: 36vw;
-	bottom: -22vmax;
-	border: 4.5vmax solid var(--deco-3);
-	border-radius: 50%;
-	opacity: calc(var(--deco-shape) * 0.8);
-}
-
-/* A capsule tipped across the middle. */
-.thunderlist-shape-capsule {
-	width: 26vmax;
-	height: 8vmax;
-	left: 16vw;
-	top: 54vh;
-	border-radius: 999px;
-	background: var(--deco-2);
-	rotate: -32deg;
-	opacity: calc(var(--deco-shape) * 0.7);
 }
 
 /* What keeps the top light: the shapes fade out before they reach it. */
@@ -197,89 +110,54 @@ body,
 	position: absolute;
 	inset: 0 0 auto;
 	height: 50vh;
-	background: linear-gradient(
-		180deg,
-		var(--deco-top) 40%,
-		transparent 100%
-	);
-}
-
-/* The picture, bottom right, clear of the bottom bar on a phone. */
-.thunderlist-scenery-art {
-	position: absolute;
-	right: clamp(1rem, 4vw, 4rem);
-	bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-	width: min(36vw, 300px);
-	max-height: 34vh;
-	object-fit: contain;
-	object-position: right bottom;
-	opacity: var(--deco-art);
-	animation: thunderlist-art-in var(--duration-slow, 400ms)
-		var(--ease-standard, ease) both;
-}
-
-@media (min-width: 768px) {
-	.thunderlist-scenery-art {
-		bottom: 1.5rem;
-	}
-}
-
-@keyframes thunderlist-art-in {
-	from {
-		opacity: 0;
-		translate: 0 12px;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.thunderlist-scenery-art {
-		animation: none;
-	}
+	background: linear-gradient(180deg, var(--deco-top) 40%, transparent 100%);
 }
 
 /* On a dark page the shapes are faint panes of colour; multiplied, they vanish. */
 [data-theme="dark"] .thunderlist-scenery {
 	--deco-shape: 0.16;
-	--deco-art: 0.6;
 	--deco-blend: normal;
 }
 
-/* The drawings are black ink; on a dark page they are drawn in white. */
-[data-theme="dark"] .thunderlist-scenery-art {
-	filter: invert(1);
+[data-theme="dark"] .thunderlist-art-thumb {
+	--deco-shape: 0.4;
+	--deco-blend: normal;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) .thunderlist-scenery {
 		--deco-shape: 0.16;
-		--deco-art: 0.6;
 		--deco-blend: normal;
 	}
 
-	:root:not([data-theme="light"]) .thunderlist-scenery-art {
-		filter: invert(1);
+	:root:not([data-theme="light"]) .thunderlist-art-thumb {
+		--deco-shape: 0.4;
+		--deco-blend: normal;
 	}
 }
 
-/* The picker's thumbnails; see `BackdropDialog`. */
+/* The picker's thumbnails: the same drawing, a little bolder to read small. */
 .thunderlist-art-thumb {
-	display: grid;
-	place-items: center;
-	aspect-ratio: 4 / 3;
-	padding: 0.5rem;
+	--deco-shape: 0.6;
+	--deco-blend: multiply;
+	position: relative;
+	aspect-ratio: 16 / 10;
 	border-radius: var(--radius-md, 8px);
 	overflow: hidden;
-	background: linear-gradient(
-		135deg,
-		color-mix(in srgb, #7c8cff 14%, transparent),
-		color-mix(in srgb, #ffb38a 18%, transparent)
-	);
+	background: var(--color-background-body);
+	box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-.thunderlist-art-thumb img {
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
+/* A palette in the picker: its three colours side by side. */
+.thunderlist-palette-swatch {
+	display: flex;
+	height: 1.5rem;
+	border-radius: var(--radius-md, 8px);
+	overflow: hidden;
+}
+
+.thunderlist-palette-swatch > span {
+	flex: 1;
 }
 
 /* The shell and everything in it let the scenery through. */
@@ -304,7 +182,6 @@ body,
 @media (prefers-contrast: more) {
 	.thunderlist-scenery {
 		--deco-shape: 0.15;
-		--deco-art: 0.35;
 	}
 }
 
@@ -1046,14 +923,16 @@ body {
 	}
 
 	/*
-	 * The task you arrived to see.
+	 * The task — or reading, or countdown — you arrived to see.
 	 *
 	 * A ring and a wash of the accent, held long enough to be found by an eye
 	 * that is still travelling from the link it clicked, then faded out on its
 	 * own: it is an answer to "which one", not a state the task is in. Two quick
 	 * pulses were not enough — they were over before the page had settled.
 	 */
-	.thunderlist-task-row[data-focused="true"] {
+	.thunderlist-task-row[data-focused="true"],
+	.thunderlist-entry-row[data-focused="true"],
+	.thunderlist-countdown[data-focused="true"] {
 		/*
 		 * No fill mode: with one, the last frame stays applied for good and its
 		 * transparent background outranks `:hover`, so the row the user was just
@@ -1100,6 +979,22 @@ body {
 		-webkit-background-clip: text;
 		background-clip: text;
 		-webkit-text-fill-color: transparent;
+	}
+
+	/*
+	 * A thing's number, `T-42`, ahead of its name; see `ItemNumber`. Small,
+	 * grey and in even-width figures, so a column of them lines up and none
+	 * competes with the name it sits beside.
+	 */
+	.thunderlist-number {
+		margin-inline-end: 0.375rem;
+		color: var(--color-text-secondary);
+		font-size: 0.75em;
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+		-webkit-text-fill-color: currentColor;
 	}
 
 	/*

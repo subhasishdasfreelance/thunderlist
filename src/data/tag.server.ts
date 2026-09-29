@@ -67,6 +67,7 @@ import {
 	removeTagFromTasks,
 	withTrackedCompletion,
 } from "./checklist.server";
+import { nextNumber } from "./numbers.server";
 import { listTaskTypes } from "./settings.server";
 import { summarise as summariseTracker } from "./tracker.server";
 import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
@@ -226,6 +227,7 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 			const now = new Date().toISOString();
 			await current.tags.insertOne({
 				tagId: createId(ID_PREFIX.tag),
+				number: await nextNumber(current, userId, "tag"),
 				name: kind,
 				color: SPECIAL_TAG_COLORS[kind],
 				special: kind,
@@ -761,6 +763,7 @@ export async function createTag(
 		updatedAt: now,
 	};
 
+	tag.number = await nextNumber(current, userId, "tag");
 	await current.tags.insertOne({ ...tag, userId });
 
 	return tag;

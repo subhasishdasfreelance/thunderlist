@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ItemNumber } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
@@ -14,6 +15,7 @@ import { CountdownFormDialog } from "#/components/countdowns/countdown-form-dial
 import { useApplyChange } from "#/lib/changes";
 import { formatDate, formatDateWithWeekday } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
+import { useFocusRow } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { countdownsQuery } from "#/queries/countdowns";
@@ -28,6 +30,13 @@ import {
 } from "#/schemas/countdown";
 
 export const Route = createFileRoute("/countdowns")({
+	// The countdown to bring into view, when search sent you to one.
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { countdown?: string } => ({
+		countdown:
+			typeof search.countdown === "string" ? search.countdown : undefined,
+	}),
 	loader: ({ context }) => primeQuery(context.queryClient, countdownsQuery()),
 	component: CountdownsPage,
 });
@@ -90,11 +99,14 @@ function CountdownTile({
 	countdown,
 	now,
 	onOpen,
+	isFocused = false,
 }: {
 	countdown: Countdown;
 	/** `null` until the browser knows the viewer's clock; see `useNow`. */
 	now: number | null;
 	onOpen?: () => void;
+	/** The one search sent you to; it is scrolled to and ringed. */
+	isFocused?: boolean;
 }) {
 	const today = now === null ? null : todayDateOnly(new Date(now));
 	const days = today === null ? null : daysUntil(countdown.date, today);
@@ -147,7 +159,10 @@ function CountdownTile({
 					<span className="thunderlist-countdown-unit">{ahead}</span>
 				</>
 			)}
-			<span className="thunderlist-countdown-title">{countdown.title}</span>
+			<span className="thunderlist-countdown-title">
+				<ItemNumber kind="countdown" number={countdown.number} />
+				{countdown.title}
+			</span>
 			<span className="thunderlist-countdown-date">
 				{formatDateWithWeekday(countdown.date)}
 			</span>
@@ -161,6 +176,8 @@ function CountdownTile({
 		<div
 			className="thunderlist-countdown"
 			data-past={days !== null && days < 0}
+			data-countdown-id={countdown.countdownId}
+			data-focused={isFocused}
 			style={stageColorStyle(countdown.color)}
 		>
 			{content}
@@ -170,6 +187,8 @@ function CountdownTile({
 			type="button"
 			className="thunderlist-countdown"
 			data-past={days !== null && days < 0}
+			data-countdown-id={countdown.countdownId}
+			data-focused={isFocused}
 			style={stageColorStyle(countdown.color)}
 			title={`Edit ${countdown.title}`}
 			onClick={onOpen}
@@ -190,6 +209,8 @@ function CountdownsPage() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [editing, setEditing] = useState<Countdown | null>(null);
 
+	const { countdown: focusId } = Route.useSearch();
+	useFocusRow("data-countdown-id", focusId);
 	const { data, isPending, isError, error, refetch } = useQuery(
 		countdownsQuery(),
 	);
@@ -241,6 +262,7 @@ function CountdownsPage() {
 									countdown={countdown}
 									now={now}
 									onOpen={open(countdown)}
+									isFocused={countdown.countdownId === focusId}
 								/>
 							))}
 						</div>
@@ -257,6 +279,7 @@ function CountdownsPage() {
 										countdown={countdown}
 										now={now}
 										onOpen={open(countdown)}
+										isFocused={countdown.countdownId === focusId}
 									/>
 								))}
 							</div>

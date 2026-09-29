@@ -21,6 +21,7 @@ import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
 import { DayStats } from "#/components/common/day-stats";
+import { ItemNumber } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
@@ -589,7 +590,10 @@ function ChecklistDetailPage() {
 						{special === null ? null : (
 							<Icon icon={SPECIAL_CHECKLIST_ICONS[special]} color="secondary" />
 						)}
-						<Heading level={1}>{detail.title}</Heading>
+						<Heading level={1}>
+							<ItemNumber kind="checklist" number={detail.number} />
+							{detail.title}
+						</Heading>
 					</HStack>
 					{detail.description === "" ? null : (
 						<Text color="secondary">{detail.description}</Text>

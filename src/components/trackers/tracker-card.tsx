@@ -3,6 +3,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { FadeImage } from "#/components/common/fade-image";
+import { ItemNumber } from "#/components/common/item-number";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
@@ -97,6 +98,7 @@ export function TrackerCard({
 				<VStack gap={2} width="100%">
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<Text weight="medium" maxLines={1}>
+							<ItemNumber kind="tracker" number={tracker.number} />
 							{tracker.title}{" "}
 							<Text color="secondary" weight="normal">
 								({progress.percent}%)

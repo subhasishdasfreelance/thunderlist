@@ -99,6 +99,7 @@ export function EntryFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "entry", number: entry?.number }}
 			title={entry ? "Edit progress" : "Add progress"}
 			subtitle={`${tracker.title} · target ${tracker.targetValue} ${tracker.unit}`}
 			width={420}

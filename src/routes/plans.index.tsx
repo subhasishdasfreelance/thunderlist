@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { ItemNumber } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
@@ -84,6 +85,7 @@ function PlansPage() {
 						>
 							<VStack gap={1}>
 								<Text weight="medium" maxLines={1}>
+									<ItemNumber kind="plan" number={plan.number} />
 									{plan.title}
 								</Text>
 								<Text type="supporting">

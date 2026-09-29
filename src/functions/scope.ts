@@ -1,6 +1,8 @@
 import { getCookie } from "@tanstack/react-start/server";
+import { ensureNumbered } from "#/data/numbers.server";
 import { resolveScope, type Scope } from "#/data/team.server";
 import { requireUser } from "#/lib/auth.server";
+import { collections } from "#/lib/mongo/client.server";
 
 /** Names the team this browser is working in; absent for your own space. */
 export const SPACE_COOKIE = "thunderlist-space";
@@ -12,7 +14,15 @@ export const SPACE_COOKIE = "thunderlist-space";
  * request: membership is checked here, on every call, against the signed-in
  * address. A cookie naming a team this person is not in is ignored, and they
  * work in their own space.
+ *
+ * The first request into a space also numbers whatever in it has no number
+ * yet, so every read answers with them; see `ensureNumbered`.
  */
 export async function requireScope(): Promise<Scope> {
-	return resolveScope(await requireUser(), getCookie(SPACE_COOKIE));
+	const scope = await resolveScope(
+		await requireUser(),
+		getCookie(SPACE_COOKIE),
+	);
+	await ensureNumbered(await collections(), scope.ownerId);
+	return scope;
 }

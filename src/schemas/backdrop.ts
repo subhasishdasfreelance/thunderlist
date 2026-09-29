@@ -1,8 +1,14 @@
 import * as v from "valibot";
+import {
+	DESIGNS,
+	type DesignId,
+	PALETTES,
+	type PaletteId,
+} from "./backdrop-designs";
 
 /**
- * The parts of the app, each with scenery of its own behind it; see
- * `sectionOf` and `.thunderlist-shell`.
+ * The parts of the app, each with a background of its own; see `sectionOf`
+ * and `Scenery`.
  */
 export const SECTIONS = [
 	"today",
@@ -33,71 +39,98 @@ export const SECTION_LABELS: Record<Section, string> = {
 };
 
 /**
- * The illustrations a section can have at the foot of its scenery, each a
- * file in `public/illustrations`. Every one is in the public domain (CC0), so
- * nothing is owed and nothing restricts where it goes; where each came from is
- * in `public/illustrations/LICENSES.md`.
+ * Each part of the app's own colours — Today warm, checklists cool — which
+ * its background is drawn in until its person picks others.
  */
-export const ILLUSTRATIONS = [
-	{ illustrationId: "coffee-run", title: "Coffee run" },
-	{ illustrationId: "tinkering-together", title: "Tinkering together" },
-	{ illustrationId: "looking-ahead", title: "Looking ahead" },
-	{ illustrationId: "bike-ride", title: "Bike ride" },
-	{ illustrationId: "carrying-plants", title: "Armful of plants" },
-	{ illustrationId: "happy-dance", title: "Happy dance" },
-	{ illustrationId: "walking-together", title: "Walking together" },
-	{ illustrationId: "armchair-reading", title: "Armchair reading" },
-	{ illustrationId: "sitting-calm", title: "Calm sitting" },
-	{ illustrationId: "puppy-cuddle", title: "Puppy cuddle" },
-	{ illustrationId: "looking-up", title: "Looking up" },
-	{ illustrationId: "reading-cross-legged", title: "Reading corner" },
-	{ illustrationId: "sitting-reflecting", title: "Quiet reflection" },
-] as const satisfies ReadonlyArray<{ illustrationId: string; title: string }>;
+export const SECTION_PALETTES: Record<Section, PaletteId> = {
+	today: "sherbet",
+	checklists: "lagoon",
+	priority: "coral",
+	stages: "lilac",
+	tags: "berry",
+	trackers: "mint",
+	groups: "dusk",
+	plans: "ocean",
+	countdowns: "desert",
+	settings: "slate",
+};
 
-export type IllustrationId = (typeof ILLUSTRATIONS)[number]["illustrationId"];
-
-/** What each section shows until its person picks something else. */
-export const DEFAULT_BACKDROPS: Record<Section, IllustrationId | null> = {
-	today: "coffee-run",
-	checklists: "tinkering-together",
-	priority: "looking-ahead",
-	stages: "bike-ride",
-	tags: "carrying-plants",
-	trackers: "happy-dance",
-	groups: "walking-together",
-	plans: "armchair-reading",
-	countdowns: "sitting-calm",
-	settings: "puppy-cuddle",
+/** And the design each starts with, so no two neighbours look alike. */
+export const SECTION_DESIGNS: Record<Section, DesignId> = {
+	today: "sunrise",
+	checklists: "pebbles",
+	priority: "bauhaus",
+	stages: "stack",
+	tags: "confetti",
+	trackers: "dunes",
+	groups: "orbit",
+	plans: "horizon",
+	countdowns: "moonrise",
+	settings: "ripple",
 };
 
 /**
- * Which illustration each section shows, picked by the person themself —
- * `null` for none. A section never picked for is absent, and shows its
- * default.
+ * What one part of the app is drawn with: a design, or `null` for a plain
+ * page; and a palette, or `null` for the part's own colours.
+ */
+export type Backdrop = {
+	design: DesignId | null;
+	palette: PaletteId | null;
+};
+
+/**
+ * What each part of the app is drawn with, picked by the person themself. A
+ * part never picked for is absent, and drawn as it starts.
  *
  * It is the person's own, not the space's: the same wherever they work, and
  * nobody else in a team sees it.
  */
-export type Backdrops = Partial<Record<Section, IllustrationId | null>>;
+export type Backdrops = Partial<Record<Section, Backdrop>>;
 
-/** The illustration a section shows, picked or by default. */
+const isDesign = (value: unknown): value is DesignId =>
+	DESIGNS.some((design) => design.designId === value);
+const isPalette = (value: unknown): value is PaletteId =>
+	PALETTES.some((palette) => palette.paletteId === value);
+
+/**
+ * What a part of the app is drawn with, picked or as it starts. Anything
+ * stored that is no longer on offer is read as not picked.
+ */
 export function backdropOf(
 	backdrops: Backdrops | undefined,
 	section: Section,
-): IllustrationId | null {
-	const picked = backdrops?.[section];
-	return picked === undefined ? DEFAULT_BACKDROPS[section] : picked;
+): Backdrop {
+	const picked: unknown = backdrops?.[section];
+	const { design, palette } =
+		typeof picked === "object" && picked !== null
+			? (picked as Record<string, unknown>)
+			: {};
+	return {
+		design:
+			design === null
+				? null
+				: isDesign(design)
+					? design
+					: SECTION_DESIGNS[section],
+		palette: isPalette(palette) ? palette : null,
+	};
 }
 
-export function illustrationUrl(illustrationId: IllustrationId): string {
-	return `/illustrations/${illustrationId}.svg`;
+/** The three colours a part of the app is drawn in. */
+export function paletteColors(
+	backdrop: Backdrop,
+	section: Section,
+): readonly [string, string, string] {
+	const paletteId = backdrop.palette ?? SECTION_PALETTES[section];
+	const palette =
+		PALETTES.find((each) => each.paletteId === paletteId) ?? PALETTES[0];
+	return palette.colors;
 }
 
 export const setBackdropInputSchema = v.object({
 	section: v.picklist(SECTIONS),
-	illustrationId: v.nullable(
-		v.picklist(ILLUSTRATIONS.map((each) => each.illustrationId)),
-	),
+	design: v.nullable(v.picklist(DESIGNS.map((each) => each.designId))),
+	palette: v.nullable(v.picklist(PALETTES.map((each) => each.paletteId))),
 });
 
 export type SetBackdropInput = v.InferOutput<typeof setBackdropInputSchema>;

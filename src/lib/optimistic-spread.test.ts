@@ -63,6 +63,7 @@ function holding(tasks: Array<Task>): QueryClient {
 	client.setQueryData<SearchIndex>(queryKeys.searchIndex, {
 		checklists: [{ checklistId: "chk_1", title: "Work", description: "" }],
 		trackers: [],
+		entries: [],
 		tasks: tasks.map((each) => ({
 			...each,
 			checklistId: "chk_1",

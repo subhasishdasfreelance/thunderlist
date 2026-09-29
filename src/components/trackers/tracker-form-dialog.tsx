@@ -197,6 +197,7 @@ export function TrackerFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "tracker", number: tracker?.number }}
 			title={tracker ? "Edit tracker" : "New tracker"}
 			onSubmit={submit}
 			actions={(formId) => (

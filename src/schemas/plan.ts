@@ -23,6 +23,8 @@ const planBodySchema = v.pipe(
 
 export type Plan = {
 	planId: string;
+	/** `P-4`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number?: number;
 	title: string;
 	/** Markdown. */
 	body: string;

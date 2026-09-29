@@ -72,6 +72,7 @@ export function CountdownFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "countdown", number: countdown?.number }}
 			title={countdown ? "Edit countdown" : "New countdown"}
 			width={440}
 			actions={() => (

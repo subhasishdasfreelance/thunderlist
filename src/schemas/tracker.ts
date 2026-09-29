@@ -78,6 +78,8 @@ const authorSchema = v.pipe(
 
 const trackerSchema = v.object({
 	trackerId: idSchema,
+	/** `TR-7`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number: v.optional(v.number()),
 	title: titleSchema,
 	/**
 	 * A line under the title saying what it is — "Dune, for book club". Absent
@@ -151,6 +153,8 @@ export type TrackerSummary = Tracker & {
  */
 const progressEntrySchema = v.object({
 	entryId: idSchema,
+	/** `E-15`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number: v.optional(v.number()),
 	recordedAt: dateOnlySchema,
 	value: v.number(),
 	delta: v.number(),

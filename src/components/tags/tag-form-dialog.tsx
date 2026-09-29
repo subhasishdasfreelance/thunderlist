@@ -173,6 +173,7 @@ export function TagFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "tag", number: tag?.number }}
 			title={tag ? "Edit tag" : "New tag"}
 			actions={() => (
 				<HStack gap={2} hAlign="end">

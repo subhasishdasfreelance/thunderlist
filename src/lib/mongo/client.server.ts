@@ -24,6 +24,7 @@ import type { Checklist } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
 import type { Group } from "#/schemas/group";
 import type { CodeRecipients } from "#/schemas/notification-code";
+import type { NumberedKind } from "#/schemas/number";
 import type { Plan } from "#/schemas/plan";
 import type { ReminderTarget } from "#/schemas/reminder";
 import type { Tag } from "#/schemas/tag";
@@ -91,6 +92,16 @@ export type ReminderDoc = {
 	timeZone: string;
 	/** The day, on its own clock, it last went out. */
 	lastSentOn?: string | null;
+};
+
+/**
+ * The last number handed out for one kind of thing in a space; see
+ * `nextNumber`.
+ */
+export type CounterDoc = {
+	userId: string;
+	kind: NumberedKind;
+	last: number;
 };
 
 /**
@@ -219,6 +230,7 @@ export type Collections = {
 	countdowns: Collection<CountdownDoc>;
 	reminders: Collection<ReminderDoc>;
 	preferences: Collection<PreferencesDoc>;
+	counters: Collection<CounterDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
 	notificationCodes: Collection<NotificationCodeDoc>;
 	teams: Collection<TeamDoc>;
@@ -269,6 +281,7 @@ function collectionsOf(database: Db): Collections {
 		countdowns: database.collection<CountdownDoc>("countdowns"),
 		reminders: database.collection<ReminderDoc>("reminders"),
 		preferences: database.collection<PreferencesDoc>("preferences"),
+		counters: database.collection<CounterDoc>("counters"),
 		pushSubscriptions:
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
 		notificationCodes:
@@ -312,6 +325,8 @@ async function ensureIndexes(current: Collections): Promise<void> {
 			{ unique: true },
 		),
 		current.preferences.createIndex({ userId: 1 }, { unique: true }),
+		// One counter per kind per space, however many first numbers race.
+		current.counters.createIndex({ userId: 1, kind: 1 }, { unique: true }),
 		current.pushSubscriptions.createIndex({ endpoint: 1 }, { unique: true }),
 		current.pushSubscriptions.createIndex({ email: 1 }),
 		current.notificationCodes.createIndex({ code: 1 }, { unique: true }),

@@ -63,6 +63,7 @@ import {
 } from "#/schemas/common";
 import { SPECIAL_TAGS } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView, TaskPatch } from "#/schemas/task";
+import { nextNumber } from "./numbers.server";
 import { listTaskTypes } from "./settings.server";
 import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
 
@@ -183,6 +184,7 @@ async function ensureSpecialChecklist(
 	try {
 		await current.checklists.insertOne({
 			checklistId,
+			number: await nextNumber(current, userId, "checklist"),
 			...SPECIAL_CHECKLIST_DETAILS[kind],
 			startDate: todayDateOnly(),
 			deadline: null,
@@ -667,6 +669,7 @@ export async function createChecklist(
 		updatedAt: now,
 	};
 
+	checklist.number = await nextNumber(current, userId, "checklist");
 	await current.checklists.insertOne({ ...checklist, userId });
 
 	return checklist;
@@ -1096,6 +1099,7 @@ export async function createTask(
 		linkedChecklistId,
 	};
 
+	task.number = await nextNumber(current, userId, "task");
 	await current.tasks.insertOne({ ...task, userId, checklistId });
 
 	return task;

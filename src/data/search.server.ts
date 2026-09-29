@@ -19,6 +19,7 @@ import { type Hidden, isTaskVisible } from "./visibility.server";
 export type SearchIndex = {
 	checklists: Array<{
 		checklistId: string;
+		number?: number;
 		title: string;
 		description: string;
 		/** Absent for the two it starts with; see `checklistStages`. */
@@ -26,10 +27,23 @@ export type SearchIndex = {
 	}>;
 	trackers: Array<{
 		trackerId: string;
+		number?: number;
 		title: string;
 		type: TrackerType;
 		author: string | null;
 		caption?: string;
+	}>;
+	/**
+	 * Every reading of every tracker, just enough to find one by its number or
+	 * its note and name it in a result.
+	 */
+	entries: Array<{
+		entryId: string;
+		number?: number;
+		trackerId: string;
+		recordedAt: string;
+		value: number;
+		note: string;
 	}>;
 	/**
 	 * Every task, whole, with the checklist it lives in: the Priority screen
@@ -57,7 +71,7 @@ export async function getSearchIndex(
 	await ensureBacklog(userId);
 	const current = await collections();
 
-	const [checklists, trackers, tasks] = await Promise.all([
+	const [checklists, trackers, tasks, entries] = await Promise.all([
 		current.checklists
 			.find(
 				{ userId },
@@ -65,6 +79,7 @@ export async function getSearchIndex(
 					projection: {
 						_id: 0,
 						checklistId: 1,
+						number: 1,
 						title: 1,
 						description: 1,
 						stages: 1,
@@ -79,6 +94,7 @@ export async function getSearchIndex(
 					projection: {
 						_id: 0,
 						trackerId: 1,
+						number: 1,
 						title: 1,
 						type: 1,
 						author: 1,
@@ -88,6 +104,22 @@ export async function getSearchIndex(
 			)
 			.toArray(),
 		current.tasks.find({ userId }, { projection: DOMAIN_FIELDS }).toArray(),
+		current.entries
+			.find(
+				{ userId },
+				{
+					projection: {
+						_id: 0,
+						entryId: 1,
+						number: 1,
+						trackerId: 1,
+						recordedAt: 1,
+						value: 1,
+						note: 1,
+					},
+				},
+			)
+			.toArray(),
 	]);
 
 	// Anything kept from this person in their team is left out, as everywhere.
@@ -100,15 +132,19 @@ export async function getSearchIndex(
 
 	return {
 		// With their stages, so a task found by search can say where it is.
-		checklists: visible.map(({ checklistId, title, description, stages }) => ({
-			checklistId,
-			title,
-			description,
-			stages,
-		})),
+		checklists: visible.map(
+			({ checklistId, number, title, description, stages }) => ({
+				checklistId,
+				number,
+				title,
+				description,
+				stages,
+			}),
+		),
 		trackers: trackers.filter(
 			(tracker) => !hidden.trackerIds.has(tracker.trackerId),
 		),
+		entries: entries.filter((entry) => !hidden.trackerIds.has(entry.trackerId)),
 		tasks: tasks
 			.filter((task) => isTaskVisible(task, hidden))
 			.map((task) => {

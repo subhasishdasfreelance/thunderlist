@@ -9,6 +9,7 @@ import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
 import type { Countdown, CountdownFormat } from "#/schemas/countdown";
 import type { TagColor } from "#/schemas/tag";
+import { nextNumber } from "./numbers.server";
 
 /** Every countdown, by the day each counts down to. */
 export async function listCountdowns(
@@ -42,6 +43,7 @@ export async function createCountdown(
 	// Field by field, so the change's `kind` is not stored alongside.
 	const countdown: Countdown = {
 		countdownId: input.countdownId,
+		number: await nextNumber(current, userId, "countdown"),
 		title: input.title,
 		date: input.date,
 		color: input.color,

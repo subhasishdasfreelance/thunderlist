@@ -125,6 +125,7 @@ export function TaskRenameDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "task", number: task?.number }}
 			title="Edit task"
 			width={420}
 			actions={() => (

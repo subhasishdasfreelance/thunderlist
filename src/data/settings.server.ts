@@ -15,6 +15,7 @@ import type {
 import type { Group, GroupItem, GroupItemKind } from "#/schemas/group";
 import { TAG_COLORS } from "#/schemas/tag";
 import { DEFAULT_TASK_TYPES, type TaskType } from "#/schemas/task-type";
+import { nextNumber } from "./numbers.server";
 
 export async function listTaskTypes(userId: string): Promise<Array<TaskType>> {
 	const current = await collections();
@@ -131,6 +132,9 @@ export async function listGroups(userId: string): Promise<Array<Group>> {
 		}
 	}
 	const groups = [...byName.values()];
+	for (const group of groups) {
+		group.number = await nextNumber(current, userId, "group");
+	}
 
 	// Only where none have been written yet, so two first reads agree. Two
 	// first reads of a space with no settings at all can both try to make the
@@ -162,6 +166,7 @@ export async function createGroup(
 			$push: {
 				groups: {
 					groupId: input.groupId,
+					number: await nextNumber(current, userId, "group"),
 					name: input.name,
 					color: input.color,
 					items: input.items,

@@ -11,6 +11,7 @@ import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
+import { ItemNumber } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
@@ -75,7 +76,10 @@ function PlanPage() {
 
 			<HStack gap={2} hAlign="between" vAlign="start">
 				<VStack gap={0.5}>
-					<Heading level={1}>{data.title}</Heading>
+					<Heading level={1}>
+						<ItemNumber kind="plan" number={data.number} />
+						{data.title}
+					</Heading>
 					<Text type="supporting">
 						Updated {formatDate(data.updatedAt.slice(0, 10))}
 					</Text>

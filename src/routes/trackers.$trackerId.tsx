@@ -12,6 +12,7 @@ import { MoreHorizontal, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
+import { ItemNumber } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
@@ -68,6 +69,10 @@ import type { ProgressEntry } from "#/schemas/tracker";
 const ALL_OF_TODAY: TaskPageView = { sort: "newest", limit: 1000 };
 
 export const Route = createFileRoute("/trackers/$trackerId")({
+	// The reading to bring into view, when search sent you to one.
+	validateSearch: (search: Record<string, unknown>): { entry?: string } => ({
+		entry: typeof search.entry === "string" ? search.entry : undefined,
+	}),
 	/*
 	 * Only the figures are waited for. The history is the long half of the read
 	 * and nobody is blocked on it, so it is started here and not awaited — by the
@@ -95,6 +100,7 @@ type EntryDialogState =
 
 function TrackerDetailPage() {
 	const { trackerId } = Route.useParams();
+	const { entry: focusEntryId } = Route.useSearch();
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
 
@@ -274,7 +280,10 @@ function TrackerDetailPage() {
 						/>
 					) : null}
 					<VStack gap={1}>
-						<Heading level={1}>{detail.title}</Heading>
+						<Heading level={1}>
+							<ItemNumber kind="tracker" number={detail.number} />
+							{detail.title}
+						</Heading>
 						<HStack gap={2} vAlign="center" wrap="wrap">
 							{detail.caption ? (
 								<Text color="secondary">{detail.caption}</Text>
@@ -437,6 +446,7 @@ function TrackerDetailPage() {
 				) : (
 					<ProgressHistory
 						entries={theirs ?? entries}
+						focusEntryId={focusEntryId}
 						unit={detail.unit}
 						isPending={history.isPending}
 						canEdit={canUpdateTasks}

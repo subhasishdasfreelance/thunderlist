@@ -17,6 +17,8 @@ import {
  */
 const taskSchema = v.object({
 	taskId: idSchema,
+	/** `T-42`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number: v.optional(v.number()),
 	title: titleSchema,
 	completed: v.boolean(),
 	/** ISO timestamp the task was added. The only thing tasks are ordered by. */

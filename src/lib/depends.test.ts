@@ -28,6 +28,7 @@ function holding(tasks: Array<Task>): QueryClient {
 	client.setQueryData<SearchIndex>(queryKeys.searchIndex, {
 		checklists: [],
 		trackers: [],
+		entries: [],
 		tasks: tasks.map((each) => ({
 			...each,
 			checklistId: null,

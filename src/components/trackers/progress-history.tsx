@@ -10,9 +10,11 @@ import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ShortcutKey, TASK_SHORTCUTS } from "#/components/tasks/task-actions";
 import { formatDate } from "#/lib/format-date";
+import { useFocusRow } from "#/lib/use-focus-task";
 import { usePages } from "#/lib/use-pages";
 import { type RowShortcuts, useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTeam } from "#/lib/use-team";
+import { formatNumber } from "#/schemas/number";
 import { memberName } from "#/schemas/team";
 import type { ProgressEntry } from "#/schemas/tracker";
 
@@ -35,6 +37,7 @@ export function ProgressHistory({
 	canDelete = true,
 	onEdit,
 	onDelete,
+	focusEntryId,
 }: {
 	/** Oldest first, as stored; this reverses them for display. */
 	entries: ReadonlyArray<ProgressEntry>;
@@ -47,9 +50,18 @@ export function ProgressHistory({
 	canDelete?: boolean;
 	onEdit: (entry: ProgressEntry) => void;
 	onDelete: (entry: ProgressEntry) => void;
+	/**
+	 * The reading search sent you to: its page of the history is opened, and it
+	 * is scrolled to and ringed; see `useFocusRow`.
+	 */
+	focusEntryId?: string;
 }) {
 	const history = [...entries].reverse();
-	const paging = usePages(history);
+	const paging = usePages(
+		history,
+		history.findIndex((entry) => entry.entryId === focusEntryId),
+	);
+	useFocusRow("data-entry-id", focusEntryId);
 	const team = useTeam();
 	// The reading under the pointer answers to the keys a task does: E edits it.
 	const [hovered, setHovered] = useState<ProgressEntry | null>(null);
@@ -84,10 +96,15 @@ export function ProgressHistory({
 							<ListItem
 								key={entry.entryId}
 								className="thunderlist-entry-row"
+								data-entry-id={entry.entryId}
+								data-focused={entry.entryId === focusEntryId}
 								onMouseEnter={() => setHovered(entry)}
 								onMouseLeave={() => setHovered(null)}
 								label={`${entry.value} ${unit}`}
 								description={[
+									entry.number === undefined
+										? null
+										: formatNumber("entry", entry.number),
 									formatDate(entry.recordedAt),
 									loggedBy(entry.recordedBy),
 									entry.note === "" ? null : entry.note,

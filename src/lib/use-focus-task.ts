@@ -44,11 +44,20 @@ export function useArrival(): string {
 }
 
 export function useFocusTask(taskId: string | undefined): void {
+	useFocusRow("data-task-id", taskId);
+}
+
+/**
+ * The same for any row that marks itself with `attribute` — a tracker's
+ * reading, a countdown — so everything search can send you to is found and
+ * ringed the same way.
+ */
+export function useFocusRow(attribute: string, id: string | undefined): void {
 	const arrival = useArrival();
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: `arrival` is what makes the same task, searched for again, a fresh arrival.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `arrival` is what makes the same row, searched for again, a fresh arrival.
 	useEffect(() => {
-		if (!taskId) return;
+		if (!id) return;
 
 		const until = performance.now() + GIVE_UP_AFTER_MS;
 		let settled = 0;
@@ -57,7 +66,7 @@ export function useFocusTask(taskId: string | undefined): void {
 
 		const step = () => {
 			const found = document.querySelector<HTMLElement>(
-				`[data-task-id="${taskId}"]`,
+				`[${attribute}="${id}"]`,
 			);
 			// A row in a folded section is there but not yet on show; it is
 			// waited for until its section has opened.
@@ -90,5 +99,5 @@ export function useFocusTask(taskId: string | undefined): void {
 
 		frame = requestAnimationFrame(step);
 		return () => cancelAnimationFrame(frame);
-	}, [taskId, arrival]);
+	}, [attribute, id, arrival]);
 }

@@ -8,33 +8,12 @@ import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
+import { countdownsQuery } from "#/queries/countdowns";
+import { plansQuery } from "#/queries/plans";
+import { groupsQuery } from "#/queries/space";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
-import { checklistStages, stageColor } from "#/schemas/checklist";
-import { type TagColor, tagParam, tagsFor } from "#/schemas/tag";
-
-type Result = {
-	key: string;
-	label: string;
-	context: string;
-	to: string;
-	/**
-	 * The task to bring into view once the page opens, if this result is one.
-	 * The page it lands on scrolls to it and rings it; see `useFocusTask`.
-	 */
-	taskId?: string;
-	/**
-	 * For a task, the stage it is at in its checklist, in that stage's colour —
-	 * `null` for the first stage, which has none; see `stageColor`.
-	 */
-	stage?: { name: string; color: TagColor | null };
-};
-
-const MAX_PER_GROUP = 6;
-
-function matches(haystack: string, needle: string): boolean {
-	return haystack.toLowerCase().includes(needle);
-}
+import { type Result, searchResults } from "./search-results";
 
 /**
  * Search, from the keyboard as much as the pointer.
@@ -43,6 +22,9 @@ function matches(haystack: string, needle: string): boolean {
  * opens the one lit, and Esc leaves the box and then closes the dialog. Focus
  * never leaves the box: the lit result is announced from it, as a combobox
  * does.
+ *
+ * Anything can be found by its number as well as its name; see
+ * `searchResults`.
  */
 export function SearchDialog({
 	isOpen,
@@ -61,92 +43,28 @@ export function SearchDialog({
 		...searchIndexQuery(),
 		enabled: isOpen,
 	});
-	// Where a task in no checklist is shown: the page of a tag it carries.
+	// Tags are found themselves, and are where a task in no checklist is shown.
 	const tags = useQuery({ ...tagsQuery(), enabled: isOpen });
-	// Until both are here, no result is not the same as no match.
+	const plans = useQuery({ ...plansQuery(), enabled: isOpen });
+	const countdowns = useQuery({ ...countdownsQuery(), enabled: isOpen });
+	const groups = useQuery({ ...groupsQuery(), enabled: isOpen });
+	// Until the index and the tags are here, no result is not the same as no
+	// match. The rest join in as they arrive.
 	const isSearching = isOpen && (isPending || tags.isPending);
 
-	const results = useMemo<Array<Result>>(() => {
-		const needle = query.trim().toLowerCase();
-		if (!data || needle === "") return [];
-
-		const checklists = data.checklists
-			.filter((item) => matches(item.title, needle))
-			.slice(0, MAX_PER_GROUP)
-			.map((item) => ({
-				key: `chk-${item.checklistId}`,
-				label: item.title,
-				context: "Checklist",
-				to: `/checklists/${item.checklistId}`,
-			}));
-
-		const trackers = data.trackers
-			.filter(
-				(item) =>
-					matches(item.title, needle) ||
-					(item.author !== null && matches(item.author, needle)),
-			)
-			.slice(0, MAX_PER_GROUP)
-			.map((item) => ({
-				key: `trk-${item.trackerId}`,
-				label: item.title,
-				context: item.caption ? `Tracker · ${item.caption}` : "Tracker",
-				to: `/trackers/${item.trackerId}`,
-			}));
-
-		/*
-		 * A task result opens the page the task is actually on and scrolls to it:
-		 * its checklist, or — for one that belongs to no checklist — the page of
-		 * the first tag it carries. A task with neither has nowhere to be shown,
-		 * so it is not offered rather than opening a page it is not on.
-		 */
-		const tasks = data.tasks
-			.filter((item) => matches(item.title, needle))
-			.slice(0, MAX_PER_GROUP)
-			.flatMap((item) => {
-				const home =
-					item.checklistId === null
-						? (tagsFor(item.tagIds, tags.data ?? [])[0] ?? null)
-						: null;
-				const to =
-					item.checklistId !== null
-						? `/checklists/${item.checklistId}`
-						: home !== null
-							? `/tags/${tagParam(home)}`
-							: null;
-
-				if (to === null) return [];
-
-				const stages = checklistStages(
-					data.checklists.find(
-						(checklist) => checklist.checklistId === item.checklistId,
-					) ?? {},
-				);
-				const at = stages.findIndex((stage) => stage.stageId === item.stageId);
-				const index = at === -1 ? (item.completed ? stages.length - 1 : 0) : at;
-
-				return [
-					{
-						key: `tsk-${item.taskId}`,
-						label: item.title,
-						context:
-							item.checklistTitle !== null
-								? item.checklistTitle
-								: home !== null
-									? `#${home.name}`
-									: "Task",
-						to,
-						taskId: item.taskId,
-						stage: {
-							name: stages[index].name,
-							color: index === 0 ? null : stageColor(stages, index),
-						},
-					},
-				];
-			});
-
-		return [...checklists, ...tasks, ...trackers];
-	}, [data, query, tags.data]);
+	const results = useMemo<Array<Result>>(
+		() =>
+			data === undefined
+				? []
+				: searchResults(query, {
+						index: data,
+						tags: tags.data ?? [],
+						plans: plans.data ?? [],
+						countdowns: countdowns.data ?? [],
+						groups: groups.data ?? [],
+					}),
+		[data, query, tags.data, plans.data, countdowns.data, groups.data],
+	);
 
 	// A new search lights its first result again.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset on every change of the words, not of the index behind them.
@@ -160,7 +78,7 @@ export function SearchDialog({
 		setQuery("");
 		void navigate({
 			to: result.to,
-			search: { task: result.taskId },
+			search: { ...result.focus },
 		});
 	}
 
@@ -198,12 +116,12 @@ export function SearchDialog({
 			<VStack gap={3}>
 				<TextInput
 					autoComplete="off"
-					label="Search checklists, tasks and trackers"
+					label="Search by name or number"
 					isLabelHidden
 					// Opening search is asking to type: the caret is waiting in the
 					// box, however it was opened.
 					hasAutoFocus
-					placeholder="Search checklists, tasks and trackers"
+					placeholder="Search by name or number, like T-42"
 					value={query}
 					onChange={setQuery}
 					onKeyDown={onKeyDown}
@@ -255,7 +173,12 @@ export function SearchDialog({
 								onMouseEnter={() => setActive(index)}
 								onClick={() => open(result)}
 							>
-								<span className="thunderlist-search-label">{result.label}</span>
+								<span className="thunderlist-search-label">
+									{result.number === undefined ? null : (
+										<span className="thunderlist-number">{result.number}</span>
+									)}
+									{result.label}
+								</span>
 								<span className="thunderlist-search-context">
 									<span>{result.context}</span>
 									{result.stage === undefined ? null : (

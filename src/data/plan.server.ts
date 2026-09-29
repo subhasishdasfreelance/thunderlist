@@ -8,6 +8,7 @@
 import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
 import type { Plan, PlanSummary } from "#/schemas/plan";
+import { nextNumber } from "./numbers.server";
 
 /** Every plan, newest first, without its body; see `PlanSummary`. */
 export async function listPlans(userId: string): Promise<Array<PlanSummary>> {
@@ -21,6 +22,7 @@ export async function listPlans(userId: string): Promise<Array<PlanSummary>> {
 				$project: {
 					_id: 0,
 					planId: 1,
+					number: 1,
 					title: 1,
 					createdAt: 1,
 					updatedAt: 1,
@@ -58,6 +60,7 @@ export async function createPlan(
 	// Field by field, so the change's `kind` is not stored alongside.
 	const plan: Plan = {
 		planId: input.planId,
+		number: await nextNumber(current, userId, "plan"),
 		title: input.title,
 		body: input.body,
 		createdAt: now,

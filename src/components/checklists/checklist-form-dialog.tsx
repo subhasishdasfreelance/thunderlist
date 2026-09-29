@@ -187,6 +187,7 @@ export function ChecklistFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "checklist", number: checklist?.number }}
 			title={checklist ? "Edit checklist" : "New checklist"}
 			onSubmit={submit}
 			actions={(formId) => (

@@ -7,6 +7,8 @@ import {
 	useId,
 	useRef,
 } from "react";
+import { ItemNumber } from "#/components/common/item-number";
+import type { NumberedKind } from "#/schemas/number";
 
 /**
  * The shell every dialog in the app is built from.
@@ -27,6 +29,7 @@ export function FormDialog({
 	onOpenChange,
 	title,
 	subtitle,
+	number,
 	width = 480,
 	onSubmit,
 	actions,
@@ -36,6 +39,8 @@ export function FormDialog({
 	onOpenChange: (isOpen: boolean) => void;
 	title: string;
 	subtitle?: string;
+	/** The number of the thing being edited, beside the title; see `ItemNumber`. */
+	number?: { kind: NumberedKind; number: number | undefined };
 	width?: number;
 	/** When given, the body becomes a form; see `actions` for submitting it. */
 	onSubmit?: (event: FormEvent) => void;
@@ -106,6 +111,11 @@ export function FormDialog({
 						className="thunderlist-dialog-header"
 						title={title}
 						subtitle={subtitle}
+						endContent={
+							number === undefined ? undefined : (
+								<ItemNumber kind={number.kind} number={number.number} />
+							)
+						}
 						onOpenChange={onOpenChange}
 					/>
 				}

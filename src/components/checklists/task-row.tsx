@@ -225,6 +225,7 @@ export function TaskRow({
 			tags={tags}
 			tagIds={task.tagIds}
 			isMuted={task.completed}
+			number={task.number}
 		/>
 	);
 

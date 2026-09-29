@@ -143,6 +143,8 @@ const stageColorsSchema = v.record(
  */
 const tagSchema = v.object({
 	tagId: idSchema,
+	/** `TG-2`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number: v.optional(v.number()),
 	name: tagNameSchema,
 	color: tagColorSchema,
 	/** Which special tag this is, or `null` for any other; see `SPECIAL_TAGS`. */

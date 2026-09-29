@@ -32,6 +32,8 @@ export const COUNTDOWN_FORMAT_LABELS: Record<CountdownFormat, string> = {
  */
 export type Countdown = {
 	countdownId: string;
+	/** `CD-2`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number?: number;
 	title: string;
 	/** `YYYY-MM-DD`: the day it counts down to. */
 	date: string;

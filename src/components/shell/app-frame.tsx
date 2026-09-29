@@ -241,10 +241,10 @@ export function AppFrame({
 												}
 												onClick={() => setIsHelpOpen(true)}
 											/>
-											{/* The picture at the foot of this page; see `Scenery`. */}
+											{/* How this page is drawn behind its content; see `Scenery`. */}
 											<IconButton
-												label="Illustration for this page"
-												tooltip="Illustration for this page"
+												label="Background for this page"
+												tooltip="Background for this page"
 												variant="ghost"
 												size="md"
 												icon={

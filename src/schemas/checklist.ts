@@ -354,6 +354,8 @@ export type SpecialChecklist = (typeof SPECIAL_CHECKLISTS)[number];
 
 const checklistSchema = v.object({
 	checklistId: idSchema,
+	/** `C-3`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number: v.optional(v.number()),
 	title: titleSchema,
 	description: v.string(),
 	/**

@@ -40,6 +40,8 @@ const groupItemsSchema = v.pipe(
 
 export type Group = {
 	groupId: string;
+	/** `G-1`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
+	number?: number;
 	name: string;
 	color: TagColor;
 	items: Array<GroupItem>;

@@ -60,6 +60,7 @@ export function TaggedTaskRow({
 			tags={tags}
 			tagIds={task.tagIds}
 			isMuted={task.completed}
+			number={task.number}
 		/>
 	);
 

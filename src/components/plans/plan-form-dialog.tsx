@@ -86,6 +86,7 @@ export function PlanFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			number={{ kind: "plan", number: plan?.number }}
 			title={plan ? "Edit plan" : "New plan"}
 			width={720}
 			onSubmit={submit}
