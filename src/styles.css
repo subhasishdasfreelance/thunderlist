@@ -48,114 +48,243 @@ body,
 }
 
 /*
- * The scenery behind every screen: soft glows of colour, a scatter of
- * sparkles in the corner, and gentle hills along the foot of the page. It
- * takes its two colours from the part of the app on screen — gold for Today,
- * blue for checklists, green for trackers — so each place feels like its own
- * room of one house; see `sectionOf`.
+ * The scenery behind every screen; see `Scenery`. A few big, flat shapes — a
+ * disc, a blob, an arch and a capsule — in three colours that change with the
+ * part of the app on screen, and at the foot the illustration picked for it.
  *
- * Drawn by the browser from gradients and two tiny inline SVGs: nothing to
- * download, nothing moving, and fixed in place, so scrolling never repaints
- * it. The hills are a mask over a gradient, which is what lets one drawing
- * wear every section's colours. Both are the app's own, so there is no
- * licence to keep.
+ * The top of the page stays clear and nearly white, where the bar and a
+ * page's heading sit. Nothing small or dotted is drawn anywhere, so nothing
+ * back here can be mistaken for a control. The shapes are crisp rather than
+ * blurred glows, and they multiply where they cross, so each overlap makes a
+ * colour of its own.
+ *
+ * Plain elements and gradients, fixed in place: nothing to download but the
+ * picture, and scrolling never repaints it.
  */
-.thunderlist-shell {
-	--deco-1: #3b82f6;
-	--deco-2: #efc75e;
-	--deco-glow-1: light-dark(
-		color-mix(in srgb, var(--deco-1) 30%, transparent),
-		color-mix(in srgb, var(--deco-1) 24%, transparent)
+.thunderlist-scenery {
+	--deco-1: #7c8cff;
+	--deco-2: #4fd1e8;
+	--deco-3: #ffb38a;
+	--deco-shape: 0.42;
+	--deco-art: 0.88;
+	--deco-blend: multiply;
+	--deco-top: light-dark(
+		color-mix(in srgb, var(--color-background-body) 40%, #fff),
+		var(--color-background-body)
 	);
-	--deco-glow-2: light-dark(
-		color-mix(in srgb, var(--deco-2) 30%, transparent),
-		color-mix(in srgb, var(--deco-2) 16%, transparent)
-	);
-	--deco-hills: 0.22;
-	isolation: isolate;
-	background-color: transparent;
-}
-
-.thunderlist-shell[data-section="today"] {
-	--deco-1: #efc75e;
-	--deco-2: #e8590c;
-}
-.thunderlist-shell[data-section="checklists"] {
-	--deco-1: #3b82f6;
-	--deco-2: #0d9a8b;
-}
-.thunderlist-shell[data-section="priority"] {
-	--deco-1: #ef5350;
-	--deco-2: #efc75e;
-}
-.thunderlist-shell[data-section="stages"] {
-	--deco-1: #9b6be8;
-	--deco-2: #3b82f6;
-}
-.thunderlist-shell[data-section="tags"] {
-	--deco-1: #e0559f;
-	--deco-2: #9b6be8;
-}
-.thunderlist-shell[data-section="trackers"] {
-	--deco-1: #2e9e62;
-	--deco-2: #0d9a8b;
-}
-.thunderlist-shell[data-section="groups"] {
-	--deco-1: #9b6be8;
-	--deco-2: #e0559f;
-}
-.thunderlist-shell[data-section="plans"] {
-	--deco-1: #0d9a8b;
-	--deco-2: #3b82f6;
-}
-.thunderlist-shell[data-section="countdowns"] {
-	--deco-1: #e8590c;
-	--deco-2: #e0559f;
-}
-.thunderlist-shell[data-section="settings"] {
-	--deco-1: #798196;
-	--deco-2: #3b82f6;
-}
-
-.thunderlist-shell::before,
-.thunderlist-shell::after {
-	content: "";
 	position: fixed;
-	z-index: -1;
-	pointer-events: none;
-	transition: opacity var(--duration-medium, 240ms) var(--ease-standard, ease);
-}
-
-/* The glows, and the sparkles in the top corner. */
-.thunderlist-shell::before {
 	inset: 0;
-	background:
-		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 240'%3E%3Cpath transform='translate(300 40) scale(1.6)' fill='%23efc75e' fill-opacity='0.55' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(250 95) scale(0.8)' fill='%233b82f6' fill-opacity='0.45' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(330 120) scale(0.7)' fill='%23efc75e' fill-opacity='0.5' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(200 30) scale(0.55)' fill='%239b6be8' fill-opacity='0.4' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(275 175) scale(0.5)' fill='%230d9a8b' fill-opacity='0.35' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Cpath transform='translate(150 70) scale(0.4)' fill='%23efc75e' fill-opacity='0.35' d='M0 -10C1 -2 2 -1 10 0C2 1 1 2 0 10C-1 2 -2 1 -10 0C-2 -1 -1 -2 0 -10Z'/%3E%3Ccircle cx='228' cy='58' r='3' fill='%23e0559f' fill-opacity='.35'/%3E%3Ccircle cx='318' cy='205' r='2.5' fill='%233b82f6' fill-opacity='.35'/%3E%3Ccircle cx='175' cy='140' r='2' fill='%23efc75e' fill-opacity='.45'/%3E%3C/svg%3E") right 1.5rem top 4.5rem / min(360px, 70vw) auto no-repeat,
-		radial-gradient(60vw 55vh at 0% 0%, var(--deco-glow-1), transparent 70%),
-		radial-gradient(50vw 50vh at 100% 8%, var(--deco-glow-2), transparent 70%),
-		radial-gradient(55vw 45vh at 85% 100%, var(--deco-glow-2), transparent 70%),
-		radial-gradient(45vw 40vh at 10% 95%, var(--deco-glow-1), transparent 70%);
+	z-index: -1;
+	overflow: hidden;
+	pointer-events: none;
+	background: linear-gradient(
+		180deg,
+		var(--deco-top) 30%,
+		light-dark(
+				color-mix(in srgb, var(--deco-1) 12%, #fff),
+				color-mix(in srgb, var(--deco-1) 10%, var(--color-background-body))
+			)
+			100%
+	);
 }
 
-/* The hills along the foot. */
-.thunderlist-shell::after {
-	inset: auto 0 0 0;
-	height: min(26vh, 240px);
-	opacity: var(--deco-hills);
-	background: linear-gradient(90deg, var(--deco-1), var(--deco-2));
-	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.45' d='M0 150c180-60 360-70 540-20s360 90 540 40 270-110 360-100v250H0z'/%3E%3Cpath fill-opacity='.7' d='M0 220c200-50 380-40 560 5s380 60 560 10 240-70 320-60v145H0z'/%3E%3Cpath d='M0 275c240-30 470-25 700 0s460 30 740-5v50H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
-	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'%3E%3Cpath fill-opacity='.45' d='M0 150c180-60 360-70 540-20s360 90 540 40 270-110 360-100v250H0z'/%3E%3Cpath fill-opacity='.7' d='M0 220c200-50 380-40 560 5s380 60 560 10 240-70 320-60v145H0z'/%3E%3Cpath d='M0 275c240-30 470-25 700 0s460 30 740-5v50H0z'/%3E%3C/svg%3E") center bottom / 100% 100% no-repeat;
+/* Today warm, checklists cool, and every other part a mix of its own. */
+.thunderlist-scenery[data-section="today"] {
+	--deco-1: #ffd166;
+	--deco-2: #ff8a5b;
+	--deco-3: #ff8fc7;
+}
+.thunderlist-scenery[data-section="checklists"] {
+	--deco-1: #7c8cff;
+	--deco-2: #4fd1e8;
+	--deco-3: #9ef0c9;
+}
+.thunderlist-scenery[data-section="priority"] {
+	--deco-1: #ff6b6b;
+	--deco-2: #ffd166;
+	--deco-3: #ff9f7a;
+}
+.thunderlist-scenery[data-section="stages"] {
+	--deco-1: #a78bfa;
+	--deco-2: #7c8cff;
+	--deco-3: #f9a8d4;
+}
+.thunderlist-scenery[data-section="tags"] {
+	--deco-1: #ff7eb6;
+	--deco-2: #a78bfa;
+	--deco-3: #ffc58a;
+}
+.thunderlist-scenery[data-section="trackers"] {
+	--deco-1: #3ddc97;
+	--deco-2: #c6f16d;
+	--deco-3: #4fd1e8;
+}
+.thunderlist-scenery[data-section="groups"] {
+	--deco-1: #b794f6;
+	--deco-2: #ff7eb6;
+	--deco-3: #6ee7f2;
+}
+.thunderlist-scenery[data-section="plans"] {
+	--deco-1: #4fd1e8;
+	--deco-2: #9ef0c9;
+	--deco-3: #7c8cff;
+}
+.thunderlist-scenery[data-section="countdowns"] {
+	--deco-1: #ff9f6b;
+	--deco-2: #ff6b9a;
+	--deco-3: #a78bfa;
+}
+.thunderlist-scenery[data-section="settings"] {
+	--deco-1: #a5b4cf;
+	--deco-2: #7c8cff;
+	--deco-3: #9ef0c9;
 }
 
-/* Hills over a dark page read as mud; there they are a faint horizon. */
-[data-theme="dark"] .thunderlist-shell {
-	--deco-hills: 0.11;
+.thunderlist-shape {
+	position: absolute;
+	opacity: var(--deco-shape);
+	mix-blend-mode: var(--deco-blend);
+	transition: background var(--duration-medium, 240ms)
+		var(--ease-standard, ease);
+}
+
+/* A sun rising out of the bottom left. */
+.thunderlist-shape-disc {
+	width: 64vmax;
+	aspect-ratio: 1;
+	left: -20vmax;
+	bottom: -34vmax;
+	border-radius: 50%;
+	background: linear-gradient(35deg, var(--deco-1), var(--deco-2));
+}
+
+/* A pebble leaning in from the right. */
+.thunderlist-shape-blob {
+	width: 46vmax;
+	aspect-ratio: 1.2;
+	right: -15vmax;
+	top: 42vh;
+	border-radius: 58% 42% 38% 62% / 46% 58% 42% 54%;
+	background: linear-gradient(160deg, var(--deco-3), var(--deco-2));
+	rotate: -14deg;
+}
+
+/* A thick ring, half sunk below the foot of the page. */
+.thunderlist-shape-arch {
+	width: 38vmax;
+	aspect-ratio: 1;
+	left: 36vw;
+	bottom: -22vmax;
+	border: 4.5vmax solid var(--deco-3);
+	border-radius: 50%;
+	opacity: calc(var(--deco-shape) * 0.8);
+}
+
+/* A capsule tipped across the middle. */
+.thunderlist-shape-capsule {
+	width: 26vmax;
+	height: 8vmax;
+	left: 16vw;
+	top: 54vh;
+	border-radius: 999px;
+	background: var(--deco-2);
+	rotate: -32deg;
+	opacity: calc(var(--deco-shape) * 0.7);
+}
+
+/* What keeps the top light: the shapes fade out before they reach it. */
+.thunderlist-scenery-veil {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 50vh;
+	background: linear-gradient(
+		180deg,
+		var(--deco-top) 40%,
+		transparent 100%
+	);
+}
+
+/* The picture, bottom right, clear of the bottom bar on a phone. */
+.thunderlist-scenery-art {
+	position: absolute;
+	right: clamp(1rem, 4vw, 4rem);
+	bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+	width: min(36vw, 300px);
+	max-height: 34vh;
+	object-fit: contain;
+	object-position: right bottom;
+	opacity: var(--deco-art);
+	animation: thunderlist-art-in var(--duration-slow, 400ms)
+		var(--ease-standard, ease) both;
+}
+
+@media (min-width: 768px) {
+	.thunderlist-scenery-art {
+		bottom: 1.5rem;
+	}
+}
+
+@keyframes thunderlist-art-in {
+	from {
+		opacity: 0;
+		translate: 0 12px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.thunderlist-scenery-art {
+		animation: none;
+	}
+}
+
+/* On a dark page the shapes are faint panes of colour; multiplied, they vanish. */
+[data-theme="dark"] .thunderlist-scenery {
+	--deco-shape: 0.16;
+	--deco-art: 0.6;
+	--deco-blend: normal;
+}
+
+/* The drawings are black ink; on a dark page they are drawn in white. */
+[data-theme="dark"] .thunderlist-scenery-art {
+	filter: invert(1);
 }
 
 @media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) .thunderlist-shell {
-		--deco-hills: 0.11;
+	:root:not([data-theme="light"]) .thunderlist-scenery {
+		--deco-shape: 0.16;
+		--deco-art: 0.6;
+		--deco-blend: normal;
 	}
+
+	:root:not([data-theme="light"]) .thunderlist-scenery-art {
+		filter: invert(1);
+	}
+}
+
+/* The picker's thumbnails; see `BackdropDialog`. */
+.thunderlist-art-thumb {
+	display: grid;
+	place-items: center;
+	aspect-ratio: 4 / 3;
+	padding: 0.5rem;
+	border-radius: var(--radius-md, 8px);
+	overflow: hidden;
+	background: linear-gradient(
+		135deg,
+		color-mix(in srgb, #7c8cff 14%, transparent),
+		color-mix(in srgb, #ffb38a 18%, transparent)
+	);
+}
+
+.thunderlist-art-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+/* The shell and everything in it let the scenery through. */
+.thunderlist-shell {
+	background-color: transparent;
 }
 
 /* The content area and the side nav let the scenery through. */
@@ -173,9 +302,9 @@ body,
 
 /* Asked for more contrast, the scenery steps back to a hint of colour. */
 @media (prefers-contrast: more) {
-	.thunderlist-shell::before,
-	.thunderlist-shell::after {
-		opacity: 0.35;
+	.thunderlist-scenery {
+		--deco-shape: 0.15;
+		--deco-art: 0.35;
 	}
 }
 
@@ -935,27 +1064,19 @@ body {
 	}
 
 	/*
-	 * The wordmark, as a sticker: the gold bolt and the name in the brand blue,
-	 * die-cut together with a white edge and lifted off the bar by a soft
-	 * shadow, set at a slight tilt the way a sticker is put on by hand.
+	 * The wordmark: the gold bolt and the name in the brand blue, level with
+	 * the rest of the bar and printed flat on it — no tilt, no edge, no shadow.
 	 *
-	 * Still no panel behind it — a patch reads as a button, and the one thing in
-	 * the bar that is not pressable should not look the most pressable. The edge
-	 * follows the letters, so it reads as a mark.
+	 * No panel behind it either — a patch reads as a button, and the one thing
+	 * in the bar that is not pressable should not look the most pressable.
 	 *
 	 * The face is Fredoka, cut down to the eleven letters of the name (2 KB,
 	 * SIL Open Font License) and kept with the app so it draws offline too.
-	 * The edge is four hard drop-shadows, which follow a gradient fill where a
-	 * text stroke would not.
 	 */
 	.thunderlist-brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3125rem;
-		transform: rotate(-2deg);
-		filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff)
-			drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff)
-			drop-shadow(0 2px 3px rgb(15 23 42 / 0.28));
+		gap: 0.375rem;
 	}
 
 	/* The same, as the sign-in page's title. */

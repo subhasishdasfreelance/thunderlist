@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 /**
  * The Thunderlist wordmark, and the way home: pressing it opens Today.
  *
- * It is drawn as a sticker rather than a button: the bolt and the name die-cut
- * together, with no panel behind them; see `.thunderlist-brand`.
+ * It is drawn as a mark rather than a button: the bolt and the name level on
+ * the bar, with no panel behind them; see `.thunderlist-brand`.
  *
  * The bolt is `public/logo.svg`, so there is one file to change. Its colour is
  * its own — the mark is gold against the app's blue, which is the pairing the

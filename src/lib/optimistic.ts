@@ -32,6 +32,7 @@ import {
 } from "#/lib/progress";
 import { renameInlineTag, unwrittenTags } from "#/lib/tags/inline-tags";
 import {
+	calculateChecklistProgress,
 	matchesFilter,
 	orderByTask,
 	type Page,
@@ -1246,14 +1247,26 @@ function patchHistory(
 		withProgress({ ...each, currentValue }),
 	);
 
-	/*
-	 * A task following the tracker is done exactly when it reaches its target,
-	 * worked out on every read on the server; see `withTrackedCompletion`. So
-	 * a reading that reaches it ticks those tasks now, and one taken back
-	 * unticks them.
-	 */
-	const isReached =
-		withProgress({ ...tracker, currentValue }).progress.percent >= 100;
+	// A reading that reaches the target ticks the tasks following the tracker
+	// now, and one taken back unticks them.
+	followTracker(
+		client,
+		trackerId,
+		withProgress({ ...tracker, currentValue }).progress.percent >= 100,
+	);
+}
+
+/**
+ * The tasks following a tracker, ticked or unticked to match it. Such a task
+ * is done exactly when the tracker reaches its target, worked out on every
+ * read on the server — and never once the tracker is gone; see
+ * `withTrackedCompletion`.
+ */
+function followTracker(
+	client: QueryClient,
+	trackerId: string,
+	isReached: boolean,
+): void {
 	patchEveryTask(
 		client,
 		(task) => task.trackerId === trackerId && task.completed !== isReached,
@@ -1313,6 +1326,70 @@ function summaryOf({ body, ...rest }: Plan): PlanSummary {
  * patch knowing how to undo itself.
  */
 export function applyOptimistically(client: QueryClient, change: Change): void {
+	patchFor(client, change);
+	followChecklists(client);
+}
+
+/**
+ * Whether a checklist is finished: it has tasks, and every one is done —
+ * `null` when this browser does not hold its figures.
+ */
+export function isChecklistFinished(
+	client: QueryClient,
+	checklistId: string,
+): boolean | null {
+	const checklist =
+		client.getQueryData<ChecklistSummary>(queryKeys.checklist(checklistId)) ??
+		client
+			.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+			?.find((each) => each.checklistId === checklistId);
+	if (checklist === undefined) return null;
+	const { total, completed } = checklist.progress;
+	return total > 0 && completed >= total;
+}
+
+/**
+ * The tasks standing for a checklist, ticked or unticked to match it. Such a
+ * task is done exactly when every task in its checklist is, worked out on
+ * every read on the server; see `withTrackedCompletion`. So whatever change
+ * finishes a checklist — its last task ticked, an open one deleted — ticks
+ * them now, and whatever reopens it unticks them.
+ *
+ * Ticking one can finish the checklist it sits in, which another task may
+ * stand for in turn, so this goes again until nothing moves: a level of
+ * nesting a pass. The passes are capped at one per such task, so a loop the
+ * server let slip through (see `checklistsFinished`) is not followed forever.
+ */
+function followChecklists(client: QueryClient): void {
+	const linked = () =>
+		[...everyCachedTask(client).values()].filter(
+			(task) => task.linkedChecklistId != null,
+		);
+
+	for (let pass = linked().length; pass > 0; pass--) {
+		let hasMoved = false;
+		for (const task of linked()) {
+			const isFinished = isChecklistFinished(
+				client,
+				task.linkedChecklistId as string,
+			);
+			if (isFinished === null || isFinished === task.completed) continue;
+
+			patchTask(client, task.taskId, (each, checklistId) =>
+				settle(
+					{ ...each, completed: isFinished },
+					{ completed: isFinished },
+					stagesOf(client, checklistId),
+				),
+			);
+			hasMoved = true;
+		}
+		if (!hasMoved) return;
+	}
+}
+
+/** The patches for one change; see `applyOptimistically`. */
+function patchFor(client: QueryClient, change: Change): void {
 	switch (change.kind) {
 		case "task.update": {
 			const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
@@ -1775,6 +1852,7 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 		case "tracker.delete":
 			patchTracker(client, change.trackerId, () => null);
 			clearDependencies(client, "tracker", [change.trackerId]);
+			followTracker(client, change.trackerId, false);
 			return;
 
 		case "entry.create": {
@@ -2096,6 +2174,47 @@ export function applyOptimistically(client: QueryClient, change: Change): void {
 			// Every kind of change a screen can make is patched above.
 			return;
 	}
+}
+
+/**
+ * A tag's page with every task taken off it and only its trackers left, which
+ * is what clearing Today leaves; see `clearToday`.
+ *
+ * Each task is still untagged by its own change, but the screen holds only a
+ * page of them and the rest are read afterwards, from no cache that would
+ * move the counts. So the page is emptied here in one go, before any of them.
+ */
+export function emptyTagPage(client: QueryClient, address: string): void {
+	const withoutTasks = (detail: TagDetail): TagDetail => ({
+		...detail,
+		progress: {
+			// A tracker counts as one more thing to finish, done at its target.
+			...calculateChecklistProgress(
+				detail.trackers.map(({ tracker }) => ({
+					completed: tracker.progress.percent >= 100,
+				})),
+			),
+			inProgress: 0,
+			stages: [],
+		},
+	});
+
+	for (const [key, detail] of client.getQueriesData<TagDetail>({
+		queryKey: queryKeys.tag(address),
+	})) {
+		// Its figures, and the same narrowed to a filter; not its tasks.
+		if (!detail || (key.length !== 2 && key[2] !== "filtered")) continue;
+		client.setQueryData<TagDetail>(key, withoutTasks(detail));
+	}
+	for (const [key, page] of client.getQueriesData<Page<TagTaskEntry>>({
+		queryKey: queryKeys.tagOpen(address),
+	})) {
+		if (page) client.setQueryData(key, { ...page, items: [], total: 0 });
+	}
+	client.setQueryData<Array<TagTaskEntry>>(
+		queryKeys.tagCompleted(address),
+		(done) => (done === undefined ? done : []),
+	);
 }
 
 /** The caches a change can touch, snapshotted so a failure can be undone. */

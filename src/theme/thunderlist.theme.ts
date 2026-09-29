@@ -47,6 +47,19 @@ const ACCENT_FILL: [string, string] = ["#1D4ED8", "#2563EB"];
 const ACCENT_ON_FILL: [string, string] = ["#FFFFFF", "#FFFFFF"];
 const ACCENT_TEXT: [string, string] = ["#1D4ED8", "#7FBBFF"];
 
+/*
+ * What is under the pointer is tinted with the accent rather than grey — a
+ * row, a menu item, a ghost button, a card — so hovering reads as the app's
+ * own blue coming up to meet the pointer. The overlays are the same blues as
+ * the text above, faint enough that every colour drawn on a row still reads
+ * through them; pressing deepens the same tint.
+ */
+const HOVER_OVERLAY: [string, string] = ["#1D4ED814", "#7FBBFF1F"];
+const PRESSED_OVERLAY: [string, string] = ["#1D4ED826", "#7FBBFF33"];
+// A card's edge under the pointer: its own border, pulled towards the accent.
+const HOVER_BORDER =
+	"color-mix(in srgb, var(--color-text-accent) 55%, var(--color-border))";
+
 export const thunderlistTheme = defineTheme({
 	name: "thunderlist",
 
@@ -75,9 +88,14 @@ export const thunderlistTheme = defineTheme({
 		"--color-on-accent": ACCENT_ON_FILL,
 		"--color-text-accent": ACCENT_TEXT,
 		"--color-icon-accent": ACCENT_TEXT,
+		"--color-overlay-hover": HOVER_OVERLAY,
+		"--color-overlay-pressed": PRESSED_OVERLAY,
 	},
 
 	components: {
+		"clickable-card": {
+			base: { ":hover": { borderColor: HOVER_BORDER } },
+		},
 		/*
 		 * A progress bar has to show two things: how far along it is, and how far
 		 * there is to go. The track is the app's own slate, `--thunderlist-track`

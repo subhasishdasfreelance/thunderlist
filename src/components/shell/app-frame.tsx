@@ -6,7 +6,7 @@ import { HStack } from "@astryxdesign/core/Stack";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { Theme } from "@astryxdesign/core/theme";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { CircleQuestionMark, Search } from "lucide-react";
+import { CircleQuestionMark, Image, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
@@ -16,7 +16,9 @@ import { useEscape } from "#/lib/use-escape";
 import { useNoAutofill } from "#/lib/use-no-autofill";
 import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
+import { SECTIONS, type Section } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
+import { BackdropDialog } from "./backdrop-dialog";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
 import { HelpDialog } from "./help-dialog";
@@ -24,6 +26,7 @@ import { isNavItemActive, NAV_ITEMS, PAGE_SHORTCUTS } from "./nav-items";
 import { RouteProgress } from "./route-progress";
 import { RouterLink } from "./router-link";
 import { SaveIndicator } from "./save-indicator";
+import { Scenery } from "./scenery";
 import { SearchDialog } from "./search-dialog";
 import { SetupNotice } from "./setup-notice";
 import { ThemeToggle } from "./theme-toggle";
@@ -37,13 +40,14 @@ function SpaceWatch() {
 }
 
 /**
- * Which part of the app a path is in, for the colours of the scenery behind
- * it; see `.thunderlist-shell`. Today is a tag, but it is the app's home, so
- * it has colours of its own.
+ * Which part of the app a path is in, for the scenery behind it; see
+ * `Scenery`. Today is a tag, but it is the app's home, so it has scenery of
+ * its own. Anywhere else — signing in — is dressed as Today.
  */
-function sectionOf(pathname: string): string {
+function sectionOf(pathname: string): Section {
 	if (pathname === "/" || pathname.startsWith("/tags/today")) return "today";
-	return pathname.split("/")[1] || "today";
+	const first = pathname.split("/")[1];
+	return SECTIONS.find((section) => section === first) ?? "today";
 }
 
 /**
@@ -82,6 +86,7 @@ export function AppFrame({
 	const scheme = useColorScheme(colorScheme);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
+	const [isBackdropOpen, setIsBackdropOpen] = useState(false);
 	useTaskCopy();
 	// Escape closes the nearest thing: a field, then a popup, then the toasts.
 	useEscape();
@@ -179,6 +184,7 @@ export function AppFrame({
 		select: (state) =>
 			state.resolvedLocation?.pathname ?? state.location.pathname,
 	});
+	const section = sectionOf(pathname);
 
 	return (
 		/*
@@ -190,9 +196,9 @@ export function AppFrame({
 		<Theme theme={thunderlistTheme} mode={scheme}>
 			<RouteProgress />
 			<LinkProvider component={RouterLink}>
+				<Scenery section={section} isSignedIn={user !== null} />
 				<AppShell
 					className="thunderlist-shell"
-					data-section={sectionOf(pathname)}
 					data-scrolled={isScrolled}
 					height="auto"
 					variant="wash"
@@ -234,6 +240,17 @@ export function AppFrame({
 													/>
 												}
 												onClick={() => setIsHelpOpen(true)}
+											/>
+											{/* The picture at the foot of this page; see `Scenery`. */}
+											<IconButton
+												label="Illustration for this page"
+												tooltip="Illustration for this page"
+												variant="ghost"
+												size="md"
+												icon={
+													<Image aria-hidden size={22} absoluteStrokeWidth />
+												}
+												onClick={() => setIsBackdropOpen(true)}
 											/>
 										</>
 									)}
@@ -281,6 +298,13 @@ export function AppFrame({
 				{user === null ? null : <SpaceWatch />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
+				{user === null ? null : (
+					<BackdropDialog
+						section={section}
+						isOpen={isBackdropOpen}
+						onOpenChange={setIsBackdropOpen}
+					/>
+				)}
 				{/* Inside the theme, though its state lives above the frame. */}
 				<UndoQuestion />
 			</LinkProvider>

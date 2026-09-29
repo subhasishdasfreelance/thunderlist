@@ -2,7 +2,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { HStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { sendFeedbackFn } from "#/functions/feedback.functions";
 import { errorMessage } from "#/lib/errors";
@@ -23,30 +23,32 @@ export function FeedbackDialog({
 }) {
 	const toast = useToast();
 	const [message, setMessage] = useState("");
-	const [isSending, setIsSending] = useState(false);
-
-	useEffect(() => {
-		if (isOpen) setMessage("");
-	}, [isOpen]);
 
 	const trimmed = message.trim();
 
+	/*
+	 * Closed and thanked at once; the sending follows behind. The message is
+	 * only cleared once it has arrived, so one that fails to is still here to
+	 * send again.
+	 */
 	async function send() {
-		if (trimmed === "" || isSending) return;
-		setIsSending(true);
+		if (trimmed === "") return;
+		onOpenChange(false);
+		toast({
+			body: "Thanks — your feedback has been sent.",
+			type: "info",
+			uniqueID: "feedback",
+		});
 
 		try {
 			await sendFeedbackFn({ data: { message: trimmed } });
-			onOpenChange(false);
+			setMessage("");
+		} catch (error) {
 			toast({
-				body: "Thanks — your feedback has been sent.",
-				type: "info",
+				body: `${errorMessage(error)} Your feedback is still there to send again.`,
+				type: "error",
 				uniqueID: "feedback",
 			});
-		} catch (error) {
-			toast({ body: errorMessage(error), type: "error", uniqueID: "feedback" });
-		} finally {
-			setIsSending(false);
 		}
 	}
 
@@ -70,7 +72,6 @@ export function FeedbackDialog({
 						icon={<Send aria-hidden />}
 						variant="primary"
 						isDisabled={trimmed === ""}
-						isLoading={isSending}
 						onClick={() => void send()}
 					/>
 				</HStack>

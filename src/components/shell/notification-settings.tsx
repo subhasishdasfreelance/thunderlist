@@ -112,12 +112,18 @@ export function NotificationSettings() {
 										variant="secondary"
 										size="sm"
 										isDisabled={isBusy}
-										onClick={() =>
+										// Off at once, and back on if it could not be turned off.
+										onClick={() => {
+											setDevice("off");
 											void run(async () => {
-												await turnOffPush();
-												setDevice("off");
-											})
-										}
+												try {
+													await turnOffPush();
+												} catch (error) {
+													setDevice("on");
+													throw error;
+												}
+											});
+										}}
 									/>
 								</>
 							) : device === "off" ? (

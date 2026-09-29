@@ -10,11 +10,14 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import type { SearchIndex } from "#/data/search.server";
-import { findCachedTask, stagesOf } from "#/lib/optimistic";
+import {
+	findCachedTask,
+	isChecklistFinished,
+	stagesOf,
+} from "#/lib/optimistic";
 import { shortTitle } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
-import type { ChecklistSummary } from "#/schemas/checklist";
 import type { ItemRef } from "#/schemas/common";
 import type { Tag, TagDetail, TagSummary } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
@@ -25,16 +28,8 @@ export function isItemDone(client: QueryClient, ref: ItemRef): boolean | null {
 		case "task":
 			return findCachedTask(client, ref.id)?.task.completed ?? null;
 
-		case "checklist": {
-			const checklist =
-				client.getQueryData<ChecklistSummary>(queryKeys.checklist(ref.id)) ??
-				client
-					.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
-					?.find((each) => each.checklistId === ref.id);
-			if (checklist === undefined) return null;
-			const { total, completed } = checklist.progress;
-			return total > 0 && completed >= total;
-		}
+		case "checklist":
+			return isChecklistFinished(client, ref.id);
 
 		case "tracker": {
 			const tracker = client

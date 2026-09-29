@@ -1,6 +1,12 @@
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
-import { type FormEvent, type ReactNode, useId } from "react";
+import {
+	type FormEvent,
+	type ReactNode,
+	useEffect,
+	useId,
+	useRef,
+} from "react";
 
 /**
  * The shell every dialog in the app is built from.
@@ -43,6 +49,42 @@ export function FormDialog({
 	children: ReactNode;
 }) {
 	const formId = useId();
+	const actionsRef = useRef<HTMLDivElement>(null);
+
+	/*
+	 * Ctrl+Enter (⌘+Enter on a Mac) saves, from anywhere in the dialog — a
+	 * textarea included, where Enter alone is a new line. It presses the form's
+	 * submit button, or else the last button in the footer, which is where every
+	 * dialog here puts the thing it is for. A disabled button stays unpressed,
+	 * as it would to a click.
+	 */
+	useEffect(() => {
+		if (!isOpen) return;
+
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key !== "Enter" || !(event.ctrlKey || event.metaKey)) return;
+			const actions = actionsRef.current;
+			const dialog = actions?.closest("dialog");
+			// Only the dialog being typed in; one opened over another has its own.
+			if (!actions || !dialog?.contains(event.target as Node)) return;
+
+			event.preventDefault();
+			const buttons = [...actions.querySelectorAll("button")];
+			const save =
+				buttons.find((button) => button.type === "submit") ?? buttons.at(-1);
+			if (
+				save === undefined ||
+				save.disabled ||
+				save.getAttribute("aria-disabled") === "true"
+			) {
+				return;
+			}
+			save.click();
+		}
+
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [isOpen]);
 
 	return (
 		<Dialog
@@ -86,7 +128,7 @@ export function FormDialog({
 				footer={
 					actions ? (
 						<LayoutFooter>
-							<div className="thunderlist-dialog-actions">
+							<div ref={actionsRef} className="thunderlist-dialog-actions">
 								{actions(formId)}
 							</div>
 						</LayoutFooter>

@@ -19,6 +19,7 @@ import {
 } from "mongodb";
 import { AppError } from "#/lib/errors";
 import type { Arrangements } from "#/schemas/arrangement";
+import type { Backdrops } from "#/schemas/backdrop";
 import type { Checklist } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
 import type { Group } from "#/schemas/group";
@@ -90,6 +91,16 @@ export type ReminderDoc = {
 	timeZone: string;
 	/** The day, on its own clock, it last went out. */
 	lastSentOn?: string | null;
+};
+
+/**
+ * What one person has chosen for themself, whichever space they work in —
+ * keyed by their account, not by a space; see `Backdrops`.
+ */
+export type PreferencesDoc = {
+	userId: string;
+	backdrops?: Backdrops;
+	updatedAt: string;
 };
 
 /** A device someone turned notifications on for. */
@@ -207,6 +218,7 @@ export type Collections = {
 	plans: Collection<PlanDoc>;
 	countdowns: Collection<CountdownDoc>;
 	reminders: Collection<ReminderDoc>;
+	preferences: Collection<PreferencesDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
 	notificationCodes: Collection<NotificationCodeDoc>;
 	teams: Collection<TeamDoc>;
@@ -256,6 +268,7 @@ function collectionsOf(database: Db): Collections {
 		plans: database.collection<PlanDoc>("plans"),
 		countdowns: database.collection<CountdownDoc>("countdowns"),
 		reminders: database.collection<ReminderDoc>("reminders"),
+		preferences: database.collection<PreferencesDoc>("preferences"),
 		pushSubscriptions:
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
 		notificationCodes:
@@ -298,6 +311,7 @@ async function ensureIndexes(current: Collections): Promise<void> {
 			{ email: 1, ownerId: 1, target: 1, targetId: 1 },
 			{ unique: true },
 		),
+		current.preferences.createIndex({ userId: 1 }, { unique: true }),
 		current.pushSubscriptions.createIndex({ endpoint: 1 }, { unique: true }),
 		current.pushSubscriptions.createIndex({ email: 1 }),
 		current.notificationCodes.createIndex({ code: 1 }, { unique: true }),

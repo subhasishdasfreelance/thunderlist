@@ -24,8 +24,8 @@ export const thunderlistTheme = {
     "--color-background-surface": "light-dark(#FCFCFF, #1A1B22)",
     "--color-background-body": "light-dark(#F1F0F9, #0F1018)",
     "--color-overlay": "light-dark(#1C1B2166, #1A1B2299)",
-    "--color-overlay-hover": "light-dark(#1C1B210D, #FFFFFF0D)",
-    "--color-overlay-pressed": "light-dark(#1C1B211A, #FFFFFF1A)",
+    "--color-overlay-hover": "light-dark(#1D4ED814, #7FBBFF1F)",
+    "--color-overlay-pressed": "light-dark(#1D4ED826, #7FBBFF33)",
     "--color-background-muted": "light-dark(#1C1B210D, #1A1B2280)",
     "--color-text-primary": "light-dark(#1C1B21, #E1E2EC)",
     "--color-text-secondary": "light-dark(#474552, #A8AAB9)",
@@ -62,6 +62,13 @@ export const thunderlistTheme = {
     "--duration-slow-max": "800ms"
   },
   components: {
+    "clickable-card": {
+      "base": {
+        ":hover": {
+          "borderColor": "color-mix(in srgb, var(--color-text-accent) 55%, var(--color-border))"
+        }
+      }
+    },
     "progressbar-track": {
       "base": {
         "backgroundColor": "var(--thunderlist-track)"

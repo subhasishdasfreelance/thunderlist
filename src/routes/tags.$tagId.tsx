@@ -8,7 +8,11 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MoreHorizontal, Pencil, Trash2, ZapOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -65,6 +69,7 @@ import {
 	formatDeadline,
 	formatSchedule,
 } from "#/lib/format-date";
+import { emptyTagPage } from "#/lib/optimistic";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import { type ParsedTitle, withInlineTag } from "#/lib/tags/inline-tags";
 import {
@@ -83,6 +88,7 @@ import { useTaskSelection } from "#/lib/use-task-selection";
 import { useTaskTypes } from "#/lib/use-task-types";
 import { useItemPermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
+import { queryKeys } from "#/queries/keys";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import {
 	tagCompletedQuery,
@@ -153,6 +159,7 @@ function TagDetailPage() {
 	const { tagId } = Route.useParams();
 	const { task: focusTaskId } = Route.useSearch();
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const { apply, applyAsync } = useApplyChange();
 	const space = useSpace();
 	const team = space?.team ?? null;
@@ -521,12 +528,21 @@ function TagDetailPage() {
 	 * alike. Each stays in its checklist, and each is untagged the way the bolt
 	 * would, so it is drawn at once.
 	 *
-	 * What is on screen goes first, without waiting. The screen holds only a
-	 * page of Today, so the whole of it is then read and the rest follows. That
-	 * read goes straight to the server rather than through the cache: every
-	 * change drawn above cancels the queries in flight.
+	 * Today's figures and lists are emptied first, all at once; see
+	 * `emptyTagPage`. Then what is on screen is untagged, without waiting. The
+	 * screen holds only a page of Today, so the whole of it is then read and the
+	 * rest follows. That read goes straight to the server rather than through
+	 * the cache: every change drawn above cancels the queries in flight.
 	 */
 	async function clearToday() {
+		const onScreen = [
+			...(openResult.data?.items ?? []),
+			...(completedResult.data ?? []),
+		];
+		// A read of Today landing after this would put the tasks back.
+		await queryClient.cancelQueries({ queryKey: queryKeys.tag(tagId) });
+		emptyTagPage(queryClient, tagId);
+
 		const cleared = new Set<string>();
 		const untag = (entries: ReadonlyArray<TagTaskEntry>) => {
 			for (const { task } of entries) {
@@ -536,7 +552,7 @@ function TagDetailPage() {
 			}
 		};
 
-		untag([...(openResult.data?.items ?? []), ...(completedResult.data ?? [])]);
+		untag(onScreen);
 		const [openAll, doneAll] = await Promise.all([
 			getTagOpenTasksFn({ data: { tagId, ...ALL_OPEN } }),
 			getTagCompletedFn({ data: { tagId } }),

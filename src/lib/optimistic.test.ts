@@ -15,7 +15,11 @@ import type {
 	TrackerDetail,
 	TrackerSummary,
 } from "#/schemas/tracker";
-import { applyOptimistically } from "./optimistic";
+import {
+	applyOptimistically,
+	emptyTagPage,
+	findCachedTask,
+} from "./optimistic";
 
 /** The first page of the first stage, as a screen reads it. */
 const VIEW: TaskPageView = { sort: "newest", limit: 20 };
@@ -1264,5 +1268,96 @@ describe("applyOptimistically, moving a task", () => {
 			"tag_1",
 			"tag_2",
 		]);
+	});
+});
+
+describe("applyOptimistically, on tasks standing for something", () => {
+	it("unticks the tasks following a tracker that is deleted", () => {
+		const queryClient = client();
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([
+				task({
+					taskId: "tsk_1",
+					trackerId: "trk_1",
+					completed: true,
+					stageId: "done",
+				}),
+			]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "tracker.delete",
+			trackerId: "trk_1",
+		});
+
+		expect(toDo(queryClient)?.items[0]?.completed).toBe(false);
+	});
+
+	it("ticks a task standing for a checklist once that checklist finishes", () => {
+		const queryClient = client();
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			summary("chk_1"),
+			summary("chk_2"),
+		]);
+		queryClient.setQueryData<ChecklistSummary>(
+			queryKeys.checklist("chk_2"),
+			summary("chk_2"),
+		);
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_2", VIEW),
+			stagePage([task({ taskId: "tsk_link", linkedChecklistId: "chk_1" })]),
+		);
+		const linked = () => findCachedTask(queryClient, "tsk_link")?.task;
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { completed: true },
+		});
+		expect(linked()?.completed).toBe(true);
+		// The checklist it sits in counts it done too.
+		expect(
+			queryClient
+				.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+				?.find((each) => each.checklistId === "chk_2")?.progress.completed,
+		).toBe(1);
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { completed: false },
+		});
+		expect(linked()?.completed).toBe(false);
+	});
+});
+
+describe("emptyTagPage", () => {
+	it("leaves a tag's page with no tasks, counting only its trackers", () => {
+		const queryClient = new QueryClient();
+		const tasks = [task({ taskId: "tsk_1" }), task({ taskId: "tsk_2" })];
+		queryClient.setQueryData<TagDetail>(queryKeys.tag("today"), {
+			...tagPage("today", tasks),
+			trackers: [
+				{
+					tracker: { progress: { percent: 100 } } as TrackerSummary,
+					completedOn: null,
+				},
+			],
+		});
+		queryClient.setQueryData<Page<TagTaskEntry>>(
+			queryKeys.tagOpenPage("today", VIEW),
+			page(entries(tasks)),
+		);
+
+		emptyTagPage(queryClient, "today");
+
+		expect(
+			queryClient.getQueryData<TagDetail>(queryKeys.tag("today"))?.progress,
+		).toMatchObject({ total: 1, completed: 1, percent: 100, inProgress: 0 });
+		expect(tagTasks(queryClient, "today")).toMatchObject({
+			items: [],
+			total: 0,
+		});
 	});
 });

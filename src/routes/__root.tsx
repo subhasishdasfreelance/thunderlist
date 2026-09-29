@@ -16,6 +16,8 @@ import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
 import { FIRST_OPEN_SCRIPT } from "#/lib/first-open";
 import { drawnColorScheme, THEME_INIT_SCRIPT } from "#/lib/theme";
 import { useIsOnline } from "#/lib/use-online";
+import { backdropsQuery } from "#/queries/preferences";
+import { primeQuery } from "#/queries/prime";
 import { sessionQuery } from "#/queries/session";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import appCss from "../styles.css?url";
@@ -61,6 +63,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 		if (user && isLoginPage) {
 			throw redirect({ to: "/" });
 		}
+
+		// The illustrations behind every screen, so the first page is drawn
+		// with the one picked rather than the default; see `Scenery`.
+		if (user) await primeQuery(context.queryClient, backdropsQuery());
 
 		// The scheme to draw in, so the server's page is already the right one;
 		// see `drawnColorScheme`.
