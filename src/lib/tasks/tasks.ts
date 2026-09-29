@@ -6,7 +6,7 @@
  * functions are pure and know nothing about the database.
  */
 
-import type { ChecklistProgress } from "#/schemas/checklist";
+import type { Checklist, ChecklistProgress } from "#/schemas/checklist";
 import {
 	NO_TYPE,
 	PRIORITY_RANKS,
@@ -69,41 +69,31 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 	return [...tasks].sort(compareTasks);
 }
 
-/** How a caption's parts are joined, so a note can be added beside one. */
-const CAPTION_SEPARATOR = " · ";
-
 /**
- * A caption naming the checklist the task was parked from, ahead of whatever
- * it already said.
+ * A task's notes after it moves, with a line added at the end when it is
+ * parked in the Backlog ("Added from Design system") or taken out of it
+ * ("Moved from backlog"). `null` for any other move, which leaves them alone.
  *
- * The name on its own — "Design system", not "From Design system". Every task
- * in the Backlog was parked from somewhere, so the word was on every row and
- * told none of them apart.
- *
- * Without that word there is nothing in the text marking which part is the
- * origin, so an earlier one is recognised by being the name of a checklist.
- * That is what the names are for, and it is what keeps a task parked twice
- * from carrying its whole history. Anything the user wrote themselves is not a
- * checklist name, so it is kept.
+ * Parked tasks from every list sit together, and without the note the one
+ * thing you need to put a task back — where it came from — is the one thing
+ * the move throws away. The caption is the user's and is not touched.
  */
-export function captionFromChecklist(
-	caption: string | undefined,
-	checklistTitle: string,
-	/** Every checklist there is, so an earlier origin can be told from a note. */
-	checklistTitles: ReadonlyArray<string>,
-): string {
-	const isOrigin = (part: string) =>
-		checklistTitles.some((title) => title.toLowerCase() === part.toLowerCase());
+export function notesAfterMove(
+	notes: string | undefined,
+	/** The checklist it leaves, or `null` when it is in none. */
+	from: Pick<Checklist, "title" | "special"> | null,
+	to: Pick<Checklist, "special">,
+): string | null {
+	const line =
+		from?.special === "backlog"
+			? "Moved from backlog"
+			: to.special === "backlog" && from !== null
+				? `Added from ${from.title}`
+				: null;
+	if (line === null) return null;
 
-	const rest = (caption ?? "")
-		.split(CAPTION_SEPARATOR)
-		.map((part) => part.trim())
-		.filter((part) => part !== "" && !isOrigin(part))
-		.join(CAPTION_SEPARATOR);
-
-	return rest === ""
-		? checklistTitle
-		: `${checklistTitle}${CAPTION_SEPARATOR}${rest}`;
+	const before = (notes ?? "").trim();
+	return before === "" ? line : `${before}\n\n${line}`;
 }
 
 /**

@@ -39,6 +39,7 @@ import {
 import {
 	calculateChecklistProgress,
 	matchesFilter,
+	notesAfterMove,
 	orderTasks,
 	pageOf,
 	type StagePage,
@@ -1176,6 +1177,7 @@ export async function updateTask(
 							linkedChecklistId: 1,
 							checklistId: 1,
 							completed: 1,
+							stageId: 1,
 							dependsOn: 1,
 						},
 					},
@@ -1266,6 +1268,16 @@ export async function updateTask(
 		(patch.completed !== undefined || moved.completed !== existing?.completed);
 
 	/*
+	 * Moved to another stage, it goes to the top of that stage, as a task moved
+	 * to another checklist does; see `moveTask`. A list reads newest first, so
+	 * arriving counts as being added.
+	 */
+	const arrives =
+		moved !== null &&
+		existing !== null &&
+		moved.stageId !== stageOf(existing, stages);
+
+	/*
 	 * A task keeps its checklist's tags however its own are edited. An edit
 	 * sends the tags written in the title, and the checklist's are added back
 	 * here, so no screen has to know which of a task's tags came from where.
@@ -1278,6 +1290,7 @@ export async function updateTask(
 		...(stamps && moved !== null
 			? { completedAt: moved.completed ? new Date().toISOString() : null }
 			: {}),
+		...(arrives ? { addedAt: new Date().toISOString() } : {}),
 		...(patch.tagIds === undefined
 			? {}
 			: {
@@ -1305,7 +1318,8 @@ export async function updateTask(
  * starts at the new checklist's first stage, or its last if it is done, and at
  * the top of it: a list reads newest first, so arriving counts as being added.
  * A task standing for a checklist cannot be moved into that checklist, or into
- * one inside it; see `assertCanContain`.
+ * one inside it; see `assertCanContain`. Parking it in the Backlog or taking
+ * it out adds a line to its notes; see `notesAfterMove`.
  */
 export async function moveTask(
 	userId: string,
@@ -1324,6 +1338,7 @@ export async function moveTask(
 				tagIds: 1,
 				checklistId: 1,
 				linkedChecklistId: 1,
+				notes: 1,
 			},
 		},
 	);
@@ -1346,7 +1361,7 @@ export async function moveTask(
 			? null
 			: await current.checklists.findOne(
 					{ checklistId: task.checklistId, userId },
-					{ projection: { _id: 0, tagIds: 1 } },
+					{ projection: { _id: 0, tagIds: 1, title: 1, special: 1 } },
 				);
 	const joining = target.tagIds ?? [];
 	const leaving = (source?.tagIds ?? []).filter(
@@ -1367,6 +1382,7 @@ export async function moveTask(
 		leaving,
 		new Map(names.map((tag) => [tag.tagId, tag.name])),
 	);
+	const notes = notesAfterMove(task.notes, source, target);
 
 	await current.tasks.updateOne(
 		{ taskId, userId },
@@ -1382,6 +1398,7 @@ export async function moveTask(
 						...joining,
 					]),
 				],
+				...(notes === null ? {} : { notes }),
 			},
 		},
 	);

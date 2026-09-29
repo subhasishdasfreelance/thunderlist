@@ -3,7 +3,10 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { FormDialog } from "#/components/common/form-dialog";
 import { PAGE_SHORTCUTS } from "#/components/shell/nav-items";
-import { TASK_SHORTCUTS } from "#/components/tasks/task-actions";
+import {
+	STAGE_SHORTCUTS,
+	TASK_SHORTCUTS,
+} from "#/components/tasks/task-actions";
 
 type Row = { keys: Array<string>; what: string };
 
@@ -32,14 +35,21 @@ const GROUPS: Array<Group> = [
 			},
 			{ keys: [TASK_SHORTCUTS.tag], what: "Tag it, picked from the list" },
 			{ keys: ["Space"], what: "Assign to me, or unassign me — in a team" },
-			{ keys: ["Del"], what: "Delete" },
+			{ keys: [TASK_SHORTCUTS.delete], what: "Delete" },
 		],
 	},
 	{
 		title: "On a tracker reading you point at",
 		rows: [
 			{ keys: [TASK_SHORTCUTS.edit], what: "Edit" },
-			{ keys: ["Del"], what: "Delete" },
+			{ keys: [TASK_SHORTCUTS.delete], what: "Delete" },
+		],
+	},
+	{
+		title: "On a page with stages",
+		rows: [
+			{ keys: [STAGE_SHORTCUTS.next], what: "Next stage" },
+			{ keys: [STAGE_SHORTCUTS.previous], what: "Previous stage" },
 		],
 	},
 	{
@@ -79,7 +89,7 @@ const GROUPS: Array<Group> = [
 			{ keys: ["Ctrl", "Z"], what: "Undo the last thing you did to a task" },
 			{
 				keys: ["Esc"],
-				what: "Leave a field, then close a popup, then close messages",
+				what: "Leave a field, then close a popup, then close messages. Also lets go of the task under the pointer",
 			},
 			{ keys: ["?"], what: "This" },
 		],

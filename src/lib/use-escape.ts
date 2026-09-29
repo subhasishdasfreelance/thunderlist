@@ -9,6 +9,10 @@
  *    from one listener on the document; see its `layerStack`.
  * 3. Otherwise every toast on screen is closed.
  *
+ * Every press, too, lets go of the row under the pointer — its tint and its
+ * keys stay off until the pointer next moves; see `isPointerLetGo` — and a
+ * press nothing else used takes focus off whatever button had it.
+ *
  * So a dialog with its caret in a field takes three presses to clear: the
  * field, then the dialog, then any toast behind it.
  *
@@ -35,6 +39,14 @@ const TYPED_INPUTS = new Set([
 	"time",
 	"datetime-local",
 ]);
+
+/** Set on the page by Escape, until the pointer next moves. */
+const LET_GO = "data-pointer-let-go";
+
+/** Whether Escape has let go of the row under a pointer that has not moved. */
+export function isPointerLetGo(): boolean {
+	return document.documentElement.hasAttribute(LET_GO);
+}
 
 function isTextField(element: Element | null): element is HTMLElement {
 	if (!(element instanceof HTMLElement)) return false;
@@ -72,11 +84,32 @@ export function useEscape(): void {
 			if (dismissAllToasts()) event.preventDefault();
 		}
 
+		// Last, once a popup or a toast has had its chance at the press.
+		function letGoOfPointer(event: KeyboardEvent) {
+			if (event.key !== "Escape") return;
+			document.documentElement.setAttribute(LET_GO, "");
+
+			if (
+				!event.defaultPrevented &&
+				document.activeElement instanceof HTMLElement
+			) {
+				document.activeElement.blur();
+			}
+		}
+
+		function pickUpPointer() {
+			if (isPointerLetGo()) document.documentElement.removeAttribute(LET_GO);
+		}
+
 		window.addEventListener("keydown", letGoOfField, true);
 		window.addEventListener("keydown", closeToasts);
+		window.addEventListener("keydown", letGoOfPointer);
+		window.addEventListener("pointermove", pickUpPointer);
 		return () => {
 			window.removeEventListener("keydown", letGoOfField, true);
 			window.removeEventListener("keydown", closeToasts);
+			window.removeEventListener("keydown", letGoOfPointer);
+			window.removeEventListener("pointermove", pickUpPointer);
 		};
 	}, []);
 }

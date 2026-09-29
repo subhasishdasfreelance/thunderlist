@@ -318,6 +318,12 @@ function TagDetailPage() {
 		completed,
 		completed.findIndex((entry) => entry.task.taskId === focusTaskId),
 	);
+	// A page picked by hand earlier would keep it off screen; see the arrival
+	// effect above.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
+	useEffect(() => {
+		if (focusTaskId !== undefined) completedPages.reset();
+	}, [arrival, focusTaskId]);
 
 	const tags = tagsResult.data ?? [];
 	const trackers = trackersResult.data ?? [];
@@ -583,8 +589,6 @@ function TagDetailPage() {
 										task,
 										backlog.checklistId,
 										tags,
-										checklistTitle,
-										checklists.map((each) => each.title),
 									),
 							}
 				}

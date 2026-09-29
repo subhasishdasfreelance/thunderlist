@@ -8,9 +8,9 @@ import {
 import type { Task } from "#/schemas/task";
 import {
 	calculateChecklistProgress,
-	captionFromChecklist,
 	compareTasks,
 	mergeReads,
+	notesAfterMove,
 	orderByTask,
 	orderTasks,
 	pageOf,
@@ -397,34 +397,31 @@ describe("mergeReads", () => {
 	});
 });
 
-const LISTS = ["Design system", "Inbox", "Q3 launch"];
+const DESIGN = { title: "Design system", special: null };
+const BACKLOG = { title: "Backlog", special: "backlog" as const };
 
-describe("captionFromChecklist", () => {
-	it("is the checklist's name, with nothing in front of it", () => {
-		expect(captionFromChecklist("", "Design system", LISTS)).toBe(
-			"Design system",
+describe("notesAfterMove", () => {
+	it("says where a parked task came from", () => {
+		expect(notesAfterMove(undefined, DESIGN, BACKLOG)).toBe(
+			"Added from Design system",
 		);
 	});
 
-	it("keeps what the task already said, after where it came from", () => {
-		expect(captionFromChecklist("waiting on Ana", "Inbox", LISTS)).toBe(
-			"Inbox · waiting on Ana",
+	it("says a task was taken out of the Backlog", () => {
+		expect(notesAfterMove("", BACKLOG, DESIGN)).toBe("Moved from backlog");
+	});
+
+	it("adds the line after what the notes already said", () => {
+		expect(notesAfterMove("waiting on Ana\n", DESIGN, BACKLOG)).toBe(
+			"waiting on Ana\n\nAdded from Design system",
 		);
 	});
 
-	/*
-	 * With no "From " in front of it there is nothing in the text marking the
-	 * origin, so an earlier one is recognised by being a checklist's name.
-	 */
-	it("replaces where it came from last time rather than stacking them up", () => {
-		expect(
-			captionFromChecklist("Design system · waiting on Ana", "Inbox", LISTS),
-		).toBe("Inbox · waiting on Ana");
+	it("leaves the notes alone between other checklists", () => {
+		expect(notesAfterMove("x", DESIGN, { special: "inbox" })).toBeNull();
 	});
 
-	it("leaves a note alone that is nobody's checklist", () => {
-		expect(captionFromChecklist("waiting on Ana", "Inbox", [])).toBe(
-			"Inbox · waiting on Ana",
-		);
+	it("has nothing to say for a task that was in no checklist", () => {
+		expect(notesAfterMove("x", null, BACKLOG)).toBeNull();
 	});
 });

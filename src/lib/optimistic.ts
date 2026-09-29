@@ -34,6 +34,7 @@ import { renameInlineTag, unwrittenTags } from "#/lib/tags/inline-tags";
 import {
 	calculateChecklistProgress,
 	matchesFilter,
+	notesAfterMove,
 	orderByTask,
 	type Page,
 	type StagePage,
@@ -1395,8 +1396,9 @@ function patchFor(client: QueryClient, change: Change): void {
 			const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
 			const { patch } = change;
 
-			patchTask(client, change.taskId, (task, checklistId) =>
-				settle(
+			patchTask(client, change.taskId, (task, checklistId) => {
+				const stages = stagesOf(client, checklistId);
+				const next = settle(
 					{
 						...task,
 						...patch,
@@ -1417,9 +1419,15 @@ function patchFor(client: QueryClient, change: Change): void {
 									],
 					},
 					patch,
-					stagesOf(client, checklistId),
-				),
-			);
+					stages,
+				);
+
+				// Into another stage at the top of it, as the server stamps it; see
+				// `updateTask`.
+				return stageOf(next, stages) === stageOf(task, stages)
+					? next
+					: { ...next, addedAt: new Date().toISOString() };
+			});
 
 			// The server stamps the moment it was finished; guessing it here keeps
 			// the chart from re-drawing when the answer lands.
@@ -1467,6 +1475,19 @@ function patchFor(client: QueryClient, change: Change): void {
 			const source = from === null ? undefined : summary(from);
 			const target = summary(change.checklistId);
 
+			// Its title and kind, from whichever cache has it, for its notes.
+			const listed = (checklistId: string) =>
+				summary(checklistId) ??
+				client
+					.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+					?.find((each) => each.checklistId === checklistId);
+			const leftList = from === null ? undefined : listed(from);
+			const joinedList = listed(change.checklistId);
+			const notes =
+				(from !== null && leftList === undefined) || joinedList === undefined
+					? null
+					: notesAfterMove(task.notes, leftList ?? null, joinedList);
+
 			/*
 			 * A task carries its checklist's tags. The ones it is losing are the
 			 * old list's that the new one does not also have — and of those, only
@@ -1483,6 +1504,7 @@ function patchFor(client: QueryClient, change: Change): void {
 
 			const moved: Task = {
 				...task,
+				...(notes === null ? {} : { notes }),
 				// At the top of the new list, as the server stamps it; see `moveTask`.
 				addedAt: new Date().toISOString(),
 				// Its stage was the old list's; see `stageOf`.

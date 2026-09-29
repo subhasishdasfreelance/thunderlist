@@ -787,6 +787,12 @@ body {
 		background-color: var(--color-overlay-hover);
 	}
 
+	/* Escape lets go of it until the pointer moves again; see `useEscape`. */
+	:root[data-pointer-let-go] .thunderlist-task-row:hover,
+	:root[data-pointer-let-go] .thunderlist-entry-row:hover {
+		background-color: transparent;
+	}
+
 	/* Keyboard users get the same cue when focus lands inside the row. */
 	.thunderlist-task-row:focus-within,
 	.thunderlist-entry-row:focus-within {

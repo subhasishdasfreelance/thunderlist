@@ -227,8 +227,6 @@ function PriorityPage() {
 										task,
 										backlog.checklistId,
 										tags,
-										task.checklistTitle,
-										checklists.map((each) => each.title),
 									),
 							}
 				}

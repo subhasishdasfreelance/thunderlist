@@ -10,12 +10,13 @@
  * shortcuts never take a key away from the field the user is in.
  */
 
-import { useEffect } from "react";
+import { type RefObject, useEffect } from "react";
+import { isPointerLetGo } from "#/lib/use-escape";
 
 /** The keys a row answers to, lowercase, mapped to what they do. */
 export type RowShortcuts = Record<string, () => void>;
 
-function isTyping(target: EventTarget | null): boolean {
+export function isTyping(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
 
 	return (
@@ -29,6 +30,15 @@ function isTyping(target: EventTarget | null): boolean {
 export function useRowShortcuts(
 	isActive: boolean,
 	shortcuts: RowShortcuts,
+	/**
+	 * The row, when the keys are only for it while the pointer is over it.
+	 *
+	 * Asked at the moment of the keypress rather than tracked with enter and
+	 * leave events: a row drawn afresh under a pointer that has not moved — a
+	 * task just ticked into the finished ones, or a dialog just closed over it —
+	 * never hears the pointer enter, and its keys stayed dead until it moved.
+	 */
+	row?: RefObject<HTMLElement | null>,
 ): void {
 	useEffect(() => {
 		if (!isActive) return;
@@ -36,6 +46,9 @@ export function useRowShortcuts(
 		function handle(event: KeyboardEvent) {
 			if (event.metaKey || event.ctrlKey || event.altKey) return;
 			if (isTyping(event.target)) return;
+			// Escape let go of the row; see `useEscape`.
+			if (isPointerLetGo()) return;
+			if (row !== undefined && !row.current?.matches(":hover")) return;
 
 			const run = shortcuts[event.key.toLowerCase()];
 			if (!run) return;
@@ -58,5 +71,5 @@ export function useRowShortcuts(
 
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
-	}, [isActive, shortcuts]);
+	}, [isActive, shortcuts, row]);
 }

@@ -23,7 +23,6 @@ import {
 	withInlineTag,
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
-import { captionFromChecklist } from "#/lib/tasks/tasks";
 import { useToast } from "#/lib/toasts";
 import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
@@ -418,9 +417,8 @@ export function setSpecialTag(
  * Park a task in the Backlog: off Today, since a task is planned or parked
  * but never both, and then into the Backlog checklist.
  *
- * The checklist it leaves is written into its caption. Parked tasks from every
- * list sit together, and without the note the one thing you need to put a task
- * back — where it came from — is the one thing the move throws away.
+ * The checklist it leaves is written into its notes by the move itself; see
+ * `notesAfterMove`.
  *
  * Both are drawn at once. Only the sending waits: the move takes off the tags
  * the task only had from the checklist it leaves, which an update landing
@@ -429,34 +427,20 @@ export function setSpecialTag(
  */
 export async function moveToBacklog(
 	applyAsync: ApplyChangeAsync,
-	task: Pick<Task, "taskId" | "title" | "tagIds" | "caption">,
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
 	backlogId: string,
 	tags: ReadonlyArray<Tag>,
-	/** The checklist it is leaving, or `null` when it is in none. */
-	fromTitle: string | null,
-	/** Every checklist's title; see `captionFromChecklist`. */
-	checklistTitles: ReadonlyArray<string>,
 ): Promise<void> {
 	const today = specialTag(tags, "today");
 	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
 
-	const patch: TaskPatch = {
-		...(isOnToday && today !== null
+	const patch: TaskPatch =
+		isOnToday && today !== null
 			? {
 					title: withoutInlineTag(task.title, today.name),
 					tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
 				}
-			: {}),
-		...(fromTitle === null || fromTitle === ""
-			? {}
-			: {
-					caption: captionFromChecklist(
-						task.caption,
-						fromTitle,
-						checklistTitles,
-					),
-				}),
-	};
+			: {};
 
 	try {
 		await Promise.all([

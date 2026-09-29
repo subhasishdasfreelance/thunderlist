@@ -79,6 +79,13 @@ export function SearchDialog({
 		void navigate({
 			to: result.to,
 			search: { ...result.focus },
+			/*
+			 * New every time. The router treats going where you already are as
+			 * no move at all — no history entry, so no new arrival — and a task
+			 * searched for twice, or from the page it was last found on, was then
+			 * neither scrolled to nor ringed; see `useArrival`.
+			 */
+			state: { searchedAt: Date.now() },
 		});
 	}
 

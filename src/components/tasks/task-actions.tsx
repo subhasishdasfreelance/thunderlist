@@ -29,11 +29,12 @@ export const TASK_SHORTCUTS = {
 	 * already resting on, for the thing done most.
 	 */
 	assign: " ",
-	/** Delete it, after the usual confirmation. Shown as "Del". */
-	delete: "delete",
-	/** A Mac's delete key sends Backspace, so that deletes too. */
-	deleteMac: "backspace",
+	/** Delete it, after the usual confirmation. */
+	delete: "d",
 } as const;
+
+/** The stage tab after the one shown, and the one before; see `StageTabs`. */
+export const STAGE_SHORTCUTS = { next: ">", previous: "<" } as const;
 
 export type TaskQuickActions = {
 	/** Put the task on Today, or take it off; see `setSpecialTag`. */

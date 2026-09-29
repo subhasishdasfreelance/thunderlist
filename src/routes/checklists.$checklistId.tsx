@@ -384,14 +384,7 @@ function ChecklistDetailPage() {
 					: {
 							title: backlog.title,
 							onMove: () =>
-								void moveToBacklog(
-									applyAsync,
-									task,
-									backlog.checklistId,
-									tags,
-									detail.title,
-									(checklistsResult.data ?? []).map((each) => each.title),
-								),
+								void moveToBacklog(applyAsync, task, backlog.checklistId, tags),
 						}
 			}
 			actions={{

@@ -15,7 +15,7 @@ import {
 	UserMinus,
 	Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import { numberTitle } from "#/components/common/item-number";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
@@ -120,7 +120,7 @@ export function TaskRow({
 	 */
 	isStageShown?: boolean;
 }) {
-	const [isHovered, setIsHovered] = useState(false);
+	const rowRef = useRef<HTMLDivElement>(null);
 	const { canManageContent, canUpdateTasks } = usePermissions();
 	const me = useSpace()?.email;
 	const isMine = me !== undefined && (task.assignees ?? []).includes(me);
@@ -208,7 +208,6 @@ export function TaskRow({
 			...(canManageContent
 				? {
 						[TASK_SHORTCUTS.delete]: actions.onDelete,
-						[TASK_SHORTCUTS.deleteMac]: actions.onDelete,
 					}
 				: {}),
 		}),
@@ -226,7 +225,7 @@ export function TaskRow({
 		],
 	);
 
-	useRowShortcuts(isHovered && canUpdateTasks, shortcuts);
+	useRowShortcuts(canUpdateTasks, shortcuts, rowRef);
 
 	const title = (
 		<TaggedTitle
@@ -291,11 +290,10 @@ export function TaskRow({
 		 * it into three words a line. On a desktop everything sits on one line and
 		 * the row stays as short as it can be.
 		 */
-		// biome-ignore lint/a11y/noStaticElementInteractions: resting the pointer here only arms the keyboard shortcuts; every action is also a real button.
+		// Resting the pointer here arms the keyboard shortcuts; see `useRowShortcuts`.
 		<div
+			ref={rowRef}
 			className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5"
-			onMouseEnter={() => setIsHovered(true)}
-			onMouseLeave={() => setIsHovered(false)}
 		>
 			{/* Second on a phone, first on a desktop: the flags join the other
 			    buttons on the line below rather than crowding the title. */}
@@ -504,7 +502,7 @@ export function TaskRow({
 										{
 											label: "Delete task",
 											icon: Trash2,
-											endContent: <ShortcutKey label="Del" />,
+											endContent: <ShortcutKey label={TASK_SHORTCUTS.delete} />,
 											variant: "destructive" as const,
 											onClick: actions.onDelete,
 										},

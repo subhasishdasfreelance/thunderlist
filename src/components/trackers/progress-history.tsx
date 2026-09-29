@@ -64,16 +64,13 @@ export function ProgressHistory({
 	useFocusRow("data-entry-id", focusEntryId);
 	const team = useTeam();
 	// The reading under the pointer answers to the keys a task does: E edits
-	// it, Delete deletes it.
+	// it, D deletes it.
 	const [hovered, setHovered] = useState<ProgressEntry | null>(null);
 	const shortcuts = useMemo(() => {
 		const keys: RowShortcuts = {};
 		if (hovered === null) return keys;
 		if (canEdit) keys[TASK_SHORTCUTS.edit] = () => onEdit(hovered);
-		if (canDelete) {
-			keys[TASK_SHORTCUTS.delete] = () => onDelete(hovered);
-			keys[TASK_SHORTCUTS.deleteMac] = () => onDelete(hovered);
-		}
+		if (canDelete) keys[TASK_SHORTCUTS.delete] = () => onDelete(hovered);
 		return keys;
 	}, [hovered, canEdit, canDelete, onEdit, onDelete]);
 	useRowShortcuts(hovered !== null, shortcuts);
@@ -172,7 +169,11 @@ export function ProgressHistory({
 																{
 																	label: "Delete entry",
 																	icon: <Trash2 aria-hidden />,
-																	endContent: <ShortcutKey label="Del" />,
+																	endContent: (
+																		<ShortcutKey
+																			label={TASK_SHORTCUTS.delete}
+																		/>
+																	),
 																	variant: "destructive" as const,
 																	onClick: () => onDelete(entry),
 																},

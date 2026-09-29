@@ -37,3 +37,10 @@ declare module "@tanstack/react-router" {
 		router: ReturnType<typeof getRouter>;
 	}
 }
+
+declare module "@tanstack/history" {
+	interface HistoryState {
+		/** Makes a search a new arrival even where it changes nothing else; see `SearchDialog`. */
+		searchedAt?: number;
+	}
+}
