@@ -11,7 +11,7 @@ import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
-import { ItemNumber } from "#/components/common/item-number";
+import { numberTitle } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
@@ -76,10 +76,7 @@ function PlanPage() {
 
 			<HStack gap={2} hAlign="between" vAlign="start">
 				<VStack gap={0.5}>
-					<Heading level={1}>
-						<ItemNumber kind="plan" number={data.number} />
-						{data.title}
-					</Heading>
+					<Heading level={1}>{data.title}</Heading>
 					<Text type="supporting">
 						Updated {formatDate(data.updatedAt.slice(0, 10))}
 					</Text>
@@ -97,19 +94,26 @@ function PlanPage() {
 						icon: <MoreHorizontal aria-hidden />,
 					}}
 					items={[
-						...(canManageContent
-							? [
-									{
-										label: "Edit plan",
-										icon: Pencil,
-										onClick: () => setIsEditing(true),
-									},
-								]
-							: []),
+						// Headed by its number; see `numberTitle`.
 						{
-							label: "Download .md",
-							icon: Download,
-							onClick: () => download(data.title, data.body),
+							type: "section" as const,
+							title: numberTitle("plan", data.number),
+							items: [
+								...(canManageContent
+									? [
+											{
+												label: "Edit plan",
+												icon: Pencil,
+												onClick: () => setIsEditing(true),
+											},
+										]
+									: []),
+								{
+									label: "Download .md",
+									icon: Download,
+									onClick: () => download(data.title, data.body),
+								},
+							],
 						},
 						...(canManageContent
 							? [

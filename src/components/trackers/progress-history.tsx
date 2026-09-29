@@ -1,11 +1,12 @@
 import { Card } from "@astryxdesign/core/Card";
+import { Divider } from "@astryxdesign/core/Divider";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { List, ListItem } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ShortcutKey, TASK_SHORTCUTS } from "#/components/tasks/task-actions";
@@ -14,7 +15,6 @@ import { useFocusRow } from "#/lib/use-focus-task";
 import { usePages } from "#/lib/use-pages";
 import { type RowShortcuts, useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTeam } from "#/lib/use-team";
-import { formatNumber } from "#/schemas/number";
 import { memberName } from "#/schemas/team";
 import type { ProgressEntry } from "#/schemas/tracker";
 
@@ -63,14 +63,20 @@ export function ProgressHistory({
 	);
 	useFocusRow("data-entry-id", focusEntryId);
 	const team = useTeam();
-	// The reading under the pointer answers to the keys a task does: E edits it.
+	// The reading under the pointer answers to the keys a task does: E edits
+	// it, Delete deletes it.
 	const [hovered, setHovered] = useState<ProgressEntry | null>(null);
 	const shortcuts = useMemo(() => {
 		const keys: RowShortcuts = {};
-		if (hovered !== null) keys[TASK_SHORTCUTS.edit] = () => onEdit(hovered);
+		if (hovered === null) return keys;
+		if (canEdit) keys[TASK_SHORTCUTS.edit] = () => onEdit(hovered);
+		if (canDelete) {
+			keys[TASK_SHORTCUTS.delete] = () => onDelete(hovered);
+			keys[TASK_SHORTCUTS.deleteMac] = () => onDelete(hovered);
+		}
 		return keys;
-	}, [hovered, onEdit]);
-	useRowShortcuts(hovered !== null && canEdit, shortcuts);
+	}, [hovered, canEdit, canDelete, onEdit, onDelete]);
+	useRowShortcuts(hovered !== null, shortcuts);
 
 	/** In a team, who logged it: their name, or their address until they have one. */
 	const loggedBy = (email: string | null | undefined) => {
@@ -90,28 +96,34 @@ export function ProgressHistory({
 					description="Add your first entry to start the history."
 				/>
 			) : (
+				// Laid out like a checklist's tasks — the same card, rules, padding
+				// and type — so a reading reads as a row of the same kind.
 				<Card padding={0}>
-					<List hasDividers>
-						{paging.shown.map((entry) => (
-							<ListItem
+					<VStack gap={0} paddingBlock={2}>
+						{paging.shown.map((entry, index) => (
+							// biome-ignore lint/a11y/noStaticElementInteractions: resting the pointer here only arms the keyboard shortcuts; every action is also in the menu.
+							<div
 								key={entry.entryId}
-								className="thunderlist-entry-row"
+								className="thunderlist-row thunderlist-entry-row"
 								data-entry-id={entry.entryId}
 								data-focused={entry.entryId === focusEntryId}
 								onMouseEnter={() => setHovered(entry)}
 								onMouseLeave={() => setHovered(null)}
-								label={`${entry.value} ${unit}`}
-								description={[
-									entry.number === undefined
-										? null
-										: formatNumber("entry", entry.number),
-									formatDate(entry.recordedAt),
-									loggedBy(entry.recordedBy),
-									entry.note === "" ? null : entry.note,
-								]
-									.filter((part) => part !== null)
-									.join(" · ")}
-								endContent={
+							>
+								{index === 0 ? null : <Divider />}
+								<div className="flex items-center gap-2 py-1.5">
+									<VStack gap={0} className="min-w-0 flex-1">
+										<Text>{`${entry.value} ${unit}`}</Text>
+										<Text type="supporting">
+											{[
+												formatDate(entry.recordedAt),
+												loggedBy(entry.recordedBy),
+												entry.note === "" ? null : entry.note,
+											]
+												.filter((part) => part !== null)
+												.join(" · ")}
+										</Text>
+									</VStack>
 									<HStack gap={2} vAlign="center">
 										<Text type="supporting" color="secondary">
 											{entry.delta >= 0 ? `+${entry.delta}` : entry.delta}
@@ -130,15 +142,24 @@ export function ProgressHistory({
 													icon: <MoreHorizontal aria-hidden />,
 												}}
 												items={[
+													// Headed by its number; see `numberTitle`.
 													...(canEdit
 														? [
 																{
-																	label: "Edit entry",
-																	icon: Pencil,
-																	endContent: (
-																		<ShortcutKey label={TASK_SHORTCUTS.edit} />
-																	),
-																	onClick: () => onEdit(entry),
+																	type: "section" as const,
+																	title: numberTitle("entry", entry.number),
+																	items: [
+																		{
+																			label: "Edit entry",
+																			icon: Pencil,
+																			endContent: (
+																				<ShortcutKey
+																					label={TASK_SHORTCUTS.edit}
+																				/>
+																			),
+																			onClick: () => onEdit(entry),
+																		},
+																	],
 																},
 															]
 														: []),
@@ -151,6 +172,7 @@ export function ProgressHistory({
 																{
 																	label: "Delete entry",
 																	icon: <Trash2 aria-hidden />,
+																	endContent: <ShortcutKey label="Del" />,
 																	variant: "destructive" as const,
 																	onClick: () => onDelete(entry),
 																},
@@ -160,15 +182,15 @@ export function ProgressHistory({
 											/>
 										) : null}
 									</HStack>
-								}
-							/>
+								</div>
+							</div>
 						))}
-					</List>
-					<ListPagination
-						page={paging.page}
-						total={paging.total}
-						onChange={paging.setPage}
-					/>
+						<ListPagination
+							page={paging.page}
+							total={paging.total}
+							onChange={paging.setPage}
+						/>
+					</VStack>
 				</Card>
 			)}
 		</VStack>

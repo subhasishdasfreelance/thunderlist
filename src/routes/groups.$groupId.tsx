@@ -12,7 +12,7 @@ import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
 import { BackButton } from "#/components/common/back-button";
-import { ItemNumber } from "#/components/common/item-number";
+import { numberTitle } from "#/components/common/item-number";
 import {
 	ITEM_KIND_ICONS,
 	ItemPickerDialog,
@@ -142,10 +142,7 @@ function GroupPage() {
 				<HStack gap={3} vAlign="center">
 					<GroupBadge group={group} size="lg" />
 					<VStack gap={0.5}>
-						<Heading level={1}>
-							<ItemNumber kind="group" number={group.number} />
-							{group.name}
-						</Heading>
+						<Heading level={1}>{group.name}</Heading>
 						<Text type="supporting">{describeContents(contents)}</Text>
 					</VStack>
 				</HStack>
@@ -170,10 +167,17 @@ function GroupPage() {
 								icon: <MoreHorizontal aria-hidden />,
 							}}
 							items={[
+								// Headed by its number; see `numberTitle`.
 								{
-									label: "Edit group",
-									icon: Pencil,
-									onClick: () => setIsEditing(true),
+									type: "section" as const,
+									title: numberTitle("group", group.number),
+									items: [
+										{
+											label: "Edit group",
+											icon: Pencil,
+											onClick: () => setIsEditing(true),
+										},
+									],
 								},
 								{ type: "divider" as const },
 								{

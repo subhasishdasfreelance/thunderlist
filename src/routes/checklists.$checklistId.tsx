@@ -21,7 +21,7 @@ import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
 import { DayStats } from "#/components/common/day-stats";
-import { ItemNumber } from "#/components/common/item-number";
+import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
@@ -590,10 +590,7 @@ function ChecklistDetailPage() {
 						{special === null ? null : (
 							<Icon icon={SPECIAL_CHECKLIST_ICONS[special]} color="secondary" />
 						)}
-						<Heading level={1}>
-							<ItemNumber kind="checklist" number={detail.number} />
-							{detail.title}
-						</Heading>
+						<Heading level={1}>{detail.title}</Heading>
 					</HStack>
 					{detail.description === "" ? null : (
 						<Text color="secondary">{detail.description}</Text>
@@ -613,21 +610,30 @@ function ChecklistDetailPage() {
 							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
+							// Headed by its number, looked up here rather than printed
+							// ahead of its name.
 							{
-								label: "Edit checklist",
-								icon: Pencil,
-								onClick: () => setIsEditOpen(true),
+								type: "section" as const,
+								title: numberTitle("checklist", detail.number),
+								items: [
+									{
+										label: "Edit checklist",
+										icon: Pencil,
+										onClick: () => setIsEditOpen(true),
+									},
+									// A notification to everyone who can see it; see
+									// `MessageDialog`.
+									...(team === null
+										? []
+										: [
+												{
+													label: "Message its people…",
+													icon: Megaphone,
+													onClick: () => setIsMessaging(true),
+												},
+											]),
+								],
 							},
-							// A notification to everyone who can see it; see `MessageDialog`.
-							...(team === null
-								? []
-								: [
-										{
-											label: "Message its people…",
-											icon: Megaphone,
-											onClick: () => setIsMessaging(true),
-										},
-									]),
 							// Every space has these two: tasks with nowhere else to go are
 							// put in the Inbox, and parked work in the Backlog.
 							...(special !== null

@@ -669,6 +669,19 @@ body {
 	}
 
 	/*
+	 * A dropdown with a label — the filters and orders above a list — wears a
+	 * ghost button's hover fill at rest, so it reads as a control rather than as
+	 * a caption. Pointing at it then stacks Astryx's hover overlay on top, so it
+	 * still answers the pointer. The ⋯ menus are icon-only, carry an aria-label,
+	 * and stay flat.
+	 */
+	.astryx-button[data-variant="ghost"][aria-haspopup="menu"]:not(
+			[aria-label]
+		) {
+		background-color: var(--color-overlay-hover);
+	}
+
+	/*
 	 * The urgent and important flags.
 	 *
 	 * A flag that is off is a plain ghost button; one that is on is tinted, warm

@@ -1,6 +1,5 @@
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import { ItemNumber } from "#/components/common/item-number";
 import { TagSegments } from "#/components/tags/tag-segments";
 import { unwrittenTags } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
@@ -24,7 +23,6 @@ export function TaggedTitle({
 	tags,
 	tagIds = [],
 	isMuted = false,
-	number,
 }: {
 	title: string;
 	tags: ReadonlyArray<Tag>;
@@ -32,13 +30,9 @@ export function TaggedTitle({
 	tagIds?: ReadonlyArray<string>;
 	/** Completed work is settled, not gone; it dims rather than disappears. */
 	isMuted?: boolean;
-	/** The task's number, drawn ahead of the title; see `ItemNumber`. */
-	number?: number;
 }) {
 	return (
 		<Text color={isMuted ? "secondary" : "primary"}>
-			{/* Outside the title, so copying a task never copies its number. */}
-			<ItemNumber kind="task" number={number} />
 			{/* What `useTaskCopy` copies when several tasks are selected. */}
 			<span data-task-title>
 				<TagSegments title={title} tags={tags} />

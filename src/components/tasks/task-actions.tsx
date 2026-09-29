@@ -29,6 +29,10 @@ export const TASK_SHORTCUTS = {
 	 * already resting on, for the thing done most.
 	 */
 	assign: " ",
+	/** Delete it, after the usual confirmation. Shown as "Del". */
+	delete: "delete",
+	/** A Mac's delete key sends Backspace, so that deletes too. */
+	deleteMac: "backspace",
 } as const;
 
 export type TaskQuickActions = {

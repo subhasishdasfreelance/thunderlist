@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
+import { numberTitle } from "#/components/common/item-number";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
 import { TaggedTitle } from "#/components/tags/tagged-title";
 import {
@@ -203,9 +204,17 @@ export function TaskRow({
 			...(actions.onToggleMine === undefined
 				? {}
 				: { [TASK_SHORTCUTS.assign]: actions.onToggleMine }),
+			// Whether it exists is a project manager's to change; see `Capability`.
+			...(canManageContent
+				? {
+						[TASK_SHORTCUTS.delete]: actions.onDelete,
+						[TASK_SHORTCUTS.deleteMac]: actions.onDelete,
+					}
+				: {}),
 		}),
 		[
 			actions,
+			canManageContent,
 			today,
 			isOnToday,
 			park,
@@ -225,7 +234,6 @@ export function TaskRow({
 			tags={tags}
 			tagIds={task.tagIds}
 			isMuted={task.completed}
-			number={task.number}
 		/>
 	);
 
@@ -415,11 +423,13 @@ export function TaskRow({
 						 * task, or this role, is left out whole.
 						 */
 						items={[
-							// Editing first: it is the reason this menu gets opened.
+							// Editing first: it is the reason this menu gets opened. Headed
+							// by the task's number, which is looked up here rather than
+							// printed on every row.
 							{
 								type: "section" as const,
 								id: "details",
-								title: "Details",
+								title: numberTitle("task", task.number) ?? "Details",
 								items: [
 									{
 										label: "Edit",
@@ -494,6 +504,7 @@ export function TaskRow({
 										{
 											label: "Delete task",
 											icon: Trash2,
+											endContent: <ShortcutKey label="Del" />,
 											variant: "destructive" as const,
 											onClick: actions.onDelete,
 										},

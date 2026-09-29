@@ -3,7 +3,6 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import { ItemNumber } from "#/components/common/item-number";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	formatExpectedTasks,
@@ -63,7 +62,6 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<HStack gap={1.5} vAlign="center">
-						<ItemNumber kind="tag" number={tag.number} />
 						<Token
 							size="sm"
 							color={tag.color}

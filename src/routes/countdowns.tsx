@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ItemNumber } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
@@ -159,10 +158,7 @@ function CountdownTile({
 					<span className="thunderlist-countdown-unit">{ahead}</span>
 				</>
 			)}
-			<span className="thunderlist-countdown-title">
-				<ItemNumber kind="countdown" number={countdown.number} />
-				{countdown.title}
-			</span>
+			<span className="thunderlist-countdown-title">{countdown.title}</span>
 			<span className="thunderlist-countdown-date">
 				{formatDateWithWeekday(countdown.date)}
 			</span>

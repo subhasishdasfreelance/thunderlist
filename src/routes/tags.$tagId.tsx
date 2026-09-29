@@ -23,7 +23,7 @@ import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
 import { DayStats } from "#/components/common/day-stats";
-import { ItemNumber } from "#/components/common/item-number";
+import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
@@ -661,10 +661,7 @@ function TagDetailPage() {
 				<VStack gap={0.5}>
 					<HStack gap={2} vAlign="center">
 						{Mark === null ? null : <Icon icon={Mark} color="secondary" />}
-						<Heading level={1}>
-							<ItemNumber kind="tag" number={detail.number} />
-							{detail.name}
-						</Heading>
+						<Heading level={1}>{detail.name}</Heading>
 					</HStack>
 					{subtitle === "" ? null : (
 						// Formatted in the viewer's locale, so server and client can differ.
@@ -687,10 +684,17 @@ function TagDetailPage() {
 							icon: <MoreHorizontal aria-hidden />,
 						}}
 						items={[
+							// Headed by its number; see `numberTitle`.
 							{
-								label: "Edit tag",
-								icon: Pencil,
-								onClick: () => setIsEditOpen(true),
+								type: "section" as const,
+								title: numberTitle("tag", detail.number),
+								items: [
+									{
+										label: "Edit tag",
+										icon: Pencil,
+										onClick: () => setIsEditOpen(true),
+									},
+								],
 							},
 							// Today can be renamed but never deleted: the bolt on every row
 							// writes it.
