@@ -9,7 +9,7 @@
  * is why one drawn a moment ago has none until the save lands; see
  * `nextNumber`.
  */
-export const NUMBER_PREFIXES = {
+const NUMBER_PREFIXES = {
 	task: "T",
 	checklist: "C",
 	tracker: "TR",

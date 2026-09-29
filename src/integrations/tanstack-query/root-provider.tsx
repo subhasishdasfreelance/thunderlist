@@ -41,11 +41,13 @@ if (typeof window !== "undefined") {
 
 export function getContext() {
 	/*
-	 * Neither catching-up happens while a change is still saving — the interval
-	 * below, nor coming back to the window. A read sent in the middle of a
-	 * change comes back without it and would blink out what the screen has
-	 * already drawn; the change's own refetch, once it lands, is what every
-	 * screen catches up on. See `useApplyChange`.
+	 * No catching-up happens while a change is still saving — the interval
+	 * below, coming back to the window, or opening a screen whose data is
+	 * already cached. A read sent in the middle of a change comes back without
+	 * it and would blink back what the screen has already drawn — a tag just
+	 * deleted, shown on the Tags screen the delete lands on, until the save
+	 * finishes. The change's own refetch, once it lands, is what every screen
+	 * catches up on. See `useApplyChange`.
 	 */
 	const queryClient: QueryClient = new QueryClient({
 		defaultOptions: {
@@ -53,6 +55,7 @@ export function getContext() {
 				refetchInterval: () =>
 					queryClient.isMutating() > 0 ? false : REFRESH_MS,
 				refetchOnWindowFocus: () => queryClient.isMutating() === 0,
+				refetchOnMount: () => queryClient.isMutating() === 0,
 			},
 		},
 	});

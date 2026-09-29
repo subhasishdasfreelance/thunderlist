@@ -14,7 +14,7 @@ import { idSchema } from "./common";
  * so nobody's arranging loses a place in the order they cannot see.
  */
 
-export const ARRANGED_LISTS = ["checklists", "trackers", "tags"] as const;
+const ARRANGED_LISTS = ["checklists", "trackers", "tags"] as const;
 
 export type ArrangedList = (typeof ARRANGED_LISTS)[number];
 

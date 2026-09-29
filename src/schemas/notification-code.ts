@@ -17,7 +17,7 @@ import { emailSchema } from "./common";
  * and its admin can, as only they can message it, and a team's code stops
  * working once whoever made it no longer can.
  */
-export const CODE_KINDS = ["device", "people", "team"] as const;
+const CODE_KINDS = ["device", "people", "team"] as const;
 
 export type CodeKind = (typeof CODE_KINDS)[number];
 
@@ -28,7 +28,7 @@ export const notificationCodeSchema = v.pipe(
 	v.regex(/^ntf_[0-9a-z]{32}$/, "That is not a notification code"),
 );
 
-export const codeRecipientsSchema = v.variant("kind", [
+const codeRecipientsSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("device"),
 		/** The push subscription of the device it was made on. */

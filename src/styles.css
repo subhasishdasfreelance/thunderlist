@@ -73,6 +73,7 @@ body,
 	z-index: -1;
 	overflow: hidden;
 	pointer-events: none;
+	transition: --deco-1 var(--duration-slow) var(--ease-standard);
 	background: linear-gradient(
 		180deg,
 		var(--deco-top) 30%,
@@ -101,8 +102,73 @@ body,
 	height: auto;
 	translate: -50% -50%;
 	overflow: visible;
-	opacity: var(--deco-shape);
+	opacity: calc(var(--deco-shape) * var(--deco-fade));
 	mix-blend-mode: var(--deco-blend);
+}
+
+/*
+ * Moving between parts of the app drawn differently, one drawing gives way to
+ * the other; see `Scenery`. What fades is each shape's own opacity, through
+ * `--deco-fade`, not the drawing as a whole: a drawing faded as one would be
+ * blended as one, and its shapes would stop multiplying into the wash until
+ * the fade ended, then snap. The wash's colour eases across with it.
+ */
+@property --deco-fade {
+	syntax: "<number>";
+	inherits: true;
+	initial-value: 1;
+}
+
+@property --deco-1 {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: transparent;
+}
+
+.thunderlist-scenery-art {
+	position: absolute;
+	inset: 0;
+}
+
+.thunderlist-scenery-art[data-entering] {
+	animation: thunderlist-deco-in var(--duration-slow) var(--ease-standard) both;
+}
+
+.thunderlist-scenery-art[data-leaving] {
+	animation: thunderlist-deco-out var(--duration-slow) var(--ease-standard)
+		both;
+}
+
+@keyframes thunderlist-deco-in {
+	from {
+		--deco-fade: 0;
+	}
+	to {
+		--deco-fade: 1;
+	}
+}
+
+@keyframes thunderlist-deco-out {
+	from {
+		--deco-fade: 1;
+	}
+	to {
+		--deco-fade: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.thunderlist-scenery {
+		transition: none;
+	}
+
+	.thunderlist-scenery-art[data-entering] {
+		animation: none;
+	}
+
+	.thunderlist-scenery-art[data-leaving] {
+		display: none;
+	}
 }
 
 /* What keeps the top light: the shapes fade out before they reach it. */
@@ -2414,18 +2480,34 @@ input[data-number-field]::-webkit-search-cancel-button {
 }
 
 /*
- * A finger is wider than a pointer. The buttons on a task row stay drawn at
- * their size, but each takes 44px of the screen to be pressed in, with room
- * between them; the checkbox's hit area grows the same way around the box.
+ * A finger is wider than a pointer. The buttons on a task row are drawn at the
+ * size they are with a mouse — so a flag that is on, or a button being
+ * pressed, lights the same small square — but each takes 44px of the screen
+ * to be pressed in, an invisible area around it, spaced so no two overlap.
+ * The checkbox's hit area grows the same way around the box.
  */
 @media (pointer: coarse) {
 	.thunderlist-row-buttons {
-		gap: 0.25rem;
+		gap: calc(44px - var(--size-element-sm, 2rem));
+	}
+
+	/* Urgent and important share a group of their own; see `TaskFlagButtons`. */
+	.thunderlist-row-buttons .thunderlist-flag + .thunderlist-flag {
+		margin-inline-start: calc(44px - var(--size-element-sm, 2rem));
 	}
 
 	.thunderlist-row-buttons button {
-		min-width: 44px;
-		min-height: 44px;
+		position: relative;
+	}
+
+	.thunderlist-row-buttons button::after {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 44px;
+		height: 44px;
+		transform: translate(-50%, -50%);
 	}
 
 	.thunderlist-stage-check input[type="checkbox"] {

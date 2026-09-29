@@ -7,7 +7,7 @@ import { remindersQuery } from "#/queries/reminders";
 import type { ReminderTarget } from "#/schemas/reminder";
 
 /** This person's reminder about one thing: its time, or `null` for none. */
-export function useReminderTime(
+function useReminderTime(
 	target: ReminderTarget,
 	targetId: string | null,
 ): string | null {
@@ -20,7 +20,7 @@ export function useReminderTime(
 }
 
 /** Set, move or take away one reminder; drawn at once, like every change. */
-export function setReminder(
+function setReminder(
 	apply: ApplyChange,
 	target: ReminderTarget,
 	targetId: string,

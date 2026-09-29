@@ -27,7 +27,7 @@ export const ITEM_KIND_ICONS: Record<ItemKind, LucideIcon> = {
 	tag: Tags,
 };
 
-export const ITEM_KIND_LABELS: Record<ItemKind, string> = {
+const ITEM_KIND_LABELS: Record<ItemKind, string> = {
 	task: "Task",
 	checklist: "Checklist",
 	tracker: "Tracker",

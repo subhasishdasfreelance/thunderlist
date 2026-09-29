@@ -10,8 +10,11 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
+import { useEffect } from "react";
 import { StageDot } from "#/components/common/stage-dot";
+import { isTyping } from "#/lib/use-row-shortcuts";
 import { type Stage, stageColor } from "#/schemas/checklist";
+import { TASK_SHORTCUTS } from "./task-actions";
 
 /**
  * What can be done at once to the tasks a text selection picked out; see
@@ -32,6 +35,10 @@ import { type Stage, stageColor } from "#/schemas/checklist";
  * It floats at the foot of the screen, over the page, for as long as anything
  * is picked, so the rows picked can be far down a list and the bar still in
  * reach; on a phone it sits above the bottom bar.
+ *
+ * The tick key does for the pick what it does for one row: each on to its next
+ * stage, or done where none has one. With the rows picked from the keyboard
+ * (see `useTaskSelection`), a run of tasks moves on without the pointer.
  */
 export function SelectionBar({
 	count,
@@ -69,6 +76,33 @@ export function SelectionBar({
 	onDelete?: () => void;
 	onClear: () => void;
 }) {
+	const tick = onNextStage ?? onDone;
+
+	useEffect(() => {
+		if (tick === undefined) return;
+		const run = tick;
+
+		function handle(event: KeyboardEvent) {
+			if (event.key.toLowerCase() !== TASK_SHORTCUTS.complete) return;
+			if (event.metaKey || event.ctrlKey || event.altKey) return;
+			if (isTyping(event.target)) return;
+			if (
+				event.target instanceof Element &&
+				event.target.closest('dialog, [role="dialog"]')
+			) {
+				return;
+			}
+
+			// Ahead of the row under the pointer, which would tick itself too.
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			run();
+		}
+
+		window.addEventListener("keydown", handle, true);
+		return () => window.removeEventListener("keydown", handle, true);
+	}, [tick]);
+
 	return (
 		<div
 			role="toolbar"
@@ -80,6 +114,7 @@ export function SelectionBar({
 			{onNextStage === undefined ? null : (
 				<Button
 					label="Next stage"
+					tooltip={`Next stage (${TASK_SHORTCUTS.complete.toUpperCase()})`}
 					variant="secondary"
 					size="sm"
 					icon={<ArrowRight aria-hidden />}
@@ -108,6 +143,11 @@ export function SelectionBar({
 			{onDone === undefined ? null : (
 				<Button
 					label="Done"
+					tooltip={
+						onNextStage === undefined
+							? `Done (${TASK_SHORTCUTS.complete.toUpperCase()})`
+							: undefined
+					}
 					variant="secondary"
 					size="sm"
 					icon={<Check aria-hidden />}

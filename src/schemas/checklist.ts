@@ -215,7 +215,7 @@ export function stageProgress(
  * done — in review, say. A tag's bar draws these as one part; see
  * `tagStageParts`.
  */
-export function isUnderway(
+function isUnderway(
 	task: { stageId?: string | null; completed: boolean },
 	stages: ReadonlyArray<Stage>,
 ): boolean {

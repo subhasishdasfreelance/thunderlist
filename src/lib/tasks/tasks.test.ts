@@ -422,7 +422,14 @@ describe("notesAfterMove", () => {
 
 	it("adds the line after what the notes already said", () => {
 		expect(notesAfterMove("waiting on Ana\n", DESIGN, BACKLOG)).toBe(
-			"waiting on Ana\nAdded from Design system",
+			"waiting on Ana  \nAdded from Design system",
+		);
+	});
+
+	it("puts a second move on the next line, with no blank line between", () => {
+		const once = notesAfterMove(undefined, DESIGN, BACKLOG);
+		expect(notesAfterMove(once ?? undefined, BACKLOG, DESIGN)).toBe(
+			"Added from Design system  \nMoved from backlog",
 		);
 	});
 

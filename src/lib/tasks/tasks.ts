@@ -101,8 +101,13 @@ export function notesAfterMove(
 	const line =
 		at === undefined ? what : `${formatDeadline(at.date, at.time)} — ${what}`;
 
+	/*
+	 * On the next line, with no blank one between. Notes are Markdown, where a
+	 * bare newline runs the two lines together, so it is a line break: two
+	 * spaces, then the newline.
+	 */
 	const before = (notes ?? "").trim();
-	return before === "" ? line : `${before}\n${line}`;
+	return before === "" ? line : `${before}  \n${line}`;
 }
 
 /**

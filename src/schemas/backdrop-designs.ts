@@ -13,7 +13,7 @@
  * control.
  */
 
-export const SHAPES = [
+const SHAPES = [
 	"disc",
 	"ring",
 	"blob",

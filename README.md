@@ -52,7 +52,7 @@ code; where something could not be checked, the text says so.
 | **Tasks** | One line to add. Supports inline `#tags`, `&tracker` / `&checklist` links, `-u`/`-i`/`-ui` flags, a caption, Markdown notes, a type, assignees and dependencies. | `src/schemas/task.ts` |
 | **Tags** | Labels that group tasks across checklists. Each can have its own schedule, stage colours and access list. | `src/routes/tags.*.tsx` |
 | **Untagged** | Every task without a tag, reached from its card on the Tags screen. | `src/routes/tags.untagged.tsx` |
-| **Trackers** | Progress towards a measurable goal (book, course, project, fitness, custom). You enter readings, not increments. | `src/routes/trackers.*.tsx` |
+| **Trackers** | Progress towards a measurable goal (book, course, project, fitness, custom). You enter readings, not increments. A tracker's page has **Add to #today**, which adds a task standing for it to Today. | `src/routes/trackers.*.tsx` |
 | **Priority** | Every open task, grouped by urgent and important. | `src/routes/priority.tsx` |
 | **Across lists** | Every task across all checklists, grouped by stage name or by task type. It is served by the server a page at a time. | `src/routes/stages.tsx`, `src/data/across.server.ts` |
 | **Task types** | Labels for the kind of work, per space: Deliverable, Milestone, Issue, Routine, Meeting, Follow-up and Idea by default. Managed in Settings. | `src/schemas/task-type.ts` |
@@ -69,7 +69,7 @@ code; where something could not be checked, the text says so.
 | **Notification codes** | Secrets that let an outside script send notifications through `POST /api/notify`. | `src/schemas/notification-code.ts` |
 | **Backdrops** | A per-person choice of background design and palette for each section of the app. | `src/schemas/backdrop*.ts`, `src/components/shell/scenery.tsx` |
 | **Feedback** | "Send feedback…" in the account menu. It files a task in the maintainer's own account (see [Feedback](#710-feedback)). | `src/data/feedback.server.ts` |
-| **PWA** | Installable, with a service worker that caches the hashed bundle and keeps the last copy of Today for offline launches. | `public/sw.js`, `public/manifest.webmanifest` |
+| **PWA** | Installable, with a service worker that caches the hashed bundle and keeps the last copy of Today for offline launches, and home-screen shortcuts to Today, Checklists and Priority. | `public/sw.js`, `public/manifest.webmanifest` |
 
 Every change appears on screen immediately and is saved in the background (see
 [The change pipeline](#54-the-change-pipeline-writes)). Each change plays a
@@ -87,17 +87,17 @@ generated from them; do not edit it.
 | `/backlog` | `backlog.tsx` | Legacy address. Redirects to the Backlog checklist. |
 | `/login` | `login.tsx` | The only page available when signed out. Google sign-in. |
 | `/checklists` | `checklists.index.tsx` | Checklist cards, which can be ordered by hand. |
-| `/checklists/$checklistId` | `checklists.$checklistId.tsx` | Search params: `?task=` (scroll to and highlight a task), `?stage=`, `?page=`. |
-| `/priority` | `priority.tsx` | Open tasks by priority. |
-| `/stages` | `stages.tsx` | The **Across lists** screen. |
+| `/checklists/$checklistId` | `checklists.$checklistId.tsx` | Search params: `?task=` (scroll to and highlight a task), `?stage=`, `?page=`, plus the filters `?sort=`, `?who=`, `?tag=`, `?type=`. |
+| `/priority` | `priority.tsx` | Open tasks by priority. Takes the filter params (`?sort=`, `?who=`, `?tag=`, `?type=`). |
+| `/stages` | `stages.tsx` | The **Across lists** screen. `?by=type`, `?group=`, `?page=`, plus the filter params. |
 | `/tags` | `tags.index.tsx` | Tag cards. |
-| `/tags/$tagId` | `tags.$tagId.tsx` | A tag's page. Special tags use their kind as the id (`/tags/today`); see `tagParam`. |
+| `/tags/$tagId` | `tags.$tagId.tsx` | A tag's page. Special tags use their kind as the id (`/tags/today`); see `tagParam`. Search params: `?task=`, `?stage=` (a stage name), `?sort=`, `?who=`, `?type=`. |
 | `/tags/untagged` | `tags.untagged.tsx` | Tasks that have no tag. |
-| `/trackers`, `/trackers/$trackerId` | `trackers.*.tsx` | |
+| `/trackers`, `/trackers/$trackerId` | `trackers.*.tsx` | `/trackers?who=`; `/trackers/$trackerId?entry=` (bring a reading into view) and `?who=`. |
 | `/groups`, `/groups/$groupId` | `groups.*.tsx` | |
 | `/plans`, `/plans/$planId` | `plans.*.tsx` | |
-| `/countdowns` | `countdowns.tsx` | |
-| `/settings` | `settings.tsx` | Account, spaces and teams, task types, notifications, notification codes. |
+| `/countdowns` | `countdowns.tsx` | `?countdown=` brings one into view, from search. |
+| `/settings` | `settings.tsx` | Account, where you work (spaces and teams), task types, notifications, team messages, notification codes. |
 | `/api/auth/$` | `api/auth/$.ts` | Better Auth handler (GET and POST). |
 | `/api/reminders` | `api/reminders.ts` | Called by a scheduler to send due reminders. |
 | `/api/notify` | `api/notify.ts` | Public endpoint for notification codes. |
@@ -125,18 +125,27 @@ the moment of the keypress — and never fire while you are typing in a field
 | `#` | Tag it, choosing from a list |
 | `Space` | Assign to me, or unassign me (teams only) |
 | `D` | Delete |
-| `>` / `<` | Next / previous stage tab, on a page with stage tabs (`src/components/checklists/stage-tabs.tsx`) |
+| `>` / `<` | Next / previous stage tab on a checklist (`src/components/checklists/stage-tabs.tsx`), or next / previous choice in a tag page's stage filter (`stage-filter.tsx`) |
 | Drag across rows | Select several tasks (press and hold on a phone) on any task list — a checklist, a tag, Priority, Across lists, Untagged. The bar that appears moves them on, finishes, tags, moves or deletes them. `Esc` clears the selection |
+| `↑` / `↓` | Pick the previous / next task on the list, starting from the row under the pointer or the first on screen. `Shift` stretches the pick from where it started (`useTaskSelection` in `src/lib/use-task-selection.ts`) |
+| `X` with tasks picked | Each picked task on to its next stage, or done where none has one — the Selection bar's **Next stage** / **Done** (`SelectionBar`). It takes the key ahead of the row under the pointer |
 | `1`–`9` | Go to Today, Checklists, Priority, Across lists, Tags, Trackers, Groups, Plans, Countdowns |
-| `Ctrl+K` | Search |
+| `E` / `D` on a reading | On a tracker reading under the pointer: edit / delete (`progress-history.tsx`) |
+| `Ctrl+K` | Search (Cmd+K on a Mac). Works even while typing in a field |
 | `Ctrl+Z` | Undo the last task action. On a touch screen, each undoable action shows a toast with an **Undo** button instead |
+| `?` | Open the shortcuts and how-to guide (not while typing) |
+| `Tab` | In the quick-add field, take the highlighted suggestion |
 | `Esc` | Closes one layer at a time: first leaves the text field, then closes the popup, then clears toasts. Every press also lets go of the row under the pointer until the pointer moves (`src/lib/use-escape.ts`) |
 
 ### Writing a task
 
 The quick-add field is a `<textarea>`. Each **new line is a separate task**, so
 you can paste a list. **Enter** adds everything; **Shift+Enter** starts a new
-line. Parsing is in `src/lib/tags/inline-tags.ts`.
+line. Parsing is in `src/lib/tags/inline-tags.ts`. Typing `#` or `&` opens
+suggestions: tags (including new names) for `#`, existing trackers and
+checklists for `&`. **Tab** takes the highlighted one. On a phone, a round
+**+** floats above the bottom bar once the field has scrolled out of view;
+pressing it brings the field back and focuses it (`thunderlist-add-fab`).
 
 | You type | Effect |
 |---|---|
@@ -160,7 +169,7 @@ cannot create tags, so an unknown `#name` stays as plain text for them.
 | Data fetching | **TanStack Query** with `@tanstack/react-router-ssr-query` | Query option factories live in `src/queries/`. The SSR integration sends the server's cache down with the page. |
 | Validation | **Valibot** | Every server function input and every `Change` is a Valibot schema in `src/schemas/`, with messages written for users. |
 | Design system | **Astryx** (`@astryxdesign/core`, CLI `@astryxdesign/cli`), plus **Tailwind v4** utilities on top of Astryx tokens, and **StyleX** as an Astryx peer | Import components per entry point, e.g. `@astryxdesign/core/Button`. The theme is compiled from `src/theme/thunderlist.theme.ts`. Icons come from `lucide-react`. |
-| Forms | `@tanstack/react-form` is a dependency | Most dialogs manage their own state; check an existing dialog before assuming a pattern. |
+| Forms | `@tanstack/react-form` | Used by one dialog, `task-rename-dialog.tsx`; the others keep their own state. Check an existing dialog before assuming a pattern. |
 | Database | **MongoDB**, official driver **pinned to v6** | A single `thunderlist` database. Server-only access through `src/lib/mongo/client.server.ts`. |
 | Auth | **Better Auth** with Google as the only provider | `src/lib/auth.ts` (config), `src/lib/auth.server.ts` (`currentUser`, `requireUser`), `src/lib/auth-client.ts` (browser). |
 | Push | **web-push** (VAPID) | Reminders, team messages, assignments and notification codes. |
@@ -272,7 +281,7 @@ All scripts are defined in `package.json`.
 | `bun run theme:build` | Compiles the theme to `src/theme/thunderlist.css` and `.js` | Run after editing `thunderlist.theme.ts`. |
 | `bun run theme:check` | Fails if the compiled theme is stale | |
 | `bun run generate-routes` | `tsr generate` | The Vite plugin normally does this for you. |
-| `bun test` | Bun's test runner over `**/*.test.ts` | About 240 tests, runs in well under a second. |
+| `bun test` | Bun's test runner over `**/*.test.ts` | About 260 tests, runs in well under a second. |
 | `bun run typecheck` | `tsc --noEmit` | |
 | `bun run check` | `biome check` (lint + format + import order, report only) | Add `--write` via `bunx biome check --write` to fix. |
 | `bun run lint` / `bun run format` | `biome lint` / `biome format` | Report only unless you pass `--write`. |
@@ -281,11 +290,11 @@ Before pushing, run `bun test`, `bun run typecheck` and `bun run check`. There
 is no CI config in the repo and no git hook, so nothing enforces these.
 
 > When this guide was written, `bun test` and `bun run typecheck` passed.
-> `bun run check` reported formatting differences in several files, including
-> `vite.config.ts` (which uses 2-space indentation and single quotes) and
-> `.vscode/*.json`, plus one `useExhaustiveDependencies` warning in
-> `src/components/checklists/task-row.tsx`. So `check` was not clean at the
-> time.
+> `bun run check` was not clean: `biome.json` (its `$schema` names 2.2.4
+> while the CLI is 2.4.5, plus formatting), `.vscode/settings.json`,
+> `.vscode/tasks.json`, `vite.config.ts` (formatting and import order), and
+> one `useExhaustiveDependencies` warning in
+> `src/components/checklists/task-row.tsx`.
 
 ### 3.7 Running database scripts: use Node
 
@@ -326,7 +335,7 @@ Guidelines:
 │  ├─ sw.js                  Service worker (production only)
 │  ├─ manifest.webmanifest   PWA manifest (start_url /tags/today)
 │  ├─ offline.html           Offline fallback page
-│  ├─ icons/, logo.*, fonts/ Icons, logo, wordmark font
+│  ├─ icons/, logo.*, fonts/ Icons (incl. the monochrome badge-96.png), logo, wordmark font
 ├─ src/
 │  ├─ routes/                File-based routes (pages + /api/* server routes)
 │  ├─ routeTree.gen.ts       GENERATED route tree — do not edit
@@ -346,18 +355,26 @@ Guidelines:
 │  │  ├─ tags/inline-tags.ts Pure #tag / &tracker / -u -i parsing
 │  │  ├─ format-date.ts      The one date format: "8th Oct, 2026"
 │  │  ├─ sounds.ts           Synthesised change sounds
+│  │  ├─ filter-search.ts    Sort and filters kept in the URL (?sort= ?who= ?tag= ?type=)
+│  │  ├─ device-data.ts      Safe localStorage helpers
+│  │  ├─ push.ts             Turning this device's notifications on and off
+│  │  ├─ toasts.ts, errors.ts   Toasts (with "close all" for Esc); AppError
+│  │  ├─ use-task-copy.ts    Copying several tasks copies just their titles and captions
 │  │  ├─ theme.ts, first-open.ts, chunk-reload.ts   Inline head scripts and recovery helpers
 │  │  └─ use-*.ts            React hooks (permissions, space, pages, pace, shortcuts, selection…)
-│  ├─ queries/               TanStack Query option factories; keys.ts holds every query key
+│  ├─ queries/               TanStack Query option factories; keys.ts holds every key but push-key
 │  ├─ schemas/               Valibot schemas + domain types + pure domain rules (shared client/server)
 │  ├─ components/            UI built from Astryx, grouped by domain
 │  │  ├─ shell/              App frame, nav, search, help, undo provider, notifications, backdrops
 │  │  ├─ checklists/, tasks/, tags/, trackers/, teams/, groups/, plans/, countdowns/, common/
+│  │  │  (tasks/index-task-list.tsx: the selectable task rows of Priority, Across lists and Untagged)
 │  ├─ integrations/tanstack-query/  QueryClient defaults (refetch policy) + devtools panel
 │  ├─ theme/                 thunderlist.theme.ts (source) → thunderlist.css/.js/.d.ts (generated)
 │  ├─ types/                 Ambient type augmentations (Astryx autoComplete prop)
 │  └─ styles.css             Global CSS: layer order, colour tokens, thunderlist-* classes
-├─ vite.config.ts            Vite + Nitro (cache headers for public files) + Tailwind + Start + React
+├─ vite.config.ts            Vite + TanStack devtools + Nitro (cache headers for public files) + Tailwind + Start + React
+├─ CLAUDE.md                 Engineering guidelines for AI-assisted work
+├─ skills-lock.json          Pinned versions of the agent skills in .claude/skills/
 ├─ tsconfig.json             Strict TS, `#/*` path alias (an unused `@/*` alias is also declared)
 ├─ biome.json                Formatter/linter config and the files it covers
 ├─ vercel.json               Vercel framework preset
@@ -463,7 +480,10 @@ screen and the Untagged page.
 - Queries refetch every **30 s** while the page is visible, and when the window
   regains focus (both the `focus` and `visibilitychange` events).
 - **Neither happens while a mutation is in flight**, because a read sent mid-change
-  would come back without the change and make it flicker.
+  would come back without the change and make it flicker. Nor does the refetch
+  a screen makes when it mounts over cached data (`refetchOnMount`): deleting
+  a tag and landing on the Tags screen would otherwise show the tag again
+  until the delete saved. Everything is refetched once the last change lands.
 - Some queries override this: `sessionQuery` (gcTime ∞, stale after 60 s),
   `spaceQuery` (refetches every 60 s to notice removal from a team),
   `backdropsQuery` / `pushKeyQuery` (never stale), and `arrangementsQuery`
@@ -510,7 +530,8 @@ backdrops (`preferences.functions.ts`).
 
 ```
 apply(change)
- ├─ whyBlocked(change)        refuse a tick on a task still waiting on something (src/lib/depends.ts)
+ ├─ refusal(change)           offline → "You're offline…" toast; else whyBlocked(change),
+ │                            a tick on a task still waiting on something (src/lib/depends.ts)
  ├─ playChangeSound(change)
  └─ mutation.mutate(change)
      onMutate:
@@ -523,7 +544,8 @@ apply(change)
        - a change naming a checklist still being created waits for it (creatingChecklists)
        - applyChangeFn({ data: { change } })
      retry: only while navigator.onLine is false, so a dropped connection retries when it returns
-     onError: restore(snapshot); reset caches of a never-saved checklist/tracker; toast the message
+     onError: restore(snapshot), then re-apply later pending changes over it; forget the undo
+              step; reset caches of a never-saved checklist/tracker; toast the message
      onSettled: if this was the last pending mutation → invalidateQueries() (everything)
 ```
 
@@ -546,11 +568,16 @@ change in one place.
    - **Access level** on the thing touched (`assertLevel` / `assertTaskAllowed`),
      e.g. `full` to update or delete a checklist, `edit` to update a task or
      record a reading.
-2. `includingActor(scope, change)`. When a change sets an access list, the
+2. `assertReachesAdded`: tagging a task, or making it wait on something,
+   needs read access to that thing; `task.create` checks each tag too.
+3. `keepingHiddenTags`: an edit's tag list keeps the tags the editor cannot
+   see, so emptying a task's tags cannot uncover it to the whole team.
+4. `includingActor(scope, change)`. When a change sets an access list, the
    person making it is added at `full`, so nobody locks themselves out.
-3. `run(ownerId, change, actor)`. A `switch` that dispatches to the repository
-   function.
-4. Errors: an `AppError` passes through with its user-facing message. Anything
+5. `run(ownerId, change, actor)`. A `switch` that dispatches to the repository
+   function. After it, `sendAssigned` notifies anyone the change newly
+   assigned (teams only); a failure there is logged, not thrown.
+6. Errors: an `AppError` passes through with its user-facing message. Anything
    else is logged and replaced with "Something went wrong while saving."
 
 **Guarantees:**
@@ -604,9 +631,9 @@ typing in a field).
 | Change | Undo | Asks first? |
 |---|---|---|
 | `task.update` | `task.update` with the previous values of the patched fields. Stage and completion are restored via `stageId`. | no |
-| `task.move` | Move back to the previous checklist | no |
+| `task.move` | Move back to the previous checklist, then a `task.update` restoring its stage, `completedAt`, `addedAt` and tags, which the move reset | no |
 | `task.create` | `task.delete` | yes |
-| `task.delete` | `task.create` with the same id, plus a `task.update` for the caption, notes, assignees, type, dependencies and stage | yes |
+| `task.delete` | `task.create` with the same id and number, plus a `task.update` for the caption, notes, assignees, type, dependencies and stage; tasks that waited on it wait on it again (`putBack`) | yes |
 | `task.deleteMany` | Recreate only the tasks this browser has cached | yes |
 | anything else | not undoable (it was done in a dialog) | — |
 
@@ -755,10 +782,17 @@ Rules to remember:
 
 - A task can be assigned to several people. **Space** toggles yourself on the
   task under the pointer, and **Assign people…** picks anyone.
-- Checklist and tag pages have a filter row (person, tag, type). Everything on
-  the screen follows it: progress, speed figures, chart, stage counts and the
-  list. The server computes the filtered figures (`checklistFilteredQuery`,
-  `tagForQuery`).
+- Checklist, Priority and Across lists pages filter by person, tag and type;
+  a tag's page by person, type and stage; trackers by person. On checklist and
+  tag pages everything on the screen follows the filter — progress, speed
+  figures, chart, stage counts and the list — except the tag page's stage
+  filter, which narrows only the list. The server computes the filtered
+  figures (`checklistFilteredQuery`, `tagForQuery`). The sort and filters are
+  kept in the address (`?sort=`, `?who=`, `?tag=`, `?type=`; see
+  `filterSearch`), so a reload, Back or a shared link shows the same rows.
+- The admin can delete a team, which deletes everything in its space,
+  including its reminders and notification codes, and then its members
+  (`deleteTeam`).
 - Tracker readings record `recordedBy`, which the server sets from the
   session.
 
@@ -794,7 +828,8 @@ Rules to remember:
   at the end of a title, and removing it deletes the `#name` wherever it was
   written (`setSpecialTag`). It starts with a 06:00–22:00 daily window.
   Clearing completed tasks on Today removes the tag rather than deleting the
-  tasks.
+  tasks. **Clear #today** takes it off every task on it; every tag page has the
+  same button (§7.3).
 - **Inbox** (`special: "inbox"`). `task.create` with `checklistId: null` goes
   into the Inbox (`createTask` in `checklist.server.ts`). On first sight of a
   space, `ensureInbox` moves any legacy task that has no checklist into it.
@@ -802,8 +837,12 @@ Rules to remember:
   `task.update` (removing Today) and a `task.move`. The move waits for the
   update to land (`moveToBacklog`). Moving work is a project manager's action.
   Any move into the Backlog adds "Added from <checklist>" to the end of the task's
-  notes, and any move out adds "Moved from backlog"; the caption is never
-  touched (`notesAfterMove` in `src/lib/tasks/tasks.ts`, applied by `moveTask`).
+  notes, and any move out adds "Moved from backlog", each led by when; the
+  caption is never touched (`notesAfterMove` in `src/lib/tasks/tasks.ts`,
+  applied by `moveTask` and drawn by `patchFor`). Each line goes on the next
+  line with no blank line between, joined with a Markdown hard break (two
+  spaces, then a newline), since notes are Markdown and a bare newline would
+  run the lines together in Preview.
   The Backlog used to be a special tag; `ensureBacklog` migrates such tasks
   into the checklist and deletes the old tag.
 - Special checklists and tags are identified by `special`, never by title,
@@ -819,12 +858,20 @@ Rules to remember:
   task, checklist and tracker (`deleteTag`), and from dependency lists.
 - A checklist's `tagIds` are copied onto every task in it, including tasks
   added later. They are removed again when the checklist drops the tag, or
-  when a task leaves the checklist.
+  when a task leaves the checklist, unless the task's title still says
+  `#name`: that tag was typed, not inherited (`untypedTags`).
 - A tag can have a start date, a deadline (with time), a daily window, a
   description, an access list and per-stage colours. Every field is optional,
   because tags are usually born mid-sentence.
 - Autocomplete on `#` offers existing tags, and also offers new names, which
   become real tags.
+- Every tag's page (`src/routes/tags.$tagId.tsx`) has the same filters —
+  person, type, stage and order — and, for anyone who can update tasks, a
+  **Clear #name** button that takes the tag off every task on it, open and
+  done, after asking. Each task stays in its checklist; the tag is untagged
+  the way the tag picker (or Today's bolt) would, so title and `tagIds` move
+  together (`clearTag`, `setTag`). It ignores the filters, as Today's always
+  did, and leaves trackers alone.
 
 ### 7.4 Task types
 
@@ -848,6 +895,8 @@ filtered and sorted by type; untyped tasks come last.
   tracker when it reaches its target. The client refuses early
   (`whyBlocked`), and the server checks again in `updateTask`. Deleting a
   dependency removes it from waiting tasks (`clearDependencies`).
+- Deleting a tracker or checklist turns the tasks linked to it into ordinary
+  tasks, done if it was finished (`releaseFollowers`).
 
 ### 7.6 Ordering and paging
 
@@ -857,8 +906,13 @@ filtered and sorted by type; untyped tasks come last.
 - Lists of cards (checklists, trackers, tags) can be ordered by hand. That
   order is stored per space as `settings.arrangements` and written in one
   `arrangement.set`. Ids that no longer exist are ignored when drawing and
-  kept when writing. Which order a viewer sees (manual, newest, or most
-  behind) is kept in their browser.
+  kept when writing. Which order a viewer sees (the space's own order, newest,
+  or most behind) is remembered only while the app is open. It is not saved
+  anywhere, because someone else in the team may want to look at the list
+  another way.
+- A task moved to another stage, or to another checklist, goes to the top:
+  its `addedAt` is re-stamped. A move to another checklist also starts it at
+  the first stage.
 - Pages have 20 rows. A `?task=` link opens on the page and stage holding
   that task, and highlights it (`reveal` in `taskPageSchema`,
   `useFocusTask`).
@@ -873,7 +927,8 @@ filtered and sorted by type; untyped tasks come last.
   `recordedAt`, then `entryId`) and recomputed whenever a reading changes
   (`deriveCurrentValue`). The tracker list is therefore one query.
 - `startValue` is where the count stood on day one. Progress, pace and charts
-  measure from there.
+  measure from there. With no readings yet, changing `startValue` moves
+  `currentValue` with it.
 - Types are `book`, `course`, `project`, `fitness` and `custom`, each with a
   default unit. Books and courses cannot overshoot their target
   (`allowsOvershoot`).
@@ -899,6 +954,8 @@ with an atomic `$inc` on `counters` (`nextNumber`). Something drawn
 optimistically therefore has no number until its save lands. `ensureNumbered`
 backfills unnumbered documents once per space per server process. Search
 accepts `T-42`, `t42`, `tr 7`, `#42` or a bare `42` (`parseNumberQuery`).
+An undone delete puts the task back under its old number, if no other task
+has taken it.
 
 ### 7.9 Groups, plans and countdowns
 
@@ -922,7 +979,9 @@ them, and changing them needs `manageContent`.
 `chk_feedback_<ownerId>`, titled `thunderlist-feedback`, in the account of the
 hard-coded `RECIPIENT` address in `src/data/feedback.server.ts`. If that
 account has never signed in, sending fails with a friendly error. Change
-`RECIPIENT` if you fork the app.
+`RECIPIENT` if you fork the app. The dialog also credits the author, with a
+link to their LinkedIn profile (`AUTHOR_LINKEDIN` in
+`src/components/shell/feedback-dialog.tsx`), which opens in a new tab.
 
 ---
 
@@ -965,7 +1024,7 @@ edits, moves and searches are single targeted writes.
 | Entity | Fields |
 |---|---|
 | Checklist | `checklistId`, `number`, `title`, `description`, `startDate`, `deadline`, `deadlineTime`, `dailyWindow`, `tagIds`, `access`, `stages`, `special`, `createdAt`, `updatedAt` (legacy `visibleTo`) |
-| Task | `taskId`, `number`, `checklistId`, `title`, `completed`, `completedAt` (set by the server), `addedAt`, `tagIds`, `trackerId`, `linkedChecklistId`, `urgent`, `important`, `caption`, `notes` (Markdown), `assignees`, `stageId`, `typeId`, `dependsOn`. There is no `updatedAt` and no position. |
+| Task | `taskId`, `number`, `checklistId`, `title`, `completed`, `completedAt` (set by the server, except when an undo sends back the old value), `addedAt`, `tagIds`, `trackerId`, `linkedChecklistId`, `urgent`, `important`, `caption`, `notes` (Markdown), `assignees`, `stageId`, `typeId`, `dependsOn`. There is no `updatedAt` and no position. |
 | Tracker | `trackerId`, `number`, `title`, `caption`, `type`, `description`, `unit`, `targetValue`, `startValue`, `currentValue`, `coverUrl`, `author`, `startDate`, `deadline`, `deadlineTime`, `tagIds`, `assignees`, `access`, `createdAt`, `updatedAt` |
 | Entry | `entryId`, `number`, `trackerId`, `recordedAt` (`YYYY-MM-DD`), `value`, `note`, `recordedBy`, `updatedAt` |
 | Tag | `tagId`, `number`, `name`, `color`, `special`, `description`, `startDate`, `deadline`, `deadlineTime`, `dailyWindow`, `access`, `stageColors`, `createdAt`, `updatedAt` |
@@ -1081,7 +1140,25 @@ Several of these (`ensureInbox`, `ensureBacklog`, `ensureNumbered`) cache
 - **Backdrops**: each section (Today, Checklists, …) draws a background of big
   flat shapes (`src/schemas/backdrop-designs.ts`, `BackdropArt`, `Scenery`).
   They are drawn in code, with no image files. Each person picks a design and
-  palette per section; the choice is stored in `preferences`.
+  palette per section; the choice is stored in `preferences`. Moving to a
+  section drawn differently cross-fades the two drawings over
+  `--duration-slow` and eases the wash colour across (a registered
+  `--deco-1`). The fade is on each shape's opacity through `--deco-fade`,
+  not on the drawing as a whole, so shapes keep blending into the wash
+  throughout. Reduced motion swaps them at once.
+- **Touch targets**: on a coarse pointer the buttons on a task row are drawn
+  at their mouse size (so a lit flag or pressed button is the same small
+  square), with an invisible 44px pressable area around each, spaced so no
+  two overlap (`.thunderlist-row-buttons` in `styles.css`). The checkbox's
+  hit area grows the same way.
+- **Phone layout**: at 768px and below, a bottom bar replaces the side nav:
+  Today, Checklists, Priority, Tags and **More** (Across lists, Trackers,
+  Groups, Plans, Countdowns; `isInMore` in `nav-items.ts`). The shortcuts
+  button is hidden on touch screens (`thunderlist-keyboard-only`), and the
+  page's background choice moves into the account menu.
+- **Copying tasks**: when a text selection runs across several task titles,
+  the clipboard gets just their titles and captions, one blank line apart
+  (`src/lib/use-task-copy.ts`).
 - **Dates** are shown one way everywhere: `8th Oct, 2026`
   (`src/lib/format-date.ts`). The formatting is English and not
   locale-driven, so server and client output match.
@@ -1122,11 +1199,19 @@ with stale-while-revalidate (`vite.config.ts`).
    trimmed to 200 entries).
 2. Pages come from the network, with navigation preload.
 3. The last copy of `/tags/today` and what it loads is kept
-   (`thunderlist-pages-v1`), so the app can launch instantly and offline. It
-   is cleared on sign-out (`user-menu.tsx`) and on a space switch.
+   (`thunderlist-pages-v1`), so the app can launch instantly and offline.
+   `/tags/today` (with no query string) opens from that copy at once and is
+   refreshed behind it. A copy is used only while every `/assets/` file it
+   loads is still cached, and nothing is kept from a redirect or an error, so
+   a signed-out launch never shows the last account's list. It is cleared on
+   sign-out (`user-menu.tsx`) and on a space switch.
 4. A page that cannot be fetched and has no kept copy shows
    `public/offline.html` (`thunderlist-fallback-v1`). **Bump `FALLBACK`** in
    `sw.js` when that page changes, or installed copies keep the old one.
+5. A push is shown as a notification with `icon-192` and the monochrome
+   `badge-96.png`, plus an image if a notification code sends one. Tapping it
+   focuses an open app window and navigates there; an outside link opens a
+   new window.
 
 Server functions, auth and cross-origin requests bypass the worker. When a new
 worker takes over during a visit, the page reloads.
@@ -1139,7 +1224,9 @@ retrying.
 **Offline**: `useIsOnline()` shows `OfflineBanner` above the page, which stays
 on screen as it was, half-typed text included. New changes are refused with a
 toast until the connection is back (`useApplyChange`). Changes that fail because
-the connection dropped are retried when it returns.
+the connection dropped are retried when it returns. A spinner in the top bar
+shows while a save is in flight (`save-indicator.tsx`), and leaving the page
+then asks first (`beforeunload` in `__root.tsx`).
 
 `src/lib/first-open.ts` rearranges history on a fresh open so that **Back** from
 Today goes to Checklists instead of leaving the app.
@@ -1154,7 +1241,11 @@ Today goes to Checklists instead of leaving the app.
 - `GET` or `POST /api/reminders` with `Authorization: Bearer <CRON_SECRET>`
   runs `sendDueReminders`. Each reminder is sent at most once a day, and not
   if it is more than 3 hours late (`isDue`). A reminder about something
-  deleted is itself deleted. The response is `{ due, sent }`.
+  deleted, or that its person can no longer see (removed from the team, or
+  taken off the list), is itself deleted. One that fails is logged and
+  skipped without stopping the others. A reminder set for 23:58 that the
+  scheduler reaches at 00:03 still goes out, for the day before. Time zones
+  are validated (`isTimeZone`). The response is `{ due, sent }`.
 - **Something must call it every few minutes.** On Vercel Pro, add a cron to
   `vercel.json` (Vercel sends the `CRON_SECRET` header itself):
   ```json
@@ -1396,14 +1487,16 @@ Nothing forces all of these steps at compile time, so work through the list.
 ## 13. Testing
 
 - **Runner**: `bun test`, using `import { describe, expect, it } from "bun:test"`.
-  Tests are colocated as `*.test.ts` next to the code (15 files at the time of
+  Tests are colocated as `*.test.ts` next to the code (17 files at the time of
   writing). The `#/` alias resolves through `package.json` `imports`.
 - **What is covered**: pure logic, namely task ordering and paging
   (`tasks.test.ts`), progress, pace and velocity (`progress.test.ts`), date
   formatting, inline tag parsing, dependencies, access levels, visibility
   (`visibility.server.test.ts`, which tests pure helpers only), schemas
   (arrangement, countdown, notification code, number, reminder), search
-  result ranking, and optimistic cache patching (the largest suite).
+  result ranking, undo (`undo.test.ts`), where tasks land when a checklist's
+  stages change (`checklist.test.ts`), and optimistic cache patching (the
+  largest suite).
 - **Pattern for optimistic tests**: create a `new QueryClient()`, seed the
   relevant keys with `setQueryData` using `queryKeys`, call
   `applyOptimistically(client, change)`, and assert with `getQueryData`.
@@ -1496,8 +1589,6 @@ Things this guide could not fully verify:
   external scheduler exists). The repo only has `vercel.json` with the
   framework preset, and no cron.
 - **Which Nitro preset Vercel builds use.** It is auto-detected, not pinned.
-- **`@tanstack/react-form` usage.** It is a dependency, but this guide did not
-  trace where it is used.
 - **Signed-in UI flows.** These were read from code, not exercised in a
   browser.
 - **Contrast figures** in §9 are quoted from comments in `styles.css`, not

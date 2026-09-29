@@ -60,6 +60,12 @@ const GROUPS: Array<Group> = [
 				keys: ["Drag"],
 				what: "Select across rows to pick them — press and hold on a phone",
 			},
+			{ keys: ["↑", "↓"], what: "Pick the previous or next task" },
+			{ keys: ["Shift", "↑", "↓"], what: "Stretch the pick" },
+			{
+				keys: [TASK_SHORTCUTS.complete],
+				what: "Each picked task on to its next stage, or done",
+			},
 			{ keys: ["Esc"], what: "Drop the pick" },
 		],
 	},

@@ -18,6 +18,7 @@ import {
 	Megaphone,
 	MoreHorizontal,
 	Pencil,
+	TagX,
 	Trash2,
 	ZapOff,
 } from "lucide-react";
@@ -66,6 +67,7 @@ import {
 	resolveTags,
 	resolveTrackerName,
 	setSpecialTag,
+	setTag,
 	toggleAssignee,
 	updateTask,
 	useApplyChange,
@@ -123,7 +125,7 @@ import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
-/** A tag's open tasks a thousand at a time, for clearing Today in one go. */
+/** A tag's open tasks a thousand at a time, for clearing a tag in one go. */
 const ALL_OPEN: TaskPageView = { sort: "newest", limit: 1000 };
 
 export const Route = createFileRoute("/tags/$tagId")({
@@ -213,8 +215,8 @@ function TagDetailPage() {
 	const shownDeletingPicked = useHeld(deletingPicked);
 	const [isMessaging, setIsMessaging] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
-	// Taking Today off every task on it, asked about first; see `clearToday`.
-	const [isClearingToday, setIsClearingToday] = useState(false);
+	// Taking the tag off every task on it, asked about first; see `clearTag`.
+	const [isClearingTag, setIsClearingTag] = useState(false);
 	// Picked by hand; until then, the page `?task=` is on, or the first.
 	const [page, setPage] = useState<number | undefined>(undefined);
 	const [wantsCompleted, setWantsCompleted] = useState(false);
@@ -380,8 +382,8 @@ function TagDetailPage() {
 	const shownCompletedCount = useHeld(
 		isClearingCompleted ? completed.length : null,
 	);
-	const shownTodayTotal = useHeld(
-		isClearingToday ? (data?.progress.total ?? null) : null,
+	const shownClearTotal = useHeld(
+		isClearingTag ? (data?.progress.total ?? null) : null,
 	);
 
 	useFocusTask(focusTaskId);
@@ -588,22 +590,24 @@ function TagDetailPage() {
 	}
 
 	/**
-	 * Start the day afresh: Today taken off every task on it, open and done
-	 * alike. Each stays in its checklist, and each is untagged the way the bolt
-	 * would, so it is drawn at once.
+	 * The tag taken off every task on it, open and done alike — on Today, the
+	 * day started afresh. Each stays in its checklist, and each is untagged the
+	 * way the tag picker (or Today's bolt) would, so it is drawn at once.
 	 *
-	 * Today's figures and lists are emptied first, all at once; see
-	 * `emptyTagPage`. The screen holds only a page of Today, so the whole of it
-	 * is then read, and every task on it untagged together. That read goes
+	 * The tag's figures and lists are emptied first, all at once; see
+	 * `emptyTagPage`. The screen holds only a page of the tag, so the whole of
+	 * it is then read, and every task on it untagged together. That read goes
 	 * straight to the server rather than through the cache: every change drawn
 	 * above cancels the queries in flight.
 	 */
-	async function clearToday() {
+	async function clearTag() {
+		if (detail === null) return;
+		const tag = detail;
 		const onScreen = [
 			...(openResult.data?.items ?? []),
 			...(completedResult.data ?? []),
 		];
-		// A read of Today landing after this would put the tasks back.
+		// A read of the tag landing after this would put the tasks back.
 		await queryClient.cancelQueries({ queryKey: queryKeys.tag(tagId) });
 		emptyTagPage(queryClient, tagId);
 
@@ -612,7 +616,8 @@ function TagDetailPage() {
 			for (const { task } of entries) {
 				if (cleared.has(task.taskId)) continue;
 				cleared.add(task.taskId);
-				setSpecialTag(apply, task, "today", false, tags);
+				if (special === null) setTag(apply, task, tag, false);
+				else setSpecialTag(apply, task, special, false, tags);
 			}
 		};
 
@@ -878,12 +883,12 @@ function TagDetailPage() {
 				/>
 			) : null}
 
-			{/* On a phone, Today's clear button leaves the filters no room beside
-			    it, so the count and the filters take a line each there. */}
+			{/* On a phone, the clear button leaves the filters no room beside it,
+			    so the count and the filters take a line each there. */}
 			{detail.progress.total === 0 ? null : (
 				<div
 					className={
-						special === "today"
+						canUpdateTasks
 							? "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
 							: "flex flex-row items-center justify-between gap-2"
 					}
@@ -892,16 +897,20 @@ function TagDetailPage() {
 						<Text type="label" weight="semibold" color="secondary">
 							{openTotal} yet to complete
 						</Text>
-						{special === "today" &&
-						canUpdateTasks &&
-						detail.progress.total > 0 ? (
+						{canUpdateTasks ? (
 							<Button
 								label={`Clear #${detail.name}`}
 								tooltip={`Take #${detail.name} off every task on it`}
 								variant="ghost"
 								size="sm"
-								icon={<ZapOff aria-hidden />}
-								onClick={() => setIsClearingToday(true)}
+								icon={
+									special === "today" ? (
+										<ZapOff aria-hidden />
+									) : (
+										<TagX aria-hidden />
+									)
+								}
+								onClick={() => setIsClearingTag(true)}
 							/>
 						) : null}
 					</HStack>
@@ -1268,16 +1277,16 @@ function TagDetailPage() {
 			/>
 
 			<AlertDialog
-				isOpen={isClearingToday}
-				onOpenChange={setIsClearingToday}
+				isOpen={isClearingTag}
+				onOpenChange={setIsClearingTag}
 				title={`Clear #${detail.name}?`}
-				description={`#${detail.name} is taken off all ${shownTodayTotal} ${
-					shownTodayTotal === 1 ? "task" : "tasks"
+				description={`#${detail.name} is taken off all ${shownClearTotal} ${
+					shownClearTotal === 1 ? "task" : "tasks"
 				} on it, done or not. They stay in their checklists.`}
 				actionLabel="Clear"
 				onAction={() => {
-					void clearToday();
-					setIsClearingToday(false);
+					void clearTag();
+					setIsClearingTag(false);
 				}}
 			/>
 

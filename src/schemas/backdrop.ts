@@ -56,7 +56,7 @@ export const SECTION_PALETTES: Record<Section, PaletteId> = {
 };
 
 /** And the design each starts with, so no two neighbours look alike. */
-export const SECTION_DESIGNS: Record<Section, DesignId> = {
+const SECTION_DESIGNS: Record<Section, DesignId> = {
 	today: "sunrise",
 	checklists: "pebbles",
 	priority: "bauhaus",

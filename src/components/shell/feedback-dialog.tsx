@@ -1,5 +1,7 @@
 import { Button } from "@astryxdesign/core/Button";
-import { HStack } from "@astryxdesign/core/Stack";
+import { Link } from "@astryxdesign/core/Link";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Send, X } from "lucide-react";
 import { useState } from "react";
@@ -7,6 +9,8 @@ import { FormDialog } from "#/components/common/form-dialog";
 import { sendFeedbackFn } from "#/functions/feedback.functions";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
+
+const AUTHOR_LINKEDIN = "https://in.linkedin.com/in/subhasish-das-660a831b2";
 
 /**
  * Tell the person who makes Thunderlist what you think.
@@ -77,14 +81,22 @@ export function FeedbackDialog({
 				</HStack>
 			)}
 		>
-			<TextArea
-				autoComplete="off"
-				label="Your feedback"
-				rows={6}
-				value={message}
-				onChange={setMessage}
-				placeholder="The first line becomes its title."
-			/>
+			<VStack gap={4}>
+				<TextArea
+					autoComplete="off"
+					label="Your feedback"
+					rows={6}
+					value={message}
+					onChange={setMessage}
+					placeholder="The first line becomes its title."
+				/>
+				<Text type="supporting">
+					Thunderlist is made by Subhasish Das. Check out{" "}
+					<Link as="a" href={AUTHOR_LINKEDIN} isExternalLink hasUnderline>
+						Subhasish Das’ profile on LinkedIn
+					</Link>
+				</Text>
+			</VStack>
 		</FormDialog>
 	);
 }

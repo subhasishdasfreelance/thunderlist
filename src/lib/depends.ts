@@ -62,7 +62,7 @@ export function isItemDone(client: QueryClient, ref: ItemRef): boolean | null {
 }
 
 /** How a refusal names one thing: `task "Write the brief"`, `tag #launch`. */
-export function describeItem(client: QueryClient, ref: ItemRef): string {
+function describeItem(client: QueryClient, ref: ItemRef): string {
 	switch (ref.kind) {
 		case "task": {
 			const task = findCachedTask(client, ref.id)?.task;

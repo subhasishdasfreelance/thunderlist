@@ -9,7 +9,7 @@ import { idSchema, timeOfDaySchema } from "./common";
  * Each is the person's own: a reminder on a team's tag reminds whoever set it,
  * not the team.
  */
-export const REMINDER_TARGETS = ["tracker", "tag"] as const;
+const REMINDER_TARGETS = ["tracker", "tag"] as const;
 
 export type ReminderTarget = (typeof REMINDER_TARGETS)[number];
 
