@@ -1,5 +1,5 @@
 /**
- * The Across lists screen's tasks. Server only.
+ * The Across lists and Priority screens' tasks. Server only.
  *
  * Every other list in the app is read a page at a time — one stage of one
  * checklist, one page of one tag — and this is the same thing for the cut that
@@ -10,7 +10,8 @@
  *
  * The grouping is the one the screen already showed: by the name of the stage
  * each task is at (`stagesByName`), or by the kind of work it is
- * (`tasksByType`).
+ * (`tasksByType`) — or, for the Priority screen, by how urgent and important
+ * it is (`byPriority`).
  */
 
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
@@ -27,7 +28,13 @@ import {
 	stageProgress,
 	stagesByName,
 } from "#/schemas/checklist";
-import type { AcrossPageView, Task } from "#/schemas/task";
+import {
+	type AcrossPageView,
+	PRIORITY_LABELS,
+	PRIORITY_RANKS,
+	priorityRank,
+	type Task,
+} from "#/schemas/task";
 import { tasksByType } from "#/schemas/task-type";
 import { ensureInbox, withTrackedCompletion } from "./checklist.server";
 import { listTaskTypes } from "./settings.server";
@@ -110,6 +117,22 @@ async function readAcrossTasks(
 	};
 }
 
+/**
+ * The four corners of urgent and important, each with its open tasks, in
+ * order: the corner to do first, first. Finished work is in none of them —
+ * the question is what to do next.
+ */
+function byPriority(
+	tasks: ReadonlyArray<AcrossTask>,
+): Array<{ key: string; name: string; tasks: Array<AcrossTask> }> {
+	const open = tasks.filter((task) => !task.completed);
+	return PRIORITY_RANKS.map((rank) => ({
+		key: rank,
+		name: PRIORITY_LABELS[rank],
+		tasks: open.filter((task) => priorityRank(task) === rank),
+	}));
+}
+
 export async function getAcrossTasks(
 	userId: string,
 	view: AcrossPageView,
@@ -128,7 +151,9 @@ export async function getAcrossTasks(
 	const groups =
 		view.groupBy === "stage"
 			? stagesByName(checklists, narrowed)
-			: tasksByType(types, narrowed);
+			: view.groupBy === "type"
+				? tasksByType(types, narrowed)
+				: byPriority(narrowed);
 
 	const group = groups.find((each) => each.key === view.group) ?? groups[0];
 	const stagesOf = (checklistId: string | null) =>

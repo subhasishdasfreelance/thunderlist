@@ -18,5 +18,28 @@
 			"type": "image/png",
 			"purpose": "maskable"
 		}
+	],
+	"shortcuts": [
+		{
+			"name": "Today",
+			"url": "/tags/today",
+			"icons": [
+				{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+			]
+		},
+		{
+			"name": "Checklists",
+			"url": "/checklists",
+			"icons": [
+				{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+			]
+		},
+		{
+			"name": "Priority",
+			"url": "/priority",
+			"icons": [
+				{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
+			]
+		}
 	]
 }

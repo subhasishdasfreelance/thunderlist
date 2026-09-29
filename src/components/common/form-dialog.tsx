@@ -1,4 +1,5 @@
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
 import {
 	type FormEvent,
@@ -55,6 +56,13 @@ export function FormDialog({
 }) {
 	const formId = useId();
 	const actionsRef = useRef<HTMLDivElement>(null);
+	/*
+	 * The whole screen on a phone: a card floating in the middle of one is
+	 * three-quarters of its height at most, with the keyboard taking half of
+	 * that, and what is left of it scrolls. Full screen, the fields have the
+	 * room and the footer sits above the home indicator.
+	 */
+	const isPhone = useMediaQuery("(max-width: 768px)");
 
 	/*
 	 * Ctrl+Enter (⌘+Enter on a Mac) saves, from anywhere in the dialog — a
@@ -102,6 +110,7 @@ export function FormDialog({
 			 * form here is short enough to retype.
 			 */
 			purpose="info"
+			variant={isPhone ? "fullscreen" : "standard"}
 			width={width}
 		>
 			<Layout

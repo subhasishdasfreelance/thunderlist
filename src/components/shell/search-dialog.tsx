@@ -128,6 +128,7 @@ export function SearchDialog({
 					// Opening search is asking to type: the caret is waiting in the
 					// box, however it was opened.
 					hasAutoFocus
+					enterKeyHint="search"
 					placeholder="Search by name or number, like T-42"
 					value={query}
 					onChange={setQuery}
@@ -144,8 +145,10 @@ export function SearchDialog({
 					<Text color="secondary">Search is unavailable right now.</Text>
 				) : query.trim() === "" ? (
 					<Text color="secondary">
-						Type to search across checklists, tasks and trackers. ↑ ↓ to move,
-						Enter to open.
+						Type to search across checklists, tasks and trackers.{" "}
+						<span className="thunderlist-keyboard-only">
+							↑ ↓ to move, Enter to open.
+						</span>
 					</Text>
 				) : isSearching ? (
 					<SectionSpinner label="Searching…" />

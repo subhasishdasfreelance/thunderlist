@@ -175,6 +175,11 @@ export const taskFilterSchema = v.object({
 	tag: v.optional(idSchema),
 	/** Only the tasks of this kind, by id — or `NO_TYPE` for those with none. */
 	type: v.optional(idSchema),
+	/**
+	 * Only the tasks standing for this tracker, by id: whether a tracker is on
+	 * Today is whether Today has one; see its page.
+	 */
+	tracker: v.optional(idSchema),
 });
 
 export type TaskFilter = v.InferOutput<typeof taskFilterSchema>;
@@ -206,18 +211,22 @@ export const taskPageSchema = v.object({
 
 export type TaskPageView = v.InferOutput<typeof taskPageSchema>;
 
-/** How the Across lists screen cuts every task; see its page. */
-const GROUP_BYS = ["stage", "type"] as const;
+/**
+ * How every task is cut into groups: by stage or by type on the Across lists
+ * screen, and into the four corners of urgent and important on the Priority
+ * screen, which leaves finished work out; see `priorityRank`.
+ */
+const GROUP_BYS = ["stage", "type", "priority"] as const;
 
 export type GroupBy = (typeof GROUP_BYS)[number];
 
 /**
- * Which page of which group the Across lists screen is showing.
+ * Which page of which group the Across lists or Priority screen is showing.
  *
  * `group` is not an id: cut by stage a group is a stage *name*, lowercased,
  * since that is what checklists share; cut by type it is a type's id, or the
- * word for the tasks with none. With none asked for it is the first group of
- * whichever cut is shown.
+ * word for the tasks with none; by priority it is a `PriorityRank`. With none
+ * asked for it is the first group of whichever cut is shown.
  */
 export const acrossPageSchema = v.object({
 	groupBy: v.picklist(GROUP_BYS),
@@ -251,6 +260,11 @@ export const createTaskInputSchema = v.object({
 	linkedChecklistId: v.optional(v.nullable(idSchema), null),
 	urgent: v.optional(v.boolean(), false),
 	important: v.optional(v.boolean(), false),
+	/**
+	 * The number it had, for a deleted task put back by an undo; taken only
+	 * while no other task has it. A new task is given the next one.
+	 */
+	number: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
 
 /**
@@ -272,6 +286,13 @@ const taskPatchSchema = v.pipe(
 		stageId: v.optional(idSchema),
 		typeId: v.optional(v.nullable(idSchema)),
 		dependsOn: v.optional(dependsOnSchema),
+		/**
+		 * When it was finished, and where it sits in its list, as they were —
+		 * for an undo putting a task back. Otherwise the server stamps both
+		 * afresh as a task is ticked or moved on; see `updateTask`.
+		 */
+		completedAt: v.optional(v.nullable(v.pipe(v.string(), v.isoTimestamp()))),
+		addedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 	}),
 	v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 );

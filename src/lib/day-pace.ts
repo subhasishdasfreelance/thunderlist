@@ -37,11 +37,17 @@ export type DayPace = {
 export function dayPace(input: {
 	total: number;
 	completed: number;
+	/**
+	 * Of `completed`, how many were finished since today's window opened: the
+	 * speed is today's, not yesterday's still-ticked tasks spread over this
+	 * morning's first hour.
+	 */
+	completedToday: number;
 	now: Date;
 	/** Today's window, as two moments; see `todayWindow`. */
 	window: { start: number; end: number };
 }): DayPace {
-	const { total, completed, now, window } = input;
+	const { total, completed, completedToday, now, window } = input;
 
 	const hoursInWindow = (window.end - window.start) / MS_PER_HOUR;
 	const withinWindow = (hours: number) =>
@@ -59,7 +65,7 @@ export function dayPace(input: {
 	// An empty list has no pace to report; a rate over the first few minutes of
 	// the window is noise rather than information.
 	const perHour =
-		total === 0 || hoursElapsed < 0.25 ? null : completed / hoursElapsed;
+		total === 0 || hoursElapsed < 0.25 ? null : completedToday / hoursElapsed;
 	const expectedPerHour = total === 0 ? null : total / hoursInWindow;
 	const requiredPerHour =
 		total === 0

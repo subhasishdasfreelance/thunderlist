@@ -7,6 +7,7 @@ import {
 	Check,
 	FolderInput,
 	Tag as TagIcon,
+	Trash2,
 	X,
 } from "lucide-react";
 import { StageDot } from "#/components/common/stage-dot";
@@ -25,7 +26,8 @@ import { type Stage, stageColor } from "#/schemas/checklist";
  * handful of rows picked out is exactly what a move usually is: sorting a
  * dozen tasks into the lists they belong in, one pick rather than one menu
  * each. Tagging them is offered for the same reason, and is the other half of
- * that sort: what a dozen tasks have in common is usually one word.
+ * that sort: what a dozen tasks have in common is usually one word. Deleting
+ * them comes last, apart, asked about first by the page.
  *
  * It floats at the foot of the screen, over the page, for as long as anything
  * is picked, so the rows picked can be far down a list and the bar still in
@@ -39,6 +41,7 @@ export function SelectionBar({
 	onDone,
 	onMoveToChecklist,
 	onAddTag,
+	onDelete,
 	onClear,
 }: {
 	count: number;
@@ -59,6 +62,11 @@ export function SelectionBar({
 	 * it — picked in a dialog; see `TagTasks`.
 	 */
 	onAddTag?: () => void;
+	/**
+	 * Delete all of them, once the page has asked. Left out for anyone whose
+	 * role may not delete tasks; see `Capability`.
+	 */
+	onDelete?: () => void;
 	onClear: () => void;
 }) {
 	return (
@@ -124,6 +132,16 @@ export function SelectionBar({
 					size="sm"
 					icon={<FolderInput aria-hidden />}
 					onClick={onMoveToChecklist}
+				/>
+			)}
+
+			{onDelete === undefined ? null : (
+				<Button
+					label="Delete"
+					variant="destructive"
+					size="sm"
+					icon={<Trash2 aria-hidden />}
+					onClick={onDelete}
 				/>
 			)}
 

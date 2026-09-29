@@ -12,6 +12,8 @@ import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
 import { useTeam } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
+import { tagsQuery } from "#/queries/tags";
+import { trackersQuery } from "#/queries/trackers";
 import {
 	type MessageRecipients,
 	memberName,
@@ -21,6 +23,21 @@ import {
 } from "#/schemas/team";
 
 type Audience = MessageRecipients["kind"];
+
+/** Something whose people a message can be sent to, and is opened from. */
+export type MessagedItem = Extract<
+	MessageRecipients,
+	{ kind: "checklist" | "tag" | "tracker" }
+>;
+
+/** Its id, whichever of the three it is. */
+function idOf(item: MessagedItem): string {
+	return item.kind === "checklist"
+		? item.checklistId
+		: item.kind === "tag"
+			? item.tagId
+			: item.trackerId;
+}
 
 /** What the answer says: who took it, or that nobody could. */
 export function sentNote(people: number, devices: number): string {
@@ -35,8 +52,8 @@ export function sentNote(people: number, devices: number): string {
 /**
  * A message to people in the team being worked in, shown by their installed
  * app as a notification: everyone, everyone with one role, everyone who can
- * see one checklist, or one person. Opened from a checklist, it starts
- * addressed to that checklist's people.
+ * see one checklist, tag or tracker, or one person. Opened from one of those,
+ * it starts addressed to its people.
  * Someone whose device is off gets it once it is back on.
  *
  * Only for the team's project managers; the server checks that too. The
@@ -46,48 +63,66 @@ export function sentNote(people: number, devices: number): string {
 export function MessageDialog({
 	isOpen,
 	onOpenChange,
-	checklistId: startChecklistId,
+	from,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
-	/** The checklist it is opened from, whose people it starts addressed to. */
-	checklistId?: string;
+	/** What it is opened from, whose people it starts addressed to. */
+	from?: MessagedItem;
 }) {
 	const team = useTeam();
 	const toast = useToast();
 	const [audience, setAudience] = useState<Audience>("team");
 	const [role, setRole] = useState<TeamRole>("collaborator");
 	const [email, setEmail] = useState("");
-	const [checklistId, setChecklistId] = useState("");
+	// The checklist, tag or tracker picked for each of those audiences.
+	const [itemId, setItemId] = useState("");
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 
 	const members = team?.members ?? [];
-	const checklists = useQuery({ ...checklistsQuery(), enabled: isOpen }).data;
+	const checklists = useQuery({
+		...checklistsQuery(),
+		enabled: isOpen && audience === "checklist",
+	}).data;
+	const tags = useQuery({
+		...tagsQuery(),
+		enabled: isOpen && audience === "tag",
+	}).data;
+	const trackers = useQuery({
+		...trackersQuery(),
+		enabled: isOpen && audience === "tracker",
+	}).data;
 
-	// A fresh message each time, to everyone — or to the checklist it is from.
+	// A fresh message each time, to everyone — or to what it is opened from.
+	const fromKind = from?.kind;
+	const fromId = from === undefined ? undefined : idOf(from);
 	useEffect(() => {
 		if (!isOpen) return;
-		setAudience(startChecklistId === undefined ? "team" : "checklist");
+		setAudience(fromKind ?? "team");
 		setRole("collaborator");
 		setEmail("");
-		setChecklistId(startChecklistId ?? "");
+		setItemId(fromId ?? "");
 		setTitle("");
 		setBody("");
-	}, [isOpen, startChecklistId]);
+	}, [isOpen, fromKind, fromId]);
 
 	const to: MessageRecipients | null =
 		audience === "team"
 			? { kind: "team" }
 			: audience === "role"
 				? { kind: "role", role }
-				: audience === "checklist"
-					? checklistId === ""
+				: audience === "person"
+					? email === ""
 						? null
-						: { kind: "checklist", checklistId }
-					: email === ""
+						: { kind: "person", email }
+					: itemId === ""
 						? null
-						: { kind: "person", email };
+						: audience === "checklist"
+							? { kind: "checklist", checklistId: itemId }
+							: audience === "tag"
+								? { kind: "tag", tagId: itemId }
+								: { kind: "tracker", trackerId: itemId };
 	const canSend = to !== null && title.trim() !== "" && body.trim() !== "";
 
 	function send() {
@@ -143,10 +178,16 @@ export function MessageDialog({
 						{ value: "team", label: `Everyone in ${team?.name ?? "the team"}` },
 						{ value: "role", label: "Everyone with a role" },
 						{ value: "checklist", label: "Everyone on a checklist" },
+						{ value: "tag", label: "Everyone on a tag" },
+						{ value: "tracker", label: "Everyone on a tracker" },
 						{ value: "person", label: "One person" },
 					]}
 					value={audience}
-					onChange={(next) => setAudience(next as Audience)}
+					onChange={(next) => {
+						setAudience(next as Audience);
+						// A checklist's id names no tag, so the pick starts again.
+						setItemId("");
+					}}
 				/>
 				{audience === "role" ? (
 					<Selector
@@ -167,8 +208,32 @@ export function MessageDialog({
 							value: checklist.checklistId,
 							label: checklist.title,
 						}))}
-						value={checklistId}
-						onChange={setChecklistId}
+						value={itemId}
+						onChange={setItemId}
+					/>
+				) : null}
+				{audience === "tag" ? (
+					<Selector
+						label="Tag"
+						placeholder="Pick a tag"
+						options={(tags ?? []).map((tag) => ({
+							value: tag.tagId,
+							label: `#${tag.name}`,
+						}))}
+						value={itemId}
+						onChange={setItemId}
+					/>
+				) : null}
+				{audience === "tracker" ? (
+					<Selector
+						label="Tracker"
+						placeholder="Pick a tracker"
+						options={(trackers ?? []).map((tracker) => ({
+							value: tracker.trackerId,
+							label: tracker.title,
+						}))}
+						value={itemId}
+						onChange={setItemId}
 					/>
 				) : null}
 				{audience === "person" ? (

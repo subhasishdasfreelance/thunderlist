@@ -493,6 +493,47 @@ describe("applyOptimistically", () => {
 		expect(page?.groups[0]?.count).toBe(1);
 	});
 
+	it("moves a task flagged on the Priority screen to its new corner", () => {
+		const queryClient = client();
+		const view = {
+			groupBy: "priority" as const,
+			group: "none",
+			sort: "newest" as const,
+			limit: 20,
+		};
+		queryClient.setQueryData<AcrossPage>(queryKeys.acrossPage(view), {
+			items: [
+				{
+					...task({ taskId: "tsk_1" }),
+					checklistId: "chk_1",
+					checklistTitle: "chk_1",
+					caption: "",
+				},
+			],
+			total: 1,
+			page: 1,
+			key: "none",
+			groups: [
+				{ key: "urgent-important", name: "Both", count: 0 },
+				{ key: "urgent", name: "Urgent", count: 0 },
+				{ key: "important", name: "Important", count: 0 },
+				{ key: "none", name: "Neither", count: 1 },
+			],
+		});
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { urgent: true },
+		});
+
+		const page = queryClient.getQueryData<AcrossPage>(
+			queryKeys.acrossPage(view),
+		);
+		expect(page?.items).toEqual([]);
+		expect(page?.groups.map((group) => group.count)).toEqual([0, 1, 0, 0]);
+	});
+
 	it("puts a task typed on the Across screen at the top, newest first", () => {
 		const queryClient = new QueryClient();
 		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
@@ -642,6 +683,10 @@ describe("applyOptimistically", () => {
 			tag("tag_1"),
 			tag("tag_2"),
 		]);
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
+			...summary("chk_1"),
+			tagIds: ["tag_2"],
+		});
 		queryClient.setQueryData(
 			queryKeys.checklistPage("chk_1", VIEW),
 			stagePage([
@@ -661,6 +706,77 @@ describe("applyOptimistically", () => {
 
 		// The typed tag went with its text; the inherited one stayed.
 		expect(toDo(queryClient)?.items[0]?.tagIds).toEqual(["tag_2"]);
+	});
+
+	it("keeps a checklist's tag even when the title wrote it and no longer does", () => {
+		const queryClient = client();
+
+		queryClient.setQueryData<Array<Tag>>(queryKeys.tags, [tag("tag_2")]);
+		queryClient.setQueryData<ChecklistSummary>(queryKeys.checklist("chk_1"), {
+			...summary("chk_1"),
+			tagIds: ["tag_2"],
+		});
+		queryClient.setQueryData(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([
+				task({
+					taskId: "tsk_1",
+					title: "call vendor #tag_2",
+					tagIds: ["tag_2"],
+				}),
+			]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { title: "call vendor", tagIds: [] },
+		});
+
+		// As the server answers: the list's tag comes back; see `updateTask`.
+		expect(toDo(queryClient)?.items[0]?.tagIds).toEqual(["tag_2"]);
+	});
+
+	it("draws a finished task moved to another checklist at its Done stage", () => {
+		const queryClient = client();
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			summary("chk_1"),
+			summary("chk_2"),
+		]);
+		queryClient.setQueryData<ChecklistSummary>(
+			queryKeys.checklist("chk_2"),
+			summary("chk_2"),
+		);
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_2", VIEW),
+			stagePage([]),
+		);
+		queryClient.setQueryData<Array<Task>>(
+			queryKeys.checklistCompleted("chk_2"),
+			[],
+		);
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([task({ taskId: "tsk_1", completed: true, stageId: "done" })]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.move",
+			taskId: "tsk_1",
+			checklistId: "chk_2",
+		});
+
+		// Not at "To do", where it would sit until the server said Done.
+		expect(
+			queryClient.getQueryData<StagePage>(
+				queryKeys.checklistPage("chk_2", VIEW),
+			)?.items,
+		).toEqual([]);
+		expect(
+			queryClient
+				.getQueryData<Array<Task>>(queryKeys.checklistCompleted("chk_2"))
+				?.map((each) => each.taskId),
+		).toEqual(["tsk_1"]);
 	});
 
 	it("gives a task added to a checklist that checklist's tags", () => {
@@ -1272,18 +1388,18 @@ describe("applyOptimistically, moving a task", () => {
 });
 
 describe("applyOptimistically, on tasks standing for something", () => {
-	it("unticks the tasks following a tracker that is deleted", () => {
+	it("frees the tasks following a tracker that is deleted, ticked as they were", () => {
 		const queryClient = client();
-		queryClient.setQueryData<StagePage>(
-			queryKeys.checklistPage("chk_1", VIEW),
-			stagePage([
+		queryClient.setQueryData<Array<Task>>(
+			queryKeys.checklistCompleted("chk_1"),
+			[
 				task({
-					taskId: "tsk_1",
+					taskId: "tsk_2",
 					trackerId: "trk_1",
 					completed: true,
 					stageId: "done",
 				}),
-			]),
+			],
 		);
 
 		applyOptimistically(queryClient, {
@@ -1291,7 +1407,34 @@ describe("applyOptimistically, on tasks standing for something", () => {
 			trackerId: "trk_1",
 		});
 
-		expect(toDo(queryClient)?.items[0]?.completed).toBe(false);
+		const freed = findCachedTask(queryClient, "tsk_2")?.task;
+		expect(freed?.trackerId).toBeNull();
+		expect(freed?.completed).toBe(true);
+	});
+
+	it("frees the tasks standing for a checklist that is deleted", () => {
+		const queryClient = client();
+		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
+			summary("chk_1"),
+			summary("chk_2"),
+		]);
+		queryClient.setQueryData<ChecklistSummary>(
+			queryKeys.checklist("chk_2"),
+			summary("chk_2"),
+		);
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_2", VIEW),
+			stagePage([task({ taskId: "tsk_link", linkedChecklistId: "chk_1" })]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "checklist.delete",
+			checklistId: "chk_1",
+		});
+
+		const freed = findCachedTask(queryClient, "tsk_link")?.task;
+		expect(freed?.linkedChecklistId).toBeNull();
+		expect(freed?.completed).toBe(false);
 	});
 
 	it("ticks a task standing for a checklist once that checklist finishes", () => {

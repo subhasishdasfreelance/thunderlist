@@ -1,5 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { VStack } from "@astryxdesign/core/Stack";
@@ -38,6 +39,7 @@ export function TaskTypeDialog({
 	const types = useTaskTypes();
 	const { canManageContent } = usePermissions();
 	const [query, setQuery] = useState("");
+	const hasKeyboard = useMediaQuery("(pointer: fine)");
 	const [isManaging, setIsManaging] = useState(false);
 
 	// A fresh filter every time it opens.
@@ -84,8 +86,9 @@ export function TaskTypeDialog({
 						label="Find a type"
 						isLabelHidden
 						placeholder="Find a type, then Enter"
-						// Opened from the keyboard, so the keyboard carries on here.
-						hasAutoFocus
+						// Opened from the keyboard, so the keyboard carries on here. On a
+						// phone the keyboard would cover the list, so it waits for a tap.
+						hasAutoFocus={hasKeyboard}
 						value={query}
 						onChange={setQuery}
 						onEnter={() => {

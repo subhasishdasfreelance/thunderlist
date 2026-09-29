@@ -1,4 +1,5 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Button } from "@astryxdesign/core/Button";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	type ReactNode,
@@ -11,6 +12,7 @@ import {
 import { useApplyChange } from "#/lib/changes";
 import { useToast } from "#/lib/toasts";
 import { invertChange, UndoContext, type UndoStep, useUndo } from "#/lib/undo";
+import { useSpace } from "#/lib/use-team";
 import type { Change } from "#/schemas/change";
 
 /** How far back Ctrl+Z goes. Further than anyone reaches, short of a log. */
@@ -20,9 +22,10 @@ const DEPTH = 20;
  * Ctrl+Z, from anywhere in the app.
  *
  * Every change made while reading a list hands in its undo as it goes out; see
- * `invertChange`. They stack up here, and Ctrl+Z takes the top one off and
- * applies it. Undoing something that deletes a task or writes one back asks
- * first, as pressing the same thing on screen would; that question is drawn by
+ * `invertChange`. They stack up here, and Ctrl+Z — or, on a touch screen, the
+ * Undo on the toast each step raises — takes the top one off and applies it.
+ * Undoing something that deletes a task or writes one back asks first, as
+ * pressing the same thing on screen would; that question is drawn by
  * `UndoQuestion`, inside the theme, rather than here.
  *
  * Not while typing: a text field has an undo of its own, and taking Ctrl+Z off
@@ -37,18 +40,10 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	const client = useQueryClient();
 	const { applyAsync } = useApplyChange();
 	const toast = useToast();
-	const steps = useRef<Array<UndoStep>>([]);
+	// Each with the change it undoes, so a refused change's can be taken out,
+	// and when it was made.
+	const steps = useRef<Array<UndoStep & { source: Change; at: number }>>([]);
 	const [asking, setAsking] = useState<UndoStep | null>(null);
-
-	const remember = useCallback(
-		(change: Change) => {
-			const step = invertChange(client, change);
-			if (step === null) return;
-
-			steps.current = [...steps.current, step].slice(-DEPTH);
-		},
-		[client],
-	);
 
 	/*
 	 * Drawn at once, like any change, and said to be done at once too: the
@@ -75,6 +70,72 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 		[applyAsync, toast],
 	);
 
+	/** Take the last step back, asking first where it deletes or writes a task. */
+	const undoLast = useCallback(() => {
+		const step = steps.current[steps.current.length - 1];
+		if (step === undefined) {
+			toast({ body: "Nothing to undo.", type: "info", uniqueID: "undo" });
+			return;
+		}
+
+		steps.current = steps.current.slice(0, -1);
+		if (step.question === null) run(step);
+		else setAsking(step);
+	}, [run, toast]);
+
+	/*
+	 * On a touch screen there is no Ctrl+Z, so each step is offered as it is
+	 * made: a toast naming it, with Undo on it. Only the latest is offered —
+	 * each replaces the one before — as Undo takes the latest back. A keyboard
+	 * has the key, and a toast on every tick there would only be noise.
+	 */
+	const remember = useCallback(
+		(change: Change) => {
+			const inverse = invertChange(client, change);
+			if (inverse === null) return;
+
+			/*
+			 * Parking a task is an edit — Today taken off it — and then a move,
+			 * made together; see `moveToBacklog`. Undone, it is one thing done,
+			 * so the two are one step: moved back, then the edit put back.
+			 */
+			const top = steps.current[steps.current.length - 1];
+			const isParking =
+				top !== undefined &&
+				change.kind === "task.move" &&
+				top.source.kind === "task.update" &&
+				top.source.taskId === change.taskId &&
+				Date.now() - top.at < 1000;
+			const step = isParking
+				? { ...inverse, changes: [...inverse.changes, ...top.changes] }
+				: inverse;
+
+			steps.current = [
+				...(isParking ? steps.current.slice(0, -1) : steps.current),
+				{ ...step, source: change, at: Date.now() },
+			].slice(-DEPTH);
+
+			if (!window.matchMedia("(pointer: coarse)").matches) return;
+			const dismiss = toast({
+				body: `${step.label}.`,
+				type: "info",
+				uniqueID: "undo",
+				endContent: (
+					<Button
+						label="Undo"
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							dismiss();
+							undoLast();
+						}}
+					/>
+				),
+			});
+		},
+		[client, toast, undoLast],
+	);
+
 	useEffect(() => {
 		function isTyping(target: EventTarget | null): boolean {
 			return (
@@ -91,25 +152,33 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			if (isTyping(event.target)) return;
 
 			event.preventDefault();
-
-			const step = steps.current[steps.current.length - 1];
-			if (step === undefined) {
-				toast({ body: "Nothing to undo.", type: "info", uniqueID: "undo" });
-				return;
-			}
-
-			steps.current = steps.current.slice(0, -1);
-			if (step.question === null) run(step);
-			else setAsking(step);
+			undoLast();
 		}
 
 		window.addEventListener("keydown", handle);
 		return () => window.removeEventListener("keydown", handle);
-	}, [run, toast]);
+	}, [undoLast]);
+
+	const forget = useCallback((change: Change) => {
+		steps.current = steps.current.filter((step) => step.source !== change);
+	}, []);
+
+	/*
+	 * What was done in one space is not there to undo in another: the tasks
+	 * are the other space's, and the undo would be sent where they are not.
+	 * Switching space starts the history afresh. Nothing is known while the
+	 * new space is still being read, so that is waited out.
+	 */
+	const space = useSpace();
+	const where = space === null ? null : (space.team?.teamId ?? "own");
+	useEffect(() => {
+		if (where !== null) steps.current = [];
+	}, [where]);
 
 	const value = useMemo(
 		() => ({
 			remember,
+			forget,
 			asking,
 			confirm: () => {
 				if (asking !== null) run(asking);
@@ -117,7 +186,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			},
 			dismiss: () => setAsking(null),
 		}),
-		[remember, asking, run],
+		[remember, forget, asking, run],
 	);
 
 	return <UndoContext value={value}>{children}</UndoContext>;

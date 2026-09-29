@@ -22,6 +22,7 @@ import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
 import { type AccessEntry, type AccessLevel, reaches } from "#/schemas/access";
 import type { Change } from "#/schemas/change";
+import type { TaskPatch } from "#/schemas/task";
 import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
 	createChecklist,
@@ -39,7 +40,7 @@ import {
 	updateCountdown,
 } from "./countdown.server";
 import { createPlan, deletePlan, updatePlan } from "./plan.server";
-import { setReminder } from "./reminder.server";
+import { sendAssigned, setReminder } from "./reminder.server";
 import {
 	createGroup,
 	deleteGroup,
@@ -269,6 +270,9 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 			if (change.trackerId != null) {
 				assertLevel(scope, "trackers", change.trackerId, "read");
 			}
+			for (const tagId of change.tagIds) {
+				assertLevel(scope, "tags", tagId, "read");
+			}
 			return;
 
 		case "tracker.update":
@@ -303,6 +307,7 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 
 		case "task.update":
 			await assertTaskAllowed(scope, change.taskId, "edit");
+			await assertReachesAdded(scope, change.taskId, change.patch);
 			return;
 
 		case "tag.update":
@@ -397,6 +402,72 @@ async function assertTaskAllowed(
 }
 
 /**
+ * Refuse tagging a task with, or making it wait on, something this person
+ * cannot see. What it already carries is left alone — someone who could see
+ * it put it there — and only what the edit adds is asked about.
+ */
+async function assertReachesAdded(
+	scope: Scope,
+	taskId: string,
+	patch: TaskPatch,
+): Promise<void> {
+	if (patch.tagIds === undefined && patch.dependsOn === undefined) return;
+
+	const current = await collections();
+	const task = await current.tasks.findOne(
+		{ taskId, userId: scope.ownerId },
+		{ projection: { _id: 0, tagIds: 1, dependsOn: 1 } },
+	);
+	if (!task) return;
+
+	for (const tagId of patch.tagIds ?? []) {
+		if (!task.tagIds.includes(tagId)) assertLevel(scope, "tags", tagId, "read");
+	}
+
+	const had = task.dependsOn ?? [];
+	for (const ref of patch.dependsOn ?? []) {
+		if (had.some((each) => each.kind === ref.kind && each.id === ref.id)) {
+			continue;
+		}
+		if (ref.kind === "task") await assertTaskAllowed(scope, ref.id, "read");
+		else assertLevel(scope, `${ref.kind}s`, ref.id, "read");
+	}
+}
+
+/**
+ * A task's tags as an edit leaves them, keeping the ones this person cannot
+ * see: to them those do not exist, so leaving them out of the list they send
+ * is not taking them off. Otherwise emptying a task's tags could uncover it to
+ * the whole team; see `isTaskVisible`.
+ */
+async function keepingHiddenTags(
+	scope: Scope,
+	change: Change,
+): Promise<Change> {
+	if (
+		change.kind !== "task.update" ||
+		change.patch.tagIds === undefined ||
+		scope.hidden.tagIds.size === 0
+	) {
+		return change;
+	}
+
+	const current = await collections();
+	const task = await current.tasks.findOne(
+		{ taskId: change.taskId, userId: scope.ownerId },
+		{ projection: { _id: 0, tagIds: 1 } },
+	);
+	const sent = change.patch.tagIds;
+	const kept = (task?.tagIds ?? []).filter(
+		(tagId) => scope.hidden.tagIds.has(tagId) && !sent.includes(tagId),
+	);
+
+	return kept.length === 0
+		? change
+		: { ...change, patch: { ...change.patch, tagIds: [...sent, ...kept] } };
+}
+
+/**
  * Whoever keeps a checklist, a tag or a tracker to a few people is one of them
  * and runs it, so the list they choose never locks them out of what they are
  * working on — nor leaves it with nobody who can change it again.
@@ -447,11 +518,52 @@ function includingActor(scope: Scope, change: Change): Change {
 	}
 }
 
+/**
+ * Who had a task before a change that gives it to people, so whoever it adds
+ * can be told; see `sendAssigned`. `null` for any other change, and outside a
+ * team, where there is nobody else to tell.
+ */
+async function assigneesBefore(
+	scope: Scope,
+	change: Change,
+): Promise<ReadonlyArray<string> | null> {
+	if (
+		scope.team === null ||
+		change.kind !== "task.update" ||
+		change.patch.assignees === undefined
+	) {
+		return null;
+	}
+
+	const current = await collections();
+	const task = await current.tasks.findOne(
+		{ taskId: change.taskId, userId: scope.ownerId },
+		{ projection: { _id: 0, assignees: 1 } },
+	);
+	return task?.assignees ?? [];
+}
+
 /** Log the real cause, hand back something a person can act on. */
 export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
 		await assertAllowed(scope, change);
-		await run(scope.ownerId, includingActor(scope, change), scope.email);
+		const assignedBefore = await assigneesBefore(scope, change);
+		await run(
+			scope.ownerId,
+			await keepingHiddenTags(scope, includingActor(scope, change)),
+			scope.email,
+		);
+		if (assignedBefore !== null && change.kind === "task.update") {
+			// Saved whatever happens to the notification; it is only news.
+			await sendAssigned(
+				scope.ownerId,
+				scope.email,
+				change.taskId,
+				assignedBefore,
+			).catch((error) =>
+				console.error("[thunderlist] assignment push failed:", error),
+			);
+		}
 	} catch (error) {
 		if (error instanceof AppError) {
 			console.error(

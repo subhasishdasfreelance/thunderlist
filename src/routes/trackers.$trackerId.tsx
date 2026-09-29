@@ -8,7 +8,14 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import {
+	Megaphone,
+	MoreHorizontal,
+	Pencil,
+	Plus,
+	Trash2,
+	Zap,
+} from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
@@ -26,6 +33,7 @@ import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
+import { MessageDialog } from "#/components/teams/message-dialog";
 import { EntryFormDialog } from "#/components/trackers/entry-form-dialog";
 import { ProgressHistory } from "#/components/trackers/progress-history";
 import {
@@ -43,6 +51,7 @@ import {
 	useApplyChange,
 } from "#/lib/changes";
 import { dayStart } from "#/lib/chart-points";
+import { searchText } from "#/lib/filter-search";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
 import {
 	computeVelocity,
@@ -63,15 +72,21 @@ import { memberName } from "#/schemas/team";
 import type { ProgressEntry } from "#/schemas/tracker";
 
 /**
- * All of Today's open tasks, to see whether this tracker is among them. The one
- * list still read whole: a day's is short, and nothing waits for it.
+ * Today's open tasks standing for this tracker — at most one needed, since
+ * whether there are any is what says it is on Today.
  */
-const ALL_OF_TODAY: TaskPageView = { sort: "newest", limit: 1000 };
+function onToday(trackerId: string): TaskPageView {
+	return { sort: "newest", limit: 1, tracker: trackerId };
+}
 
 export const Route = createFileRoute("/trackers/$trackerId")({
-	// The reading to bring into view, when search sent you to one.
-	validateSearch: (search: Record<string, unknown>): { entry?: string } => ({
+	// The reading to bring into view, when search sent you to one; and the
+	// person the history is narrowed to, kept too; see `filterSearch`.
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { entry?: string; who?: string } => ({
 		entry: typeof search.entry === "string" ? search.entry : undefined,
+		who: searchText(search.who),
 	}),
 	/*
 	 * Only the figures are waited for. The history is the long half of the read
@@ -86,7 +101,10 @@ export const Route = createFileRoute("/trackers/$trackerId")({
 		// tasks, to say whether it is on Today. Nobody waits on them either.
 		deferQuery(context.queryClient, tagsQuery());
 		deferQuery(context.queryClient, tagQuery("today"));
-		deferQuery(context.queryClient, tagOpenQuery("today", ALL_OF_TODAY));
+		deferQuery(
+			context.queryClient,
+			tagOpenQuery("today", onToday(params.trackerId)),
+		);
 
 		return primeQuery(context.queryClient, trackerQuery(params.trackerId));
 	},
@@ -100,7 +118,7 @@ type EntryDialogState =
 
 function TrackerDetailPage() {
 	const { trackerId } = Route.useParams();
-	const { entry: focusEntryId } = Route.useSearch();
+	const { entry: focusEntryId, who: person } = Route.useSearch();
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
 
@@ -110,8 +128,15 @@ function TrackerDetailPage() {
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingEntry, setPendingEntry] = useState<ProgressEntry | null>(null);
 	const [isDeletingTracker, setIsDeletingTracker] = useState(false);
+	const [isMessaging, setIsMessaging] = useState(false);
 	// In a team, what one person logged rather than everyone's; see `MemberFilter`.
-	const [person, setPerson] = useState<string | undefined>(undefined);
+	const setPerson = (who: string | undefined) =>
+		void navigate({
+			to: ".",
+			search: (previous) => ({ ...previous, entry: undefined, who }),
+			replace: true,
+			resetScroll: false,
+		});
 	const team = useSpace()?.team ?? null;
 
 	const { data, isPending, isError, error, refetch } = useQuery(
@@ -121,7 +146,7 @@ function TrackerDetailPage() {
 	// Today's page is held as well as its tasks, so a task added to it from here
 	// is drawn there at once; see `applyOptimistically`.
 	useQuery(tagQuery("today"));
-	const todayResult = useQuery(tagOpenQuery("today", ALL_OF_TODAY));
+	const todayResult = useQuery(tagOpenQuery("today", onToday(trackerId)));
 	const tagsResult = useQuery(tagsQuery());
 	const entries = history.data ?? [];
 	const tags = tagsResult.data ?? [];
@@ -236,9 +261,7 @@ function TrackerDetailPage() {
 	 * Read off Today's own page. While that is still arriving the button simply
 	 * reads as available.
 	 */
-	const isOnToday = (todayResult.data?.items ?? []).some(
-		(entry) => entry.task.trackerId === trackerId,
-	);
+	const isOnToday = (todayResult.data?.total ?? 0) > 0;
 	const today = specialTag(tags, "today");
 
 	function addToToday() {
@@ -323,6 +346,16 @@ function TrackerDetailPage() {
 										icon: Pencil,
 										onClick: () => setIsEditOpen(true),
 									},
+									// A notification to everyone who can see it; see `MessageDialog`.
+									...(team === null
+										? []
+										: [
+												{
+													label: "Message its people…",
+													icon: Megaphone,
+													onClick: () => setIsMessaging(true),
+												},
+											]),
 								],
 							},
 							{ type: "divider" as const },
@@ -518,6 +551,12 @@ function TrackerDetailPage() {
 					}
 					setPendingEntry(null);
 				}}
+			/>
+
+			<MessageDialog
+				isOpen={isMessaging}
+				onOpenChange={setIsMessaging}
+				from={{ kind: "tracker", trackerId }}
 			/>
 
 			<AlertDialog

@@ -59,6 +59,11 @@ import {
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import {
+	type FilterSearch,
+	filterSearch,
+	sortParam,
+} from "#/lib/filter-search";
+import {
 	formatClock,
 	formatDate,
 	formatDeadline,
@@ -66,12 +71,7 @@ import {
 } from "#/lib/format-date";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import type { ParsedTitle } from "#/lib/tags/inline-tags";
-import {
-	matchesFilter,
-	orderTasks,
-	type SortOrder,
-	shortTitle,
-} from "#/lib/tasks/tasks";
+import { matchesFilter, orderTasks, shortTitle } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
 import { useHeld } from "#/lib/use-held";
 import { useNow } from "#/lib/use-now";
@@ -111,8 +111,14 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 	 */
 	validateSearch: (
 		search: Record<string, unknown>,
-	): { task: string | undefined; stage?: string; page?: number } => ({
+	): {
+		task: string | undefined;
+		stage?: string;
+		page?: number;
+	} & FilterSearch => ({
 		task: typeof search.task === "string" ? search.task : undefined,
+		// The order and filters too; see `filterSearch`.
+		...filterSearch(search),
 		// The stage and page on show, so leaving and coming back — Back, say —
 		// lands on the same tab, and the router puts the scroll back on it.
 		stage: typeof search.stage === "string" ? search.stage : undefined,
@@ -178,32 +184,24 @@ function ChecklistDetailPage() {
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	// Its title stays on the question while it closes; see `useHeld`.
 	const shownDelete = useHeld(pendingDelete);
+	// The tasks picked out to delete, asked about first; see `SelectionBar`.
+	const [deletingPicked, setDeletingPicked] =
+		useState<ReadonlyArray<string> | null>(null);
+	const shownDeletingPicked = useHeld(deletingPicked);
 	const [isDeletingChecklist, setIsDeletingChecklist] = useState(false);
 	const [isMessaging, setIsMessaging] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
-	const [sort, setSort] = useState<SortOrder>("newest");
 	// Picked by hand, and kept in the URL; until then, where `?task=` is, or
-	// the first of each.
-	const { stage: stageId, page } = Route.useSearch();
+	// the first of each, newest first and unfiltered.
+	const {
+		stage: stageId,
+		page,
+		sort = "newest",
+		who: assignee,
+		tag: tagId,
+		type: typeId,
+	} = Route.useSearch();
 	const [view, setView] = useState<ProgressView>("list");
-	const [assignee, setAssignee] = useState<string | undefined>(undefined);
-	const [tagId, setTagId] = useState<string | undefined>(undefined);
-	const [typeId, setTypeId] = useState<string | undefined>(undefined);
-
-	/*
-	 * Sent to a task on this page while already here — from search, say — the
-	 * page goes back to where `?task=` would have opened it: the stage and page
-	 * the task is on, with no filter hiding it. It is not remounted, so what was
-	 * picked by hand would otherwise keep the task off screen.
-	 */
-	const arrival = useArrival();
-	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
-	useEffect(() => {
-		if (focusTaskId === undefined) return;
-		setAssignee(undefined);
-		setTagId(undefined);
-		setTypeId(undefined);
-	}, [arrival, focusTaskId]);
 
 	const filter: TaskFilter = { assignee, tag: tagId, type: typeId };
 	const isFiltered =
@@ -219,6 +217,7 @@ function ChecklistDetailPage() {
 		placeholderData: keepPreviousData,
 	});
 
+	const arrival = useArrival();
 	/*
 	 * Where `?task=` opened the list, held for the rest of that arrival. The
 	 * task is found once: ticked on to its next stage, the list read again would
@@ -282,10 +281,11 @@ function ChecklistDetailPage() {
 	const isDoneStage = shownStage.stageId === lastStage.stageId;
 
 	// Every finished task, for the chart and for clearing them: read once the
-	// last stage is open, and not before.
+	// last stage is open, and not before — or at once for a list paced daily,
+	// whose speed is measured from when they were finished; see `DayStats`.
 	const completedResult = useQuery({
 		...checklistCompletedQuery(checklistId),
-		enabled: isDoneStage,
+		enabled: isDoneStage || detail?.dailyWindow != null,
 	});
 	const completed = useMemo(
 		() =>
@@ -352,7 +352,7 @@ function ChecklistDetailPage() {
 	 * and keeps the scroll where it is, as a tab does. A task arrived at is
 	 * let go: it was only ever where the list opened.
 	 */
-	function show(next: { stage?: string; page?: number }) {
+	function show(next: { stage?: string; page?: number } & FilterSearch) {
 		void navigate({
 			to: ".",
 			search: (previous) => ({ ...previous, task: undefined, ...next }),
@@ -363,13 +363,9 @@ function ChecklistDetailPage() {
 	const setPage = (next: number | undefined) =>
 		show({ stage: stageId, page: next });
 
-	/** Back to the first page, for a different list shown in its place. */
-	const turn =
-		<T,>(set: (value: T) => void) =>
-		(value: T) => {
-			set(value);
-			setPage(undefined);
-		};
+	/** Another order or filter: a different list, so from its first page. */
+	const filterBy = (next: FilterSearch) =>
+		show({ stage: stageId, page: undefined, ...next });
 
 	/** One task row, the same at every stage. */
 
@@ -688,6 +684,11 @@ function ChecklistDetailPage() {
 				<DayStats
 					total={progress.total}
 					completed={progress.completed}
+					finishedAt={
+						completedResult.data === undefined
+							? undefined
+							: completed.map((task) => task.completedAt)
+					}
 					window={daily}
 					now={now}
 				/>
@@ -716,9 +717,19 @@ function ChecklistDetailPage() {
 					{/* The filter row: whose, and which tag's, then the order. */}
 					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
 						<HStack gap={1} vAlign="center" wrap="wrap">
-							<MemberFilter value={assignee} onChange={turn(setAssignee)} />
-							<TagFilter tags={tags} value={tagId} onChange={turn(setTagId)} />
-							<TypeFilter value={typeId} onChange={turn(setTypeId)} />
+							<MemberFilter
+								value={assignee}
+								onChange={(who) => filterBy({ who })}
+							/>
+							<TagFilter
+								tags={tags}
+								value={tagId}
+								onChange={(tag) => filterBy({ tag })}
+							/>
+							<TypeFilter
+								value={typeId}
+								onChange={(type) => filterBy({ type })}
+							/>
 						</HStack>
 						<HStack gap={1} vAlign="center">
 							{isDoneStage && chart !== null ? (
@@ -737,7 +748,10 @@ function ChecklistDetailPage() {
 									onClick={() => setIsClearingCompleted(true)}
 								/>
 							) : null}
-							<SortMenu order={sort} onChange={turn(setSort)} />
+							<SortMenu
+								order={sort}
+								onChange={(next) => filterBy({ sort: sortParam(next) })}
+							/>
 						</HStack>
 					</HStack>
 
@@ -829,6 +843,11 @@ function ChecklistDetailPage() {
 						canManageContent ? () => setMoving(pickedTasks) : undefined
 					}
 					onAddTag={() => setTagging(pickedTasks)}
+					onDelete={
+						canManageContent
+							? () => setDeletingPicked(pickedTasks.map((task) => task.taskId))
+							: undefined
+					}
 					onClear={clear}
 				/>
 			)}
@@ -923,7 +942,24 @@ function ChecklistDetailPage() {
 			<MessageDialog
 				isOpen={isMessaging}
 				onOpenChange={setIsMessaging}
-				checklistId={checklistId}
+				from={{ kind: "checklist", checklistId }}
+			/>
+
+			<AlertDialog
+				isOpen={deletingPicked !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeletingPicked(null);
+				}}
+				title={`Delete ${shownDeletingPicked?.length ?? 0} tasks?`}
+				description="Every task picked out will be deleted."
+				actionLabel="Delete"
+				onAction={() => {
+					if (deletingPicked) {
+						apply({ kind: "task.deleteMany", taskIds: [...deletingPicked] });
+					}
+					setDeletingPicked(null);
+					clear();
+				}}
 			/>
 
 			<AlertDialog

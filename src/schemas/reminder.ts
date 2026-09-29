@@ -31,8 +31,23 @@ export const setReminderInputSchema = v.object({
 	target: v.picklist(REMINDER_TARGETS),
 	targetId: idSchema,
 	time: v.nullable(timeOfDaySchema),
-	timeZone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	timeZone: v.pipe(
+		v.string(),
+		v.minLength(1),
+		v.maxLength(64),
+		v.check(isTimeZone, "That time zone isn't recognised."),
+	),
 });
+
+/** Whether the clock can be read in this zone; an unknown one throws. */
+function isTimeZone(timeZone: string): boolean {
+	try {
+		new Intl.DateTimeFormat("en", { timeZone });
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 /** A push subscription, as the browser hands it over. */
 export const pushSubscriptionInputSchema = v.object({
@@ -76,8 +91,13 @@ export function localClock(
 const LATEST = 180;
 
 /**
- * Whether a reminder is due: its time has come today on its own clock, it has
- * not gone out today, and it is not so late that it would only be noise.
+ * Whether a reminder is due: its time last came round on its own clock, it
+ * has not gone out for that day, and it is not so late that it would only be
+ * noise.
+ *
+ * `today` is the day it is for — yesterday's, just after midnight, for one
+ * set at 23:58 that the scheduler only reached at 00:03 — and is what
+ * `lastSentOn` records, so the next day's still goes out.
  */
 export function isDue(
 	reminder: { time: string; timeZone: string; lastSentOn?: string | null },
@@ -86,10 +106,19 @@ export function isDue(
 	const clock = localClock(now, reminder.timeZone);
 	const minutes = (hhmm: string) =>
 		Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
-	const late = minutes(clock.time) - minutes(reminder.time);
+	const since = minutes(clock.time) - minutes(reminder.time);
+	const late = since >= 0 ? since : since + 24 * 60;
+	const day = since >= 0 ? clock.date : dayBefore(clock.date);
 
 	return {
-		isDue: reminder.lastSentOn !== clock.date && late >= 0 && late <= LATEST,
-		today: clock.date,
+		isDue: reminder.lastSentOn !== day && late <= LATEST,
+		today: day,
 	};
+}
+
+/** The date-only day before `YYYY-MM-DD`. */
+function dayBefore(date: string): string {
+	const at = new Date(`${date}T00:00:00Z`);
+	at.setUTCDate(at.getUTCDate() - 1);
+	return at.toISOString().slice(0, 10);
 }

@@ -1,4 +1,5 @@
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { VStack } from "@astryxdesign/core/Stack";
@@ -53,6 +54,7 @@ export function TagPickerDialog({
 	onCreate: (name: string) => void;
 }) {
 	const [query, setQuery] = useState("");
+	const hasKeyboard = useMediaQuery("(pointer: fine)");
 
 	// A fresh filter every time it opens.
 	useEffect(() => {
@@ -88,8 +90,9 @@ export function TagPickerDialog({
 					label="Find a tag"
 					isLabelHidden
 					placeholder="Find a tag, then Enter"
-					// Opened from the keyboard, so the keyboard carries on here.
-					hasAutoFocus
+					// Opened from the keyboard, so the keyboard carries on here. On a
+					// phone the keyboard would cover the list, so it waits for a tap.
+					hasAutoFocus={hasKeyboard}
 					value={query}
 					onChange={setQuery}
 					onEnter={takeFirst}

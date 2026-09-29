@@ -27,8 +27,9 @@ import {
  * `key` is the digit that goes there from anywhere; see `PAGE_SHORTCUTS`.
  *
  * `isInMore` puts an entry in the phone bar's "More" dropup rather than on
- * the bar itself: five places are what a phone's width holds, and these are
- * the ones visited least. The side bar shows every one.
+ * the bar itself: five places are what a phone's width holds, Today leads
+ * them (see `BottomNav`), and these are the ones visited least. The side bar
+ * shows every one.
  */
 export const NAV_ITEMS: ReadonlyArray<{
 	to: string;
@@ -67,6 +68,7 @@ export const NAV_ITEMS: ReadonlyArray<{
 		shortLabel: "Trackers",
 		icon: TrendingUp,
 		key: "6",
+		isInMore: true,
 	},
 	{
 		to: "/groups",

@@ -13,17 +13,22 @@
  * offered saved cards, and a lone text field offered saved passwords. The one
  * exception is the address a team member is added by, which says `email`,
  * because there the browser knowing the answer is the point.
+ *
+ * `enterKeyHint` for the same reason: it is what a phone's keyboard writes on
+ * its Enter key, and it reaches the field the same way.
  */
 
 declare module "@astryxdesign/core/TextInput" {
 	interface TextInputProps {
 		autoComplete?: string;
+		enterKeyHint?: React.InputHTMLAttributes<HTMLInputElement>["enterKeyHint"];
 	}
 }
 
 declare module "@astryxdesign/core/TextArea" {
 	interface TextAreaProps {
 		autoComplete?: string;
+		enterKeyHint?: React.TextareaHTMLAttributes<HTMLTextAreaElement>["enterKeyHint"];
 	}
 }
 

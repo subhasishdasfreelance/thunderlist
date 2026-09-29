@@ -441,6 +441,8 @@ export function TagTextField({
 		onKeyUp: syncCaret,
 		onClick: syncCaret,
 		hasAutoFocus,
+		// Enter adds the task, so a phone's key says so rather than "new line".
+		enterKeyHint: "done" as const,
 		width: "100%" as const,
 	};
 

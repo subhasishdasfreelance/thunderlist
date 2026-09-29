@@ -170,6 +170,8 @@ export const teamMessageInputSchema = v.object({
 		v.object({ kind: v.literal("team") }),
 		v.object({ kind: v.literal("role"), role: v.picklist(TEAM_ROLES) }),
 		v.object({ kind: v.literal("checklist"), checklistId: idSchema }),
+		v.object({ kind: v.literal("tag"), tagId: idSchema }),
+		v.object({ kind: v.literal("tracker"), trackerId: idSchema }),
 		v.object({ kind: v.literal("person"), email: emailSchema }),
 	]),
 	title: v.pipe(

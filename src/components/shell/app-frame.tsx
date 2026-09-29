@@ -226,36 +226,48 @@ export function AppFrame({
 												onClick={() => setIsSearchOpen(true)}
 											/>
 											{/* The familiar magnifier and question mark, at one size so
-											   they read as a pair. */}
-											<IconButton
-												label="Shortcuts and help"
-												tooltip="Shortcuts (?)"
-												variant="ghost"
-												size="md"
-												icon={
-													<CircleQuestionMark
-														aria-hidden
-														size={22}
-														absoluteStrokeWidth
-													/>
-												}
-												onClick={() => setIsHelpOpen(true)}
-											/>
-											{/* How this page is drawn behind its content; see `Scenery`. */}
-											<IconButton
-												label="Background for this page"
-												tooltip="Background for this page"
-												variant="ghost"
-												size="md"
-												icon={
-													<Image aria-hidden size={22} absoluteStrokeWidth />
-												}
-												onClick={() => setIsBackdropOpen(true)}
-											/>
+											   they read as a pair. The shortcuts are keys, so there is
+											   nothing to show on a touch screen. */}
+											<span className="thunderlist-keyboard-only">
+												<IconButton
+													label="Shortcuts and help"
+													tooltip="Shortcuts (?)"
+													variant="ghost"
+													size="md"
+													icon={
+														<CircleQuestionMark
+															aria-hidden
+															size={22}
+															absoluteStrokeWidth
+														/>
+													}
+													onClick={() => setIsHelpOpen(true)}
+												/>
+											</span>
+											{/* How this page is drawn behind its content; see `Scenery`.
+											   On a phone the bar has no room, and it is in the account
+											   menu instead. */}
+											<span className="max-[768px]:hidden">
+												<IconButton
+													label="Background for this page"
+													tooltip="Background for this page"
+													variant="ghost"
+													size="md"
+													icon={
+														<Image aria-hidden size={22} absoluteStrokeWidth />
+													}
+													onClick={() => setIsBackdropOpen(true)}
+												/>
+											</span>
 										</>
 									)}
 									<ThemeToggle scheme={scheme} />
-									{user === null ? null : <UserMenu user={user} />}
+									{user === null ? null : (
+										<UserMenu
+											user={user}
+											onBackdrop={() => setIsBackdropOpen(true)}
+										/>
+									)}
 								</HStack>
 							}
 						/>
@@ -285,7 +297,7 @@ export function AppFrame({
 					 */}
 					<div
 						key={renderedPathname}
-						className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4 pb-28 md:pb-10"
+						className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4 pb-28 min-[769px]:pb-10"
 					>
 						<SetupNotice />
 						{children}

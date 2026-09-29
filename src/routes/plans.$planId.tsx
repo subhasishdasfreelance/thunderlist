@@ -17,9 +17,11 @@ import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
 import { useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
+import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { planQuery } from "#/queries/plans";
 import { primeQuery } from "#/queries/prime";
+import { todayDateOnly } from "#/schemas/common";
 
 export const Route = createFileRoute("/plans/$planId")({
 	loader: ({ context, params }) =>
@@ -56,6 +58,8 @@ function PlanPage() {
 	const [isDeleting, setIsDeleting] = useState(false);
 
 	const { data, isError, error, refetch } = useQuery(planQuery(planId));
+	// The day on the viewer's clock, once the browser has it; see `useNow`.
+	const now = useNow();
 
 	if (data === undefined) {
 		return (
@@ -78,7 +82,12 @@ function PlanPage() {
 				<VStack gap={0.5}>
 					<Heading level={1}>{data.title}</Heading>
 					<Text type="supporting">
-						Updated {formatDate(data.updatedAt.slice(0, 10))}
+						Updated{" "}
+						{formatDate(
+							now === null
+								? data.updatedAt.slice(0, 10)
+								: todayDateOnly(new Date(data.updatedAt)),
+						)}
 					</Text>
 				</VStack>
 

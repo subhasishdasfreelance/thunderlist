@@ -270,7 +270,9 @@ self.addEventListener("push", (event) => {
 		self.registration.showNotification(message.title, {
 			body: message.body,
 			icon: "/icons/icon-192.png",
-			badge: "/icons/icon-192.png",
+			// The status bar draws a badge from its shape alone, so it is the
+			// bolt in white on nothing; the full-colour icon came out a blob.
+			badge: "/icons/badge-96.png",
 			image: message.image,
 			data: { url: message.url },
 		}),

@@ -213,11 +213,10 @@ function CountdownsPage() {
 	const now = useTicking(
 		(data ?? []).some((each) => (each.format ?? "seconds") === "seconds"),
 	);
+	// Which have passed is a question for the viewer's clock, so the tiles wait
+	// for the browser to have it; see `useNow`.
 	const today = now === null ? null : todayDateOnly(new Date(now));
-	const { upcoming, past } = orderCountdowns(
-		data ?? [],
-		today ?? todayDateOnly(),
-	);
+	const { upcoming, past } = orderCountdowns(data ?? [], today ?? "");
 
 	const open = (countdown: Countdown) =>
 		canManageContent ? () => setEditing(countdown) : undefined;
@@ -241,7 +240,7 @@ function CountdownsPage() {
 
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
-			) : isPending ? (
+			) : isPending || today === null ? (
 				<LoadingState />
 			) : upcoming.length === 0 && past.length === 0 ? (
 				<EmptyState

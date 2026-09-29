@@ -51,6 +51,7 @@ import {
 	type ChecklistSummary,
 	checklistStages,
 	countByStage,
+	restaged,
 	SPECIAL_CHECKLISTS,
 	type SpecialChecklist,
 	type Stage,
@@ -757,13 +758,8 @@ async function retagTasks(
 }
 
 /**
- * Bring a checklist's tasks in line with a change to its stages.
- *
- * A task at a stage that is kept stays there. One at a stage taken away moves
- * back to the nearest stage before it that is left — work under review when
- * review goes is still under way — or to the first. Then whatever is at the
- * last stage is done and nothing else is, as always; a task that follows a
- * tracker or another checklist is left for that to decide.
+ * Bring a checklist's tasks in line with a change to its stages; see
+ * `restaged`.
  */
 async function restageTasks(
 	current: Collections,
@@ -772,18 +768,6 @@ async function restageTasks(
 	before: ReadonlyArray<Stage>,
 	after: ReadonlyArray<Stage>,
 ): Promise<void> {
-	const kept = new Set(after.map((stage) => stage.stageId));
-	const last = after[after.length - 1].stageId;
-
-	const landing = (stageId: string): string => {
-		if (kept.has(stageId)) return stageId;
-		const at = before.findIndex((stage) => stage.stageId === stageId);
-		for (let index = at - 1; index >= 0; index -= 1) {
-			if (kept.has(before[index].stageId)) return before[index].stageId;
-		}
-		return after[0].stageId;
-	};
-
 	const tasks = await current.tasks
 		.find(
 			{ userId, checklistId },
@@ -803,12 +787,8 @@ async function restageTasks(
 	const now = new Date().toISOString();
 	const writes: Array<AnyBulkWriteOperation<TaskDoc>> = tasks.flatMap(
 		(task) => {
-			if (task.trackerId != null || task.linkedChecklistId != null) return [];
-
-			const from = stageOf(task, before);
-			const stageId = landing(from);
-			const completed = stageId === last;
-			if (stageId === from && completed === task.completed) return [];
+			const next = restaged(task, before, after);
+			if (next === null) return [];
 
 			return [
 				{
@@ -816,11 +796,10 @@ async function restageTasks(
 						filter: { userId, taskId: task.taskId },
 						update: {
 							$set: {
-								stageId,
-								completed,
-								...(completed === task.completed
+								...next,
+								...(next.completed === task.completed
 									? {}
-									: { completedAt: completed ? now : null }),
+									: { completedAt: next.completed ? now : null }),
 							},
 						},
 					},
@@ -922,16 +901,48 @@ export async function deleteChecklist(
 		);
 	}
 
+	// Asked before its tasks go, while there is still something to ask.
+	const isFinished =
+		(await checklistsFinished(current, userId, [checklistId], new Set())).get(
+			checklistId,
+		) ?? false;
+
 	const gone = await current.tasks
 		.find({ checklistId, userId }, { projection: { _id: 0, taskId: 1 } })
 		.toArray();
 	await current.tasks.deleteMany({ checklistId, userId });
 	await current.checklists.deleteOne({ checklistId, userId });
+	await releaseFollowers(userId, "linkedChecklistId", checklistId, isFinished);
 	await clearDependencies(userId, "checklist", [checklistId]);
 	await clearDependencies(
 		userId,
 		"task",
 		gone.map((task) => task.taskId),
+	);
+}
+
+/**
+ * Make the tasks standing for a deleted tracker or checklist ordinary tasks,
+ * done or not as they last showed. Still pointing at something gone, such a
+ * task could never be ticked — it follows that thing — nor finished by it.
+ */
+export async function releaseFollowers(
+	userId: string,
+	link: "trackerId" | "linkedChecklistId",
+	id: string,
+	isDone: boolean,
+): Promise<void> {
+	const current = await collections();
+
+	await current.tasks.updateMany(
+		{ userId, [link]: id },
+		{
+			$set: {
+				[link]: null,
+				completed: isDone,
+				completedAt: isDone ? new Date().toISOString() : null,
+			},
+		},
 	);
 }
 
@@ -1059,6 +1070,8 @@ export async function createTask(
 		tagIds: Array<string>;
 		urgent: boolean;
 		important: boolean;
+		/** The number it had, for one put back; see `createTaskInputSchema`. */
+		number?: number;
 		/** A tracker this task stands for; see `taskSchema`. */
 		trackerId?: string | null;
 		/** A checklist this task stands for; see `taskSchema`. */
@@ -1100,8 +1113,29 @@ export async function createTask(
 		linkedChecklistId,
 	};
 
-	task.number = await nextNumber(current, userId, "task");
-	await current.tasks.insertOne({ ...task, userId, checklistId });
+	// Its old number, put back by an undo, while nothing else has taken it.
+	const isFree =
+		input.number !== undefined &&
+		(await current.tasks.findOne(
+			{ userId, number: input.number },
+			{ projection: { _id: 1 } },
+		)) === null;
+	task.number = isFree
+		? (input.number as number)
+		: await nextNumber(current, userId, "task");
+	try {
+		await current.tasks.insertOne({ ...task, userId, checklistId });
+	} catch (error) {
+		// A retry that overlapped the first try, which got there first: the task
+		// is saved, which is all this was asked for.
+		if (!isDuplicateKey(error)) throw error;
+		const saved = await current.tasks.findOne(
+			{ taskId: input.taskId, userId },
+			{ projection: TASK_FIELDS },
+		);
+		if (saved === null) throw error;
+		return saved;
+	}
 
 	return task;
 }
@@ -1287,10 +1321,13 @@ export async function updateTask(
 		...(moved === null
 			? {}
 			: { stageId: moved.stageId, completed: moved.completed }),
-		...(stamps && moved !== null
+		// Unless an undo sent the ones it had; see `TaskPatch`.
+		...(stamps && moved !== null && patch.completedAt === undefined
 			? { completedAt: moved.completed ? new Date().toISOString() : null }
 			: {}),
-		...(arrives ? { addedAt: new Date().toISOString() } : {}),
+		...(arrives && patch.addedAt === undefined
+			? { addedAt: new Date().toISOString() }
+			: {}),
 		...(patch.tagIds === undefined
 			? {}
 			: {

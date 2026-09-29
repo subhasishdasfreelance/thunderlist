@@ -1,7 +1,7 @@
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TaskTitleField } from "#/components/checklists/task-title-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import type { Checklist } from "#/schemas/checklist";
@@ -33,6 +33,10 @@ function parseLines(value: string): Array<ParsedTitle> {
  * they are typed. A line beginning `&` names a tracker or another checklist
  * instead: the task it makes is finished when that is, and cannot be ticked by
  * hand.
+ *
+ * On a phone the field sits below the page's figures, so once it is scrolled
+ * out of sight a round "+" floats above the bottom bar: pressing it brings the
+ * field back and puts the caret in it, keyboard and all.
  */
 export function QuickAddTask({
 	placeholder = "Add a task — #tag it, &track it, or paste a list",
@@ -61,26 +65,61 @@ export function QuickAddTask({
 
 	const label = lines.length > 1 ? `Add ${lines.length} tasks` : "Add task";
 
+	const boxRef = useRef<HTMLDivElement>(null);
+	const [isOutOfView, setIsOutOfView] = useState(false);
+	useEffect(() => {
+		const box = boxRef.current;
+		if (box === null) return;
+		const observer = new IntersectionObserver(([entry]) =>
+			setIsOutOfView(!entry.isIntersecting),
+		);
+		observer.observe(box);
+		return () => observer.disconnect();
+	}, []);
+
+	// Focused in the press itself, which is the only way a phone will open its
+	// keyboard for it; the scroll follows.
+	function jumpToField() {
+		const box = boxRef.current;
+		box
+			?.querySelector<HTMLElement>("textarea, input")
+			?.focus({ preventScroll: true });
+		box?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}
+
 	return (
-		<HStack gap={2} vAlign="start">
-			<TaskTitleField
-				label={placeholder}
-				placeholder={placeholder}
-				value={value}
-				onChange={setValue}
-				onSubmit={add}
-				tags={tags}
-				trackers={trackers}
-				checklists={checklists}
-			/>
-			<IconButton
-				label={label}
-				tooltip={label}
-				variant="primary"
-				icon={<Plus aria-hidden />}
-				isDisabled={lines.length === 0}
-				onClick={add}
-			/>
-		</HStack>
+		<div ref={boxRef}>
+			<HStack gap={2} vAlign="start">
+				<TaskTitleField
+					label={placeholder}
+					placeholder={placeholder}
+					value={value}
+					onChange={setValue}
+					onSubmit={add}
+					tags={tags}
+					trackers={trackers}
+					checklists={checklists}
+				/>
+				<IconButton
+					label={label}
+					tooltip={label}
+					variant="primary"
+					icon={<Plus aria-hidden />}
+					isDisabled={lines.length === 0}
+					onClick={add}
+				/>
+			</HStack>
+			{isOutOfView ? (
+				<div className="thunderlist-add-fab min-[769px]:hidden">
+					<IconButton
+						label="Add a task"
+						variant="primary"
+						size="lg"
+						icon={<Plus aria-hidden />}
+						onClick={jumpToField}
+					/>
+				</div>
+			) : null}
+		</div>
 	);
 }

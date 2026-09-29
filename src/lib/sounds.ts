@@ -200,7 +200,24 @@ export function playSound(sound: Sound): void {
 	}
 }
 
-/** Play the sound for a change the user has just made. */
+/**
+ * A buzz under the finger, for the changes worth feeling on a phone: a tick,
+ * short; a delete, twice. Everything else is heard only, or a phone would
+ * buzz at every tap. Where there is nothing to vibrate — a laptop, an iPhone,
+ * whose browsers do not offer it — it is skipped, as sound is.
+ */
+const BUZZES: Partial<Record<Sound, number | Array<number>>> = {
+	check: 12,
+	delete: [12, 60, 12],
+};
+
+/** Play the sound for a change the user has just made, and buzz for it. */
 export function playChangeSound(change: Change): void {
-	playSound(soundFor(change));
+	const sound = soundFor(change);
+	playSound(sound);
+
+	const buzz = BUZZES[sound];
+	if (buzz !== undefined && typeof navigator.vibrate === "function") {
+		navigator.vibrate(buzz);
+	}
 }

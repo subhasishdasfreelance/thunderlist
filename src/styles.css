@@ -781,22 +781,38 @@ body {
 		transition: background-color var(--duration-fast) var(--ease-standard);
 	}
 
-	/* A tracker's readings light up the same way; see `ProgressHistory`. */
-	.thunderlist-task-row:hover,
-	.thunderlist-entry-row:hover {
-		background-color: var(--color-overlay-hover);
+	/*
+	 * A tracker's readings light up the same way; see `ProgressHistory`.
+	 *
+	 * Only where there is a pointer to hover with. A touch screen reports the
+	 * last row tapped as hovered, and focus stays on the button tapped in it,
+	 * so the row stayed lit after the finger had gone.
+	 */
+	@media (hover: hover) {
+		.thunderlist-task-row:hover,
+		.thunderlist-entry-row:hover {
+			background-color: var(--color-overlay-hover);
+		}
+
+		/* Escape lets go of it until the pointer moves again; see `useEscape`. */
+		:root[data-pointer-let-go] .thunderlist-task-row:hover,
+		:root[data-pointer-let-go] .thunderlist-entry-row:hover {
+			background-color: transparent;
+		}
+
+		/* Keyboard users get the same cue when focus lands inside the row. */
+		.thunderlist-task-row:focus-within,
+		.thunderlist-entry-row:focus-within {
+			background-color: var(--color-overlay-hover);
+		}
 	}
 
-	/* Escape lets go of it until the pointer moves again; see `useEscape`. */
-	:root[data-pointer-let-go] .thunderlist-task-row:hover,
-	:root[data-pointer-let-go] .thunderlist-entry-row:hover {
-		background-color: transparent;
-	}
-
-	/* Keyboard users get the same cue when focus lands inside the row. */
-	.thunderlist-task-row:focus-within,
-	.thunderlist-entry-row:focus-within {
-		background-color: var(--color-overlay-hover);
+	/* A keyboard on a touch screen still gets it, for where focus is. */
+	@media (hover: none) {
+		.thunderlist-task-row:has(:focus-visible),
+		.thunderlist-entry-row:has(:focus-visible) {
+			background-color: var(--color-overlay-hover);
+		}
 	}
 
 	/*
@@ -1069,9 +1085,11 @@ body {
 		cursor: pointer;
 	}
 
-	button.thunderlist-countdown:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 6px 16px var(--color-shadow);
+	@media (hover: hover) {
+		button.thunderlist-countdown:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 6px 16px var(--color-shadow);
+		}
 	}
 
 	.thunderlist-countdown[data-past="true"] {
@@ -1172,8 +1190,10 @@ body {
 		font-weight: 500;
 	}
 
-	.thunderlist-crumb[data-backlog="true"]:hover {
-		color: var(--color-error);
+	@media (hover: hover) {
+		.thunderlist-crumb[data-backlog="true"]:hover {
+			color: var(--color-error);
+		}
 	}
 
 	/*
@@ -1196,9 +1216,14 @@ body {
 		text-decoration: none;
 	}
 
-	.thunderlist-more-link:hover,
 	.thunderlist-more-link[data-active="true"] {
 		background-color: var(--color-overlay-hover);
+	}
+
+	@media (hover: hover) {
+		.thunderlist-more-link:hover {
+			background-color: var(--color-overlay-hover);
+		}
 	}
 
 	/*
@@ -1852,8 +1877,10 @@ body {
 		transition: background-color var(--duration-fast) var(--ease-standard);
 	}
 
-	.thunderlist-disclosure:hover {
-		background-color: var(--color-overlay-hover);
+	@media (hover: hover) {
+		.thunderlist-disclosure:hover {
+			background-color: var(--color-overlay-hover);
+		}
 	}
 
 	.thunderlist-disclosure-chevron {
@@ -2091,8 +2118,10 @@ body {
 		transition: background-color var(--duration-fast) var(--ease-standard);
 	}
 
-	.thunderlist-facet:hover {
-		background-color: var(--color-overlay-hover);
+	@media (hover: hover) {
+		.thunderlist-facet:hover {
+			background-color: var(--color-overlay-hover);
+		}
 	}
 
 	.thunderlist-facet[data-selected="true"] {
@@ -2360,4 +2389,100 @@ input[data-number-field] {
 
 input[data-number-field]::-webkit-search-cancel-button {
 	display: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Touch and phone                                                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Outside the layers, so these win over both Astryx's component styles and
+ * Tailwind's utilities — each says what a touch screen or a phone needs in
+ * place of what they would otherwise draw.
+ */
+
+/*
+ * Keys, where there is no keyboard to press them on: the shortcuts button in
+ * the bar, and the key caps beside menu entries. Width is the wrong question —
+ * a tablet is wide and has no keys, a narrow window on a laptop does.
+ */
+@media (pointer: coarse) {
+	.thunderlist-keyboard-only,
+	kbd.thunderlist-key {
+		display: none;
+	}
+}
+
+/*
+ * A finger is wider than a pointer. The buttons on a task row stay drawn at
+ * their size, but each takes 44px of the screen to be pressed in, with room
+ * between them; the checkbox's hit area grows the same way around the box.
+ */
+@media (pointer: coarse) {
+	.thunderlist-row-buttons {
+		gap: 0.25rem;
+	}
+
+	.thunderlist-row-buttons button {
+		min-width: 44px;
+		min-height: 44px;
+	}
+
+	.thunderlist-stage-check input[type="checkbox"] {
+		min-width: 44px;
+		min-height: 44px;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+	}
+}
+
+/*
+ * A long word or address in a title wraps rather than widening the page past
+ * the screen's edge.
+ */
+[data-task-title],
+[data-task-caption],
+.thunderlist-screen h1 {
+	overflow-wrap: anywhere;
+}
+
+/*
+ * Toasts sit above the phone's bottom bar rather than over it. Astryx draws
+ * them in a viewport of its own; see `useToast`. The bar is 3.5rem tall above
+ * the home indicator, which the viewport already pads for.
+ */
+@media (max-width: 768px) {
+	[data-astryx-toast-fallback] > [popover] {
+		bottom: 3.5rem;
+	}
+}
+
+/*
+ * Quick add's "+", once its field is scrolled away; see `QuickAddTask`. Above
+ * the bottom bar, where a thumb rests.
+ */
+.thunderlist-add-fab {
+	position: fixed;
+	right: 1rem;
+	bottom: calc(3.5rem + env(safe-area-inset-bottom) + 1rem);
+	z-index: 40;
+	border-radius: 9999px;
+	box-shadow: 0 6px 16px var(--color-shadow);
+}
+
+.thunderlist-add-fab button {
+	border-radius: 9999px;
+	min-width: 3.5rem;
+	min-height: 3.5rem;
+}
+
+/*
+ * A dialog is the whole screen on a phone (see `FormDialog`), so a picker's
+ * list can take more of it than the card's 40%.
+ */
+@media (max-width: 768px) {
+	.thunderlist-picker-list {
+		max-height: 60dvh;
+	}
 }

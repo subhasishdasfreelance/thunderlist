@@ -16,9 +16,10 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
-import { findCachedTask } from "#/lib/optimistic";
+import { dependentsOf, findCachedTask, stagesOf } from "#/lib/optimistic";
 import { shortTitle } from "#/lib/tasks/tasks";
 import type { Change } from "#/schemas/change";
+import { type Stage, stageOf } from "#/schemas/checklist";
 import type { Task, TaskPatch } from "#/schemas/task";
 
 /** One step back: what it puts right, and the changes that do it. */
@@ -42,10 +43,17 @@ export type UndoStep = {
  *
  * `stageId` and `completed` are one answer on the server — reaching the last
  * stage is being done — so an edit touching either is put back by the stage
- * the task was at, which says both. Returns `null` when there is nothing to
+ * the task was at, which says both. Named outright, worked out as its list
+ * does (`stageOf`): "not done" alone would land it one stage short of done,
+ * not where it was. When it was finished and where it sat go back with it,
+ * rather than being stamped afresh. Returns `null` when there is nothing to
  * put back, so a no-op is never queued as an undo.
  */
-function previousPatch(task: Task, patch: TaskPatch): TaskPatch | null {
+function previousPatch(
+	task: Task,
+	patch: TaskPatch,
+	stages: ReadonlyArray<Stage>,
+): TaskPatch | null {
 	const previous: TaskPatch = {};
 
 	if ("title" in patch) previous.title = task.title;
@@ -59,15 +67,19 @@ function previousPatch(task: Task, patch: TaskPatch): TaskPatch | null {
 	if ("dependsOn" in patch) previous.dependsOn = [...(task.dependsOn ?? [])];
 
 	if ("stageId" in patch || "completed" in patch) {
-		if (task.stageId) previous.stageId = task.stageId;
-		else previous.completed = task.completed;
+		previous.stageId = stageOf(task, stages);
+		previous.completedAt = task.completedAt ?? null;
+		previous.addedAt = task.addedAt;
 	}
 
 	return Object.keys(previous).length === 0 ? null : previous;
 }
 
 /** The fields `task.create` does not carry, where the task had any of them. */
-function restOfTask(task: Task): TaskPatch | null {
+function restOfTask(
+	task: Task,
+	stages: ReadonlyArray<Stage>,
+): TaskPatch | null {
 	const rest: TaskPatch = {};
 
 	if (task.caption) rest.caption = task.caption;
@@ -76,15 +88,28 @@ function restOfTask(task: Task): TaskPatch | null {
 	if (task.typeId) rest.typeId = task.typeId;
 	if (task.dependsOn?.length) rest.dependsOn = [...task.dependsOn];
 	// A task comes back at the stage it was taken from, which says whether it
-	// was done as well; see `previousPatch`.
-	if (task.stageId) rest.stageId = task.stageId;
+	// was done as well — finished when it was; see `previousPatch`.
+	const at = stageOf(task, stages);
+	if (at !== stages[0].stageId) {
+		rest.stageId = at;
+		rest.completedAt = task.completedAt ?? null;
+		rest.addedAt = task.addedAt;
+	}
 
 	return Object.keys(rest).length === 0 ? null : rest;
 }
 
-/** The changes that write a deleted task back as it was. */
-function putBack(task: Task, checklistId: string | null): Array<Change> {
-	const rest = restOfTask(task);
+/**
+ * The changes that write a deleted task back as it was: under its own number,
+ * and waited on again by whatever waited on it, since deleting it took their
+ * wait off; see `clearDependencies`.
+ */
+function putBack(
+	client: QueryClient,
+	task: Task,
+	checklistId: string | null,
+): Array<Change> {
+	const rest = restOfTask(task, stagesOf(client, checklistId));
 
 	return [
 		{
@@ -100,12 +125,18 @@ function putBack(task: Task, checklistId: string | null): Array<Change> {
 			linkedChecklistId: task.linkedChecklistId ?? null,
 			urgent: task.urgent,
 			important: task.important,
+			...(task.number === undefined ? {} : { number: task.number }),
 		},
 		// Adding a task is one line of typing, so the rest of what it carried
 		// is a second change; see `restOfTask`.
 		...(rest === null
 			? []
 			: [{ kind: "task.update" as const, taskId: task.taskId, patch: rest }]),
+		...dependentsOf(client, task.taskId).map((waiting) => ({
+			kind: "task.update" as const,
+			taskId: waiting.taskId,
+			patch: { dependsOn: [...(waiting.dependsOn ?? [])] },
+		})),
 	];
 }
 
@@ -122,7 +153,11 @@ export function invertChange(
 			const found = findCachedTask(client, change.taskId);
 			if (found === null) return null;
 
-			const patch = previousPatch(found.task, change.patch);
+			const patch = previousPatch(
+				found.task,
+				change.patch,
+				stagesOf(client, found.checklistId),
+			);
 			if (patch === null) return null;
 
 			return {
@@ -139,13 +174,30 @@ export function invertChange(
 			if (found === null || found.checklistId === null) return null;
 			if (found.checklistId === change.checklistId) return null;
 
+			/*
+			 * Moved back, then put back as it was there: moving starts a task at
+			 * the top of its new list's first stage and writes a line into its
+			 * notes, and moving it back would do both again.
+			 */
+			const { task } = found;
 			return {
-				label: `Moving "${shortTitle(found.task.title)}"`,
+				label: `Moving "${shortTitle(task.title)}"`,
 				changes: [
 					{
 						kind: "task.move",
 						taskId: change.taskId,
 						checklistId: found.checklistId,
+					},
+					{
+						kind: "task.update",
+						taskId: change.taskId,
+						patch: {
+							stageId: stageOf(task, stagesOf(client, found.checklistId)),
+							completedAt: task.completedAt ?? null,
+							addedAt: task.addedAt,
+							notes: task.notes ?? "",
+							tagIds: [...task.tagIds],
+						},
 					},
 				],
 				question: null,
@@ -170,7 +222,7 @@ export function invertChange(
 
 			return {
 				label: `Deleting "${title}"`,
-				changes: putBack(found.task, found.checklistId),
+				changes: putBack(client, found.task, found.checklistId),
 				question: `Undo deleting "${title}"? The task will be put back.`,
 			};
 		}
@@ -187,7 +239,9 @@ export function invertChange(
 
 			return {
 				label: `Deleting ${count}`,
-				changes: found.flatMap((each) => putBack(each.task, each.checklistId)),
+				changes: found.flatMap((each) =>
+					putBack(client, each.task, each.checklistId),
+				),
 				question: `Undo deleting ${count}? They will be put back.`,
 			};
 		}
@@ -203,6 +257,11 @@ export function invertChange(
 export type Undo = {
 	/** Where a change hands in its undo on its way out; see `useApplyChange`. */
 	remember: (change: Change) => void;
+	/**
+	 * Take back the undo a change handed in, once the server has refused it:
+	 * there is nothing to undo of a change that never happened.
+	 */
+	forget: (change: Change) => void;
 	/** The step waiting on an answer, or `null` while none is; see `question`. */
 	asking: UndoStep | null;
 	/** Do the step being asked about. */
@@ -221,6 +280,6 @@ export function useUndo(): Undo | null {
 	return useContext(UndoContext);
 }
 
-export function useRememberUndo(): ((change: Change) => void) | null {
-	return useContext(UndoContext)?.remember ?? null;
+export function useRememberUndo(): Pick<Undo, "remember" | "forget"> | null {
+	return useContext(UndoContext);
 }

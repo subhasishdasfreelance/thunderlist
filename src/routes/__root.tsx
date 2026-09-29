@@ -1,5 +1,5 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import type { QueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -10,7 +10,7 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { AppFrame } from "#/components/shell/app-frame";
-import { OfflineScreen } from "#/components/shell/offline-screen";
+import { OfflineBanner } from "#/components/shell/offline-banner";
 import { UndoProvider } from "#/components/shell/undo-provider";
 import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
 import { FIRST_OPEN_SCRIPT } from "#/lib/first-open";
@@ -79,7 +79,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			},
 			{
 				name: "viewport",
-				content: "width=device-width, initial-scale=1, viewport-fit=cover",
+				// `resizes-content`: on Android the on-screen keyboard shrinks the
+				// page rather than covering it, so a dialog's fields and buttons
+				// stay above it.
+				content:
+					"width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content",
 			},
 			{
 				title: "Thunderlist",
@@ -178,25 +182,37 @@ function RootComponent() {
 		};
 	}, []);
 
+	/*
+	 * Leaving while a change is still on its way — waiting out a dropped
+	 * connection, say — would lose it, though the screen already showed it as
+	 * made. The browser asks first, in its own words.
+	 */
+	const queryClient = useQueryClient();
+	useEffect(() => {
+		const onBeforeUnload = (event: BeforeUnloadEvent) => {
+			if (queryClient.isMutating() > 0) event.preventDefault();
+		};
+		window.addEventListener("beforeunload", onBeforeUnload);
+		return () => window.removeEventListener("beforeunload", onBeforeUnload);
+	}, [queryClient]);
+
 	const isOnline = useIsOnline();
 
 	// The frame is rendered signed out too — it drops everything that needs an
 	// account and keeps the bar, so the login page is recognisably this app
 	// rather than a page from somewhere else.
 	//
-	// Offline it is drawn the same way, around the offline screen rather than
-	// the page: nothing that needs the server is left to be pressed, so no change
-	// is made only to fail. The page comes back with the connection.
+	// Offline the page stays, under a banner saying so: what was being read is
+	// still there to read, and anything half typed is not lost. Changes are
+	// refused meanwhile; see `useApplyChange`.
 	// Ctrl+Z wraps the whole frame rather than the screens inside it, so the
 	// last few things done are still there to take back after moving between
 	// them; see `UndoProvider`.
 	return (
 		<UndoProvider>
-			<AppFrame
-				user={isOnline ? (user ?? null) : null}
-				colorScheme={colorScheme}
-			>
-				{isOnline ? <Outlet /> : <OfflineScreen />}
+			<AppFrame user={user ?? null} colorScheme={colorScheme}>
+				{isOnline ? null : <OfflineBanner />}
+				<Outlet />
 			</AppFrame>
 		</UndoProvider>
 	);

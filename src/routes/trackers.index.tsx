@@ -31,6 +31,7 @@ import {
 	type TrackerValues,
 	useApplyChange,
 } from "#/lib/changes";
+import { searchText } from "#/lib/filter-search";
 import { lagFraction } from "#/lib/progress";
 import { isAssignedTo } from "#/lib/tasks/tasks";
 import { useNow } from "#/lib/use-now";
@@ -62,6 +63,11 @@ const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
 const createdAtOf = (tracker: TrackerSummary) => tracker.createdAt;
 
 export const Route = createFileRoute("/trackers/")({
+	// The person the list is narrowed to, kept in the address; see
+	// `filterSearch`.
+	validateSearch: (search: Record<string, unknown>): { who?: string } => ({
+		who: searchText(search.who),
+	}),
 	loader: ({ context }) => {
 		// The tags on each card, and for the form; the trackers are the screen.
 		deferQuery(context.queryClient, tagsQuery());
@@ -85,7 +91,14 @@ function TrackersPage() {
 	const [isOpening, setIsOpening] = useState(false);
 	const [isArranging, setIsArranging] = useState(false);
 	// In a team, one person's trackers rather than everyone's; see `MemberFilter`.
-	const [assignee, setAssignee] = useState<string | undefined>(undefined);
+	const { who: assignee } = Route.useSearch();
+	const setAssignee = (who: string | undefined) =>
+		void navigate({
+			to: ".",
+			search: { who },
+			replace: true,
+			resetScroll: false,
+		});
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
 

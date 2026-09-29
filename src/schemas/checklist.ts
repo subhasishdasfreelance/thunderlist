@@ -146,6 +146,53 @@ export function stageOf(
 }
 
 /**
+ * Where a task is once its checklist's stages change from `before` to `after`,
+ * or `null` where nothing about it changes.
+ *
+ * A task at a stage that is kept stays there. One at a stage taken away moves
+ * back to the nearest stage before it that is left — work under review when
+ * review goes is still under way — or to the first. Then whatever is at the
+ * last stage is done and nothing else is, as always; a task that follows a
+ * tracker or another checklist is left for that to decide.
+ *
+ * The stage a task names is trusted while it is one of the old ones, however
+ * it is ticked: a save that failed partway may have left a task open at the old
+ * last stage, and \`stageOf\` would send that one back to the first on the retry.
+ */
+export function restaged(
+	task: {
+		stageId?: string | null;
+		completed: boolean;
+		trackerId?: string | null;
+		linkedChecklistId?: string | null;
+	},
+	before: ReadonlyArray<Stage>,
+	after: ReadonlyArray<Stage>,
+): { stageId: string; completed: boolean } | null {
+	if (task.trackerId != null || task.linkedChecklistId != null) return null;
+
+	const kept = new Set(after.map((stage) => stage.stageId));
+	const landing = (stageId: string): string => {
+		if (kept.has(stageId)) return stageId;
+		const at = before.findIndex((stage) => stage.stageId === stageId);
+		for (let index = at - 1; index >= 0; index -= 1) {
+			if (kept.has(before[index].stageId)) return before[index].stageId;
+		}
+		return after[0].stageId;
+	};
+
+	const from = before.some((stage) => stage.stageId === task.stageId)
+		? (task.stageId as string)
+		: stageOf(task, before);
+	const stageId = landing(from);
+	const completed = stageId === after[after.length - 1].stageId;
+
+	return stageId === from && completed === task.completed
+		? null
+		: { stageId, completed };
+}
+
+/**
  * How far through its checklist's stages a task is, from 0 at the first to 1
  * once done. Ordering by stage goes by this, so tasks from checklists with
  * different stages still fall into one order: every list's first stage

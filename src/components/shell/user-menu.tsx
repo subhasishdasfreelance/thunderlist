@@ -4,13 +4,14 @@ import {
 	DropdownMenuDivider,
 	DropdownMenuItem,
 } from "@astryxdesign/core/DropdownMenu";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { LogOut, MessageSquare, Settings, Users } from "lucide-react";
+import { Image, LogOut, MessageSquare, Settings, Users } from "lucide-react";
 import { useState } from "react";
 import { RoleToken } from "#/components/teams/role-token";
 import type { SignedInUser } from "#/lib/auth.server";
@@ -38,7 +39,18 @@ import { FeedbackDialog } from "./feedback-dialog";
  * previous account's checklists, and the next person to sign in on this browser
  * must not be handed them from memory.
  */
-export function UserMenu({ user }: { user: SignedInUser }) {
+export function UserMenu({
+	user,
+	onBackdrop,
+}: {
+	user: SignedInUser;
+	/**
+	 * Opens the page's background, which a phone's bar has no room for; see
+	 * `AppFrame`.
+	 */
+	onBackdrop: () => void;
+}) {
+	const isPhone = useMediaQuery("(max-width: 768px)");
 	const router = useRouter();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -146,6 +158,13 @@ export function UserMenu({ user }: { user: SignedInUser }) {
 					description="Your account, and where you work"
 					onClick={() => void navigate({ to: "/settings" })}
 				/>
+				{isPhone ? (
+					<DropdownMenuItem
+						icon={Image}
+						label="Background for this page…"
+						onClick={onBackdrop}
+					/>
+				) : null}
 				<DropdownMenuItem
 					icon={MessageSquare}
 					label="Send feedback…"

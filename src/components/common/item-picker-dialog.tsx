@@ -1,5 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
@@ -119,6 +120,7 @@ export function ItemPickerDialog({
 	isOffered?: (item: ItemRef) => boolean;
 }) {
 	const [query, setQuery] = useState("");
+	const hasKeyboard = useMediaQuery("(pointer: fine)");
 	const [active, setActive] = useState(0);
 	const listId = useId();
 	const directory = useItemDirectory(isOpen);
@@ -195,7 +197,9 @@ export function ItemPickerDialog({
 					autoComplete="off"
 					label={`Search ${nouns}`}
 					isLabelHidden
-					hasAutoFocus
+					// Straight to typing with a keyboard; on a phone the keyboard would
+					// cover the list, which is usually what was wanted.
+					hasAutoFocus={hasKeyboard}
 					placeholder={`Search ${nouns}`}
 					value={query}
 					onChange={setQuery}

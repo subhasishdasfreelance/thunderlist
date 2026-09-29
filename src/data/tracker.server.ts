@@ -28,7 +28,7 @@ import type {
 	TrackerType,
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
-import { clearDependencies } from "./checklist.server";
+import { clearDependencies, releaseFollowers } from "./checklist.server";
 import { nextNumber } from "./numbers.server";
 import { type Hidden, withAccess } from "./visibility.server";
 
@@ -245,6 +245,17 @@ export async function updateTracker(
 	};
 	// A cleared author field is stored as "no author" rather than an empty string.
 	if (patch.author !== undefined) changes.author = patch.author || null;
+	// With nothing logged yet it stands where it starts, so moving the start
+	// moves it; see `deriveCurrentValue`.
+	if (
+		patch.startValue !== undefined &&
+		(await current.entries.countDocuments(
+			{ trackerId, userId },
+			{ limit: 1 },
+		)) === 0
+	) {
+		changes.currentValue = patch.startValue;
+	}
 
 	const next = await current.trackers.findOneAndUpdate(
 		{ trackerId, userId },
@@ -276,8 +287,21 @@ export async function deleteTracker(
 ): Promise<void> {
 	const current = await collections();
 
+	const tracker = await current.trackers.findOne(
+		{ trackerId, userId },
+		{ projection: { _id: 0, currentValue: 1, targetValue: 1, startValue: 1 } },
+	);
+	const isReached =
+		tracker !== null &&
+		trackerProgress(
+			tracker.currentValue,
+			tracker.targetValue,
+			tracker.startValue,
+		).percent >= 100;
+
 	await current.entries.deleteMany({ trackerId, userId });
 	await current.trackers.deleteOne({ trackerId, userId });
+	await releaseFollowers(userId, "trackerId", trackerId, isReached);
 	await clearDependencies(userId, "tracker", [trackerId]);
 }
 

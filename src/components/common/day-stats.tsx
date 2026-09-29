@@ -30,23 +30,27 @@ const PENDING_LABELS = [
  * out afresh on every minute's tick, so tomorrow simply measures against
  * tomorrow's.
  *
- * Only the labels are drawn until the browser has the time; see `useNow`.
+ * Only the labels are drawn until the browser has the time, and the finished
+ * tasks to measure today's speed from; see `useNow`.
  */
 export function DayStats({
 	total,
 	completed,
+	finishedAt,
 	window,
 	now,
 }: {
 	total: number;
 	completed: number;
+	/** When each finished task was finished; `undefined` while loading. */
+	finishedAt: ReadonlyArray<string | null> | undefined;
 	window: DailyWindow;
 	now: number | null;
 }) {
 	const moments = now === null ? null : todayWindow(window, now);
 	// The grid is held open with its labels, so nothing below it jumps when
 	// the figures arrive. The Current speed hint's line is held too.
-	if (now === null || moments === null) {
+	if (now === null || moments === null || finishedAt === undefined) {
 		return (
 			<StatGrid
 				stats={PENDING_LABELS.map((label) => ({
@@ -61,6 +65,9 @@ export function DayStats({
 	const pace = dayPace({
 		total,
 		completed,
+		completedToday: finishedAt.filter(
+			(at) => at !== null && Date.parse(at) >= moments.start,
+		).length,
 		now: new Date(now),
 		window: moments,
 	});

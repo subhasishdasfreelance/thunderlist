@@ -104,24 +104,27 @@ export function ArrangeDialog({
 							<span className="min-w-0 flex-1">
 								<Text maxLines={1}>{item.label}</Text>
 							</span>
-							<IconButton
-								label={`Move ${item.label} up`}
-								tooltip="Up"
-								variant="ghost"
-								size="sm"
-								icon={<ArrowUp aria-hidden />}
-								isDisabled={index === 0}
-								onClick={() => move(id, -1)}
-							/>
-							<IconButton
-								label={`Move ${item.label} down`}
-								tooltip="Down"
-								variant="ghost"
-								size="sm"
-								icon={<ArrowDown aria-hidden />}
-								isDisabled={index === rows.length - 1}
-								onClick={() => move(id, 1)}
-							/>
+							{/* Finger-sized on a touch screen; see `.thunderlist-row-buttons`. */}
+							<span className="thunderlist-row-buttons flex items-center gap-1">
+								<IconButton
+									label={`Move ${item.label} up`}
+									tooltip="Up"
+									variant="ghost"
+									size="sm"
+									icon={<ArrowUp aria-hidden />}
+									isDisabled={index === 0}
+									onClick={() => move(id, -1)}
+								/>
+								<IconButton
+									label={`Move ${item.label} down`}
+									tooltip="Down"
+									variant="ghost"
+									size="sm"
+									icon={<ArrowDown aria-hidden />}
+									isDisabled={index === rows.length - 1}
+									onClick={() => move(id, 1)}
+								/>
+							</span>
 						</HStack>
 					);
 				})}

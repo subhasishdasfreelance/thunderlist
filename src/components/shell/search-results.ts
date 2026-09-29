@@ -51,7 +51,8 @@ function matches(haystack: string, needle: string): boolean {
  *
  * A search for a number — `T-42`, `tr7` — finds that one thing and nothing
  * else. A bare `42` finds each kind's 42 first, then anything with 42 in its
- * name. Anything else is matched against names, as it always was.
+ * name. Anything else is matched against names — and a task's caption and
+ * notes, and a tracker's caption, as well.
  */
 export function searchResults(query: string, sources: Sources): Array<Result> {
 	const needle = query.trim().toLowerCase();
@@ -96,16 +97,33 @@ export function searchResults(query: string, sources: Sources): Array<Result> {
 	}));
 
 	/*
+	 * A task is found by its title, its caption or its notes — the title first,
+	 * since a word in the name is the likelier thing to be after — and a result
+	 * found only further in says where; see `foundIn`.
+	 *
 	 * A task result opens the page the task is actually on and scrolls to it:
 	 * its checklist, or — for one that belongs to no checklist — the page of
 	 * the first tag it carries. A task with neither has nowhere to be shown,
 	 * so it is not offered rather than opening a page it is not on.
 	 */
+	const inTitle = (item: SearchIndex["tasks"][number]) =>
+		matches(item.title, needle);
+	const foundIn = (item: SearchIndex["tasks"][number]) =>
+		inTitle(item)
+			? null
+			: matches(item.caption, needle)
+				? "caption"
+				: matches(item.notes ?? "", needle)
+					? "notes"
+					: null;
 	const tasks = found(
 		"task",
-		index.tasks,
+		[
+			...index.tasks.filter(inTitle),
+			...index.tasks.filter((item) => !inTitle(item)),
+		],
 		(item) => item.number,
-		(item) => matches(item.title, needle),
+		(item) => inTitle(item) || foundIn(item) !== null,
 	).flatMap((item): Array<Result> => {
 		const home =
 			item.checklistId === null
@@ -119,17 +137,20 @@ export function searchResults(query: string, sources: Sources): Array<Result> {
 					: null;
 		if (to === null) return [];
 
+		const where =
+			item.checklistTitle !== null
+				? item.checklistTitle
+				: home !== null
+					? `#${home.name}`
+					: "Task";
+		const inside = foundIn(item);
+
 		return [
 			{
 				key: `tsk-${item.taskId}`,
 				number: numbered("task", item.number),
 				label: item.title,
-				context:
-					item.checklistTitle !== null
-						? item.checklistTitle
-						: home !== null
-							? `#${home.name}`
-							: "Task",
+				context: inside === null ? where : `${where} · in its ${inside}`,
 				to,
 				focus: { task: item.taskId },
 				stage: stageAt(
@@ -150,7 +171,8 @@ export function searchResults(query: string, sources: Sources): Array<Result> {
 		(item) => item.number,
 		(item) =>
 			matches(item.title, needle) ||
-			(item.author !== null && matches(item.author, needle)),
+			(item.author !== null && matches(item.author, needle)) ||
+			(item.caption !== undefined && matches(item.caption, needle)),
 	).map((item) => ({
 		key: `trk-${item.trackerId}`,
 		number: numbered("tracker", item.number),

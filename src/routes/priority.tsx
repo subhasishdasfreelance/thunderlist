@@ -1,78 +1,60 @@
-import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { Card } from "@astryxdesign/core/Card";
-import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CircleAlert, CircleDashed, Flame, Star } from "lucide-react";
-import { useMemo, useState } from "react";
-import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
-import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
-import { TaskRow } from "#/components/checklists/task-row";
+import { useState } from "react";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
-import { ListPagination } from "#/components/common/list-pagination";
-import { LoadingState } from "#/components/common/loading-state";
+import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { TagFilter } from "#/components/tags/tag-filter";
-import { TagTasks } from "#/components/tags/tag-tasks";
-import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
+import { IndexTaskList } from "#/components/tasks/index-task-list";
 import { TypeFilter } from "#/components/tasks/type-filter";
-import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
 import {
-	createTagResolver,
-	moveToBacklog,
-	resolveTags,
-	setSpecialTag,
-	toggleAssignee,
-	updateTask,
-	useApplyChange,
-} from "#/lib/changes";
-import {
-	matchesFilter,
-	orderByTask,
-	type SortOrder,
-	shortTitle,
-} from "#/lib/tasks/tasks";
-import { useHeld } from "#/lib/use-held";
-import { usePages } from "#/lib/use-pages";
-import { useTaskTypes } from "#/lib/use-task-types";
-import { usePermissions, useSpace } from "#/lib/use-team";
+	type FilterSearch,
+	filterSearch,
+	sortParam,
+} from "#/lib/filter-search";
+import { PAGE_SIZE } from "#/lib/use-pages";
+import { acrossQuery } from "#/queries/across";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { searchIndexQuery, type TaggedTask } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
 import {
-	checklistStages,
-	specialChecklist,
-	stageProgress,
-} from "#/schemas/checklist";
-import {
+	type AcrossPageView,
 	PRIORITY_LABELS,
 	PRIORITY_RANKS,
 	type PriorityRank,
-	priorityRank,
 } from "#/schemas/task";
 
+/** The corner and the page the screen opens on: the one to do first. */
+const FIRST_VIEW: AcrossPageView = {
+	groupBy: "priority",
+	sort: "newest",
+	limit: PAGE_SIZE,
+};
+
 export const Route = createFileRoute("/priority")({
-	loader: ({ context }) => {
+	// The order and filters, kept in the address; see `filterSearch`.
+	validateSearch: (search: Record<string, unknown>): FilterSearch =>
+		filterSearch(search),
+	loader: async ({ context }) => {
 		// Tags only colour the rows and light their Today buttons, and the
 		// checklists give each row its stages and somewhere to move to, the
 		// Backlog included; the rows themselves are the screen.
 		deferQuery(context.queryClient, tagsQuery());
 		deferQuery(context.queryClient, checklistsQuery());
 
-		return primeQuery(context.queryClient, searchIndexQuery());
+		await primeQuery(context.queryClient, acrossQuery(FIRST_VIEW));
 	},
 	component: PriorityPage,
 });
 
-/** What each band means, so the grid is readable without knowing the theory. */
 /**
  * The marks the flags already use, so a band looks like what it holds. Both
  * flags at once is the corner to do first, so it gets a mark of its own rather
@@ -85,6 +67,7 @@ const BAND_ICONS: Record<PriorityRank, typeof CircleAlert> = {
 	none: CircleDashed,
 };
 
+/** What each band means, so the grid is readable without knowing the theory. */
 const BAND_HINTS: Record<PriorityRank, string> = {
 	"urgent-important": "Do these first",
 	urgent: "Pressing, but ask whether they are worth it",
@@ -104,95 +87,82 @@ const BAND_HINTS: Record<PriorityRank, string> = {
  * checklist it lives in under the title — so it can be ticked or re-flagged
  * right here. Completed work is left out: this is for deciding what to do next,
  * so a task ticked here leaves the list.
+ *
+ * The corners, the filters, the order and the page are the server's to answer,
+ * as on the Across lists screen: one corner and one page of it come back, with
+ * the counts for all four, rather than every task in the space.
  */
 function PriorityPage() {
 	const navigate = useNavigate();
-	const { apply, applyAsync } = useApplyChange();
-	const index = useQuery(searchIndexQuery());
 	const tagsResult = useQuery(tagsQuery());
-	const checklistsResult = useQuery(checklistsQuery());
 
-	const [renaming, setRenaming] = useState<TaggedTask | null>(null);
-	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
-	// Its title stays on the question while it closes; see `useHeld`.
-	const shownDelete = useHeld(pendingDelete);
-	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
-	const [typing, setTyping] = useState<TaggedTask | null>(null);
-	// The tasks a tag is being put on: the one pointed at, or every one
-	// picked out; see `TagPickerDialog`.
-	const [tagging, setTagging] = useState<ReadonlyArray<TaggedTask> | null>(
-		null,
-	);
-	const [moving, setMoving] = useState<TaggedTask | null>(null);
-	const [sort, setSort] = useState<SortOrder>("newest");
-	const [assignee, setAssignee] = useState<string | undefined>(undefined);
-	const [tagId, setTagId] = useState<string | undefined>(undefined);
-	const [typeId, setTypeId] = useState<string | undefined>(undefined);
-	const space = useSpace();
-	const team = space?.team ?? null;
-	const { canManageContent } = usePermissions();
-	const types = useTaskTypes();
+	// Picked by hand, and kept in the URL; until then newest first, unfiltered.
+	const {
+		sort = "newest",
+		who: assignee,
+		tag: tagId,
+		type: typeId,
+	} = Route.useSearch();
+	const [selected, setSelected] = useState<PriorityRank>("urgent-important");
+	const [page, setPage] = useState<number | undefined>(undefined);
+
+	/**
+	 * Another order or filter. It replaces the address rather than adding to
+	 * it, so Back leaves the screen rather than stepping back through every
+	 * filter, and the scroll stays.
+	 */
+	function filterBy(next: FilterSearch) {
+		setPage(undefined);
+		void navigate({
+			to: ".",
+			search: (previous) => ({ ...previous, ...next }),
+			replace: true,
+			resetScroll: false,
+		});
+	}
+
+	// The rows on screen stay up while another corner, order or page is on
+	// its way, as on the Across lists screen.
+	const result = useQuery({
+		...acrossQuery({
+			groupBy: "priority",
+			group: selected,
+			sort,
+			limit: PAGE_SIZE,
+			page,
+			assignee,
+			tag: tagId,
+			type: typeId,
+		}),
+		placeholderData: keepPreviousData,
+	});
 
 	const tags = tagsResult.data ?? [];
-	const checklists = checklistsResult.data ?? [];
-	// Somewhere to park a task; see `moveToBacklog`.
-	const backlog = specialChecklist(checklists, "backlog");
 
-	const tasks = useMemo(
-		() =>
-			(index.data?.tasks ?? []).filter(
-				(task) =>
-					!task.completed &&
-					matchesFilter(task, { assignee, tag: tagId, type: typeId }),
-			),
-		[index.data, assignee, tagId, typeId],
-	);
-
-	const [selected, setSelected] = useState<PriorityRank>("urgent-important");
-
-	const bands = useMemo(() => {
-		const grouped = new Map<PriorityRank, typeof tasks>();
-		for (const rank of PRIORITY_RANKS) grouped.set(rank, []);
-		for (const task of tasks) grouped.get(priorityRank(task))?.push(task);
-		return grouped;
-	}, [tasks]);
-
-	const shown = useMemo(
-		() =>
-			orderByTask(
-				bands.get(selected) ?? [],
-				sort,
-				(task) => task,
-				// A band holds tasks from lists with stages of their own, so how far
-				// along each is is what puts them in one order; see `stageProgress`.
-				(task) =>
-					stageProgress(
-						task,
-						checklistStages(
-							checklists.find(
-								(each) => each.checklistId === task.checklistId,
-							) ?? {},
-						),
-					),
-				types,
-			),
-		[bands, selected, sort, types, checklists],
-	);
-	const paging = usePages(shown);
-
-	if (index.isError) {
+	if (result.isError) {
 		return (
 			<VStack gap={4}>
 				<Heading level={1}>Priority</Heading>
-				<ErrorNotice error={index.error} onRetry={() => void index.refetch()} />
+				<ErrorNotice
+					error={result.error}
+					onRetry={() => void result.refetch()}
+				/>
 			</VStack>
 		);
 	}
 
+	const data = result.data ?? null;
+	const countOf = (rank: PriorityRank) =>
+		data?.groups.find((group) => group.key === rank)?.count ?? 0;
+	const openTotal = PRIORITY_RANKS.reduce(
+		(sum, rank) => sum + countOf(rank),
+		0,
+	);
+
 	/*
 	 * The four corners, each with what it holds.
 	 *
-	 * Completed tasks are already filtered out, so "left" is the whole count and
+	 * Completed tasks are already left out, so "left" is the whole count and
 	 * "done" is nothing — the summary is a comparison of how much of each kind
 	 * is outstanding, which is the question this screen exists to answer.
 	 */
@@ -200,74 +170,9 @@ function PriorityPage() {
 		value: rank,
 		label: PRIORITY_LABELS[rank],
 		mark: <Icon icon={BAND_ICONS[rank]} size="sm" color="secondary" />,
-		total: bands.get(rank)?.length ?? 0,
+		total: countOf(rank),
 		done: 0,
 	}));
-
-	/** One task, as a tag's page draws it. */
-	const taskRow = (task: TaggedTask) => {
-		const { checklistId } = task;
-
-		return (
-			<TaskRow
-				task={task}
-				tags={tags}
-				stages={checklistStages(
-					checklists.find((each) => each.checklistId === checklistId) ?? {},
-				)}
-				isStageShown
-				backlog={
-					backlog === null || checklistId === backlog.checklistId
-						? undefined
-						: {
-								title: backlog.title,
-								onMove: () =>
-									void moveToBacklog(
-										applyAsync,
-										task,
-										backlog.checklistId,
-										tags,
-									),
-							}
-				}
-				checklist={
-					checklistId === null
-						? null
-						: {
-								title: task.checklistTitle,
-								isBacklog: checklistId === backlog?.checklistId,
-								// Straight to the task, not just the checklist it lives in.
-								onOpen: () =>
-									void navigate({
-										to: "/checklists/$checklistId",
-										params: { checklistId },
-										search: { task: task.taskId },
-									}),
-							}
-				}
-				actions={{
-					onToggle: (completed) =>
-						updateTask(apply, task.taskId, { completed }),
-					onSetStage: (stageId) => updateTask(apply, task.taskId, { stageId }),
-					onSetSpecial: (kind, isOn) =>
-						setSpecialTag(apply, task, kind, isOn, tags),
-					onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
-					onSetImportant: (important) =>
-						updateTask(apply, task.taskId, { important }),
-					onSetType: () => setTyping(task),
-					onAddTag: () => setTagging([task]),
-					onRename: () => setRenaming(task),
-					onMove: () => setMoving(task),
-					onDelete: () => setPendingDelete(task),
-					onAssign: team === null ? undefined : () => setAssigning(task),
-					onToggleMine:
-						space?.team == null
-							? undefined
-							: () => toggleAssignee(apply, task, space.email),
-				}}
-			/>
-		);
-	};
 
 	return (
 		<VStack gap={4}>
@@ -278,9 +183,9 @@ function PriorityPage() {
 				</Text>
 			</VStack>
 
-			{index.isPending && tasks.length === 0 ? (
+			{data === null ? (
 				<LoadingState />
-			) : tasks.length === 0 ? (
+			) : openTotal === 0 && !result.isPlaceholderData ? (
 				<EmptyState
 					title="Nothing to prioritise."
 					description="Mark a task urgent or important from any list and it appears here."
@@ -292,7 +197,7 @@ function PriorityPage() {
 						selected={selected}
 						onSelect={(value) => {
 							setSelected(value as PriorityRank);
-							paging.reset();
+							setPage(undefined);
 						}}
 					/>
 
@@ -302,158 +207,49 @@ function PriorityPage() {
 							<HStack gap={1} vAlign="center" wrap="wrap">
 								<MemberFilter
 									value={assignee}
-									onChange={(next) => {
-										setAssignee(next);
-										paging.reset();
-									}}
+									onChange={(next) => filterBy({ who: next })}
 								/>
 								<TagFilter
 									tags={tags}
 									value={tagId}
-									onChange={(next) => {
-										setTagId(next);
-										paging.reset();
-									}}
+									onChange={(next) => filterBy({ tag: next })}
 								/>
 								<TypeFilter
 									value={typeId}
-									onChange={(next) => {
-										setTypeId(next);
-										paging.reset();
-									}}
+									onChange={(next) => filterBy({ type: next })}
 								/>
 							</HStack>
 							<SortMenu
 								order={sort}
 								hasStageOrder
-								onChange={(next) => {
-									setSort(next);
-									paging.reset();
-								}}
+								onChange={(next) => filterBy({ sort: sortParam(next) })}
 							/>
 						</HStack>
 
 						<Text type="supporting">{BAND_HINTS[selected]}</Text>
 
-						{shown.length === 0 ? (
-							<EmptyState
-								isCompact
-								title="Nothing here."
-								description="Nothing is sitting in this corner right now."
-							/>
-						) : (
-							<Card padding={0}>
-								<VStack gap={0} paddingBlock={2}>
-									{paging.shown.map((task, position) => (
-										<div
-											key={task.taskId}
-											className="thunderlist-row thunderlist-task-row"
-										>
-											{position === 0 ? null : <Divider />}
-											{taskRow(task)}
-										</div>
-									))}
-									<ListPagination
-										page={paging.page}
-										total={paging.total}
-										onChange={paging.setPage}
-									/>
-								</VStack>
-							</Card>
-						)}
+						<ListLoading
+							isLoading={result.isPlaceholderData}
+							isEmpty={data.items.length === 0}
+						>
+							{data.items.length === 0 ? (
+								<EmptyState
+									isCompact
+									title="Nothing here."
+									description="Nothing is sitting in this corner right now."
+								/>
+							) : (
+								<IndexTaskList
+									tasks={data.items}
+									page={data.page}
+									total={data.total}
+									onPageChange={setPage}
+								/>
+							)}
+						</ListLoading>
 					</VStack>
 				</>
 			)}
-
-			<AssignDialog
-				isOpen={assigning !== null}
-				onOpenChange={(open) => {
-					if (!open) setAssigning(null);
-				}}
-				task={assigning}
-				onSubmit={(assignees) => {
-					if (assigning) updateTask(apply, assigning.taskId, { assignees });
-					setAssigning(null);
-				}}
-			/>
-
-			<TagTasks
-				tasks={tagging}
-				tags={tags}
-				canCreate={canManageContent}
-				onClose={() => setTagging(null)}
-			/>
-
-			<TaskTypeDialog
-				isOpen={typing !== null}
-				onOpenChange={(open) => {
-					if (!open) setTyping(null);
-				}}
-				task={typing}
-				onPick={(typeId) => {
-					if (typing) updateTask(apply, typing.taskId, { typeId });
-					setTyping(null);
-				}}
-			/>
-
-			<ChecklistPickerDialog
-				isOpen={moving !== null}
-				onOpenChange={(open) => {
-					if (!open) setMoving(null);
-				}}
-				title="Move to checklist"
-				subtitle={moving?.title}
-				checklists={checklists.filter(
-					(checklist) => checklist.checklistId !== moving?.checklistId,
-				)}
-				isLoading={checklistsResult.isPending}
-				onPick={(target) => {
-					if (moving) {
-						apply({
-							kind: "task.move",
-							taskId: moving.taskId,
-							checklistId: target,
-						});
-					}
-					setMoving(null);
-				}}
-			/>
-
-			<TaskRenameDialog
-				isOpen={renaming !== null}
-				onOpenChange={(open) => {
-					if (!open) setRenaming(null);
-				}}
-				task={renaming}
-				tags={tags}
-				onSubmit={(parsed, details) => {
-					if (renaming) {
-						const resolveTag = createTagResolver(apply, tags, canManageContent);
-						updateTask(apply, renaming.taskId, {
-							title: parsed.title,
-							tagIds: resolveTags(resolveTag, parsed.tagNames),
-							...details,
-						});
-					}
-					setRenaming(null);
-				}}
-			/>
-
-			<AlertDialog
-				isOpen={pendingDelete !== null}
-				onOpenChange={(open) => {
-					if (!open) setPendingDelete(null);
-				}}
-				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
-				description="This task will be deleted."
-				actionLabel="Delete"
-				onAction={() => {
-					if (pendingDelete) {
-						apply({ kind: "task.delete", taskId: pendingDelete.taskId });
-					}
-					setPendingDelete(null);
-				}}
-			/>
 		</VStack>
 	);
 }

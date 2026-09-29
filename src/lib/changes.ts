@@ -65,15 +65,29 @@ function checklistNeeded(change: Change): string | null {
 }
 
 /**
- * The last change sent for each task, still on its way.
+ * The last change made to each task, not yet settled.
  *
  * Several changes to one task can be made at once — parking it is an edit and
  * then a move, undoing a delete is the task and then the rest of it — and each
  * is drawn the moment it is made. Only the sending waits: a change to a task
- * goes once the one before it has landed, since two requests can arrive in
+ * goes once the one before it has settled, since two requests can arrive in
  * either order and the second may name a task the first has yet to write.
+ *
+ * Settled, not sent: a change that failed with the connection down waits and
+ * is tried again, and everything after it for that task waits with it, or a
+ * tick would land before the task it ticks; see `settleChange`.
  */
-const sendingTasks = new Map<string, Promise<unknown>>();
+const sendingTasks = new Map<string, Promise<void>>();
+
+/** Each change's place in that queue, kept across its retries. */
+const queued = new WeakMap<
+	Change,
+	{
+		before: Array<Promise<void> | undefined>;
+		done: Promise<void>;
+		settle: () => void;
+	}
+>();
 
 /** The tasks a change is about, if it is about any. */
 function tasksOf(change: Change): ReadonlyArray<string> {
@@ -90,27 +104,46 @@ function tasksOf(change: Change): ReadonlyArray<string> {
 	}
 }
 
-/** Send one change, after any change to the same tasks before it. */
-function send(change: Change): Promise<void> {
+/**
+ * Send one change, after any change to the same tasks before it has settled.
+ * Its place is taken on the first try and kept through every retry.
+ */
+async function send(change: Change): Promise<void> {
 	const taskIds = tasksOf(change);
 	if (taskIds.length === 0) return sendNow(change);
 
-	const before = taskIds.map((taskId) => sendingTasks.get(taskId));
-	const sending = (async () => {
-		// Whatever became of the ones before, this one is still asked for.
-		await Promise.all(before.map((each) => each?.catch(() => {})));
-		await sendNow(change);
-	})();
-
-	for (const taskId of taskIds) sendingTasks.set(taskId, sending);
-	void sending
-		.catch(() => {})
-		.finally(() => {
-			for (const taskId of taskIds) {
-				if (sendingTasks.get(taskId) === sending) sendingTasks.delete(taskId);
-			}
+	let place = queued.get(change);
+	if (place === undefined) {
+		let settle = () => {};
+		const done = new Promise<void>((resolve) => {
+			settle = resolve;
 		});
-	return sending;
+		place = {
+			before: taskIds.map((taskId) => sendingTasks.get(taskId)),
+			done,
+			settle,
+		};
+		queued.set(change, place);
+		for (const taskId of taskIds) sendingTasks.set(taskId, done);
+	}
+
+	// Whatever became of the ones before, this one is still asked for.
+	await Promise.all(place.before);
+	await sendNow(change);
+}
+
+/**
+ * A change has landed, or been given up on: what waits on it for its tasks
+ * may go now.
+ */
+function settleChange(change: Change): void {
+	const place = queued.get(change);
+	if (place === undefined) return;
+
+	place.settle();
+	for (const taskId of tasksOf(change)) {
+		if (sendingTasks.get(taskId) === place.done) sendingTasks.delete(taskId);
+	}
 }
 
 /** Send one change, once any checklist it depends on has been written. */
@@ -170,7 +203,7 @@ function withMovedAt(change: Change): Change {
 export function useApplyChange() {
 	const queryClient = useQueryClient();
 	const toast = useToast();
-	const remember = useRememberUndo();
+	const undo = useRememberUndo();
 
 	const mutation = useMutation({
 		mutationFn: send,
@@ -194,7 +227,7 @@ export function useApplyChange() {
 			const previous = snapshot(queryClient);
 			// Worked out from the caches as they still are, since what a change
 			// undoes is only knowable before it lands; see `invertChange`.
-			remember?.(change);
+			undo?.remember(change);
 			applyOptimistically(queryClient, change);
 			return { previous };
 		},
@@ -202,7 +235,29 @@ export function useApplyChange() {
 		// The guess was wrong. Put back exactly what was there rather than trying
 		// to reverse each patch, which is where this kind of code usually breaks.
 		onError: (error, change, context) => {
-			if (context?.previous) restore(queryClient, context.previous);
+			if (context?.previous) {
+				restore(queryClient, context.previous);
+
+				/*
+				 * That snapshot was taken before anything made since, so putting
+				 * it back took those off the screen too, though they are still on
+				 * their way. They are drawn again over it, in the order they were
+				 * made — each that has been drawn once already.
+				 */
+				const made = queryClient.getMutationCache().getAll();
+				const at = made.findIndex((each) => each.state.variables === change);
+				if (at >= 0) {
+					for (const later of made.slice(at + 1)) {
+						if (
+							later.state.status === "pending" &&
+							later.state.context !== undefined
+						) {
+							applyOptimistically(queryClient, later.state.variables as Change);
+						}
+					}
+				}
+			}
+			undo?.forget(change);
 
 			/*
 			 * A checklist or tracker that was only ever drawn has no earlier state
@@ -234,7 +289,8 @@ export function useApplyChange() {
 		 * just added blinks out until that change lands too. This change still
 		 * counts as saving while it settles, hence one.
 		 */
-		onSettled: async () => {
+		onSettled: async (_data, _error, change) => {
+			settleChange(change);
 			if (queryClient.isMutating() === 1) await queryClient.invalidateQueries();
 		},
 	});
@@ -242,9 +298,20 @@ export function useApplyChange() {
 	/*
 	 * A task finished before what it waits on is refused here, before it is
 	 * drawn or heard, rather than drawn and then taken back; see `whyBlocked`.
+	 *
+	 * So is anything made with no connection: the page stays readable offline
+	 * (see `OfflineBanner`), but a change drawn now could only fail later, or
+	 * be lost with the tab.
 	 */
 	const refusal = useCallback(
 		(change: Change) => {
+			if (!navigator.onLine) {
+				const offline =
+					"You’re offline. This can be done once you’re back online.";
+				toast({ body: offline, type: "error", uniqueID: "offline" });
+				return offline;
+			}
+
 			const reason = whyBlocked(queryClient, change);
 			if (reason !== null) {
 				toast({ body: reason, type: "error", uniqueID: "depends" });

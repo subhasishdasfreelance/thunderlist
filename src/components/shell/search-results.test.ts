@@ -63,6 +63,28 @@ describe("searchResults", () => {
 		expect(keys.indexOf("tsk-tsk_1")).toBeLessThan(keys.indexOf("tsk-tsk_2"));
 	});
 
+	it("finds a task by its notes or caption, after the titles that match", () => {
+		const found = searchResults("oak", {
+			...sources,
+			index: {
+				...sources.index,
+				tasks: [
+					{ ...task("tsk_3", 3, "Visit"), notes: "Meet at the oak tree" },
+					{ ...task("tsk_4", 4, "Book"), caption: "Oakland trip" },
+					...sources.index.tasks,
+				],
+			},
+		});
+
+		expect(found.map((each) => each.key)).toEqual([
+			"tsk-tsk_2",
+			"tsk-tsk_3",
+			"tsk-tsk_4",
+		]);
+		expect(found[1]?.context).toBe("Work · in its notes");
+		expect(found[2]?.context).toBe("Work · in its caption");
+	});
+
 	it("sends a reading to its tracker, to be ringed there", () => {
 		const [entry] = searchResults("e42", sources);
 		expect(entry?.to).toBe("/trackers/trk_1");

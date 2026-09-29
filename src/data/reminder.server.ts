@@ -13,10 +13,19 @@
 import webpush from "web-push";
 import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
-import { levelFor } from "#/schemas/access";
+import { type AccessEntry, levelFor } from "#/schemas/access";
 import { isDue, type Reminder, type ReminderTarget } from "#/schemas/reminder";
-import { storedRole, type TeamMessageInput } from "#/schemas/team";
-import { type Hidden, withAccess } from "./visibility.server";
+import {
+	type MessageRecipients,
+	storedRole,
+	type TeamMessageInput,
+} from "#/schemas/team";
+import {
+	type Hidden,
+	isTaskVisible,
+	readAccess,
+	withAccess,
+} from "./visibility.server";
 
 /** The server's push keys, or `null` while none are configured. */
 function pushKeys(): { publicKey: string; privateKey: string } | null {
@@ -162,14 +171,79 @@ export async function sendTo(
 /** As long as the push services will hold a message: four weeks. */
 export const MESSAGE_TTL = 60 * 60 * 24 * 28;
 
+/** What an access list is read from, as stored. */
+type Listed = {
+	access?: ReadonlyArray<AccessEntry> | null;
+	visibleTo?: ReadonlyArray<string> | null;
+	special?: string | null;
+};
+
+/**
+ * The checklist, tag or tracker a message is sent to the people of, with the
+ * page it opens — `null` for a message to anyone else. Refused as deleted when
+ * it is gone, or kept from the sender.
+ */
+async function messagedItem(
+	teamId: string,
+	to: MessageRecipients,
+	hidden: Hidden,
+): Promise<{ found: Listed; url: string } | null> {
+	const current = await collections();
+	const ACCESS = { _id: 0, access: 1, visibleTo: 1, special: 1 } as const;
+
+	switch (to.kind) {
+		case "checklist": {
+			const found = hidden.checklistIds.has(to.checklistId)
+				? null
+				: await current.checklists.findOne(
+						{ userId: teamId, checklistId: to.checklistId },
+						{ projection: ACCESS },
+					);
+			if (found === null) {
+				throw new AppError("not_found", "That checklist no longer exists.");
+			}
+			return { found, url: `/checklists/${to.checklistId}` };
+		}
+		case "tag": {
+			const found = hidden.tagIds.has(to.tagId)
+				? null
+				: await current.tags.findOne(
+						{ userId: teamId, tagId: to.tagId },
+						{ projection: ACCESS },
+					);
+			if (found === null) {
+				throw new AppError("not_found", "That tag no longer exists.");
+			}
+			return {
+				found,
+				url: `/tags/${found.special === "today" ? "today" : to.tagId}`,
+			};
+		}
+		case "tracker": {
+			const found = hidden.trackerIds.has(to.trackerId)
+				? null
+				: await current.trackers.findOne(
+						{ userId: teamId, trackerId: to.trackerId },
+						{ projection: { _id: 0, access: 1, visibleTo: 1 } },
+					);
+			if (found === null) {
+				throw new AppError("not_found", "That tracker no longer exists.");
+			}
+			return { found, url: `/trackers/${to.trackerId}` };
+		}
+		default:
+			return null;
+	}
+}
+
 /**
  * A message from a project manager to the people of their team it names, on
  * every device each of them has turned notifications on for. One that is off
  * gets it once it is back on, within four weeks. Returns how many people and
  * how many devices took it — a person with no device has nothing to take it.
  *
- * Sent to a checklist, it goes to everyone who can see that checklist, and
- * opens it; see `levelFor`.
+ * Sent to a checklist, a tag or a tracker, it goes to everyone who can see
+ * that, and opens it; see `levelFor`.
  */
 export async function sendTeamMessage(
 	teamId: string,
@@ -182,24 +256,15 @@ export async function sendTeamMessage(
 		.toArray();
 
 	const { to } = input;
-	const checklist =
-		to.kind === "checklist" && !hidden.checklistIds.has(to.checklistId)
-			? await current.checklists.findOne(
-					{ userId: teamId, checklistId: to.checklistId },
-					{ projection: { _id: 0, access: 1, visibleTo: 1, special: 1 } },
-				)
-			: null;
-	if (to.kind === "checklist" && checklist === null) {
-		throw new AppError("not_found", "That checklist no longer exists.");
-	}
-	// The Inbox and the Backlog are everyone's, whatever they say.
+	const item = await messagedItem(teamId, to, hidden);
+	// The Inbox, the Backlog and Today are everyone's, whatever they say.
 	const canSee = (member: { email: string; role: string }) =>
-		checklist === null ||
-		checklist.special != null ||
+		item === null ||
+		item.found.special != null ||
 		levelFor(
 			storedRole(member.role),
 			member.email,
-			withAccess(checklist).access,
+			withAccess(item.found).access,
 		) !== null;
 
 	const recipients = members
@@ -208,13 +273,12 @@ export async function sendTeamMessage(
 				? true
 				: to.kind === "role"
 					? storedRole(member.role) === to.role
-					: to.kind === "checklist"
-						? canSee(member)
-						: member.email === to.email,
+					: to.kind === "person"
+						? member.email === to.email
+						: canSee(member),
 		)
 		.map((member) => member.email);
-	const url =
-		to.kind === "checklist" ? `/checklists/${to.checklistId}` : "/tags/today";
+	const url = item?.url ?? "/tags/today";
 
 	let people = 0;
 	let devices = 0;
@@ -228,6 +292,76 @@ export async function sendTeamMessage(
 		devices += sent;
 	}
 	return { people, devices };
+}
+
+/**
+ * Tell everyone a task has just been given to, on every device they turned
+ * notifications on for; tapping it opens the task. `before` is who had it
+ * already, who have nothing new to hear.
+ *
+ * Not whoever did the assigning — they know — and not anyone the task is
+ * kept from, whom it would tell its title; see `isTaskVisible`.
+ */
+export async function sendAssigned(
+	teamId: string,
+	actor: string,
+	taskId: string,
+	before: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	const task = await current.tasks.findOne(
+		{ userId: teamId, taskId },
+		{
+			projection: {
+				_id: 0,
+				title: 1,
+				assignees: 1,
+				checklistId: 1,
+				tagIds: 1,
+			},
+		},
+	);
+	if (!task) return;
+
+	const added = (task.assignees ?? []).filter(
+		(email) => email !== actor && !before.includes(email),
+	);
+	if (added.length === 0) return;
+
+	const account = await current.users.findOne(
+		{ email: actor },
+		{ projection: { _id: 0, name: 1 } },
+	);
+	const url =
+		task.checklistId === null
+			? "/tags/today"
+			: `/checklists/${task.checklistId}?task=${taskId}`;
+
+	for (const email of added) {
+		const member = await current.members.findOne(
+			{ teamId, email },
+			{ projection: { _id: 0, role: 1 } },
+		);
+		if (!member) continue;
+
+		const { hidden } = await readAccess(
+			current,
+			teamId,
+			email,
+			storedRole(member.role),
+		);
+		if (!isTaskVisible(task, hidden)) continue;
+
+		await sendTo(
+			{ email },
+			{
+				title: `${account?.name ?? actor} gave you a task`,
+				body: task.title,
+				url,
+			},
+			MESSAGE_TTL,
+		);
+	}
 }
 
 /** A notification now, to check this one device of this person's gets them. */
@@ -245,22 +379,61 @@ export async function sendTestPush(
 	);
 }
 
-/** What a reminder says, and where it opens. */
+/**
+ * Whether a reminder's person may still see what it is about. In their own
+ * space, always. In a team they can be taken out of it, or off that thing's
+ * list, after setting it — and the reminder must not go on telling them its
+ * name.
+ */
+async function canStillSee(
+	reminder: { ownerId: string; email: string },
+	item: Listed,
+): Promise<boolean> {
+	const current = await collections();
+	const team = await current.teams.findOne(
+		{ teamId: reminder.ownerId },
+		{ projection: { _id: 0, teamId: 1 } },
+	);
+	if (team === null) return true;
+
+	const member = await current.members.findOne(
+		{ teamId: reminder.ownerId, email: reminder.email },
+		{ projection: { _id: 0, role: 1 } },
+	);
+	if (member === null) return false;
+
+	// Today is everyone's, whatever it says; see `readAccess`.
+	return (
+		item.special != null ||
+		levelFor(
+			storedRole(member.role),
+			reminder.email,
+			withAccess(item).access,
+		) !== null
+	);
+}
+
+/**
+ * What a reminder says, and where it opens — `null` once what it is about is
+ * gone, or gone for its person; see `canStillSee`.
+ */
 async function messageFor(reminder: {
 	ownerId: string;
+	email: string;
 	target: ReminderTarget;
 	targetId: string;
 }): Promise<Message | null> {
 	const current = await collections();
 	const { ownerId, targetId } = reminder;
+	const ACCESS = { access: 1, visibleTo: 1 } as const;
 
 	switch (reminder.target) {
 		case "tracker": {
 			const found = await current.trackers.findOne(
 				{ userId: ownerId, trackerId: targetId },
-				{ projection: { _id: 0, title: 1 } },
+				{ projection: { _id: 0, title: 1, ...ACCESS } },
 			);
-			return found === null
+			return found === null || !(await canStillSee(reminder, found))
 				? null
 				: {
 						title: `Log progress on ${found.title}`,
@@ -271,9 +444,9 @@ async function messageFor(reminder: {
 		case "tag": {
 			const found = await current.tags.findOne(
 				{ userId: ownerId, tagId: targetId },
-				{ projection: { _id: 0, name: 1, special: 1 } },
+				{ projection: { _id: 0, name: 1, special: 1, ...ACCESS } },
 			);
-			return found === null
+			return found === null || !(await canStillSee(reminder, found))
 				? null
 				: {
 						title: `Review #${found.name}`,
@@ -290,7 +463,8 @@ async function messageFor(reminder: {
 
 /**
  * Send every reminder whose time has come, once each per day on its own
- * clock. A reminder about something since deleted is deleted with it.
+ * clock. A reminder about something since deleted, or since kept from its
+ * person, is deleted with it.
  */
 export async function sendDueReminders(
 	now: Date,
@@ -301,23 +475,29 @@ export async function sendDueReminders(
 	let due = 0;
 	let sent = 0;
 	for (const reminder of reminders) {
-		const { isDue: isNow, today } = isDue(reminder, now);
-		if (!isNow) continue;
-		due += 1;
+		// One that cannot be worked out — a time zone this server does not
+		// know — is skipped rather than stopping everyone's after it.
+		try {
+			const { isDue: isNow, today } = isDue(reminder, now);
+			if (!isNow) continue;
+			due += 1;
 
-		const message = await messageFor(reminder);
-		if (message === null) {
-			await current.reminders.deleteOne({ _id: reminder._id });
-			continue;
+			const message = await messageFor(reminder);
+			if (message === null) {
+				await current.reminders.deleteOne({ _id: reminder._id });
+				continue;
+			}
+
+			// Marked first: a slow push service must not make the next run send
+			// the same reminder again.
+			await current.reminders.updateOne(
+				{ _id: reminder._id },
+				{ $set: { lastSentOn: today } },
+			);
+			sent += await sendTo({ email: reminder.email }, message);
+		} catch (error) {
+			console.error("[thunderlist] reminder failed:", error);
 		}
-
-		// Marked first: a slow push service must not make the next run send
-		// the same reminder again.
-		await current.reminders.updateOne(
-			{ _id: reminder._id },
-			{ $set: { lastSentOn: today } },
-		);
-		sent += await sendTo({ email: reminder.email }, message);
 	}
 
 	return { due, sent };

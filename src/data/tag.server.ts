@@ -812,6 +812,17 @@ export async function updateTag(
 		await assertNameIsFree(userId, patch.name, tagId);
 	}
 
+	/*
+	 * The titles first, then the name: saved the other way round, a failure
+	 * between the two left the new name saved and the titles still saying the
+	 * old one, and trying again saw no rename to finish. This way the retry
+	 * still sees the old name, and rewriting a title already rewritten finds
+	 * nothing to change.
+	 */
+	if (patch.name !== undefined && patch.name !== before.name) {
+		await renameInTitles(current, userId, tagId, before.name, patch.name);
+	}
+
 	const next = await current.tags.findOneAndUpdate(
 		{ tagId, userId },
 		{
@@ -824,10 +835,6 @@ export async function updateTag(
 	);
 
 	if (!next) throw new AppError("not_found", "That tag no longer exists.");
-
-	if (patch.name !== undefined && patch.name !== before.name) {
-		await renameInTitles(current, userId, tagId, before.name, patch.name);
-	}
 
 	return withSchedule(next);
 }

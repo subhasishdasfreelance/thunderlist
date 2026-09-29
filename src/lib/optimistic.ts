@@ -41,6 +41,7 @@ import {
 } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { TaggedTask } from "#/queries/system";
+import type { AccessEntry } from "#/schemas/access";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Change } from "#/schemas/change";
 import {
@@ -48,6 +49,7 @@ import {
 	type ChecklistSummary,
 	checklistStages,
 	DEFAULT_STAGES,
+	restaged,
 	type Stage,
 	specialChecklist,
 	stageOf,
@@ -67,12 +69,13 @@ import {
 	type TagSummary,
 	type TagTaskEntry,
 } from "#/schemas/tag";
-import type {
-	AcrossPageView,
-	Task,
-	TaskFilter,
-	TaskPageView,
-	TaskPatch,
+import {
+	type AcrossPageView,
+	priorityRank,
+	type Task,
+	type TaskFilter,
+	type TaskPageView,
+	type TaskPatch,
 } from "#/schemas/task";
 import { type TaskType, UNTYPED } from "#/schemas/task-type";
 import type { SpaceView } from "#/schemas/team";
@@ -181,6 +184,24 @@ export function stagesOf(
 			?.find((each) => each.checklistId === checklistId);
 
 	return checklistStages(checklist ?? {});
+}
+
+/**
+ * A checklist's own tags, which every task in it carries, or `null` for one
+ * this browser has never read.
+ */
+function checklistTagsOf(
+	client: QueryClient,
+	checklistId: string | null,
+): ReadonlyArray<string> | null {
+	if (checklistId === null) return null;
+
+	const checklist =
+		client.getQueryData<ChecklistSummary>(queryKeys.checklist(checklistId)) ??
+		client
+			.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+			?.find((each) => each.checklistId === checklistId);
+	return checklist === undefined ? null : (checklist.tagIds ?? []);
 }
 
 /**
@@ -499,14 +520,19 @@ function patchTags(
  * Cut by stage that is the name of the stage it is at, lowercased, since names
  * are what checklists share; cut by type it is its type's id, or the group the
  * untyped fall into — which is also where a type the space no longer has puts
- * it, so `groups` is what decides whether an id is still one.
+ * it, so `groups` is what decides whether an id is still one. Cut by priority
+ * it is its corner, and a finished task is in none: `null`.
  */
 function acrossGroupOf(
 	task: AcrossTask,
 	view: AcrossPageView,
 	groups: ReadonlyArray<AcrossGroup>,
 	stages: ReadonlyArray<Stage>,
-): string {
+): string | null {
+	if (view.groupBy === "priority") {
+		return task.completed ? null : priorityRank(task);
+	}
+
 	if (view.groupBy === "type") {
 		const typeId = task.typeId ?? UNTYPED;
 		return groups.some((group) => group.key === typeId) ? typeId : UNTYPED;
@@ -646,11 +672,6 @@ export function findCachedTask(
 	client: QueryClient,
 	taskId: string,
 ): { task: Task; checklistId: string | null } | null {
-	const indexed = client
-		.getQueryData<SearchIndex>(queryKeys.searchIndex)
-		?.tasks.find((task) => task.taskId === taskId);
-	if (indexed) return { task: indexed, checklistId: indexed.checklistId };
-
 	for (const [, page] of client.getQueriesData<AcrossPage>({
 		queryKey: queryKeys.across,
 	})) {
@@ -693,6 +714,16 @@ export function findCachedTask(
 				?.find((entry) => entry.task.taskId === taskId);
 		if (found) return { task: found.task, checklistId: found.checklistId };
 	}
+
+	/*
+	 * The search index last: it is read while search or a picker is open and
+	 * then left, so it can be well behind what someone else has done since —
+	 * the lists on screen are read again every half minute.
+	 */
+	const indexed = client
+		.getQueryData<SearchIndex>(queryKeys.searchIndex)
+		?.tasks.find((task) => task.taskId === taskId);
+	if (indexed) return { task: indexed, checklistId: indexed.checklistId };
 
 	return offPageTasks(client).get(taskId) ?? null;
 }
@@ -867,6 +898,18 @@ function dropTask(client: QueryClient, taskId: string): void {
 	patchAcross(client, taskId, () => null);
 }
 
+/**
+ * The tasks this browser holds that wait on one task, each as it is now —
+ * what deleting that task takes their wait off; see `clearDependencies`.
+ */
+export function dependentsOf(client: QueryClient, taskId: string): Array<Task> {
+	return [...everyCachedTask(client).values()].filter((task) =>
+		(task.dependsOn ?? []).some(
+			(ref) => ref.kind === "task" && ref.id === taskId,
+		),
+	);
+}
+
 /** Every task this browser holds, by id, from whichever cache has it. */
 function everyCachedTask(client: QueryClient): Map<string, Task> {
 	const found = new Map<string, Task>();
@@ -934,6 +977,18 @@ function clearDependencies(
 function tasksIn(client: QueryClient, checklistId: string): Set<string> {
 	const found = new Set<string>();
 
+	// Its own screen first: the pages of its stages, and its finished tasks.
+	for (const [, page] of client.getQueriesData<StagePage>({
+		queryKey: queryKeys.checklistPages(checklistId),
+	})) {
+		for (const task of page?.items ?? []) found.add(task.taskId);
+	}
+	for (const task of client.getQueryData<Array<Task>>(
+		queryKeys.checklistCompleted(checklistId),
+	) ?? []) {
+		found.add(task.taskId);
+	}
+
 	for (const task of client.getQueryData<SearchIndex>(queryKeys.searchIndex)
 		?.tasks ?? []) {
 		if (task.checklistId === checklistId) found.add(task.taskId);
@@ -967,8 +1022,8 @@ function tasksIn(client: QueryClient, checklistId: string): Set<string> {
 }
 
 /**
- * A task arriving in a checklist: at its first stage, on the first page, where
- * a newest-first list puts it — and counted on every page whose filter it
+ * A task arriving in a checklist: at its stage — the first, or the last for one
+ * already done — on the first page, where a newest-first list puts it — and counted on every page whose filter it
  * passes. Where it sits among the rows is the screen's order to decide.
  */
 function addToChecklistPages(
@@ -976,20 +1031,31 @@ function addToChecklistPages(
 	checklistId: string,
 	task: Task,
 ): void {
-	const first = stagesOf(client, checklistId)[0].stageId;
+	// Where it arrives: the first stage for a new task, the last for one
+	// moved in already done.
+	const at = stageOf(task, stagesOf(client, checklistId));
 
 	for (const [key, page] of client.getQueriesData<StagePage>({
 		queryKey: queryKeys.checklistPages(checklistId),
 	})) {
 		if (!page || !matchesFilter(task, viewOf(key))) continue;
 
-		const isHere = page.stageId === first;
+		const isHere = page.stageId === at;
 		client.setQueryData<StagePage>(key, {
 			...page,
-			counts: { ...page.counts, [first]: (page.counts[first] ?? 0) + 1 },
+			counts: { ...page.counts, [at]: (page.counts[at] ?? 0) + 1 },
 			items: isHere && page.page === 1 ? [...page.items, task] : page.items,
 			total: isHere ? page.total + 1 : page.total,
 		});
+	}
+
+	// The finished tasks are read whole, for the Done stage; see
+	// `checklistCompletedQuery`.
+	if (task.completed) {
+		client.setQueryData<Array<Task>>(
+			queryKeys.checklistCompleted(checklistId),
+			(done) => (done === undefined ? done : [task, ...done]),
+		);
 	}
 }
 
@@ -1278,8 +1344,7 @@ function patchHistory(
 /**
  * The tasks following a tracker, ticked or unticked to match it. Such a task
  * is done exactly when the tracker reaches its target, worked out on every
- * read on the server — and never once the tracker is gone; see
- * `withTrackedCompletion`.
+ * read on the server; see `withTrackedCompletion`.
  */
 function followTracker(
 	client: QueryClient,
@@ -1345,8 +1410,68 @@ function summaryOf({ body, ...rest }: Plan): PlanSummary {
  * patch knowing how to undo itself.
  */
 export function applyOptimistically(client: QueryClient, change: Change): void {
-	patchFor(client, change);
+	patchFor(client, asStored(client, change));
 	followChecklists(client);
+}
+
+/**
+ * A change as the server will store it, where that differs from what was
+ * sent: in a team, whoever keeps something to a few people is on that list
+ * themselves (see `includingActor`), and the Inbox and the Backlog keep no
+ * list at all (see `updateChecklist`). Drawn as sent, the list on screen
+ * would lose that person, or show one, until the refetch.
+ */
+function asStored(client: QueryClient, change: Change): Change {
+	const space = client.getQueryData<SpaceView>(queryKeys.space);
+	if (space == null || space.team === null) return change;
+
+	const including = (
+		people: Array<AccessEntry> | null,
+	): Array<AccessEntry> | null =>
+		people === null || people.some((entry) => entry.email === space.email)
+			? people
+			: [...people, { email: space.email, level: "full" as const }];
+
+	switch (change.kind) {
+		case "checklist.create":
+		case "tag.create":
+		case "tracker.create":
+			return { ...change, access: including(change.access) };
+
+		case "checklist.update": {
+			const { access } = change.patch;
+			if (access === undefined) return change;
+			const isSpecial =
+				client
+					.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+					?.find((each) => each.checklistId === change.checklistId)?.special !=
+				null;
+			return {
+				...change,
+				patch: {
+					...change.patch,
+					access: isSpecial ? null : including(access),
+				},
+			};
+		}
+
+		case "tag.update": {
+			const { access } = change.patch;
+			return access === undefined
+				? change
+				: { ...change, patch: { ...change.patch, access: including(access) } };
+		}
+
+		case "tracker.update": {
+			const { access } = change.patch;
+			return access === undefined
+				? change
+				: { ...change, patch: { ...change.patch, access: including(access) } };
+		}
+
+		default:
+			return change;
+	}
 }
 
 /**
@@ -1421,18 +1546,20 @@ function patchFor(client: QueryClient, change: Change): void {
 						...task,
 						...patch,
 						// The server adds a task's checklist tags back to whatever an
-						// edit sends. Keeping the ones its title never wrote does the
-						// same here, so their chips do not blink off until the answer
-						// lands.
+						// edit sends, so they are added here too — or, for a checklist
+						// this browser has not read, the ones its title never wrote,
+						// which is where those came from — so their chips do not blink
+						// off until the answer lands.
 						tagIds:
 							patch.tagIds === undefined
 								? task.tagIds
 								: [
 										...new Set([
 											...patch.tagIds,
-											...unwrittenTags(task.title, task.tagIds, tags).map(
-												(tag) => tag.tagId,
-											),
+											...(checklistTagsOf(client, checklistId) ??
+												unwrittenTags(task.title, task.tagIds, tags).map(
+													(tag) => tag.tagId,
+												)),
 										]),
 									],
 					},
@@ -1440,21 +1567,26 @@ function patchFor(client: QueryClient, change: Change): void {
 					stages,
 				);
 
-				// Into another stage at the top of it, as the server stamps it; see
-				// `updateTask`.
-				return stageOf(next, stages) === stageOf(task, stages)
+				// Into another stage at the top of it, as the server stamps it —
+				// unless an undo sent where it was; see `updateTask`.
+				return stageOf(next, stages) === stageOf(task, stages) ||
+					patch.addedAt !== undefined
 					? next
 					: { ...next, addedAt: new Date().toISOString() };
 			});
 
-			// The server stamps the moment it was finished; guessing it here keeps
+			// The server stamps the moment it was finished — afresh whenever a
+			// tick is sent, as it does; see `updateTask`. Guessing it here keeps
 			// the chart from re-drawing when the answer lands.
 			patchTask(client, change.taskId, (task) =>
-				task.completedAt === null && task.completed
-					? { ...task, completedAt: new Date().toISOString() }
-					: !task.completed && task.completedAt !== null
-						? { ...task, completedAt: null }
-						: task,
+				patch.completedAt !== undefined
+					? task
+					: task.completed &&
+							(task.completedAt === null || patch.completed !== undefined)
+						? { ...task, completedAt: new Date().toISOString() }
+						: !task.completed && task.completedAt !== null
+							? { ...task, completedAt: null }
+							: task,
 			);
 			return;
 		}
@@ -1525,8 +1657,12 @@ function patchFor(client: QueryClient, change: Change): void {
 				...(notes === null ? {} : { notes }),
 				// At the top of the new list, as the server stamps it; see `moveTask`.
 				addedAt: new Date().toISOString(),
-				// Its stage was the old list's; see `stageOf`.
-				stageId: stagesOf(client, change.checklistId)[0].stageId,
+				// Its stage was the old list's, so it starts the new one's — or is
+				// at its end, done, if it was done; see `stageOf`.
+				stageId: stageOf(
+					{ stageId: null, completed: task.completed },
+					stagesOf(client, change.checklistId),
+				),
 				tagIds: [
 					...new Set([
 						...task.tagIds.filter((tagId) => !dropped.has(tagId)),
@@ -1595,12 +1731,7 @@ function patchFor(client: QueryClient, change: Change): void {
 
 			// A task added to a checklist carries its tags as well, just as the
 			// server will store it; see `createTask`.
-			const inherited =
-				checklistId === null
-					? []
-					: (client.getQueryData<ChecklistSummary>(
-							queryKeys.checklist(checklistId),
-						)?.tagIds ?? []);
+			const inherited = checklistTagsOf(client, checklistId) ?? [];
 
 			const first = stagesOf(client, checklistId)[0].stageId;
 			const task: Task = {
@@ -1615,6 +1746,8 @@ function patchFor(client: QueryClient, change: Change): void {
 				urgent: change.urgent,
 				important: change.important,
 				stageId: first,
+				// Its old number, for one an undo puts back; see `createTask`.
+				...(change.number === undefined ? {} : { number: change.number }),
 			};
 
 			patchSummaries(client, null, null, task, checklistId);
@@ -1795,12 +1928,24 @@ function patchFor(client: QueryClient, change: Change): void {
 				}
 			}
 			/*
-			 * The counts are left as they are. Taking a stage away moves its
-			 * tasks back to the one before it, which is a walk over every task in
-			 * the list — the server does it in a single write and the refetch
-			 * brings the answer. The stages themselves are on screen at once,
-			 * which is what was asked for.
+			 * Its tasks follow its stages as the server moves them: a stage taken
+			 * away sends its tasks back, and a new last stage is the one that
+			 * means done — so what was done is not any longer, until moved on to
+			 * it; see `restaged`. The counts are left for the refetch.
 			 */
+			if (patch.stages !== undefined && before !== undefined) {
+				const was = checklistStages(before);
+				const is = patch.stages;
+				const inside = tasksIn(client, checklistId);
+				patchEveryTask(
+					client,
+					(task) => inside.has(task.taskId),
+					(task) => {
+						const next = restaged(task, was, is);
+						return next === null ? task : { ...task, ...next };
+					},
+				);
+			}
 			return;
 		}
 
@@ -1812,6 +1957,13 @@ function patchFor(client: QueryClient, change: Change): void {
 			for (const taskId of inside) dropTask(client, taskId);
 			clearDependencies(client, "task", inside);
 			clearDependencies(client, "checklist", [change.checklistId]);
+			// Tasks standing for it become ordinary ones, ticked as they were;
+			// see `releaseFollowers`.
+			patchEveryTask(
+				client,
+				(task) => task.linkedChecklistId === change.checklistId,
+				(task) => ({ ...task, linkedChecklistId: null }),
+			);
 			patchChecklist(client, change.checklistId, () => null);
 			return;
 		}
@@ -1881,18 +2033,48 @@ function patchFor(client: QueryClient, change: Change): void {
 			 * Where it stands is not touched, only what that is measured against.
 			 * A reading is a fact about the past; moving the target or the
 			 * starting point changes the percentage it makes, and nothing else —
-			 * which is exactly what the server does with it too.
+			 * which is exactly what the server does with it too. With nothing
+			 * logged yet, though, it stands at its start, so that moves with it.
 			 */
-			patchTracker(client, change.trackerId, (tracker) =>
-				withProgress({ ...tracker, ...change.patch, updatedAt }),
+			const history = client.getQueryData<Array<ProgressEntry>>(
+				queryKeys.trackerEntries(change.trackerId),
 			);
+			const isUnlogged =
+				change.patch.startValue !== undefined && history?.length === 0;
+			patchTracker(client, change.trackerId, (tracker) =>
+				withProgress({
+					...tracker,
+					...change.patch,
+					...(isUnlogged ? { currentValue: change.patch.startValue } : {}),
+					updatedAt,
+				}),
+			);
+
+			// A target moved past where it stands, or back under it, ticks or
+			// unticks the tasks following it.
+			const after =
+				client.getQueryData<TrackerDetail>(
+					queryKeys.tracker(change.trackerId),
+				) ??
+				client
+					.getQueryData<Array<TrackerSummary>>(queryKeys.trackers)
+					?.find((each) => each.trackerId === change.trackerId);
+			if (after !== undefined) {
+				followTracker(client, change.trackerId, after.progress.percent >= 100);
+			}
 			return;
 		}
 
 		case "tracker.delete":
 			patchTracker(client, change.trackerId, () => null);
 			clearDependencies(client, "tracker", [change.trackerId]);
-			followTracker(client, change.trackerId, false);
+			// Its tasks become ordinary ones, ticked as they were; see
+			// `releaseFollowers`.
+			patchEveryTask(
+				client,
+				(task) => task.trackerId === change.trackerId,
+				(task) => ({ ...task, trackerId: null }),
+			);
 			return;
 
 		case "entry.create": {

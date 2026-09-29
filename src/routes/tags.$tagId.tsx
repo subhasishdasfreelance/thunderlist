@@ -14,7 +14,13 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Trash2, ZapOff } from "lucide-react";
+import {
+	Megaphone,
+	MoreHorizontal,
+	Pencil,
+	Trash2,
+	ZapOff,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
 import { QuickAddTask } from "#/components/checklists/quick-add-task";
@@ -46,6 +52,7 @@ import { TypeFilter } from "#/components/tasks/type-filter";
 import { AccessButton } from "#/components/teams/access-button";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
+import { MessageDialog } from "#/components/teams/message-dialog";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
 	getTagCompletedFn,
@@ -65,6 +72,12 @@ import {
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import {
+	type FilterSearch,
+	filterSearch,
+	searchText,
+	sortParam,
+} from "#/lib/filter-search";
+import {
 	formatClock,
 	formatDate,
 	formatDateWithWeekday,
@@ -78,7 +91,6 @@ import {
 	matchesFilter,
 	mergeReads,
 	orderByTask,
-	type SortOrder,
 	shortTitle,
 } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
@@ -111,13 +123,21 @@ import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
-/** Every open task on a tag at once, for clearing Today in one go. */
+/** A tag's open tasks a thousand at a time, for clearing Today in one go. */
 const ALL_OPEN: TaskPageView = { sort: "newest", limit: 1000 };
 
 export const Route = createFileRoute("/tags/$tagId")({
-	/** `?task=` names a task to scroll to and ring; see `useFocusTask`. */
-	validateSearch: (search: Record<string, unknown>) => ({
+	/**
+	 * `?task=` names a task to scroll to and ring; see `useFocusTask`. The
+	 * order and filters are kept here too, `?stage=` the name of the one stage
+	 * shown; see `filterSearch`.
+	 */
+	validateSearch: (
+		search: Record<string, unknown>,
+	): { task: string | undefined; stage?: string } & FilterSearch => ({
 		task: typeof search.task === "string" ? search.task : undefined,
+		...filterSearch(search),
+		stage: searchText(search.stage),
 	}),
 	loaderDeps: ({ search }) => ({ task: search.task }),
 	loader: async ({ context, params, deps }) => {
@@ -159,7 +179,14 @@ export const Route = createFileRoute("/tags/$tagId")({
  */
 function TagDetailPage() {
 	const { tagId } = Route.useParams();
-	const { task: focusTaskId } = Route.useSearch();
+	// Picked by hand, and kept in the URL; until then newest first, unfiltered.
+	const {
+		task: focusTaskId,
+		sort = "newest",
+		who: assignee,
+		type: typeId,
+		stage: stageName,
+	} = Route.useSearch();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { apply, applyAsync } = useApplyChange();
@@ -180,34 +207,44 @@ function TagDetailPage() {
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	const [isDeletingTag, setIsDeletingTag] = useState(false);
+	// The tasks picked out to delete, asked about first; see `SelectionBar`.
+	const [deletingPicked, setDeletingPicked] =
+		useState<ReadonlyArray<string> | null>(null);
+	const shownDeletingPicked = useHeld(deletingPicked);
+	const [isMessaging, setIsMessaging] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	// Taking Today off every task on it, asked about first; see `clearToday`.
 	const [isClearingToday, setIsClearingToday] = useState(false);
-	const [sort, setSort] = useState<SortOrder>("newest");
 	// Picked by hand; until then, the page `?task=` is on, or the first.
 	const [page, setPage] = useState<number | undefined>(undefined);
 	const [wantsCompleted, setWantsCompleted] = useState(false);
-	// In a team, one person's work rather than everyone's; see `MemberFilter`.
-	const [assignee, setAssignee] = useState<string | undefined>(undefined);
-	// One kind of work rather than every kind; see `TypeFilter`.
-	const [typeId, setTypeId] = useState<string | undefined>(undefined);
-	// The open tasks at one stage rather than every one; see `StageFilter`.
-	const [stageName, setStageName] = useState<string | undefined>(undefined);
 
 	/*
 	 * Sent to a task on this page while already here — from search, say — the
-	 * page goes back to where `?task=` would have opened it, with no filter
-	 * hiding it; see the same on a checklist's page.
+	 * page goes back to where `?task=` would have opened it. The link carries
+	 * no filters, so none is left hiding it.
 	 */
 	const arrival = useArrival();
 	// biome-ignore lint/correctness/useExhaustiveDependencies: every arrival, the same task again included; see `useArrival`.
 	useEffect(() => {
 		if (focusTaskId === undefined) return;
 		setPage(undefined);
-		setAssignee(undefined);
-		setTypeId(undefined);
-		setStageName(undefined);
 	}, [arrival, focusTaskId]);
+
+	/**
+	 * Another order or filter: a different list, so from its first page. It
+	 * replaces the address rather than adding to it, so Back leaves the screen
+	 * rather than stepping back through every filter, and the scroll stays.
+	 */
+	function filterBy(next: FilterSearch & { stage?: string }) {
+		setPage(undefined);
+		void navigate({
+			to: ".",
+			search: (previous) => ({ ...previous, task: undefined, ...next }),
+			replace: true,
+			resetScroll: false,
+		});
+	}
 
 	const filter: TaskFilter = { assignee, type: typeId };
 	const isFiltered = assignee !== undefined || typeId !== undefined;
@@ -238,10 +275,12 @@ function TagDetailPage() {
 		placeholderData: keepPreviousData,
 	});
 
-	// The finished tasks are read once their section is opened, and not before.
+	// The finished tasks are read once their section is opened, and not before
+	// — or at once for a tag paced daily, whose speed is measured from when
+	// they were finished; see `DayStats`.
 	const completedResult = useQuery({
 		...tagCompletedQuery(tagId),
-		enabled: wantsCompleted,
+		enabled: wantsCompleted || data?.dailyWindow != null,
 	});
 	const tagsResult = useQuery(tagsQuery());
 	const trackersResult = useQuery(trackersQuery());
@@ -383,6 +422,19 @@ function TagDetailPage() {
 	// drawn against.
 	const todays =
 		daily === null || now === null ? null : todayWindow(daily, now);
+	// What the chart and today's speed are drawn from: the finished tasks, and
+	// the trackers, each done on the day it reached its target.
+	const finished = [
+		...completed.map((entry) => entry.task),
+		...figures.trackers.map(({ tracker, completedOn }) => ({
+			taskId: tracker.trackerId,
+			completed: tracker.progress.percent >= 100,
+			completedAt:
+				completedOn === null
+					? null
+					: new Date(dayStart(completedOn)).toISOString(),
+		})),
+	];
 
 	const velocity =
 		now === null
@@ -541,10 +593,10 @@ function TagDetailPage() {
 	 * would, so it is drawn at once.
 	 *
 	 * Today's figures and lists are emptied first, all at once; see
-	 * `emptyTagPage`. Then what is on screen is untagged, without waiting. The
-	 * screen holds only a page of Today, so the whole of it is then read and the
-	 * rest follows. That read goes straight to the server rather than through
-	 * the cache: every change drawn above cancels the queries in flight.
+	 * `emptyTagPage`. The screen holds only a page of Today, so the whole of it
+	 * is then read, and every task on it untagged together. That read goes
+	 * straight to the server rather than through the cache: every change drawn
+	 * above cancels the queries in flight.
 	 */
 	async function clearToday() {
 		const onScreen = [
@@ -564,12 +616,21 @@ function TagDetailPage() {
 			}
 		};
 
-		untag(onScreen);
-		const [openAll, doneAll] = await Promise.all([
-			getTagOpenTasksFn({ data: { tagId, ...ALL_OPEN } }),
-			getTagCompletedFn({ data: { tagId } }),
-		]);
-		untag([...openAll.items, ...doneAll]);
+		/*
+		 * Every open task on it, a page at a time however many there are — all
+		 * read before any is untagged, or each page read would shift under the
+		 * untagging of the one before it and skip tasks.
+		 */
+		const openAll: Array<TagTaskEntry> = [];
+		for (let page = 1; ; page++) {
+			const read = await getTagOpenTasksFn({
+				data: { tagId, ...ALL_OPEN, page },
+			});
+			openAll.push(...read.items);
+			if (page * ALL_OPEN.limit >= read.total) break;
+		}
+		const doneAll = await getTagCompletedFn({ data: { tagId } });
+		untag([...onScreen, ...openAll, ...doneAll]);
 	}
 
 	/** One task row, used by both the open and the completed sections. */
@@ -637,10 +698,13 @@ function TagDetailPage() {
 		);
 	};
 
-	// Today's page says which day it is, as the Today screen always did.
+	// Today's page says which day it is, as the Today screen always did — on
+	// the viewer's clock, so only once the browser has it; see `useNow`.
 	const subtitle =
 		special === "today"
-			? formatDateWithWeekday(todayDateOnly())
+			? now === null
+				? ""
+				: formatDateWithWeekday(todayDateOnly(new Date(now)))
 			: detail.description;
 
 	const openTotal = openResult.data?.total ?? 0;
@@ -703,6 +767,16 @@ function TagDetailPage() {
 										icon: Pencil,
 										onClick: () => setIsEditOpen(true),
 									},
+									// A notification to everyone who can see it; see `MessageDialog`.
+									...(team === null
+										? []
+										: [
+												{
+													label: "Message its people…",
+													icon: Megaphone,
+													onClick: () => setIsMessaging(true),
+												},
+											]),
 								],
 							},
 							// Today can be renamed but never deleted: the bolt on every row
@@ -766,6 +840,13 @@ function TagDetailPage() {
 				<DayStats
 					total={progress.total}
 					completed={progress.completed}
+					finishedAt={
+						completedResult.data === undefined
+							? undefined
+							: finished.flatMap((each) =>
+									each.completed ? [each.completedAt] : [],
+								)
+					}
 					window={daily}
 					now={now}
 				/>
@@ -827,17 +908,11 @@ function TagDetailPage() {
 					<HStack gap={1} vAlign="center">
 						<MemberFilter
 							value={assignee}
-							onChange={(next) => {
-								setAssignee(next);
-								setPage(undefined);
-							}}
+							onChange={(next) => filterBy({ who: next })}
 						/>
 						<TypeFilter
 							value={typeId}
-							onChange={(next) => {
-								setTypeId(next);
-								setPage(undefined);
-							}}
+							onChange={(next) => filterBy({ type: next })}
 						/>
 						<StageFilter
 							stages={(detail.progress.stages ?? []).map((stage) => ({
@@ -845,18 +920,12 @@ function TagDetailPage() {
 								color: detail.stageColors?.[stage.key] ?? stage.color,
 							}))}
 							value={stageName}
-							onChange={(next) => {
-								setStageName(next);
-								setPage(undefined);
-							}}
+							onChange={(next) => filterBy({ stage: next })}
 						/>
 						<SortMenu
 							order={sort}
 							hasStageOrder
-							onChange={(next) => {
-								setSort(next);
-								setPage(undefined);
-							}}
+							onChange={(next) => filterBy({ sort: sortParam(next) })}
 						/>
 					</HStack>
 				</div>
@@ -969,18 +1038,7 @@ function TagDetailPage() {
 							target={progress.total}
 							current={progress.completed}
 							points={completionPoints(
-								[
-									...completed.map((entry) => entry.task),
-									// A tracker is done on the day it reached its target.
-									...figures.trackers.map(({ tracker, completedOn }) => ({
-										taskId: tracker.trackerId,
-										completed: tracker.progress.percent >= 100,
-										completedAt:
-											completedOn === null
-												? null
-												: new Date(dayStart(completedOn)).toISOString(),
-									})),
-								],
+								finished,
 								todays?.start ?? dayStart(startDate),
 							)}
 							startLabel={
@@ -1057,6 +1115,14 @@ function TagDetailPage() {
 						canManageContent ? () => setMoving(pickedEntries) : undefined
 					}
 					onAddTag={() => setTagging(pickedEntries.map((entry) => entry.task))}
+					onDelete={
+						canManageContent
+							? () =>
+									setDeletingPicked(
+										pickedEntries.map((entry) => entry.task.taskId),
+									)
+							: undefined
+					}
 					onClear={clear}
 				/>
 			)}
@@ -1149,6 +1215,23 @@ function TagDetailPage() {
 			/>
 
 			<AlertDialog
+				isOpen={deletingPicked !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeletingPicked(null);
+				}}
+				title={`Delete ${shownDeletingPicked?.length ?? 0} tasks?`}
+				description="Every task picked out will be deleted."
+				actionLabel="Delete"
+				onAction={() => {
+					if (deletingPicked) {
+						apply({ kind: "task.deleteMany", taskIds: [...deletingPicked] });
+					}
+					setDeletingPicked(null);
+					clear();
+				}}
+			/>
+
+			<AlertDialog
 				isOpen={pendingDelete !== null}
 				onOpenChange={(isOpen) => {
 					if (!isOpen) setPendingDelete(null);
@@ -1196,6 +1279,12 @@ function TagDetailPage() {
 					void clearToday();
 					setIsClearingToday(false);
 				}}
+			/>
+
+			<MessageDialog
+				isOpen={isMessaging}
+				onOpenChange={setIsMessaging}
+				from={{ kind: "tag", tagId: detail.tagId }}
 			/>
 
 			<AlertDialog

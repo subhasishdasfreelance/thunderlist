@@ -61,10 +61,10 @@ code; where something could not be checked, the text says so.
 | **Plans** | Long Markdown documents, written in the app or imported from `.md`. | `src/routes/plans.*.tsx`, `src/schemas/plan.ts` |
 | **Countdowns** | A day to count down to, shown in one of four formats. | `src/routes/countdowns.tsx`, `src/schemas/countdown.ts` |
 | **Numbers** | Short, human-readable numbers (`T-42`, `C-3`, `TR-7` …) that can be searched for. | `src/schemas/number.ts`, `src/data/numbers.server.ts` |
-| **Search** | **Ctrl+K** searches checklists, tasks, trackers, readings, tags, plans, countdowns and groups, including by number (`T-42`). | `src/components/shell/search-dialog.tsx`, `search-results.ts`, `src/data/search.server.ts` |
+| **Search** | **Ctrl+K** searches checklists, tasks (titles, captions and notes), trackers, readings, tags, plans, countdowns and groups, including by number (`T-42`). | `src/components/shell/search-dialog.tsx`, `search-results.ts`, `src/data/search.server.ts` |
 | **Undo** | **Ctrl+Z** undoes the last 20 task-level actions. | `src/lib/undo.ts`, `src/components/shell/undo-provider.tsx` |
 | **Teams** | Shared spaces with four roles and an access list on each checklist, tracker and tag. | `src/schemas/team.ts`, `src/schemas/access.ts` |
-| **Team messages** | Project managers can push a message to a team, a role, everyone who can see a checklist, or one person. | `sendTeamMessage` in `src/data/reminder.server.ts` |
+| **Team messages** | Project managers can push a message to a team, a role, everyone who can see a checklist, tag or tracker, or one person. | `sendTeamMessage` in `src/data/reminder.server.ts` |
 | **Reminders** | A daily push notification about a tracker or a tag, at a time you choose. | `src/schemas/reminder.ts`, `/api/reminders` |
 | **Notification codes** | Secrets that let an outside script send notifications through `POST /api/notify`. | `src/schemas/notification-code.ts` |
 | **Backdrops** | A per-person choice of background design and palette for each section of the app. | `src/schemas/backdrop*.ts`, `src/components/shell/scenery.tsx` |
@@ -117,6 +117,7 @@ the moment of the keypress — and never fire while you are typing in a field
 |---|---|
 | `T` | Put the task on Today, or take it off |
 | `B` | Move to Backlog |
+| `M` | Move to another checklist |
 | `U` / `I` | Toggle urgent / important |
 | `X` | Tick: move to the next stage, or to done |
 | `E` | Edit |
@@ -125,10 +126,10 @@ the moment of the keypress — and never fire while you are typing in a field
 | `Space` | Assign to me, or unassign me (teams only) |
 | `D` | Delete |
 | `>` / `<` | Next / previous stage tab, on a page with stage tabs (`src/components/checklists/stage-tabs.tsx`) |
-| Drag across rows | Select several tasks (press and hold on a phone); `Esc` clears the selection |
+| Drag across rows | Select several tasks (press and hold on a phone) on any task list — a checklist, a tag, Priority, Across lists, Untagged. The bar that appears moves them on, finishes, tags, moves or deletes them. `Esc` clears the selection |
 | `1`–`9` | Go to Today, Checklists, Priority, Across lists, Tags, Trackers, Groups, Plans, Countdowns |
 | `Ctrl+K` | Search |
-| `Ctrl+Z` | Undo the last task action |
+| `Ctrl+Z` | Undo the last task action. On a touch screen, each undoable action shows a toast with an **Undo** button instead |
 | `Esc` | Closes one layer at a time: first leaves the text field, then closes the popup, then clears toasts. Every press also lets go of the row under the pointer until the pointer moves (`src/lib/use-escape.ts`) |
 
 ### Writing a task
@@ -162,7 +163,7 @@ cannot create tags, so an unknown `#name` stays as plain text for them.
 | Forms | `@tanstack/react-form` is a dependency | Most dialogs manage their own state; check an existing dialog before assuming a pattern. |
 | Database | **MongoDB**, official driver **pinned to v6** | A single `thunderlist` database. Server-only access through `src/lib/mongo/client.server.ts`. |
 | Auth | **Better Auth** with Google as the only provider | `src/lib/auth.ts` (config), `src/lib/auth.server.ts` (`currentUser`, `requireUser`), `src/lib/auth-client.ts` (browser). |
-| Push | **web-push** (VAPID) | Reminders, team messages and notification codes. |
+| Push | **web-push** (VAPID) | Reminders, team messages, assignments and notification codes. |
 | Runtime | **Bun** (package manager, test runner, dev runtime); **Node** for ad-hoc DB scripts | See [Running database scripts](#37-running-database-scripts-use-node). |
 | Lint and format | **Biome 2** | Tabs and double quotes. See `biome.json`. |
 | Types | **TypeScript 6**, `strict`, `noUnusedLocals`/`Parameters`, `verbatimModuleSyntax` | `bun run typecheck`. |
@@ -448,14 +449,15 @@ Take opening a checklist as an example:
 
 Long lists are paged on the server, 20 rows per page (`PAGE_SIZE` in
 `src/lib/use-pages.ts`, and `taskPageSchema` in `src/schemas/task.ts`). This
-covers a checklist's stage, a tag's open tasks, and the Across lists groups.
+covers a checklist's stage, a tag's open tasks, the Across lists groups, and
+the Priority corners (`groupBy: "priority"` in `getAcrossTasks`).
 Finished tasks are read only when their section is opened.
 
 **The search index** (`getSearchIndex`) is one read that returns every
 checklist, tracker, reading and task visible to the viewer. It powers search
 (Ctrl+K, together with the tags, plans, countdowns and groups already in the
-cache; see `Sources` in `search-results.ts`), the item picker, Priority, the
-Tags screen and the Untagged page.
+cache; see `Sources` in `search-results.ts`), the item picker, the Tags
+screen and the Untagged page.
 
 **Client cache policy** (`src/integrations/tanstack-query/root-provider.tsx`):
 - Queries refetch every **30 s** while the page is visible, and when the window
@@ -1134,9 +1136,10 @@ no longer has, `src/lib/chunk-reload.ts` shows the loading screen and reloads.
 It holds off if a reload was just tried or the connection is down, and keeps
 retrying.
 
-**Offline**: `useIsOnline()` swaps the page for `OfflineScreen`, so nothing that
-needs the server can be pressed. Changes that fail because the connection
-dropped are retried when it returns.
+**Offline**: `useIsOnline()` shows `OfflineBanner` above the page, which stays
+on screen as it was, half-typed text included. New changes are refused with a
+toast until the connection is back (`useApplyChange`). Changes that fail because
+the connection dropped are retried when it returns.
 
 `src/lib/first-open.ts` rearranges history on a fresh open so that **Back** from
 Today goes to Checklists instead of leaving the app.
@@ -1167,9 +1170,15 @@ Today goes to Checklists instead of leaving the app.
 
 A project manager or admin can push a message (title up to 60 characters,
 body up to 300) to the whole team, everyone with a given role, everyone who
-can see a checklist, or one person (`teamMessageInputSchema`,
+can see a checklist, tag or tracker ("Message its people…" in its menu), or one
+person (`teamMessageInputSchema`,
 `MessageDialog`). The push service holds it for up to four weeks for offline
 devices (`MESSAGE_TTL`).
+
+**Assignments**: when someone in a team is added to a task's assignees, they
+get a push ("Priya gave you a task") that opens the task. The person who did
+the assigning is not notified, and neither is anyone the task is hidden from
+(`sendAssigned`, called from `applyChange`).
 
 ### 10.4 Notification codes and `/api/notify`
 

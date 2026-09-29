@@ -55,13 +55,15 @@ export function matchesFilter(
 		assignees?: ReadonlyArray<string>;
 		tagIds: ReadonlyArray<string>;
 		typeId?: string | null;
+		trackerId?: string | null;
 	},
 	filter: TaskFilter,
 ): boolean {
 	return (
 		isAssignedTo(task, filter.assignee) &&
 		(filter.tag === undefined || task.tagIds.includes(filter.tag)) &&
-		(filter.type === undefined || (task.typeId ?? NO_TYPE) === filter.type)
+		(filter.type === undefined || (task.typeId ?? NO_TYPE) === filter.type) &&
+		(filter.tracker === undefined || task.trackerId === filter.tracker)
 	);
 }
 
@@ -100,7 +102,7 @@ export function notesAfterMove(
 		at === undefined ? what : `${formatDeadline(at.date, at.time)} — ${what}`;
 
 	const before = (notes ?? "").trim();
-	return before === "" ? line : `${before}\n\n${line}`;
+	return before === "" ? line : `${before}\n${line}`;
 }
 
 /**

@@ -14,9 +14,11 @@ import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
 import { useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
+import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { plansQuery } from "#/queries/plans";
 import { primeQuery } from "#/queries/prime";
+import { todayDateOnly } from "#/schemas/common";
 import type { PlanSummary } from "#/schemas/plan";
 
 export const Route = createFileRoute("/plans/")({
@@ -46,6 +48,10 @@ function PlansPage() {
 
 	const { data, isPending, isError, error, refetch } = useQuery(plansQuery());
 	const plans = data ?? [];
+	// The day on the viewer's clock, once the browser has it; see `useNow`.
+	const now = useNow();
+	const dayOf = (at: string) =>
+		formatDate(now === null ? at.slice(0, 10) : todayDateOnly(new Date(at)));
 
 	return (
 		<VStack gap={4}>
@@ -87,8 +93,7 @@ function PlansPage() {
 									{plan.title}
 								</Text>
 								<Text type="supporting">
-									Updated {formatDate(plan.updatedAt.slice(0, 10))} ·{" "}
-									{sizeOf(plan)}
+									Updated {dayOf(plan.updatedAt)} · {sizeOf(plan)}
 								</Text>
 							</VStack>
 						</ClickableCard>
