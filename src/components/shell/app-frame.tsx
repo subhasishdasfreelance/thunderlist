@@ -16,7 +16,7 @@ import { useEscape } from "#/lib/use-escape";
 import { useNoAutofill } from "#/lib/use-no-autofill";
 import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
-import { SECTIONS, type Section } from "#/schemas/backdrop";
+import { pageOf } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BackdropDialog } from "./backdrop-dialog";
 import { BottomNav } from "./bottom-nav";
@@ -37,17 +37,6 @@ import { UserMenu } from "./user-menu";
 function SpaceWatch() {
 	useSpaceWatch();
 	return null;
-}
-
-/**
- * Which part of the app a path is in, for the scenery behind it; see
- * `Scenery`. Today is a tag, but it is the app's home, so it has scenery of
- * its own. Anywhere else — signing in — is dressed as Today.
- */
-function sectionOf(pathname: string): Section {
-	if (pathname === "/" || pathname.startsWith("/tags/today")) return "today";
-	const first = pathname.split("/")[1];
-	return SECTIONS.find((section) => section === first) ?? "today";
 }
 
 /**
@@ -184,7 +173,7 @@ export function AppFrame({
 		select: (state) =>
 			state.resolvedLocation?.pathname ?? state.location.pathname,
 	});
-	const section = sectionOf(pathname);
+	const page = pageOf(pathname);
 
 	return (
 		/*
@@ -196,7 +185,7 @@ export function AppFrame({
 		<Theme theme={thunderlistTheme} mode={scheme}>
 			<RouteProgress />
 			<LinkProvider component={RouterLink}>
-				<Scenery section={section} isSignedIn={user !== null} />
+				<Scenery page={page} isSignedIn={user !== null} />
 				<AppShell
 					className="thunderlist-shell"
 					data-scrolled={isScrolled}
@@ -312,7 +301,7 @@ export function AppFrame({
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 				{user === null ? null : (
 					<BackdropDialog
-						section={section}
+						page={page}
 						isOpen={isBackdropOpen}
 						onOpenChange={setIsBackdropOpen}
 					/>

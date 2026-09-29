@@ -12,7 +12,7 @@ import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
 import { CountdownFormDialog } from "#/components/countdowns/countdown-form-dialog";
 import { useApplyChange } from "#/lib/changes";
-import { formatDate, formatDateWithWeekday } from "#/lib/format-date";
+import { formatDate } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { useFocusRow } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
@@ -79,7 +79,7 @@ function useTicking(isTicking: boolean): number | null {
 
 /**
  * Since when it has been counted — the day it was made — and how far along
- * that is: "Since 12th Sep, 2026 · 16 of 36 days" while it is ahead, the
+ * that is: "Since Sat, Sep 12, 2026 · 16 of 36 days" while it is ahead, the
  * whole stretch once it has come. Nothing for one made on or after its day.
  */
 function sinceLabel(countdown: Countdown, today: string): string | null {
@@ -160,7 +160,7 @@ function CountdownTile({
 			)}
 			<span className="thunderlist-countdown-title">{countdown.title}</span>
 			<span className="thunderlist-countdown-date">
-				{formatDateWithWeekday(countdown.date)}
+				{formatDate(countdown.date)}
 			</span>
 			{since === null ? null : (
 				<span className="thunderlist-countdown-date">{since}</span>

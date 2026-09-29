@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { type CSSProperties, useState } from "react";
 import { backdropsQuery } from "#/queries/preferences";
-import { backdropOf, paletteColors, type Section } from "#/schemas/backdrop";
+import { backdropOf, type Page, paletteColors } from "#/schemas/backdrop";
 import type { DesignId } from "#/schemas/backdrop-designs";
 import { BackdropArt } from "./backdrop-art";
 
@@ -13,27 +13,27 @@ type Art = {
 };
 
 /**
- * The background behind every screen: the design picked for the part of the
- * app on screen, in the colours picked for it, or those it starts with; see
+ * The background behind every screen: the design picked for the page on
+ * screen, in the colours picked for it, or those it starts with; see
  * `BackdropDialog`. Signed out, it is how Today starts.
  *
  * The top of the page is kept clear and light, where the bar and the page's
  * heading sit, so nothing up there can be mistaken for a control.
  *
- * Going to a part of the app drawn differently, the old drawing fades out as
+ * Going to a page drawn differently, the old drawing fades out as
  * the new one fades in, and the wash beneath them eases from one colour to the
  * other; see `.thunderlist-scenery-art`. The first drawing is simply there.
  */
 export function Scenery({
-	section,
+	page,
 	isSignedIn,
 }: {
-	section: Section;
+	page: Page;
 	isSignedIn: boolean;
 }) {
 	const backdrops = useQuery({ ...backdropsQuery(), enabled: isSignedIn });
-	const backdrop = backdropOf(backdrops.data, section);
-	const colors = paletteColors(backdrop, section);
+	const backdrop = backdropOf(backdrops.data, page);
+	const colors = paletteColors(backdrop, page.section);
 	const key = `${backdrop.design}|${colors.join()}`;
 
 	// The drawing on screen, and the one fading out from under it.

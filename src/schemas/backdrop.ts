@@ -7,8 +7,8 @@ import {
 } from "./backdrop-designs";
 
 /**
- * The parts of the app, each with a background of its own; see `sectionOf`
- * and `Scenery`.
+ * The parts of the app, each with the background its pages start with; see
+ * `pageOf` and `Scenery`.
  */
 export const SECTIONS = [
 	"today",
@@ -70,7 +70,58 @@ const SECTION_DESIGNS: Record<Section, DesignId> = {
 };
 
 /**
- * What one part of the app is drawn with: a design, or `null` for a plain
+ * One page of the app, for its background: `key` names the page itself, and
+ * `section` the part of the app it is in, which gives it the colours and design
+ * it starts with.
+ *
+ * A list page's key is its section's (`checklists`), and one item's page adds
+ * the item's id (`checklists/chk_…`). Today is a tag, but it is the app's home,
+ * so it is a page of its own.
+ */
+export type Page = { key: string; section: Section };
+
+const TODAY: Page = { key: "today", section: "today" };
+
+/** The page a path is on. Anywhere that is not a section — signing in — is dressed as Today. */
+export function pageOf(pathname: string): Page {
+	const [first, second] = pathname.split("/").filter(Boolean);
+	if (first === "tags" && second === "today") return TODAY;
+
+	const section = SECTIONS.find((each) => each === first);
+	if (section === undefined) return TODAY;
+
+	return {
+		key: second === undefined ? section : `${section}/${second}`,
+		section,
+	};
+}
+
+/** What one item is called, for the sections whose items have pages. */
+const ITEM_NOUNS: Partial<Record<Section, string>> = {
+	checklists: "checklist",
+	tags: "tag",
+	trackers: "tracker",
+	groups: "group",
+	plans: "plan",
+};
+
+/** A page as its background dialog names it: `Checklists`, or `this checklist`. */
+export function pageLabel(page: Page): string {
+	if (page.key === page.section) return SECTION_LABELS[page.section];
+	if (page.key === "tags/untagged") return "Untagged";
+	return `this ${ITEM_NOUNS[page.section] ?? "page"}`;
+}
+
+/**
+ * For a list page whose items have pages of their own, what one is called;
+ * those items follow the list's background until given one. `null` otherwise.
+ */
+export function followerNoun(page: Page): string | null {
+	return page.key === page.section ? (ITEM_NOUNS[page.section] ?? null) : null;
+}
+
+/**
+ * What one page is drawn with: a design, or `null` for a plain
  * page; and a palette, or `null` for the part's own colours.
  */
 export type Backdrop = {
@@ -79,13 +130,14 @@ export type Backdrop = {
 };
 
 /**
- * What each part of the app is drawn with, picked by the person themself. A
- * part never picked for is absent, and drawn as it starts.
+ * What each page is drawn with, picked by the person themself and keyed by
+ * `Page.key`. A page never picked for is absent: one item's page is then drawn
+ * as its list page is, and a list page as its section starts.
  *
  * It is the person's own, not the space's: the same wherever they work, and
  * nobody else in a team sees it.
  */
-export type Backdrops = Partial<Record<Section, Backdrop>>;
+export type Backdrops = Partial<Record<string, Backdrop>>;
 
 const isDesign = (value: unknown): value is DesignId =>
 	DESIGNS.some((design) => design.designId === value);
@@ -93,14 +145,15 @@ const isPalette = (value: unknown): value is PaletteId =>
 	PALETTES.some((palette) => palette.paletteId === value);
 
 /**
- * What a part of the app is drawn with, picked or as it starts. Anything
- * stored that is no longer on offer is read as not picked.
+ * What a page is drawn with: picked for it, else for its list page, else as its
+ * section starts. Anything stored that is no longer on offer is read as not
+ * picked.
  */
 export function backdropOf(
 	backdrops: Backdrops | undefined,
-	section: Section,
+	{ key, section }: Page,
 ): Backdrop {
-	const picked: unknown = backdrops?.[section];
+	const picked: unknown = backdrops?.[key] ?? backdrops?.[section];
 	const { design, palette } =
 		typeof picked === "object" && picked !== null
 			? (picked as Record<string, unknown>)
@@ -116,7 +169,7 @@ export function backdropOf(
 	};
 }
 
-/** The three colours a part of the app is drawn in. */
+/** The three colours a page in this section is drawn in. */
 export function paletteColors(
 	backdrop: Backdrop,
 	section: Section,
@@ -127,8 +180,14 @@ export function paletteColors(
 	return palette.colors;
 }
 
+/**
+ * A section, then optionally one item's id. It becomes part of a Mongo field
+ * path, so it can hold neither a dot nor a dollar.
+ */
+const PAGE_KEY = new RegExp(`^(${SECTIONS.join("|")})(/[A-Za-z0-9_-]{1,64})?$`);
+
 export const setBackdropInputSchema = v.object({
-	section: v.picklist(SECTIONS),
+	page: v.pipe(v.string(), v.regex(PAGE_KEY)),
 	design: v.nullable(v.picklist(DESIGNS.map((each) => each.designId))),
 	palette: v.nullable(v.picklist(PALETTES.map((each) => each.paletteId))),
 });

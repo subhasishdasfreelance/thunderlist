@@ -82,7 +82,6 @@ import {
 import {
 	formatClock,
 	formatDate,
-	formatDateWithWeekday,
 	formatDeadline,
 	formatSchedule,
 } from "#/lib/format-date";
@@ -709,7 +708,7 @@ function TagDetailPage() {
 		special === "today"
 			? now === null
 				? ""
-				: formatDateWithWeekday(todayDateOnly(new Date(now)))
+				: formatDate(todayDateOnly(new Date(now)))
 			: detail.description;
 
 	const openTotal = openResult.data?.total ?? 0;

@@ -75,7 +75,7 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 /**
  * A task's notes after it moves, with a line added at the end when it is
  * parked in the Backlog ("Added from Design system") or taken out of it
- * ("Moved from backlog"), led by when — "29th Sep, 2026, 3:45 pm — Moved from
+ * ("Moved from backlog"), led by when — "Tue, Sep 29, 2026, 3:45 pm — Moved from
  * backlog". `null` for any other move, which leaves them alone.
  *
  * Parked tasks from every list sit together, and without the note the one

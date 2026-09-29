@@ -1,6 +1,6 @@
 /**
- * What one person has chosen for themself: how each part of the app is
- * drawn behind its screens. Server only.
+ * What one person has chosen for themself: how each page of the app is
+ * drawn behind it. Server only.
  *
  * One document per account, absent until something is picked, so a person
  * who never picked reads the defaults and nothing is written for them.
@@ -19,10 +19,10 @@ export async function getBackdrops(userId: string): Promise<Backdrops> {
 	return preferences?.backdrops ?? {};
 }
 
-/** One section's design and colours; the others are left as they are. */
+/** One page's design and colours; the others are left as they are. */
 export async function setBackdrop(
 	userId: string,
-	{ section, design, palette }: SetBackdropInput,
+	{ page, design, palette }: SetBackdropInput,
 ): Promise<void> {
 	const current = await collections();
 
@@ -30,7 +30,7 @@ export async function setBackdrop(
 		{ userId },
 		{
 			$set: {
-				[`backdrops.${section}`]: { design, palette },
+				[`backdrops.${page}`]: { design, palette },
 				updatedAt: new Date().toISOString(),
 			},
 		},

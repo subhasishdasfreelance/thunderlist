@@ -417,7 +417,7 @@ describe("notesAfterMove", () => {
 				date: "2026-09-29",
 				time: "15:45",
 			}),
-		).toBe("29th Sep, 2026, 3:45 pm — Moved from backlog");
+		).toBe("Tue, Sep 29, 2026, 3:45 pm — Moved from backlog");
 	});
 
 	it("adds the line after what the notes already said", () => {

@@ -6,7 +6,7 @@ import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
 
 /**
- * The illustration each section shows this person. Their own, whichever space
+ * The illustration each page shows this person. Their own, whichever space
  * they are working in, so it asks who they are rather than where.
  */
 export const getBackdropsFn = createServerFn().handler(() =>

@@ -19,7 +19,7 @@ export type ChartPoint = {
 	at: number;
 	value: number;
 	/**
-	 * What pointing at its dot says — "284 pages · 3rd Sep, 2026". Without one
+	 * What pointing at its dot says — "284 pages · Thu, Sep 3, 2026". Without one
 	 * the dot is only drawn.
 	 */
 	label?: string;

@@ -15,36 +15,37 @@ import {
 	type Backdrop,
 	type Backdrops,
 	backdropOf,
+	followerNoun,
+	type Page,
+	pageLabel,
 	paletteColors,
-	SECTION_LABELS,
 	SECTION_PALETTES,
-	type Section,
 } from "#/schemas/backdrop";
 import { DESIGNS, PALETTES } from "#/schemas/backdrop-designs";
 import { BackdropArt } from "./backdrop-art";
 
 /**
- * Pick how one part of the app is drawn behind its screens: its colours, and
- * its design or none. It is this person's own — the same on every device,
- * and nobody else's.
+ * Pick how one page is drawn behind it: its colours, and its design or none.
+ * It is this person's own — the same on every device, and nobody else's.
  *
  * A pick is drawn at once, behind the dialog, so it can be seen in place
  * before it is kept; the saving follows.
  */
 export function BackdropDialog({
-	section,
+	page,
 	isOpen,
 	onOpenChange,
 }: {
-	section: Section;
+	page: Page;
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 }) {
 	const queryClient = useQueryClient();
 	const toast = useToast();
 	const backdrops = useQuery(backdropsQuery()).data;
-	const current = backdropOf(backdrops, section);
-	const colors = paletteColors(current, section);
+	const current = backdropOf(backdrops, page);
+	const colors = paletteColors(current, page.section);
+	const follower = followerNoun(page);
 
 	function pick(change: Partial<Backdrop>) {
 		const next = { ...current, ...change };
@@ -52,25 +53,29 @@ export function BackdropDialog({
 		const before = queryClient.getQueryData<Backdrops>(key);
 		queryClient.setQueryData<Backdrops>(key, (all) => ({
 			...all,
-			[section]: next,
+			[page.key]: next,
 		}));
 
-		setBackdropFn({ data: { section, ...next } }).catch((error) => {
+		setBackdropFn({ data: { page: page.key, ...next } }).catch((error) => {
 			queryClient.setQueryData<Backdrops>(key, before);
 			toast({ body: errorMessage(error), type: "error", uniqueID: "backdrop" });
 		});
 	}
 
 	const own = PALETTES.find(
-		(each) => each.paletteId === SECTION_PALETTES[section],
+		(each) => each.paletteId === SECTION_PALETTES[page.section],
 	);
 
 	return (
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			title={`Background for ${SECTION_LABELS[section]}`}
-			subtitle="Just for you, on every device."
+			title={`Background for ${pageLabel(page)}`}
+			subtitle={
+				follower === null
+					? "Just for you, on every device."
+					: `Just for you, on every device. Each ${follower} without one of its own uses it too.`
+			}
 			width={720}
 			actions={() => (
 				<Button
