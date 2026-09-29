@@ -1325,6 +1325,8 @@ export async function moveTask(
 	userId: string,
 	taskId: string,
 	checklistId: string,
+	/** When it was moved, on the mover's clock; see `notesAfterMove`. */
+	at?: { date: string; time: string },
 ): Promise<void> {
 	const current = await collections();
 	const target = await requireChecklist(current, userId, checklistId);
@@ -1382,7 +1384,7 @@ export async function moveTask(
 		leaving,
 		new Map(names.map((tag) => [tag.tagId, tag.name])),
 	);
-	const notes = notesAfterMove(task.notes, source, target);
+	const notes = notesAfterMove(task.notes, source, target, at);
 
 	await current.tasks.updateOne(
 		{ taskId, userId },

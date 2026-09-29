@@ -37,6 +37,7 @@ import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
+import { StageFilter } from "#/components/tags/stage-filter";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { TagTasks } from "#/components/tags/tag-tasks";
 import { SelectionBar } from "#/components/tasks/selection-bar";
@@ -190,6 +191,8 @@ function TagDetailPage() {
 	const [assignee, setAssignee] = useState<string | undefined>(undefined);
 	// One kind of work rather than every kind; see `TypeFilter`.
 	const [typeId, setTypeId] = useState<string | undefined>(undefined);
+	// The open tasks at one stage rather than every one; see `StageFilter`.
+	const [stageName, setStageName] = useState<string | undefined>(undefined);
 
 	/*
 	 * Sent to a task on this page while already here — from search, say — the
@@ -203,6 +206,7 @@ function TagDetailPage() {
 		setPage(undefined);
 		setAssignee(undefined);
 		setTypeId(undefined);
+		setStageName(undefined);
 	}, [arrival, focusTaskId]);
 
 	const filter: TaskFilter = { assignee, type: typeId };
@@ -229,6 +233,7 @@ function TagDetailPage() {
 			reveal: page === undefined ? focusTaskId : undefined,
 			assignee,
 			type: typeId,
+			stageName,
 		}),
 		placeholderData: keepPreviousData,
 	});
@@ -834,6 +839,17 @@ function TagDetailPage() {
 								setPage(undefined);
 							}}
 						/>
+						<StageFilter
+							stages={(detail.progress.stages ?? []).map((stage) => ({
+								...stage,
+								color: detail.stageColors?.[stage.key] ?? stage.color,
+							}))}
+							value={stageName}
+							onChange={(next) => {
+								setStageName(next);
+								setPage(undefined);
+							}}
+						/>
 						<SortMenu
 							order={sort}
 							hasStageOrder
@@ -877,12 +893,18 @@ function TagDetailPage() {
 					{open.length === 0 ? (
 						<EmptyState
 							title={
-								assignee === undefined ? "All done." : "Nothing to do here."
+								stageName !== undefined
+									? "Nothing at this stage."
+									: assignee === undefined
+										? "All done."
+										: "Nothing to do here."
 							}
 							description={
-								assignee === undefined
-									? "Every task with this tag is complete."
-									: "No open task with this tag is assigned to them."
+								stageName !== undefined
+									? "No open task with this tag is at it."
+									: assignee === undefined
+										? "Every task with this tag is complete."
+										: "No open task with this tag is assigned to them."
 							}
 						/>
 					) : (

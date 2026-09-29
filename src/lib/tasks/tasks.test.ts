@@ -411,6 +411,15 @@ describe("notesAfterMove", () => {
 		expect(notesAfterMove("", BACKLOG, DESIGN)).toBe("Moved from backlog");
 	});
 
+	it("leads with when, on the mover's clock", () => {
+		expect(
+			notesAfterMove("", BACKLOG, DESIGN, {
+				date: "2026-09-29",
+				time: "15:45",
+			}),
+		).toBe("29th Sep, 2026, 3:45 pm — Moved from backlog");
+	});
+
 	it("adds the line after what the notes already said", () => {
 		expect(notesAfterMove("waiting on Ana\n", DESIGN, BACKLOG)).toBe(
 			"waiting on Ana\n\nAdded from Design system",

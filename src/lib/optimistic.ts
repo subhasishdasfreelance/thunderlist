@@ -52,6 +52,7 @@ import {
 	specialChecklist,
 	stageOf,
 	stageProgress,
+	tagStageKey,
 	underwayStage,
 } from "#/schemas/checklist";
 import type { ItemKind, ItemRef } from "#/schemas/common";
@@ -477,9 +478,12 @@ function patchTags(
 
 		for (const [pageKey, page] of pages) {
 			if (!page) continue;
-			// Off a page filtered to one person or kind once it stops being theirs.
+			// Off a page filtered to one person, kind or stage once it stops
+			// being theirs.
 			const stays =
-				after !== null && matchesFilter(after.task, viewOf(pageKey));
+				after !== null &&
+				matchesFilter(after.task, viewOf(pageKey)) &&
+				isAtTagStage(client, after, viewOf(pageKey));
 			client.setQueryData(
 				pageKey,
 				swapInPage(page, matches, stays ? after : null),
@@ -989,6 +993,19 @@ function addToChecklistPages(
 	}
 }
 
+/** Whether a task is at the stage a tag's page is narrowed to, if any. */
+function isAtTagStage(
+	client: QueryClient,
+	entry: TagTaskEntry,
+	view: TaskPageView,
+): boolean {
+	return (
+		view.stageName === undefined ||
+		tagStageKey(entry.task, stagesOf(client, entry.checklistId)) ===
+			view.stageName
+	);
+}
+
 /**
  * A task arriving on a tag's page. A page of one person's tasks is left alone,
  * in a team: a task just added is nobody's yet, so it does not belong there.
@@ -1005,7 +1022,8 @@ function addToTagPages(
 		if (
 			!page ||
 			view.assignee !== undefined ||
-			!matchesFilter(entry.task, view)
+			!matchesFilter(entry.task, view) ||
+			!isAtTagStage(client, entry, view)
 		) {
 			continue;
 		}
@@ -1486,7 +1504,7 @@ function patchFor(client: QueryClient, change: Change): void {
 			const notes =
 				(from !== null && leftList === undefined) || joinedList === undefined
 					? null
-					: notesAfterMove(task.notes, leftList ?? null, joinedList);
+					: notesAfterMove(task.notes, leftList ?? null, joinedList, change.at);
 
 			/*
 			 * A task carries its checklist's tags. The ones it is losing are the

@@ -9,7 +9,12 @@ import {
 	timeOfDaySchema,
 	titleSchema,
 } from "./common";
-import { TAG_COLORS, type TagColor, type TagStage } from "./tag";
+import {
+	NOT_STARTED_STAGE_KEY,
+	TAG_COLORS,
+	type TagColor,
+	type TagStage,
+} from "./tag";
 import { taskFilterSchema } from "./task";
 
 const PACE_STATUSES = ["ahead", "on_track", "behind"] as const;
@@ -190,6 +195,17 @@ export function underwayStage(
 		color: stageColor(stages, index),
 		rank: index / (stages.length - 1),
 	};
+}
+
+/**
+ * Where an open task is, as a tag's stage filter picks it: the key of the
+ * stage it is under way at, or `NOT_STARTED_STAGE_KEY` at its first.
+ */
+export function tagStageKey(
+	task: { stageId?: string | null; completed: boolean },
+	stages: ReadonlyArray<Stage>,
+): string {
+	return underwayStage(task, stages)?.key ?? NOT_STARTED_STAGE_KEY;
 }
 
 /**

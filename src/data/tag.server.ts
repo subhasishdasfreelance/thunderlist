@@ -45,6 +45,7 @@ import {
 	type Stage,
 	stageOf,
 	stageProgress,
+	tagStageKey,
 	underwayStage,
 } from "#/schemas/checklist";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
@@ -651,8 +652,14 @@ export async function getTagOpenTasks(
 	// Narrowed exactly as the figures above the list are: in a team, to one
 	// person's, and to one kind of work. Both have to cut the same rows, or the
 	// list and the progress bar over it describe different things.
+	// The stage only narrows the list; see `stageName`.
 	const open = entries.filter(
-		(entry) => !entry.task.completed && matchesFilter(entry.task, view),
+		(entry) =>
+			!entry.task.completed &&
+			matchesFilter(entry.task, view) &&
+			(view.stageName === undefined ||
+				tagStageKey(entry.task, stagesOf(entry.checklistId)) ===
+					view.stageName),
 	);
 
 	// Only ordering by type needs the space's list, so only then is it read.

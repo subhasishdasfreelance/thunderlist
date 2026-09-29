@@ -6,6 +6,7 @@
  * functions are pure and know nothing about the database.
  */
 
+import { formatDeadline } from "#/lib/format-date";
 import type { Checklist, ChecklistProgress } from "#/schemas/checklist";
 import {
 	NO_TYPE,
@@ -72,7 +73,8 @@ export function sortTasks(tasks: ReadonlyArray<Task>): Array<Task> {
 /**
  * A task's notes after it moves, with a line added at the end when it is
  * parked in the Backlog ("Added from Design system") or taken out of it
- * ("Moved from backlog"). `null` for any other move, which leaves them alone.
+ * ("Moved from backlog"), led by when — "29th Sep, 2026, 3:45 pm — Moved from
+ * backlog". `null` for any other move, which leaves them alone.
  *
  * Parked tasks from every list sit together, and without the note the one
  * thing you need to put a task back — where it came from — is the one thing
@@ -83,14 +85,19 @@ export function notesAfterMove(
 	/** The checklist it leaves, or `null` when it is in none. */
 	from: Pick<Checklist, "title" | "special"> | null,
 	to: Pick<Checklist, "special">,
+	/** When, on the mover's clock; a move sent without one says only where. */
+	at?: { date: string; time: string },
 ): string | null {
-	const line =
+	const what =
 		from?.special === "backlog"
 			? "Moved from backlog"
 			: to.special === "backlog" && from !== null
 				? `Added from ${from.title}`
 				: null;
-	if (line === null) return null;
+	if (what === null) return null;
+
+	const line =
+		at === undefined ? what : `${formatDeadline(at.date, at.time)} — ${what}`;
 
 	const before = (notes ?? "").trim();
 	return before === "" ? line : `${before}\n\n${line}`;

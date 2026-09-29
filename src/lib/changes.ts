@@ -29,7 +29,7 @@ import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
 import type { Change } from "#/schemas/change";
 import type { Stage } from "#/schemas/checklist";
-import type { DailyWindow } from "#/schemas/common";
+import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import {
 	PICKABLE_COLORS,
 	type SpecialTag,
@@ -141,6 +141,25 @@ async function sendNow(change: Change): Promise<void> {
 }
 
 /**
+ * A move stamped with when it was made, on this browser's clock — which the
+ * server does not know — for the line it may write into the task's notes; see
+ * `notesAfterMove`. Stamped here, once, so every way of moving a task says
+ * when, and a move retried after the connection comes back keeps the moment
+ * it was made.
+ */
+function withMovedAt(change: Change): Change {
+	if (change.kind !== "task.move" || change.at !== undefined) return change;
+
+	const now = new Date();
+	const hours = String(now.getHours()).padStart(2, "0");
+	const minutes = String(now.getMinutes()).padStart(2, "0");
+	return {
+		...change,
+		at: { date: todayDateOnly(now), time: `${hours}:${minutes}` },
+	};
+}
+
+/**
  * Apply a change: on screen at once, on the server behind it.
  *
  * Everything is invalidated afterwards rather than the one query that changed:
@@ -240,7 +259,7 @@ export function useApplyChange() {
 		(change: Change) => {
 			if (refusal(change) !== null) return;
 			playChangeSound(change);
-			mutation.mutate(change);
+			mutation.mutate(withMovedAt(change));
 		},
 		[mutation.mutate, refusal],
 	);
@@ -251,7 +270,7 @@ export function useApplyChange() {
 			const reason = refusal(change);
 			if (reason !== null) return Promise.reject(new Error(reason));
 			playChangeSound(change);
-			return mutation.mutateAsync(change);
+			return mutation.mutateAsync(withMovedAt(change));
 		},
 		[mutation.mutateAsync, refusal],
 	);

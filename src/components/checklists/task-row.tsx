@@ -204,7 +204,11 @@ export function TaskRow({
 			...(actions.onToggleMine === undefined
 				? {}
 				: { [TASK_SHORTCUTS.assign]: actions.onToggleMine }),
-			// Whether it exists is a project manager's to change; see `Capability`.
+			// Where it lives, and whether it exists, are a project manager's to
+			// change; see `Capability`.
+			...(actions.onMove === undefined || !canManageContent
+				? {}
+				: { [TASK_SHORTCUTS.move]: actions.onMove }),
 			...(canManageContent
 				? {
 						[TASK_SHORTCUTS.delete]: actions.onDelete,
@@ -275,6 +279,7 @@ export function TaskRow({
 					{
 						label: "Move to checklist…",
 						icon: FolderInput,
+						endContent: <ShortcutKey label={TASK_SHORTCUTS.move} />,
 						onClick: actions.onMove,
 					},
 				]),

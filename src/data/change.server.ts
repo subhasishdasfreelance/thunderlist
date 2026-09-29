@@ -95,7 +95,7 @@ async function run(
 			return;
 
 		case "task.move":
-			await moveTask(userId, change.taskId, change.checklistId);
+			await moveTask(userId, change.taskId, change.checklistId, change.at);
 			return;
 
 		case "tracker.create":

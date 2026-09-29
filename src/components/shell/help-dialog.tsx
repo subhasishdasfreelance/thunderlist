@@ -25,6 +25,7 @@ const GROUPS: Array<Group> = [
 		rows: [
 			{ keys: [TASK_SHORTCUTS.today], what: "Today, on or off" },
 			{ keys: [TASK_SHORTCUTS.backlog], what: "Move to the Backlog" },
+			{ keys: [TASK_SHORTCUTS.move], what: "Move to a checklist" },
 			{ keys: [TASK_SHORTCUTS.urgent], what: "Urgent" },
 			{ keys: [TASK_SHORTCUTS.important], what: "Important" },
 			{ keys: [TASK_SHORTCUTS.complete], what: "Tick: next stage, or done" },

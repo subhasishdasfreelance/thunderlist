@@ -1,10 +1,12 @@
 import * as v from "valibot";
 import {
 	assigneesSchema,
+	dateOnlySchema,
 	emailSchema,
 	idSchema,
 	itemRefSchema,
 	tagIdsSchema,
+	timeOfDaySchema,
 	titleSchema,
 } from "./common";
 
@@ -192,6 +194,13 @@ export const taskPageSchema = v.object({
 	page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 	reveal: v.optional(idSchema),
 	stageId: v.optional(idSchema),
+	/**
+	 * On a tag, only the open tasks at the stage of this name, lowercased — or
+	 * `NOT_STARTED_STAGE_KEY` for those not yet under way; see `tagStageKey`.
+	 * Only the list: a finished task is at no stage, so the figures over it
+	 * stay whole.
+	 */
+	stageName: v.optional(v.pipe(v.string(), v.maxLength(30))),
 	...taskFilterSchema.entries,
 });
 
@@ -292,4 +301,10 @@ export const deleteTasksInputSchema = v.object({
 export const moveTaskInputSchema = v.object({
 	taskId: idSchema,
 	checklistId: idSchema,
+	/**
+	 * When it was moved, on the mover's own clock, which the server does not
+	 * know; written into its notes, see `notesAfterMove`. Stamped on the way
+	 * out, see `useApplyChange`.
+	 */
+	at: v.optional(v.object({ date: dateOnlySchema, time: timeOfDaySchema })),
 });

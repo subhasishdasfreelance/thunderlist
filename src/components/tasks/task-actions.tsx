@@ -16,6 +16,8 @@ import type { SpecialTag, Tag } from "#/schemas/tag";
 export const TASK_SHORTCUTS = {
 	today: "t",
 	backlog: "b",
+	/** Move it to another checklist, picked from the list. */
+	move: "m",
 	urgent: "u",
 	important: "i",
 	complete: "x",

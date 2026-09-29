@@ -254,6 +254,13 @@ export type TagSummary = Tag & {
 export const DONE_STAGE_KEY = "done";
 
 /**
+ * What a tag's stage filter calls the open tasks not yet under way — at their
+ * checklist's first stage, "To do" on its bar. Empty, as no stage's name can
+ * be, so it is never mistaken for one; see `tagStageKey`.
+ */
+export const NOT_STARTED_STAGE_KEY = "";
+
+/**
  * Tasks under way, counted by stage, the furthest along first — the order a
  * tag's bar draws them in.
  */
