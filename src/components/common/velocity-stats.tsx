@@ -3,9 +3,24 @@ import { formatDate } from "#/lib/format-date";
 import type { Velocity } from "#/schemas/progress";
 import { type Stat, StatGrid } from "./stat-grid";
 
-/** One decimal place: "12.4 pages/day" reads better than "12.428…". */
-function rate(value: number, unit: string): string {
-	return `${Math.round(value * 10) / 10} ${unit}/day`;
+/**
+ * A speed given per day, to one decimal place: "12.4 pages/day" reads better
+ * than "12.428…".
+ *
+ * With under a day left the time left reads in hours and minutes, so the
+ * speeds follow it: "2.1 pages/hr" is what the last stretch is planned by.
+ */
+function rate(
+	perDay: number,
+	unit: string,
+	minutesRemaining: number | null,
+): string {
+	const isLastDay =
+		minutesRemaining !== null &&
+		minutesRemaining > 0 &&
+		minutesRemaining < 1440;
+	const value = isLastDay ? perDay / 24 : perDay;
+	return `${Math.round(value * 10) / 10} ${unit}/${isLastDay ? "hr" : "day"}`;
 }
 
 /**
@@ -64,7 +79,7 @@ function velocityStats(
 		totalMinutes,
 	} = velocity;
 
-	const perDayIn = (value: number) => rate(value, unit);
+	const perDayIn = (value: number) => rate(value, unit, minutesRemaining);
 	const noDeadline = "No deadline";
 
 	return [
@@ -126,12 +141,12 @@ export function velocitySummary(
 	if (isComplete) return "Complete";
 
 	if (deadline != null && velocity.requiredPerDay !== null) {
-		return `Due ${formatDate(deadline)} · ${rate(velocity.requiredPerDay, unit)} needed`;
+		return `Due ${formatDate(deadline)} · ${rate(velocity.requiredPerDay, unit, velocity.minutesRemaining)} needed`;
 	}
 
 	if (velocity.perDay === null || velocity.perDay <= 0) return null;
 
-	const pace = rate(velocity.perDay, unit);
+	const pace = rate(velocity.perDay, unit, velocity.minutesRemaining);
 	return velocity.projectedFinish === null
 		? pace
 		: `${pace} · finishing ${formatDate(velocity.projectedFinish)}`;
