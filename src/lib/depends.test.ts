@@ -97,6 +97,61 @@ describe("whyBlocked", () => {
 	});
 });
 
+describe("subtasks", () => {
+	const sub = (subtaskId: string, done: boolean) => ({
+		subtaskId,
+		title: subtaskId,
+		done,
+	});
+
+	it("refuses finishing a task while a subtask is open", () => {
+		const client = holding([
+			task({
+				taskId: "tsk_a",
+				subtasks: [sub("sub_1", true), sub("sub_2", false)],
+			}),
+		]);
+
+		expect(
+			whyBlocked(client, {
+				kind: "task.update",
+				taskId: "tsk_a",
+				patch: { completed: true },
+			}),
+		).toBe("Can't complete this yet: 1 subtask is not done.");
+		expect(
+			whyBlocked(client, {
+				kind: "task.update",
+				taskId: "tsk_a",
+				patch: { stageId: "done" },
+			}),
+		).not.toBeNull();
+	});
+
+	it("judges by the list the change leaves, and lets other edits through", () => {
+		const client = holding([
+			task({ taskId: "tsk_a", subtasks: [sub("sub_1", false)] }),
+		]);
+
+		// Ticked with the same edit that finishes it.
+		expect(
+			whyBlocked(client, {
+				kind: "task.update",
+				taskId: "tsk_a",
+				patch: { completed: true, subtasks: [sub("sub_1", true)] },
+			}),
+		).toBeNull();
+		// Adding one to an open task is not finishing it.
+		expect(
+			whyBlocked(client, {
+				kind: "task.update",
+				taskId: "tsk_a",
+				patch: { subtasks: [sub("sub_1", false), sub("sub_2", false)] },
+			}),
+		).toBeNull();
+	});
+});
+
 describe("dependencies on something deleted", () => {
 	it("are taken off every task waiting on it at once", () => {
 		const client = holding([

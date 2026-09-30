@@ -142,8 +142,9 @@ function TagsPage() {
 					) : (
 						<>
 							<HStack gap={2} hAlign="between" vAlign="center">
-								<Text type="label" weight="semibold">
-									Your Tags
+								{/* Untagged is not a tag, so its card is not counted. */}
+								<Text type="label" weight="semibold" color="secondary">
+									{tags.length} {tags.length === 1 ? "tag" : "tags"}
 								</Text>
 								<HStack gap={1} vAlign="center">
 									<ListOrderMenu

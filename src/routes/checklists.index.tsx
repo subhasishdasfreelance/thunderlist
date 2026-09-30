@@ -188,7 +188,7 @@ function ChecklistsPage() {
 			) : (
 				<VStack gap={3}>
 					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text type="label" weight="semibold">
+						<Text type="label" weight="semibold" color="secondary">
 							{checklists.length}{" "}
 							{checklists.length === 1 ? "checklist" : "checklists"}
 						</Text>

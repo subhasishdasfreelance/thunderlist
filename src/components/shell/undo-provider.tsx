@@ -1,6 +1,7 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { useQueryClient } from "@tanstack/react-query";
+import { Undo2 } from "lucide-react";
 import {
 	type ReactNode,
 	useCallback,
@@ -12,6 +13,7 @@ import {
 import { useApplyChange } from "#/lib/changes";
 import { useToast } from "#/lib/toasts";
 import { invertChange, UndoContext, type UndoStep, useUndo } from "#/lib/undo";
+import { isTyping } from "#/lib/use-row-shortcuts";
 import { useSpace } from "#/lib/use-team";
 import type { Change } from "#/schemas/change";
 
@@ -22,8 +24,10 @@ const DEPTH = 20;
  * Ctrl+Z, from anywhere in the app.
  *
  * Every change made while reading a list hands in its undo as it goes out; see
- * `invertChange`. They stack up here, and Ctrl+Z — or, on a touch screen, the
- * Undo on the toast each step raises — takes the top one off and applies it.
+ * `invertChange`. They stack up here, and Ctrl+Z — or the Undo in the top bar,
+ * which is how a touch screen gets at it; see `UndoButton` — takes the top one
+ * off and applies it. Nothing is announced as it is done: the change is on
+ * screen already, and a toast on every tick is only noise.
  * Undoing something that deletes a task or writes one back asks first, as
  * pressing the same thing on screen would; that question is drawn by
  * `UndoQuestion`, inside the theme, rather than here.
@@ -44,6 +48,16 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	// and when it was made.
 	const steps = useRef<Array<UndoStep & { source: Change; at: number }>>([]);
 	const [asking, setAsking] = useState<UndoStep | null>(null);
+	// What the top step takes back, for the button; `null` with nothing to undo.
+	const [latest, setLatest] = useState<string | null>(null);
+
+	const keep = useCallback(
+		(next: Array<UndoStep & { source: Change; at: number }>) => {
+			steps.current = next;
+			setLatest(next.at(-1)?.label ?? null);
+		},
+		[],
+	);
 
 	/*
 	 * Drawn at once, like any change, and said to be done at once too: the
@@ -78,17 +92,11 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			return;
 		}
 
-		steps.current = steps.current.slice(0, -1);
+		keep(steps.current.slice(0, -1));
 		if (step.question === null) run(step);
 		else setAsking(step);
-	}, [run, toast]);
+	}, [keep, run, toast]);
 
-	/*
-	 * On a touch screen there is no Ctrl+Z, so each step is offered as it is
-	 * made: a toast naming it, with Undo on it. Only the latest is offered —
-	 * each replaces the one before — as Undo takes the latest back. A keyboard
-	 * has the key, and a toast on every tick there would only be noise.
-	 */
 	const remember = useCallback(
 		(change: Change) => {
 			const inverse = invertChange(client, change);
@@ -110,42 +118,17 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 				? { ...inverse, changes: [...inverse.changes, ...top.changes] }
 				: inverse;
 
-			steps.current = [
-				...(isParking ? steps.current.slice(0, -1) : steps.current),
-				{ ...step, source: change, at: Date.now() },
-			].slice(-DEPTH);
-
-			if (!window.matchMedia("(pointer: coarse)").matches) return;
-			const dismiss = toast({
-				body: `${step.label}.`,
-				type: "info",
-				uniqueID: "undo",
-				endContent: (
-					<Button
-						label="Undo"
-						variant="ghost"
-						size="sm"
-						onClick={() => {
-							dismiss();
-							undoLast();
-						}}
-					/>
-				),
-			});
+			keep(
+				[
+					...(isParking ? steps.current.slice(0, -1) : steps.current),
+					{ ...step, source: change, at: Date.now() },
+				].slice(-DEPTH),
+			);
 		},
-		[client, toast, undoLast],
+		[client, keep],
 	);
 
 	useEffect(() => {
-		function isTyping(target: EventTarget | null): boolean {
-			return (
-				target instanceof HTMLElement &&
-				(target.isContentEditable ||
-					target instanceof HTMLInputElement ||
-					target instanceof HTMLTextAreaElement)
-			);
-		}
-
 		function handle(event: KeyboardEvent) {
 			if (!(event.ctrlKey || event.metaKey) || event.shiftKey) return;
 			if (event.key.toLowerCase() !== "z") return;
@@ -159,9 +142,12 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 		return () => window.removeEventListener("keydown", handle);
 	}, [undoLast]);
 
-	const forget = useCallback((change: Change) => {
-		steps.current = steps.current.filter((step) => step.source !== change);
-	}, []);
+	const forget = useCallback(
+		(change: Change) => {
+			keep(steps.current.filter((step) => step.source !== change));
+		},
+		[keep],
+	);
 
 	/*
 	 * What was done in one space is not there to undo in another: the tasks
@@ -172,13 +158,15 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	const space = useSpace();
 	const where = space === null ? null : (space.team?.teamId ?? "own");
 	useEffect(() => {
-		if (where !== null) steps.current = [];
-	}, [where]);
+		if (where !== null) keep([]);
+	}, [where, keep]);
 
 	const value = useMemo(
 		() => ({
 			remember,
 			forget,
+			latest,
+			undoLast,
 			asking,
 			confirm: () => {
 				if (asking !== null) run(asking);
@@ -186,7 +174,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			},
 			dismiss: () => setAsking(null),
 		}),
-		[remember, forget, asking, run],
+		[remember, forget, latest, undoLast, asking, run],
 	);
 
 	return <UndoContext value={value}>{children}</UndoContext>;
@@ -212,6 +200,29 @@ export function UndoQuestion() {
 			description={undo?.asking?.question ?? ""}
 			actionLabel="Undo"
 			onAction={() => undo?.confirm()}
+		/>
+	);
+}
+
+/**
+ * Undo, in the top bar: Ctrl+Z for a touch screen, where there is no key, and
+ * the same on a desktop, where it is one less thing to remember.
+ *
+ * Only there while something can be taken back, and it says what: the step
+ * is named in its tooltip and to a screen reader.
+ */
+export function UndoButton() {
+	const undo = useUndo();
+	if (undo?.latest == null) return null;
+
+	return (
+		<IconButton
+			label={`Undo: ${undo.latest.toLowerCase()}`}
+			tooltip={`Undo: ${undo.latest.toLowerCase()} (Ctrl+Z)`}
+			variant="ghost"
+			size="md"
+			icon={<Undo2 aria-hidden size={22} absoluteStrokeWidth />}
+			onClick={undo.undoLast}
 		/>
 	);
 }

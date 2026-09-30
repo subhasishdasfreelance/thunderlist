@@ -65,6 +65,7 @@ function previousPatch(
 	if ("assignees" in patch) previous.assignees = [...(task.assignees ?? [])];
 	if ("typeId" in patch) previous.typeId = task.typeId ?? null;
 	if ("dependsOn" in patch) previous.dependsOn = [...(task.dependsOn ?? [])];
+	if ("subtasks" in patch) previous.subtasks = [...(task.subtasks ?? [])];
 
 	if ("stageId" in patch || "completed" in patch) {
 		previous.stageId = stageOf(task, stages);
@@ -87,6 +88,7 @@ function restOfTask(
 	if (task.assignees?.length) rest.assignees = [...task.assignees];
 	if (task.typeId) rest.typeId = task.typeId;
 	if (task.dependsOn?.length) rest.dependsOn = [...task.dependsOn];
+	if (task.subtasks?.length) rest.subtasks = [...task.subtasks];
 	// A task comes back at the stage it was taken from, which says whether it
 	// was done as well — finished when it was; see `previousPatch`.
 	const at = stageOf(task, stages);
@@ -262,6 +264,10 @@ export type Undo = {
 	 * there is nothing to undo of a change that never happened.
 	 */
 	forget: (change: Change) => void;
+	/** What the next undo takes back, or `null` with nothing to undo. */
+	latest: string | null;
+	/** Take the last step back — Ctrl+Z, or the Undo in the top bar. */
+	undoLast: () => void;
 	/** The step waiting on an answer, or `null` while none is; see `question`. */
 	asking: UndoStep | null;
 	/** Do the step being asked about. */

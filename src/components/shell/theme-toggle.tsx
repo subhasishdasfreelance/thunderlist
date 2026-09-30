@@ -1,6 +1,6 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Image, Monitor, Moon, Sun } from "lucide-react";
 import { type ColorScheme, setColorScheme } from "#/lib/theme";
 
 const OPTIONS: Array<{
@@ -23,7 +23,8 @@ const OPTIONS: Array<{
 ];
 
 /**
- * Light, dark, or follow the machine.
+ * Light, dark, or follow the machine — and, signed in, the page's background:
+ * one button for how the app looks, rather than two side by side.
  *
  * Three choices rather than a two-way switch, because "follow the machine" is
  * a real preference and not the same as picking whichever one it happens to be
@@ -33,7 +34,14 @@ const OPTIONS: Array<{
  * as an action. The frame hands the scheme down, so the page and this icon are
  * read from one place and never disagree for a frame.
  */
-export function ThemeToggle({ scheme }: { scheme: ColorScheme }) {
+export function ThemeToggle({
+	scheme,
+	onBackdrop,
+}: {
+	scheme: ColorScheme;
+	/** Opens this page's background; absent signed out. See `BackdropDialog`. */
+	onBackdrop?: () => void;
+}) {
 	const active =
 		OPTIONS.find((option) => option.scheme === scheme) ?? OPTIONS[2];
 	const ActiveIcon = active.icon;
@@ -45,7 +53,7 @@ export function ThemeToggle({ scheme }: { scheme: ColorScheme }) {
 			alignment="end"
 			button={{
 				label: `Theme: ${active.label}`,
-				tooltip: "Theme",
+				tooltip: onBackdrop === undefined ? "Theme" : "Theme and background",
 				variant: "ghost",
 				size: "md",
 				isIconOnly: true,
@@ -56,17 +64,35 @@ export function ThemeToggle({ scheme }: { scheme: ColorScheme }) {
 					</span>
 				),
 			}}
-			items={OPTIONS.map((option) => ({
-				label: option.label,
-				icon: option.icon,
-				// The tick says which one is in force; the menu is a choice, not
-				// three separate actions.
-				endContent:
-					option.scheme === scheme ? (
-						<Icon icon={Check} size="sm" color="accent" />
-					) : undefined,
-				onClick: () => setColorScheme(option.scheme),
-			}))}
+			items={[
+				{
+					type: "section" as const,
+					id: "theme",
+					title: "Theme",
+					items: OPTIONS.map((option) => ({
+						id: option.scheme,
+						label: option.label,
+						icon: option.icon,
+						// The tick says which one is in force; the menu is a choice,
+						// not three separate actions.
+						endContent:
+							option.scheme === scheme ? (
+								<Icon icon={Check} size="sm" color="accent" />
+							) : undefined,
+						onClick: () => setColorScheme(option.scheme),
+					})),
+				},
+				...(onBackdrop === undefined
+					? []
+					: [
+							{ type: "divider" as const },
+							{
+								label: "Background for this page…",
+								icon: Image,
+								onClick: onBackdrop,
+							},
+						]),
+			]}
 		/>
 	);
 }

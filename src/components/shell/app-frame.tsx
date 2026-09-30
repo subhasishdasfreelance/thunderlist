@@ -6,7 +6,7 @@ import { HStack } from "@astryxdesign/core/Stack";
 import { TopNav } from "@astryxdesign/core/TopNav";
 import { Theme } from "@astryxdesign/core/theme";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { CircleQuestionMark, Image, Search } from "lucide-react";
+import { CircleQuestionMark, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
@@ -14,8 +14,10 @@ import { useFirstOpenBack } from "#/lib/first-open";
 import { type ColorScheme, useColorScheme } from "#/lib/theme";
 import { useEscape } from "#/lib/use-escape";
 import { useNoAutofill } from "#/lib/use-no-autofill";
+import { isTyping } from "#/lib/use-row-shortcuts";
 import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
+import { useWarmPages } from "#/lib/use-warm-pages";
 import { pageOf } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BackdropDialog } from "./backdrop-dialog";
@@ -30,7 +32,7 @@ import { Scenery } from "./scenery";
 import { SearchDialog } from "./search-dialog";
 import { SetupNotice } from "./setup-notice";
 import { ThemeToggle } from "./theme-toggle";
-import { UndoQuestion } from "./undo-provider";
+import { UndoButton, UndoQuestion } from "./undo-provider";
 import { UserMenu } from "./user-menu";
 
 /** Watches for being taken out of the team; see `useSpaceWatch`. */
@@ -81,6 +83,7 @@ export function AppFrame({
 	useEscape();
 	useNoAutofill();
 	useFirstOpenBack();
+	useWarmPages(user !== null);
 
 	/*
 	 * The keys that work from anywhere.
@@ -96,15 +99,6 @@ export function AppFrame({
 	 * a Mac.
 	 */
 	useEffect(() => {
-		function isTyping(target: EventTarget | null): boolean {
-			return (
-				target instanceof HTMLElement &&
-				(target.isContentEditable ||
-					target instanceof HTMLInputElement ||
-					target instanceof HTMLTextAreaElement)
-			);
-		}
-
 		function handle(event: KeyboardEvent) {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
 				event.preventDefault();
@@ -204,6 +198,7 @@ export function AppFrame({
 									{user === null ? null : (
 										<>
 											<SaveIndicator />
+											<UndoButton />
 											<IconButton
 												label="Search"
 												tooltip="Search (Ctrl+K)"
@@ -233,30 +228,17 @@ export function AppFrame({
 													onClick={() => setIsHelpOpen(true)}
 												/>
 											</span>
-											{/* How this page is drawn behind its content; see `Scenery`.
-											   On a phone the bar has no room, and it is in the account
-											   menu instead. */}
-											<span className="max-[768px]:hidden">
-												<IconButton
-													label="Background for this page"
-													tooltip="Background for this page"
-													variant="ghost"
-													size="md"
-													icon={
-														<Image aria-hidden size={22} absoluteStrokeWidth />
-													}
-													onClick={() => setIsBackdropOpen(true)}
-												/>
-											</span>
 										</>
 									)}
-									<ThemeToggle scheme={scheme} />
-									{user === null ? null : (
-										<UserMenu
-											user={user}
-											onBackdrop={() => setIsBackdropOpen(true)}
-										/>
-									)}
+									{/* The theme, and how this page is drawn behind its content;
+									   see `Scenery`. Signed out, only the theme. */}
+									<ThemeToggle
+										scheme={scheme}
+										onBackdrop={
+											user === null ? undefined : () => setIsBackdropOpen(true)
+										}
+									/>
+									{user === null ? null : <UserMenu user={user} />}
 								</HStack>
 							}
 						/>

@@ -11,6 +11,18 @@ import {
 } from "./common";
 
 /**
+ * One step inside a task; see `Task.subtasks`. Only a title and whether it is
+ * done: it is a line on the task's own checklist, not a task of its own.
+ */
+const subtaskSchema = v.object({
+	subtaskId: idSchema,
+	title: titleSchema,
+	done: v.boolean(),
+});
+
+export type Subtask = v.InferOutput<typeof subtaskSchema>;
+
+/**
  * A task exactly as it is stored.
  *
  * A task is a flat thing: a title, whether it is done, when it was added, its
@@ -112,9 +124,32 @@ const taskSchema = v.object({
 	 * this task cannot be completed. Deleting any of them takes it off here.
 	 */
 	dependsOn: v.optional(v.array(itemRefSchema)),
+	/**
+	 * The steps it is broken into, in the order they were arranged. Absent or
+	 * empty for none.
+	 *
+	 * Kept inside the task rather than as tasks of their own, so they are never
+	 * listed anywhere else — not on a tag, a checklist or Across lists — and
+	 * go wherever the task goes. The task cannot be completed while any is
+	 * open; finishing all of them does not complete it.
+	 */
+	subtasks: v.optional(v.array(subtaskSchema)),
 });
 
 export type Task = v.InferOutput<typeof taskSchema>;
+
+/**
+ * Why a task cannot be completed for its subtasks, or `null` once every one is
+ * done. Asked in the browser before a tick is drawn (`whyBlocked`) and on the
+ * server before it is written (`updateTask`), in the same words.
+ */
+export function subtasksBlocking(
+	subtasks: ReadonlyArray<Subtask> | undefined,
+): string | null {
+	const open = (subtasks ?? []).filter((each) => !each.done).length;
+	if (open === 0) return null;
+	return `Can't complete this yet: ${open} ${open === 1 ? "subtask is" : "subtasks are"} not done.`;
+}
 
 /** What a task waits on, as an edit sends it; see `Task.dependsOn`. */
 const dependsOnSchema = v.pipe(
@@ -286,6 +321,8 @@ const taskPatchSchema = v.pipe(
 		stageId: v.optional(idSchema),
 		typeId: v.optional(v.nullable(idSchema)),
 		dependsOn: v.optional(dependsOnSchema),
+		/** Every one of them, in order: the whole list is written each time. */
+		subtasks: v.optional(v.array(subtaskSchema)),
 		/**
 		 * When it was finished, and where it sits in its list, as they were —
 		 * for an undo putting a task back. Otherwise the server stamps both

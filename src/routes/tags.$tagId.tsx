@@ -76,7 +76,6 @@ import { completionPoints, dayStart } from "#/lib/chart-points";
 import {
 	type FilterSearch,
 	filterSearch,
-	searchText,
 	sortParam,
 } from "#/lib/filter-search";
 import {
@@ -138,7 +137,9 @@ export const Route = createFileRoute("/tags/$tagId")({
 	): { task: string | undefined; stage?: string } & FilterSearch => ({
 		task: typeof search.task === "string" ? search.task : undefined,
 		...filterSearch(search),
-		stage: searchText(search.stage),
+		// Not `searchText`: "To do" is the empty key (`NOT_STARTED_STAGE_KEY`),
+		// and reading `?stage=` as no stage showed every stage instead.
+		stage: typeof search.stage === "string" ? search.stage : undefined,
 	}),
 	loaderDeps: ({ search }) => ({ task: search.task }),
 	loader: async ({ context, params, deps }) => {
@@ -889,7 +890,7 @@ function TagDetailPage() {
 					className={
 						canUpdateTasks
 							? "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
-							: "flex flex-row items-center justify-between gap-2"
+							: "flex flex-row flex-wrap items-center justify-between gap-2"
 					}
 				>
 					<HStack gap={2} vAlign="center">
@@ -913,7 +914,8 @@ function TagDetailPage() {
 							/>
 						) : null}
 					</HStack>
-					<HStack gap={1} vAlign="center">
+					{/* Wraps: three labelled menus are wider than a phone. */}
+					<HStack gap={1} vAlign="center" wrap="wrap">
 						<MemberFilter
 							value={assignee}
 							onChange={(next) => filterBy({ who: next })}

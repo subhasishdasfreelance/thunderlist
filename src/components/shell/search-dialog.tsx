@@ -122,6 +122,16 @@ export function SearchDialog({
 		>
 			<VStack gap={3}>
 				<TextInput
+					/*
+					 * A search field, not a text one: Chrome on Android draws its bar
+					 * of saved passwords, cards and addresses over any text field, but
+					 * not over a search field with nothing to suggest; see
+					 * `NumberField`. Set from the first render rather than stamped
+					 * afterwards (`useNoAutofill`), since this box takes focus the
+					 * moment it is drawn — before a stamp would reach it. Astryx types
+					 * `type` narrowly but hands it to the `<input>` as it is.
+					 */
+					type={"search" as "text"}
 					autoComplete="off"
 					label="Search by name or number"
 					isLabelHidden

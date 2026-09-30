@@ -13,6 +13,8 @@ export const ID_PREFIX = {
 	checklist: "chk",
 	tracker: "trk",
 	task: "tsk",
+	/** One step inside a task; see `Task.subtasks`. */
+	subtask: "sub",
 	entry: "ent",
 	tag: "tag",
 	/** One of a checklist's stages; see `Checklist.stages`. */

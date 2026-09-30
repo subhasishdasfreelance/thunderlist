@@ -64,7 +64,13 @@ import {
 	todayDateOnly,
 } from "#/schemas/common";
 import { SPECIAL_TAGS } from "#/schemas/tag";
-import type { Task, TaskFilter, TaskPageView, TaskPatch } from "#/schemas/task";
+import {
+	subtasksBlocking,
+	type Task,
+	type TaskFilter,
+	type TaskPageView,
+	type TaskPatch,
+} from "#/schemas/task";
 import { nextNumber } from "./numbers.server";
 import { listTaskTypes } from "./settings.server";
 import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
@@ -1213,6 +1219,7 @@ export async function updateTask(
 							completed: 1,
 							stageId: 1,
 							dependsOn: 1,
+							subtasks: 1,
 						},
 					},
 				);
@@ -1275,8 +1282,13 @@ export async function updateTask(
 		}
 	}
 
-	// Nothing is finished before what it waits on; see `Task.dependsOn`.
+	// Nothing is finished before its subtasks, or what it waits on; see
+	// `Task.subtasks` and `Task.dependsOn`.
 	if (moved?.completed && !existing?.completed) {
+		// The list this edit leaves it with, where it writes one.
+		const subtasks = subtasksBlocking(patch.subtasks ?? existing?.subtasks);
+		if (subtasks !== null) throw new AppError("invalid_data", subtasks);
+
 		const undone = await firstUndone(
 			current,
 			userId,

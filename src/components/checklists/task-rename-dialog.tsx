@@ -7,11 +7,12 @@ import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { DependsField } from "#/components/tasks/depends-field";
+import { SubtasksField } from "#/components/tasks/subtasks-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
 import type { ItemRef } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
-import type { Task } from "#/schemas/task";
+import type { Subtask, Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
 import { type NotesView, TaskNotesField } from "./task-notes-field";
 import { TaskTitleField } from "./task-title-field";
@@ -28,6 +29,7 @@ function fieldsOf(task: Task | null) {
 		notes: task?.notes ?? "",
 		typeId: task?.typeId ?? NO_TYPE,
 		dependsOn: task?.dependsOn ?? ([] as Array<ItemRef>),
+		subtasks: task?.subtasks ?? ([] as Array<Subtask>),
 	};
 }
 
@@ -49,6 +51,8 @@ export type TaskDetails = {
 	typeId: string | null;
 	/** Only when it changed; see `Task.dependsOn`. */
 	dependsOn?: Array<ItemRef>;
+	/** Only when they changed; see `Task.subtasks`. */
+	subtasks?: Array<Subtask>;
 	urgent?: boolean;
 	important?: boolean;
 };
@@ -95,6 +99,11 @@ export function TaskRenameDialog({
 		onSubmit: ({ value }) => {
 			const parsed = parseTitle(value.title);
 			if (parsed.title === "") return;
+			// A row left with no title is dropped; see `SubtasksField`.
+			const subtasks = value.subtasks.flatMap((subtask) => {
+				const title = subtask.title.trim();
+				return title === "" ? [] : [{ ...subtask, title }];
+			});
 			onSubmit(parsed, {
 				// One line, however it was typed or pasted; see the field below.
 				caption: value.caption.replace(/\s*\n\s*/g, " ").trim(),
@@ -104,6 +113,9 @@ export function TaskRenameDialog({
 				JSON.stringify(task?.dependsOn ?? [])
 					? {}
 					: { dependsOn: value.dependsOn }),
+				...(JSON.stringify(subtasks) === JSON.stringify(task?.subtasks ?? [])
+					? {}
+					: { subtasks }),
 				...(parsed.urgent ? { urgent: true } : {}),
 				...(parsed.important ? { important: true } : {}),
 			});
@@ -217,6 +229,15 @@ export function TaskRenameDialog({
 							onChange={field.handleChange}
 							view={notesView}
 							onViewChange={setNotesView}
+						/>
+					)}
+				</form.Field>
+
+				<form.Field name="subtasks">
+					{(field) => (
+						<SubtasksField
+							value={field.state.value}
+							onChange={field.handleChange}
 						/>
 					)}
 				</form.Field>

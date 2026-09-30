@@ -6,6 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import {
 	Check,
 	FolderInput,
+	ListChecks,
 	MoreHorizontal,
 	Pencil,
 	Shapes,
@@ -198,6 +199,8 @@ export function TaskRow({
 				if (!isTracked) check(!task.completed);
 			},
 			[TASK_SHORTCUTS.edit]: actions.onRename,
+			// Opening what is picked, as Enter does anywhere.
+			enter: actions.onRename,
 			[TASK_SHORTCUTS.type]: actions.onSetType,
 			[TASK_SHORTCUTS.tag]: actions.onAddTag,
 			// Only in a team, where there is somebody to assign it to.
@@ -243,6 +246,10 @@ export function TaskRow({
 	// Where it lives is the way into it: the checklist, on a screen that is not
 	// that checklist's own.
 	const crumb = checklist?.title != null ? checklist : null;
+	// How far through its subtasks it is; they are listed only in its dialog.
+	const subtasks = task.subtasks ?? [];
+	const subtasksDone = subtasks.filter((subtask) => subtask.done).length;
+	const hasMeta = crumb !== null || type !== null || subtasks.length > 0;
 	const tick = (isOn: boolean) =>
 		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
 
@@ -344,7 +351,7 @@ export function TaskRow({
 						onChange={check}
 					/>
 				</span>
-				{crumb === null && !task.caption && type === null ? (
+				{!hasMeta && !task.caption ? (
 					title
 				) : (
 					<VStack gap={0}>
@@ -354,8 +361,22 @@ export function TaskRow({
 								<span data-task-caption>{task.caption}</span>
 							</Text>
 						) : null}
-						{crumb === null && type === null ? null : (
+						{!hasMeta ? null : (
 							<HStack gap={1} vAlign="center" wrap="wrap">
+								{subtasks.length === 0 ? null : (
+									<button
+										type="button"
+										className="thunderlist-subtask-count"
+										data-all-done={subtasksDone === subtasks.length}
+										aria-label={`${subtasksDone} of ${subtasks.length} subtasks done`}
+										title={canUpdateTasks ? "Open subtasks" : undefined}
+										disabled={!canUpdateTasks}
+										onClick={actions.onRename}
+									>
+										<ListChecks aria-hidden size={12} />
+										{subtasksDone}/{subtasks.length}
+									</button>
+								)}
 								{type === null ? null : (
 									<span
 										className="thunderlist-tag thunderlist-type"

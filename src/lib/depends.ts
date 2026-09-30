@@ -20,6 +20,7 @@ import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
 import type { ItemRef } from "#/schemas/common";
 import type { Tag, TagDetail, TagSummary } from "#/schemas/tag";
+import { subtasksBlocking } from "#/schemas/task";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 /** Whether one thing is done — `null` when this browser cannot tell. */
@@ -90,8 +91,9 @@ function describeItem(client: QueryClient, ref: ItemRef): string {
 }
 
 /**
- * Why a change may not be made: a task being finished while something it
- * waits on is not done yet. `null` for any change that is fine.
+ * Why a change may not be made: a task being finished while one of its
+ * subtasks, or something it waits on, is not done yet. `null` for any change
+ * that is fine.
  */
 export function whyBlocked(client: QueryClient, change: Change): string | null {
 	if (change.kind !== "task.update") return null;
@@ -106,6 +108,10 @@ export function whyBlocked(client: QueryClient, change: Change): string | null {
 		(patch.stageId !== undefined &&
 			patch.stageId === stages[stages.length - 1].stageId);
 	if (!finishes) return null;
+
+	// The list the change leaves it with, where it writes one; see `Task.subtasks`.
+	const subtasks = subtasksBlocking(patch.subtasks ?? found.task.subtasks);
+	if (subtasks !== null) return subtasks;
 
 	const undone = (found.task.dependsOn ?? []).find(
 		(ref) => isItemDone(client, ref) === false,

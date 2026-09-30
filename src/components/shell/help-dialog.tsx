@@ -21,7 +21,7 @@ type Group = { title: string; rows: Array<Row> };
  */
 const GROUPS: Array<Group> = [
 	{
-		title: "On a task you point at",
+		title: "On a task you point at, pick with ↑ ↓, or tab to",
 		rows: [
 			{ keys: [TASK_SHORTCUTS.today], what: "Today, on or off" },
 			{ keys: [TASK_SHORTCUTS.backlog], what: "Move to the Backlog" },
@@ -29,7 +29,7 @@ const GROUPS: Array<Group> = [
 			{ keys: [TASK_SHORTCUTS.urgent], what: "Urgent" },
 			{ keys: [TASK_SHORTCUTS.important], what: "Important" },
 			{ keys: [TASK_SHORTCUTS.complete], what: "Tick: next stage, or done" },
-			{ keys: [TASK_SHORTCUTS.edit], what: "Edit" },
+			{ keys: [TASK_SHORTCUTS.edit], what: "Edit — Enter too" },
 			{
 				keys: [TASK_SHORTCUTS.type.toUpperCase()],
 				what: "Type — bug, feature…",
