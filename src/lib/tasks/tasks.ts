@@ -143,20 +143,35 @@ export type SortOrder = (typeof SORT_ORDERS)[number];
 export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
 	newest: "Newest first",
 	priority: "Priority first",
+	deadline: "Deadline first",
 	stage: "Earliest stage first",
 	type: "By type",
 };
 
 /**
+ * The earlier day first, and no deadline after any. Days are `YYYY-MM-DD`, so
+ * they compare as text.
+ */
+function compareDeadlines(
+	a: string | null | undefined,
+	b: string | null | undefined,
+): number {
+	if (!a || !b) return a ? -1 : b ? 1 : 0;
+	return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
  * Urgent and important first, then urgent, then important, then the rest — or,
  * by stage, the tasks still at their first stage first and the done last, the
  * stages between in order of how far along they are; see `stageProgress`; or
- * by type, in the order the space keeps its types in, the untyped last.
+ * by type, in the order the space keeps its types in, the untyped last; or by
+ * deadline, the soonest due first and the tasks with none after every one
+ * that has one.
  *
  * Within a band the newest is still first, so sorting reorders the list rather
  * than replacing one arbitrary order with another.
  */
-function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
+function sortTasksBy<T extends Pick<Task, "urgent" | "important" | "deadline">>(
 	tasks: ReadonlyArray<T>,
 	order: SortOrder,
 	compare: (a: T, b: T) => number,
@@ -165,6 +180,12 @@ function sortTasksBy<T extends Pick<Task, "urgent" | "important">>(
 	/** Where each one's type sits in the list. Without it, by type is newest first. */
 	typeRankOf?: (task: T) => number,
 ): Array<T> {
+	if (order === "deadline") {
+		return [...tasks].sort(
+			(a, b) => compareDeadlines(a.deadline, b.deadline) || compare(a, b),
+		);
+	}
+
 	const rank =
 		order === "priority"
 			? (task: T) => PRIORITY_RANKS.indexOf(priorityRank(task))
@@ -222,6 +243,7 @@ export function orderByTask<T>(
 			item,
 			urgent: taskOf(item).urgent,
 			important: taskOf(item).important,
+			deadline: taskOf(item).deadline,
 		})),
 		order,
 		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),

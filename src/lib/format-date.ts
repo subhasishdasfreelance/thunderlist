@@ -84,6 +84,37 @@ export function formatDeadline(date: string, time?: string | null): string {
 	return time ? `${formatDate(date)}, ${formatClock(time)}` : formatDate(date);
 }
 
+/**
+ * How many days from `today` until `date`, both `YYYY-MM-DD`: negative once it
+ * has passed. `null` when either is not a date.
+ */
+export function daysUntil(date: string, today: string): number | null {
+	const to = parts(date);
+	const from = parts(today);
+	if (to === null || from === null) return null;
+
+	// Counted in UTC, where every day is the same length.
+	return Math.round(
+		(Date.UTC(to.y, to.m - 1, to.d) - Date.UTC(from.y, from.m - 1, from.d)) /
+			86_400_000,
+	);
+}
+
+/**
+ * When a task is due, as it is said: `Due today`, `Due tomorrow`, `Due in 3
+ * days`, `Due yesterday`, `Overdue by 3 days`. Anything that is not a date is
+ * written as it is, after `Due`.
+ */
+export function formatDue(deadline: string, today: string): string {
+	const days = daysUntil(deadline, today);
+	if (days === null) return `Due ${formatDate(deadline)}`;
+
+	if (days === 0) return "Due today";
+	if (days === 1) return "Due tomorrow";
+	if (days === -1) return "Due yesterday";
+	return days > 0 ? `Due in ${days} days` : `Overdue by ${-days} days`;
+}
+
 /** `06:00` to `22:00` → `6:00 am – 10:00 pm`. */
 function formatWindow(window: { from: string; to: string }): string {
 	return `${formatClock(window.from)} – ${formatClock(window.to)}`;

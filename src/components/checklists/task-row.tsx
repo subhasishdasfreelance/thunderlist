@@ -4,6 +4,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import {
+	CalendarClock,
 	Check,
 	FolderInput,
 	ListChecks,
@@ -30,10 +31,13 @@ import {
 	TodayButton,
 } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
+import { daysUntil, formatDate, formatDue } from "#/lib/format-date";
+import { useNow } from "#/lib/use-now";
 import { useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTaskTypes } from "#/lib/use-task-types";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { type Stage, stageColor, stageOf } from "#/schemas/checklist";
+import { todayDateOnly } from "#/schemas/common";
 import { specialTag, type Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 
@@ -249,7 +253,26 @@ export function TaskRow({
 	// How far through its subtasks it is; they are listed only in its dialog.
 	const subtasks = task.subtasks ?? [];
 	const subtasksDone = subtasks.filter((subtask) => subtask.done).length;
-	const hasMeta = crumb !== null || type !== null || subtasks.length > 0;
+	/*
+	 * When it is due, counted from today on the viewer's clock — "Due in 3
+	 * days". Until the browser has that, and once the task is done and there is
+	 * nothing left to count down to, the day itself; see `useNow`.
+	 */
+	const now = useNow();
+	const deadline = task.deadline ?? null;
+	const countedFrom =
+		now === null || task.completed ? null : todayDateOnly(new Date(now));
+	const due =
+		deadline === null
+			? null
+			: countedFrom === null
+				? { label: `Due ${formatDate(deadline)}`, isOverdue: false }
+				: {
+						label: formatDue(deadline, countedFrom),
+						isOverdue: (daysUntil(deadline, countedFrom) ?? 0) < 0,
+					};
+	const hasMeta =
+		crumb !== null || type !== null || subtasks.length > 0 || due !== null;
 	const tick = (isOn: boolean) =>
 		isOn ? <Icon icon={Check} size="sm" color="accent" /> : undefined;
 
@@ -363,6 +386,16 @@ export function TaskRow({
 						) : null}
 						{!hasMeta ? null : (
 							<HStack gap={1} vAlign="center" wrap="wrap">
+								{due === null ? null : (
+									<span
+										className="thunderlist-due"
+										data-overdue={due.isOverdue}
+										title={formatDate(deadline)}
+									>
+										<CalendarClock aria-hidden size={12} />
+										{due.label}
+									</span>
+								)}
 								{subtasks.length === 0 ? null : (
 									<button
 										type="button"

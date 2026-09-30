@@ -1,4 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
+import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
@@ -8,6 +10,7 @@ import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { DependsField } from "#/components/tasks/depends-field";
 import { SubtasksField } from "#/components/tasks/subtasks-field";
+import { formatDate } from "#/lib/format-date";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
 import type { ItemRef } from "#/schemas/common";
@@ -30,6 +33,7 @@ function fieldsOf(task: Task | null) {
 		typeId: task?.typeId ?? NO_TYPE,
 		dependsOn: task?.dependsOn ?? ([] as Array<ItemRef>),
 		subtasks: task?.subtasks ?? ([] as Array<Subtask>),
+		deadline: (task?.deadline ?? undefined) as ISODateString | undefined,
 	};
 }
 
@@ -53,6 +57,8 @@ export type TaskDetails = {
 	dependsOn?: Array<ItemRef>;
 	/** Only when they changed; see `Task.subtasks`. */
 	subtasks?: Array<Subtask>;
+	/** Only when it changed; `null` takes it off. See `Task.deadline`. */
+	deadline?: string | null;
 	urgent?: boolean;
 	important?: boolean;
 };
@@ -116,6 +122,9 @@ export function TaskRenameDialog({
 				...(JSON.stringify(subtasks) === JSON.stringify(task?.subtasks ?? [])
 					? {}
 					: { subtasks }),
+				...((value.deadline ?? null) === (task?.deadline ?? null)
+					? {}
+					: { deadline: value.deadline ?? null }),
 				...(parsed.urgent ? { urgent: true } : {}),
 				...(parsed.important ? { important: true } : {}),
 			});
@@ -222,6 +231,15 @@ export function TaskRenameDialog({
 					)}
 				</form.Field>
 
+				<form.Field name="deadline">
+					{(field) => (
+						<DeadlineField
+							value={field.state.value}
+							onChange={field.handleChange}
+						/>
+					)}
+				</form.Field>
+
 				<form.Field name="notes">
 					{(field) => (
 						<TaskNotesField
@@ -257,6 +275,30 @@ export function TaskRenameDialog({
 		</FormDialog>
 	);
 }
+
+/**
+ * The day the task is due. Memoised, as the schedule's date fields are: its
+ * calendar stays mounted while closed; see `ScheduleFields`.
+ */
+const DeadlineField = memo(function DeadlineField({
+	value,
+	onChange,
+}: {
+	value: ISODateString | undefined;
+	onChange: (value: ISODateString | undefined) => void;
+}) {
+	return (
+		<DateInput
+			label="Deadline"
+			isOptional
+			hasClear
+			description="Shown on the task as how long is left."
+			format={formatDate}
+			value={value}
+			onChange={onChange}
+		/>
+	);
+});
 
 /**
  * What kind of work the task is. Memoised: the Selector is the costliest part

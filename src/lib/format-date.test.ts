@@ -3,6 +3,7 @@ import {
 	formatClock,
 	formatDate,
 	formatDeadline,
+	formatDue,
 	formatSchedule,
 } from "./format-date";
 
@@ -73,6 +74,29 @@ describe("formatDeadline", () => {
 
 	it("is the day alone without one", () => {
 		expect(formatDeadline("2026-10-08", null)).toBe("Thu, Oct 8, 2026");
+	});
+});
+
+describe("formatDue", () => {
+	const today = "2026-09-30";
+
+	it("counts the days left", () => {
+		expect(formatDue("2026-10-03", today)).toBe("Due in 3 days");
+		expect(formatDue("2027-09-30", today)).toBe("Due in 365 days");
+	});
+
+	it("names today, tomorrow and yesterday", () => {
+		expect(formatDue("2026-09-30", today)).toBe("Due today");
+		expect(formatDue("2026-10-01", today)).toBe("Due tomorrow");
+		expect(formatDue("2026-09-29", today)).toBe("Due yesterday");
+	});
+
+	it("says how long ago one passed", () => {
+		expect(formatDue("2026-09-27", today)).toBe("Overdue by 3 days");
+	});
+
+	it("hands back anything that is not a date", () => {
+		expect(formatDue("soon", today)).toBe("Due soon");
 	});
 });
 

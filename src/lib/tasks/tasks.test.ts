@@ -375,6 +375,42 @@ describe("orderTasks by priority", () => {
 	});
 });
 
+describe("orderTasks by deadline", () => {
+	const at = (minute: number) =>
+		`2026-01-01T00:${String(minute).padStart(2, "0")}:00.000Z`;
+
+	it("puts the soonest due first and the tasks with none last, newest first", () => {
+		const tasks = [
+			task({ taskId: "none-old", addedAt: at(1) }),
+			task({ taskId: "later", addedAt: at(2), deadline: "2026-10-09" }),
+			task({ taskId: "none-new", addedAt: at(3), deadline: null }),
+			task({ taskId: "sooner", addedAt: at(4), deadline: "2026-10-02" }),
+			task({ taskId: "sooner-new", addedAt: at(5), deadline: "2026-10-02" }),
+		];
+
+		expect(orderTasks(tasks, "deadline").map((row) => row.taskId)).toEqual([
+			"sooner-new",
+			"sooner",
+			"later",
+			"none-new",
+			"none-old",
+		]);
+	});
+
+	it("orders rows that carry a task the same way", () => {
+		const rows = [
+			{ task: task({ taskId: "none" }) },
+			{ task: task({ taskId: "due", deadline: "2026-10-02" }) },
+		];
+
+		expect(
+			orderByTask(rows, "deadline", (row) => row.task).map(
+				(row) => row.task.taskId,
+			),
+		).toEqual(["due", "none"]);
+	});
+});
+
 describe("mergeReads", () => {
 	const id = (row: { id: string }) => row.id;
 

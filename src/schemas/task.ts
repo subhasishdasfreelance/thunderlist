@@ -134,6 +134,12 @@ const taskSchema = v.object({
 	 * open; finishing all of them does not complete it.
 	 */
 	subtasks: v.optional(v.array(subtaskSchema)),
+	/**
+	 * The day it is due, or absent or `null` for none. A day with no time, on
+	 * the viewer's own calendar, as a checklist's is. Written only from the edit
+	 * dialog, like the caption.
+	 */
+	deadline: v.optional(v.nullable(dateOnlySchema)),
 });
 
 export type Task = v.InferOutput<typeof taskSchema>;
@@ -184,7 +190,13 @@ export function priorityRank(
 }
 
 /** The orders a list of tasks can be shown in; see `sortTasksBy`. */
-export const SORT_ORDERS = ["newest", "priority", "stage", "type"] as const;
+export const SORT_ORDERS = [
+	"newest",
+	"priority",
+	"deadline",
+	"stage",
+	"type",
+] as const;
 
 /**
  * What a task with no type is called wherever one is picked or filtered by.
@@ -323,6 +335,8 @@ const taskPatchSchema = v.pipe(
 		dependsOn: v.optional(dependsOnSchema),
 		/** Every one of them, in order: the whole list is written each time. */
 		subtasks: v.optional(v.array(subtaskSchema)),
+		/** The day it is due, or `null` to take the deadline off. */
+		deadline: v.optional(v.nullable(dateOnlySchema)),
 		/**
 		 * When it was finished, and where it sits in its list, as they were —
 		 * for an undo putting a task back. Otherwise the server stamps both

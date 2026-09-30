@@ -31,7 +31,7 @@
 	font-style: normal;
 	font-weight: 700;
 	font-display: swap;
-	src: url("/fonts/eb-garamond-wordmark.woff2") format("woff2");
+	src: url("/fonts/space-grotesk-wordmark.woff2") format("woff2");
 }
 
 /*
@@ -1050,9 +1050,10 @@ body {
 	 * No panel behind it either — a patch reads as a button, and the one thing
 	 * in the bar that is not pressable should not look the most pressable.
 	 *
-	 * The face is EB Garamond Bold, set a little tight, cut down to the eleven
+	 * The face is Space Grotesk Bold, set a little tight, cut down to the
 	 * letters of the name (SIL Open Font License) and kept with the app so it
-	 * draws offline too.
+	 * draws offline too. A sans this wide reads larger than its size, so it is
+	 * set a touch under the bolt's height.
 	 */
 	.thunderlist-brand {
 		display: inline-flex;
@@ -1071,9 +1072,9 @@ body {
 
 	.thunderlist-brand-name {
 		font-family: "Thunderlist Wordmark", var(--font-family-body, sans-serif);
-		font-size: 1.3125rem;
+		font-size: 1.1875rem;
 		font-weight: 700;
-		letter-spacing: -0.025em;
+		letter-spacing: -0.035em;
 		line-height: 1;
 		white-space: nowrap;
 		color: #2563eb;
@@ -1134,6 +1135,20 @@ body {
 
 	.thunderlist-subtask-count[data-all-done="true"] {
 		color: var(--color-success);
+	}
+
+	/* When a task is due, beside its subtasks; see `TaskRow`. */
+	.thunderlist-due {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm, 0.8125rem);
+		line-height: 1.4;
+	}
+
+	.thunderlist-due[data-overdue="true"] {
+		color: var(--color-error);
 	}
 
 	/*
