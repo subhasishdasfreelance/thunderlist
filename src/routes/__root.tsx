@@ -103,7 +103,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			// never draws in a stand-in first; see `.thunderlist-brand-name`.
 			{
 				rel: "preload",
-				href: "/fonts/jakarta-wordmark.woff2",
+				href: "/fonts/eb-garamond-wordmark.woff2",
 				as: "font",
 				type: "font/woff2",
 				crossOrigin: "anonymous",

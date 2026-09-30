@@ -29,9 +29,9 @@
 @font-face {
 	font-family: "Thunderlist Wordmark";
 	font-style: normal;
-	font-weight: 800;
+	font-weight: 700;
 	font-display: swap;
-	src: url("/fonts/jakarta-wordmark.woff2") format("woff2");
+	src: url("/fonts/eb-garamond-wordmark.woff2") format("woff2");
 }
 
 /*
@@ -1050,9 +1050,8 @@ body {
 	 * No panel behind it either — a patch reads as a button, and the one thing
 	 * in the bar that is not pressable should not look the most pressable.
 	 *
-	 * The face is Plus Jakarta Sans ExtraBold, set a little tight — a clean
-	 * geometric cut rather than a rounded one — cut down to the eleven letters
-	 * of the name (1.3 KB, SIL Open Font License) and kept with the app so it
+	 * The face is EB Garamond Bold, set a little tight, cut down to the eleven
+	 * letters of the name (SIL Open Font License) and kept with the app so it
 	 * draws offline too.
 	 */
 	.thunderlist-brand {
@@ -1073,7 +1072,7 @@ body {
 	.thunderlist-brand-name {
 		font-family: "Thunderlist Wordmark", var(--font-family-body, sans-serif);
 		font-size: 1.3125rem;
-		font-weight: 800;
+		font-weight: 700;
 		letter-spacing: -0.025em;
 		line-height: 1;
 		white-space: nowrap;

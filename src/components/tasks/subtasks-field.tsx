@@ -120,6 +120,10 @@ export const SubtasksField = memo(function SubtasksField({
 			<HStack gap={1} vAlign="center">
 				<span className="min-w-0 flex-1">
 					<TextInput
+						// A search field, so Chrome on Android keeps its bar of saved
+						// passwords, cards and addresses off the keyboard; see
+						// `SearchDialog`.
+						type={"search" as "text"}
 						autoComplete="off"
 						label="New subtask"
 						isLabelHidden
@@ -182,10 +186,14 @@ const SubtaskRow = memo(function SubtaskRow({
 				/>
 				<span className="min-w-0 flex-1">
 					<TextInput
+						// A search field, as the box for a new one is; its key only
+						// finishes typing.
+						type={"search" as "text"}
 						autoComplete="off"
 						label={`Subtask ${index + 1}`}
 						isLabelHidden
 						placeholder="Subtask"
+						enterKeyHint="done"
 						value={subtask.title}
 						onChange={(title) => onUpdate(index, { title })}
 						onKeyDown={(event) => {

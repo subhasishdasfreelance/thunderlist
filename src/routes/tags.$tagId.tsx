@@ -568,25 +568,15 @@ function TagDetailPage() {
 		}
 	}
 
-	/*
-	 * Clearing the finished tasks off Today only untags them: it is a plan, and
-	 * each task stays in the checklist it lives in. Any other tag's page
-	 * deletes them, as a checklist's does.
-	 */
 	const special = detail.special;
 
+	/* A tag's page deletes its finished tasks, as a checklist's does. */
 	function clearCompleted() {
-		if (special === null) {
-			if (completed.length === 0) return;
-			apply({
-				kind: "task.deleteMany",
-				taskIds: completed.map((entry) => entry.task.taskId),
-			});
-			return;
-		}
-		for (const entry of completed) {
-			setSpecialTag(apply, entry.task, special, false, tags);
-		}
+		if (completed.length === 0) return;
+		apply({
+			kind: "task.deleteMany",
+			taskIds: completed.map((entry) => entry.task.taskId),
+		});
 	}
 
 	/**
@@ -1020,16 +1010,9 @@ function TagDetailPage() {
 
 			<CompletedSection
 				count={progress.completed - finishedTrackers}
-				clearLabel={
-					special === null
-						? "Delete all completed"
-						: `Clear from #${detail.name}`
-				}
+				clearLabel="Delete all completed"
 				onClear={
-					// Off Today it only takes the tag off, which is an update;
-					// anywhere else it deletes them.
-					completedResult.data === undefined ||
-					!(special === null ? canManageContent : canUpdateTasks)
+					completedResult.data === undefined || !canManageContent
 						? undefined
 						: () => setIsClearingCompleted(true)
 				}
@@ -1260,17 +1243,9 @@ function TagDetailPage() {
 			<AlertDialog
 				isOpen={isClearingCompleted}
 				onOpenChange={setIsClearingCompleted}
-				title={
-					special === null
-						? `Delete ${shownCompletedCount} completed ${shownCompletedCount === 1 ? "task" : "tasks"}?`
-						: `Clear ${shownCompletedCount} completed from #${detail.name}?`
-				}
-				description={
-					special === null
-						? "They will be deleted from wherever they live."
-						: `They are only taken off #${detail.name}, and stay in their checklists.`
-				}
-				actionLabel={special === null ? "Delete" : "Clear"}
+				title={`Delete ${shownCompletedCount} completed ${shownCompletedCount === 1 ? "task" : "tasks"}?`}
+				description="They will be deleted from wherever they live."
+				actionLabel="Delete"
 				onAction={() => {
 					clearCompleted();
 					setIsClearingCompleted(false);
