@@ -94,6 +94,7 @@ export function CompletedSection({
 						<Button
 							label={clearLabel}
 							variant="ghost"
+							className="thunderlist-list-action"
 							size="sm"
 							icon={<Trash2 aria-hidden />}
 							onClick={onClear}

@@ -892,6 +892,7 @@ function TagDetailPage() {
 								label={`Clear #${detail.name}`}
 								tooltip={`Take #${detail.name} off every task on it`}
 								variant="ghost"
+								className="thunderlist-list-action"
 								size="sm"
 								icon={
 									special === "today" ? (

@@ -743,6 +743,7 @@ function ChecklistDetailPage() {
 								<Button
 									label="Delete all completed"
 									variant="ghost"
+									className="thunderlist-list-action"
 									size="sm"
 									icon={<Trash2 aria-hidden />}
 									onClick={() => setIsClearingCompleted(true)}

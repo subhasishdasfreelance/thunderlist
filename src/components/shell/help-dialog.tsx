@@ -72,6 +72,7 @@ const GROUPS: Array<Group> = [
 	{
 		title: "Writing a task",
 		rows: [
+			{ keys: ["Ctrl", "/"], what: "Go to the add-task box" },
 			{ keys: ["Enter"], what: "Add. One task per line" },
 			{ keys: ["Shift", "Enter"], what: "New line" },
 			{ keys: ["#"], what: "Tag it" },

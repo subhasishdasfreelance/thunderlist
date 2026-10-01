@@ -87,6 +87,19 @@ export function QuickAddTask({
 		box?.scrollIntoView({ block: "center", behavior: "smooth" });
 	}
 
+	// Ctrl+/ comes back here from anywhere on the page, even from another
+	// field — it is a chord, so it cannot be typed by accident. Cmd+/ too.
+	useEffect(() => {
+		function handle(event: KeyboardEvent) {
+			if (!(event.ctrlKey || event.metaKey) || event.key !== "/") return;
+			event.preventDefault();
+			jumpToField();
+		}
+
+		window.addEventListener("keydown", handle);
+		return () => window.removeEventListener("keydown", handle);
+	});
+
 	return (
 		<div ref={boxRef}>
 			<HStack gap={2} vAlign="start">

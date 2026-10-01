@@ -336,6 +336,7 @@ function StagesPage() {
 								label={`Delete all ${shown.name.toLowerCase()}`}
 								icon={<Trash2 aria-hidden />}
 								variant="ghost"
+								className="thunderlist-list-action"
 								size="sm"
 								onClick={() => setIsClearingDone(true)}
 							/>
