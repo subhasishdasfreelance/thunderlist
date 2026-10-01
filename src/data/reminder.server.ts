@@ -1,13 +1,9 @@
 /**
- * Daily reminders, and the devices they are sent to. Server only.
+ * Notifications, and the devices they are sent to. Server only.
  *
- * A reminder is one person's, about a checklist, tracker or tag, and belongs
- * to the space that thing is in. A
- * device is a push subscription, kept per person, so a reminder reaches every
- * device they turned notifications on for.
- *
- * Sending is `sendDueReminders`, run by a scheduler calling `/api/reminders`
- * every few minutes; each reminder goes out at most once a day.
+ * A device is a push subscription, kept per person, so a notification — a
+ * team message, a task given to someone, a notification code's — reaches
+ * every device they turned notifications on for.
  */
 
 import webpush from "web-push";
@@ -17,7 +13,6 @@ import {
 	type PushSubscriptionDoc,
 } from "#/lib/mongo/client.server";
 import { type AccessEntry, levelFor } from "#/schemas/access";
-import { isDue, type Reminder, type ReminderTarget } from "#/schemas/reminder";
 import {
 	type MessageRecipients,
 	storedRole,
@@ -40,58 +35,6 @@ function pushKeys(): { publicKey: string; privateKey: string } | null {
 /** What a browser needs to subscribe: the public key, or `null` if none. */
 export function pushPublicKey(): string | null {
 	return pushKeys()?.publicKey ?? null;
-}
-
-/** This person's reminders in this space. */
-export async function listReminders(
-	ownerId: string,
-	email: string,
-): Promise<Array<Reminder>> {
-	const current = await collections();
-	const found = await current.reminders
-		.find(
-			{ email, ownerId },
-			{ projection: { _id: 0, target: 1, targetId: 1, time: 1 } },
-		)
-		.toArray();
-
-	return found.map(({ target, targetId, time }) => ({
-		target,
-		targetId,
-		time,
-	}));
-}
-
-/** Set one reminder, or take it away with `time: null`. */
-export async function setReminder(
-	ownerId: string,
-	email: string,
-	input: {
-		target: ReminderTarget;
-		targetId: string;
-		time: string | null;
-		timeZone: string;
-	},
-): Promise<void> {
-	const current = await collections();
-	const key = {
-		email,
-		ownerId,
-		target: input.target,
-		targetId: input.targetId,
-	};
-
-	if (input.time === null) {
-		await current.reminders.deleteOne(key);
-		return;
-	}
-
-	await current.reminders.updateOne(
-		key,
-		// A new time is a new promise: today's may still be due.
-		{ $set: { time: input.time, timeZone: input.timeZone, lastSentOn: null } },
-		{ upsert: true },
-	);
 }
 
 export async function savePushSubscription(
@@ -470,132 +413,8 @@ export async function sendTestPush(
 		{ email, endpoint },
 		{
 			title: "Thunderlist",
-			body: "Notifications are on. Your reminders will arrive like this.",
+			body: "Notifications are on. They will arrive like this.",
 			url: "/settings",
 		},
 	);
-}
-
-/**
- * Whether a reminder's person may still see what it is about. In their own
- * space, always. In a team they can be taken out of it, or off that thing's
- * list, after setting it — and the reminder must not go on telling them its
- * name.
- */
-async function canStillSee(
-	reminder: { ownerId: string; email: string },
-	item: Listed,
-): Promise<boolean> {
-	const current = await collections();
-	const team = await current.teams.findOne(
-		{ teamId: reminder.ownerId },
-		{ projection: { _id: 0, teamId: 1 } },
-	);
-	if (team === null) return true;
-
-	const member = await current.members.findOne(
-		{ teamId: reminder.ownerId, email: reminder.email },
-		{ projection: { _id: 0, role: 1 } },
-	);
-	if (member === null) return false;
-
-	// Today is everyone's, whatever it says; see `readAccess`.
-	return (
-		item.special != null ||
-		levelFor(
-			storedRole(member.role),
-			reminder.email,
-			withAccess(item).access,
-		) !== null
-	);
-}
-
-/**
- * What a reminder says, and where it opens — `null` once what it is about is
- * gone, or gone for its person; see `canStillSee`.
- */
-async function messageFor(reminder: {
-	ownerId: string;
-	email: string;
-	target: ReminderTarget;
-	targetId: string;
-}): Promise<Message | null> {
-	const current = await collections();
-	const { ownerId, targetId } = reminder;
-	const ACCESS = { access: 1, visibleTo: 1 } as const;
-
-	switch (reminder.target) {
-		case "tracker": {
-			const found = await current.trackers.findOne(
-				{ userId: ownerId, trackerId: targetId },
-				{ projection: { _id: 0, title: 1, ...ACCESS } },
-			);
-			return found === null || !(await canStillSee(reminder, found))
-				? null
-				: {
-						title: `Log progress on ${found.title}`,
-						body: "Where have you got to today?",
-						url: `/trackers/${targetId}`,
-					};
-		}
-		case "tag": {
-			const found = await current.tags.findOne(
-				{ userId: ownerId, tagId: targetId },
-				{ projection: { _id: 0, name: 1, special: 1, ...ACCESS } },
-			);
-			return found === null || !(await canStillSee(reminder, found))
-				? null
-				: {
-						title: `Review #${found.name}`,
-						body: "Open it to see what is left.",
-						url: `/tags/${found.special === "today" ? "today" : targetId}`,
-					};
-		}
-		// The daily review and a checklist's reminder, no longer offered:
-		// deleted as they come due.
-		default:
-			return null;
-	}
-}
-
-/**
- * Send every reminder whose time has come, once each per day on its own
- * clock. A reminder about something since deleted, or since kept from its
- * person, is deleted with it.
- */
-export async function sendDueReminders(
-	now: Date,
-): Promise<{ due: number; sent: number }> {
-	const current = await collections();
-	const reminders = await current.reminders.find({}).toArray();
-
-	let due = 0;
-	let sent = 0;
-	for (const reminder of reminders) {
-		// One that cannot be worked out — a time zone this server does not
-		// know — is skipped rather than stopping everyone's after it.
-		try {
-			const { isDue: isNow, today } = isDue(reminder, now);
-			if (!isNow) continue;
-			due += 1;
-
-			const message = await messageFor(reminder);
-			if (message === null) {
-				await current.reminders.deleteOne({ _id: reminder._id });
-				continue;
-			}
-
-			// Marked first: a slow push service must not make the next run send
-			// the same reminder again.
-			await current.reminders.updateOne(
-				{ _id: reminder._id },
-				{ $set: { lastSentOn: today } },
-			);
-			sent += await sendTo({ email: reminder.email }, message);
-		} catch (error) {
-			console.error("[thunderlist] reminder failed:", error);
-		}
-	}
-
-	return { due, sent };
 }

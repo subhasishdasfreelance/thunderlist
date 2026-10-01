@@ -6,7 +6,6 @@ import { queryKeys } from "#/queries/keys";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { ChecklistSummary } from "#/schemas/checklist";
 import type { Plan, PlanSummary } from "#/schemas/plan";
-import type { Reminder } from "#/schemas/reminder";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -1262,28 +1261,6 @@ describe("applyOptimistically, on the rest", () => {
 
 		applyOptimistically(queryClient, { kind: "plan.delete", planId: "pln_1" });
 		expect(plans()?.map((each) => each.planId)).toEqual(["pln_2"]);
-	});
-
-	it("sets, moves and takes away a reminder at once", () => {
-		const queryClient = new QueryClient();
-		queryClient.setQueryData<Array<Reminder>>(queryKeys.reminders, [
-			{ target: "tag", targetId: "tag_1", time: "08:00" },
-		]);
-		const change = {
-			kind: "reminder.set" as const,
-			target: "tracker" as const,
-			targetId: "trk_1",
-			timeZone: "UTC",
-		};
-		const reminders = () =>
-			queryClient.getQueryData<Array<Reminder>>(queryKeys.reminders);
-
-		applyOptimistically(queryClient, { ...change, time: "18:00" });
-		applyOptimistically(queryClient, { ...change, time: "19:30" });
-		expect(reminders()?.map((each) => each.time)).toEqual(["08:00", "19:30"]);
-
-		applyOptimistically(queryClient, { ...change, time: null });
-		expect(reminders()?.map((each) => each.target)).toEqual(["tag"]);
 	});
 
 	it("lays a list out again at once, leaving the others as they were", () => {

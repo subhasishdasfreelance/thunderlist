@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
-	listReminders,
 	pushPublicKey,
 	removePushSubscription,
 	savePushSubscription,
@@ -16,14 +15,6 @@ import { roleCan, teamMessageInputSchema } from "#/schemas/team";
 import { validator } from "#/schemas/validate";
 import { guard } from "./guard";
 import { requireScope } from "./scope";
-
-/** This person's reminders in this space. */
-export const listRemindersFn = createServerFn().handler(() =>
-	guard("listReminders", async () => {
-		const scope = await requireScope();
-		return listReminders(scope.ownerId, scope.email);
-	}),
-);
 
 /**
  * The key a browser subscribes with, or `null` while the server has none —

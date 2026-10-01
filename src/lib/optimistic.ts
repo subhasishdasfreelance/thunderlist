@@ -61,7 +61,6 @@ import type { ItemKind, ItemRef } from "#/schemas/common";
 import type { Countdown } from "#/schemas/countdown";
 import type { Group } from "#/schemas/group";
 import type { Plan, PlanSummary } from "#/schemas/plan";
-import type { Reminder } from "#/schemas/reminder";
 import {
 	shiftTagStages,
 	type Tag,
@@ -2494,25 +2493,6 @@ function patchFor(client: QueryClient, change: Change): void {
 			client.setQueryData<Array<PlanSummary>>(queryKeys.plans, (list) =>
 				list?.filter((each) => each.planId !== change.planId),
 			);
-			return;
-
-		case "reminder.set":
-			client.setQueryData<Array<Reminder>>(queryKeys.reminders, (list) => {
-				const others = (list ?? []).filter(
-					(each) =>
-						each.target !== change.target || each.targetId !== change.targetId,
-				);
-				return change.time === null
-					? others
-					: [
-							...others,
-							{
-								target: change.target,
-								targetId: change.targetId,
-								time: change.time,
-							},
-						];
-			});
 			return;
 
 		default:

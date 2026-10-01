@@ -19,9 +19,9 @@ import { pushKeyQuery } from "#/queries/reminders";
 type DeviceState = "checking" | "unavailable" | "off" | "on" | "denied";
 
 /**
- * Notifications: whether this device gets them. Reminders about one tracker
- * or tag are set from its edit dialog; they all arrive on the devices turned
- * on here.
+ * Notifications: whether this device gets them. Team messages, tasks given
+ * to this person and notification codes' messages all arrive on the devices
+ * turned on here.
  */
 export function NotificationSettings() {
 	const toast = useToast();
@@ -73,7 +73,7 @@ export function NotificationSettings() {
 				{key.isPending ? null : !isSetUp ? (
 					<Text type="supporting">
 						Notifications aren't set up on this server yet: it needs its push
-						keys and a scheduler. See "Reminders" in the README.
+						keys. See "VAPID_PUBLIC_KEY" in the README.
 					</Text>
 				) : (
 					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">

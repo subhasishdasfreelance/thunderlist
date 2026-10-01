@@ -46,7 +46,7 @@ import {
 } from "./countdown.server";
 import { shareItems } from "./items.server";
 import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
-import { sendAssigned, sendAssignedMany, setReminder } from "./reminder.server";
+import { sendAssigned, sendAssignedMany } from "./reminder.server";
 import {
 	createGroup,
 	deleteGroup,
@@ -201,10 +201,6 @@ async function run(
 			await deleteCountdown(userId, change.countdownId);
 			return;
 
-		case "reminder.set":
-			await setReminder(userId, actor, change);
-			return;
-
 		case "items.delete":
 			switch (change.of) {
 				case "checklist":
@@ -325,13 +321,6 @@ async function assertAllowed(
 ): Promise<void> {
 	const { team } = scope;
 	if (team === null) return;
-
-	// A reminder is the person's own, whatever their role: reading the thing
-	// it is about is all it takes.
-	if (change.kind === "reminder.set") {
-		assertLevel(scope, `${change.target}s`, change.targetId, "read");
-		return;
-	}
 
 	const needed = capabilityFor(change);
 	if (!roleCan(team.role, needed)) {

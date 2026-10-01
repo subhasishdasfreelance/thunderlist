@@ -79,8 +79,3 @@ export async function turnOffPush(): Promise<void> {
 	await removePushSubscriptionFn({ data: { endpoint: subscription.endpoint } });
 	await subscription.unsubscribe();
 }
-
-/** The browser's time zone, which a reminder's time is read in. */
-export function browserTimeZone(): string {
-	return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-}

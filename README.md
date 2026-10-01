@@ -65,7 +65,6 @@ code; where something could not be checked, the text says so.
 | **Undo** | **Ctrl+Z** undoes the last 20 task-level actions. | `src/lib/undo.ts`, `src/components/shell/undo-provider.tsx` |
 | **Teams** | Shared spaces with four roles and an access list on each checklist, tracker and tag. | `src/schemas/team.ts`, `src/schemas/access.ts` |
 | **Team messages** | Project managers can push a message to a team, a role, everyone who can see a checklist, tag or tracker, or one person. | `sendTeamMessage` in `src/data/reminder.server.ts` |
-| **Reminders** | A daily push notification about a tracker or a tag, at a time you choose. | `src/schemas/reminder.ts`, `/api/reminders` |
 | **Notification codes** | Secrets that let an outside script send notifications through `POST /api/notify`. | `src/schemas/notification-code.ts` |
 | **Backdrops** | A per-person choice of background design and palette for each section of the app. | `src/schemas/backdrop*.ts`, `src/components/shell/scenery.tsx` |
 | **Feedback** | "Send feedback…" in the account menu. It files a task in the maintainer's own account (see [Feedback](#710-feedback)). | `src/data/feedback.server.ts` |
@@ -99,7 +98,6 @@ generated from them; do not edit it.
 | `/countdowns` | `countdowns.tsx` | `?countdown=` brings one into view, from search. |
 | `/settings` | `settings.tsx` | Account, where you work (spaces and teams), task types, notifications, team messages, notification codes. |
 | `/api/auth/$` | `api/auth/$.ts` | Better Auth handler (GET and POST). |
-| `/api/reminders` | `api/reminders.ts` | Called by a scheduler to send due reminders. |
 | `/api/notify` | `api/notify.ts` | Public endpoint for notification codes. |
 
 The navigation entries and their number-key shortcuts are defined in
@@ -172,7 +170,7 @@ cannot create tags, so an unknown `#name` stays as plain text for them.
 | Forms | `@tanstack/react-form` | Used by one dialog, `task-rename-dialog.tsx`; the others keep their own state. Check an existing dialog before assuming a pattern. |
 | Database | **MongoDB**, official driver **pinned to v6** | A single `thunderlist` database. Server-only access through `src/lib/mongo/client.server.ts`. |
 | Auth | **Better Auth** with Google as the only provider | `src/lib/auth.ts` (config), `src/lib/auth.server.ts` (`currentUser`, `requireUser`), `src/lib/auth-client.ts` (browser). |
-| Push | **web-push** (VAPID) | Reminders, team messages, assignments and notification codes. |
+| Push | **web-push** (VAPID) | Team messages, assignments and notification codes. |
 | Runtime | **Bun** (package manager, test runner, dev runtime); **Node** for ad-hoc DB scripts | See [Running database scripts](#37-running-database-scripts-use-node). |
 | Lint and format | **Biome 2** | Tabs and double quotes. See `biome.json`. |
 | Types | **TypeScript 6**, `strict`, `noUnusedLocals`/`Parameters`, `verbatimModuleSyntax` | `bun run typecheck`. |
@@ -229,8 +227,8 @@ http://localhost:4000/api/auth/callback/google
 cp .env.example .env.local   # then fill it in; never commit it (it is gitignored)
 ```
 
-`.env.example` only lists the first five variables below. Add the push and
-cron variables yourself if you need reminders.
+`.env.example` only lists the first five variables below. Add the push
+variables yourself if you need notifications.
 
 | Variable | Required | Purpose | Read in |
 |---|---|---|---|
@@ -241,7 +239,6 @@ cron variables yourself if you need reminders.
 | `GOOGLE_CLIENT_SECRET` | yes | From the OAuth client. | `src/lib/auth.ts` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | for push | Web-push key pair. Generate one with `bunx web-push generate-vapid-keys`. Without them, Settings reports that notifications are not set up and no push is sent. | `src/data/reminder.server.ts` |
 | `VAPID_SUBJECT` | no | A `mailto:` or URL for push services. Falls back to `BETTER_AUTH_URL`, then `mailto:reminders@thunderlist.app`. | `src/data/reminder.server.ts` |
-| `CRON_SECRET` | for reminders | Bearer token that `/api/reminders` requires. If it is unset, the endpoint always answers 401. | `src/routes/api/reminders.ts` |
 
 `src/lib/auth.ts` throws on import if any of the four auth variables is
 missing. It prints the origin it is configured for:
@@ -515,7 +512,6 @@ Current kinds:
 | Group | `group.create`, `group.update`, `group.delete` |
 | Plan | `plan.create`, `plan.update`, `plan.delete` |
 | Countdown | `countdown.create`, `countdown.update`, `countdown.delete` |
-| Reminder | `reminder.set` (a `time` of `null` removes it) |
 
 There is **one write endpoint** for all of them: `applyChangeFn` in
 `src/functions/change.functions.ts`.
@@ -562,7 +558,6 @@ change in one place.
    a team, three things are checked:
    - **Role capability** (`capabilityFor`): `task.update`, `entry.create` and
      `entry.update` need `updateTasks`. Every other kind needs `manageContent`.
-     `reminder.set` only needs read access to its target.
    - **Named people** must be team members (assignees and access-list emails;
      see `namedPeople`).
    - **Access level** on the thing touched (`assertLevel` / `assertTaskAllowed`),
@@ -598,7 +593,7 @@ change in one place.
 `applyOptimistically(client, change)` patches **every cache that shows the
 change**: checklist summaries and pages, stage counts, tag pages and summaries,
 the search index, Across pages, tracker summaries and histories, plans,
-countdowns, groups, task types, arrangements and reminders. Rules:
+countdowns, groups, task types and arrangements. Rules:
 
 - **Every change is patched**, including ones made from dialogs. This is a
   project principle: nothing waits for a round trip to appear.
@@ -655,7 +650,7 @@ Keys are hierarchical, so invalidating a prefix covers every page beneath it:
 ["trackers"], ["trackers", id], ["trackers", id, "entries"]
 ["across"], ["across", view]
 ["search-index"], ["space"], ["teams"], ["task-types"], ["arrangements"], ["groups"],
-["plans"], ["plans", id], ["countdowns"], ["reminders"], ["notification-codes"],
+["plans"], ["plans", id], ["countdowns"], ["notification-codes"],
 ["backdrops"], ["session"], ["setup-status"], ["push-key"]
 ```
 
@@ -791,7 +786,7 @@ Rules to remember:
   kept in the address (`?sort=`, `?who=`, `?tag=`, `?type=`; see
   `filterSearch`), so a reload, Back or a shared link shows the same rows.
 - The admin can delete a team, which deletes everything in its space,
-  including its reminders and notification codes, and then its members
+  including its notification codes, and then its members
   (`deleteTeam`).
 - Tracker readings record `recordedBy`, which the server sets from the
   session.
@@ -1003,7 +998,6 @@ One database, `thunderlist`. Collection types are declared in
 | `plans` | plan | `userId` | Markdown `body` |
 | `countdowns` | countdown | `userId` | |
 | `counters` | (space, kind) | `userId` | `last` number handed out |
-| `reminders` | (person, space, target) | `ownerId` + `email` | daily reminder |
 | `pushSubscriptions` | device | `email` | web-push endpoint + keys |
 | `notificationCodes` | code | `userId` + `createdBy` | secret `ntf_…` |
 | `preferences` | **person** (account, not space) | `userId` | `backdrops` per section |
@@ -1012,8 +1006,8 @@ One database, `thunderlist`. Collection types are declared in
 | `taskRefs` | legacy list entry | `userId` | old Today/Backlog lists; migrated and emptied on first read (`moveListsIntoTags`) |
 | `user`, `session`, `account` | — | — | **Better Auth's own**. The app only reads `user` (for names, pictures, and the hex `_id` that is a person's `userId`). |
 
-Every app document (except teams, members, push subscriptions and reminders,
-which are keyed differently) carries `userId`, and **every query filters on
+Every app document (except teams, members and push subscriptions, which are
+keyed differently) carries `userId`, and **every query filters on
 it**. `userId` is a person's own id or a team's id, and it always comes from
 the server-side scope. Reads project `_id` and `userId` away
 (`DOMAIN_FIELDS`). Nothing is nested: a task is its own document so that
@@ -1032,7 +1026,6 @@ edits, moves and searches are single targeted writes.
 | Group | `groupId`, `number`, `name`, `color`, `items`, `createdAt`, `updatedAt` |
 | Plan | `planId`, `number`, `title`, `body`, `createdAt`, `updatedAt` |
 | Countdown | `countdownId`, `number`, `title`, `date`, `color`, `format`, `createdAt`, `updatedAt` |
-| Reminder | `email`, `ownerId`, `target` (`tracker` \| `tag`), `targetId`, `time` (`HH:MM`), `timeZone`, `lastSentOn` |
 | Push subscription | `endpoint`, `email`, `keys { p256dh, auth }`, `createdAt` |
 | Notification code | `code`, `label`, `to` (`device` \| `people` \| `team`), `createdBy`, `teamId`, `createdAt`, `lastUsedAt` |
 
@@ -1073,7 +1066,6 @@ has a globally unique index; every other index leads with `userId`.
 | `settings` | `userId` unique |
 | `plans` | `planId` unique; `userId, updatedAt` |
 | `countdowns` | `countdownId` unique; `userId, date` |
-| `reminders` | `email, ownerId, target, targetId` unique |
 | `preferences` | `userId` unique |
 | `counters` | `userId, kind` unique |
 | `pushSubscriptions` | `endpoint` unique; `email` |
@@ -1096,7 +1088,6 @@ written:
 | Role `"member"` → `manager` | `storedRole` |
 | Per-list groups → `settings.groups` | `listGroups` |
 | Missing `number` fields | `ensureNumbered` |
-| Legacy checklist reminders | deleted as they fall due (`messageFor`) |
 | Retired colour names | drawn as the nearest pickable colour (`pickableColor`, CSS) |
 
 Several of these (`ensureInbox`, `ensureBacklog`, `ensureNumbered`) cache
@@ -1231,33 +1222,7 @@ then asks first (`beforeunload` in `__root.tsx`).
 `src/lib/first-open.ts` rearranges history on a fresh open so that **Back** from
 Today goes to Checklists instead of leaving the app.
 
-### 10.2 Reminders
-
-- A reminder is a daily push notification about a **tracker or a tag**
-  (`REMINDER_TARGETS`), set from its edit dialog. It uses the time zone of the
-  browser that set it. It belongs to the person who set it, not to the team,
-  and goes to every device they enabled in Settings. On iPhone this needs the
-  app added to the home screen.
-- `GET` or `POST /api/reminders` with `Authorization: Bearer <CRON_SECRET>`
-  runs `sendDueReminders`. Each reminder is sent at most once a day, and not
-  if it is more than 3 hours late (`isDue`). A reminder about something
-  deleted, or that its person can no longer see (removed from the team, or
-  taken off the list), is itself deleted. One that fails is logged and
-  skipped without stopping the others. A reminder set for 23:58 that the
-  scheduler reaches at 00:03 still goes out, for the day before. Time zones
-  are validated (`isTimeZone`). The response is `{ due, sent }`.
-- **Something must call it every few minutes.** On Vercel Pro, add a cron to
-  `vercel.json` (Vercel sends the `CRON_SECRET` header itself):
-  ```json
-  "crons": [{ "path": "/api/reminders", "schedule": "*/5 * * * *" }]
-  ```
-  On the Hobby plan (cron jobs run once a day), use an outside scheduler such
-  as cron-job.org or a GitHub Actions schedule. **The repo's `vercel.json`
-  has no cron configured.**
-- Without VAPID keys nothing is sent. Without a scheduler, reminders are saved
-  but never delivered.
-
-### 10.3 Team messages
+### 10.2 Team messages
 
 A project manager or admin can push a message (title up to 60 characters,
 body up to 300) to the whole team, everyone with a given role, everyone who
@@ -1271,7 +1236,7 @@ get a push ("Priya gave you a task") that opens the task. The person who did
 the assigning is not notified, and neither is anyone the task is hidden from
 (`sendAssigned`, called from `applyChange`).
 
-### 10.4 Notification codes and `/api/notify`
+### 10.3 Notification codes and `/api/notify`
 
 A notification code lets anything that can make an HTTP request notify people
 without signing in. Codes are created in Settings → Notification codes.
@@ -1493,7 +1458,7 @@ Nothing forces all of these steps at compile time, so work through the list.
   (`tasks.test.ts`), progress, pace and velocity (`progress.test.ts`), date
   formatting, inline tag parsing, dependencies, access levels, visibility
   (`visibility.server.test.ts`, which tests pure helpers only), schemas
-  (arrangement, countdown, notification code, number, reminder), search
+  (arrangement, countdown, notification code, number), search
   result ranking, undo (`undo.test.ts`), where tasks land when a checklist's
   stages change (`checklist.test.ts`), and optimistic cache patching (the
   largest suite).
@@ -1521,14 +1486,12 @@ The repo targets **Vercel** (`vercel.json`: `"framework": "tanstack-start"`).
 2. Under **Settings → Environment Variables**, add `MONGO_CONN_STR`,
    `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (the deployed origin),
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Add `VAPID_PUBLIC_KEY`,
-   `VAPID_PRIVATE_KEY`, `CRON_SECRET` and optionally `VAPID_SUBJECT` for
-   notifications.
+   `VAPID_PRIVATE_KEY` and optionally `VAPID_SUBJECT` for notifications.
 3. Add `https://<your-domain>/api/auth/callback/google` to the Google OAuth
    client's redirect URIs.
 4. On Atlas, allow Vercel's egress under **Network Access**.
 5. Deploy. The build command is the `build` script, which compiles the theme
    and then runs `vite build`.
-6. For reminders, configure a scheduler (see §10.2).
 
 Nitro chooses its output preset from the build environment; the repo does not
 pin one. A local build writes the preset it used to `.output/nitro.json`. When
@@ -1555,7 +1518,6 @@ PWAs pick up the new service worker and reload.
 | `bun run check` fails on files you didn't touch | The tree was not fully Biome-clean when this guide was written (§3.6). Fix only your own files, or run `bunx biome check --write <files>`. |
 | `npx biome` does nothing | `npx biome` can resolve to an unrelated npm package. Use `bun run check`, `bunx biome`, or `./node_modules/.bin/biome`. |
 | Service worker, push or offline not working locally | The worker only registers in production builds, so use `preview`. Push also needs VAPID keys and, on iOS, a home-screen install. |
-| Reminders never arrive | No scheduler is calling `/api/reminders`, `CRON_SECRET` is unset or does not match (401), or VAPID keys are missing. |
 | Theme looks wrong after editing `thunderlist.theme.ts` | Run `bun run theme:build`. `bun run theme:check` tells you whether it is stale. |
 | A change "undoes itself" or flickers | Something refetched mid-mutation, or the optimistic patch misses a cache. Check `patchFor` and that refetches are gated on `isMutating()`. |
 | Route file added but not found | The dev server was not running to regenerate `routeTree.gen.ts`. Run `bun run generate-routes`. |
@@ -1576,8 +1538,8 @@ PWAs pick up the new service worker and reload.
 - **`mongodb` is pinned to v6.** The v7 driver's BSON package calls
   `v8.startupSnapshot.isBuildingSnapshot()` at import time, which Bun does not
   implement, so v7 crashes the dev server on Bun.
-- **`/api/notify` has no rate limit**, and it and `/api/reminders` allow any
-  origin; their secrets are the only protection.
+- **`/api/notify` has no rate limit**, and it allows any origin; its secret is
+  the only protection.
 - **In-memory "already done" caches** (`ensureInbox`, `ensureBacklog`,
   `ensureNumbered`) are per server process. They are safe to repeat, and races
   are settled by unique indexes.
@@ -1585,9 +1547,8 @@ PWAs pick up the new service worker and reload.
 
 Things this guide could not fully verify:
 
-- **The live Vercel setup** (project settings, env vars, whether a cron or
-  external scheduler exists). The repo only has `vercel.json` with the
-  framework preset, and no cron.
+- **The live Vercel setup** (project settings, env vars). The repo only has
+  `vercel.json` with the framework preset.
 - **Which Nitro preset Vercel builds use.** It is auto-detected, not pinned.
 - **Signed-in UI flows.** These were read from code, not exercised in a
   browser.

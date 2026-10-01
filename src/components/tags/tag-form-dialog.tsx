@@ -9,14 +9,10 @@ import { Token } from "@astryxdesign/core/Token";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
-import {
-	ReminderField,
-	useReminderDraft,
-} from "#/components/common/reminder-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { StageDot } from "#/components/common/stage-dot";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
-import { type TagValues, useApplyChange } from "#/lib/changes";
+import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
@@ -138,13 +134,8 @@ export function TagFormDialog({
 		!isUnwritable &&
 		(dailyWindow === null || dailyWindow.to > dailyWindow.from);
 
-	// Your own daily reminder about it, saved with the rest; see `ReminderField`.
-	const reminder = useReminderDraft(isOpen, "tag", tag?.tagId ?? null);
-	const { apply: applyReminder } = useApplyChange();
-
 	function save() {
 		if (!isValid) return;
-		reminder.save(applyReminder);
 		onSubmit({
 			name: trimmed,
 			color,
@@ -274,11 +265,6 @@ export function TagFormDialog({
 							/>
 						))}
 					</VStack>
-				)}
-
-				{/* Only once it exists: a reminder is about something. */}
-				{tag === undefined ? null : (
-					<ReminderField value={reminder.time} onChange={reminder.setTime} />
 				)}
 
 				{/* Today is everyone's, in a team as anywhere. */}

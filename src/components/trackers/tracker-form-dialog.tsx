@@ -16,10 +16,6 @@ import {
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { NumberField } from "#/components/common/number-field";
-import {
-	ReminderField,
-	useReminderDraft,
-} from "#/components/common/reminder-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import {
 	draftTagIds,
@@ -29,7 +25,7 @@ import {
 } from "#/components/tags/tags-field";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
-import { type TrackerValues, useApplyChange } from "#/lib/changes";
+import type { TrackerValues } from "#/lib/changes";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
 import { todayDateOnly } from "#/schemas/common";
@@ -149,18 +145,9 @@ export function TrackerFormDialog({
 							: null;
 	const isValid = problem === null;
 
-	// Your own daily reminder about it, saved with the rest; see `ReminderField`.
-	const reminder = useReminderDraft(
-		isOpen,
-		"tracker",
-		tracker?.trackerId ?? null,
-	);
-	const { apply: applyReminder } = useApplyChange();
-
 	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
-		reminder.save(applyReminder);
 		onSubmit({
 			title: trimmedTitle,
 			caption: caption.trim(),
@@ -315,11 +302,6 @@ export function TrackerFormDialog({
 						value={assignees}
 						onChange={setAssignees}
 					/>
-				)}
-
-				{/* Only once it exists: a reminder is about something. */}
-				{tracker === undefined ? null : (
-					<ReminderField value={reminder.time} onChange={reminder.setTime} />
 				)}
 
 				<AccessField noun="tracker" value={access} onChange={setAccess} />

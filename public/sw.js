@@ -252,7 +252,7 @@ async function trim(cache) {
 }
 
 /*
- * 5. Reminders. A push from the server is shown as a notification — see
+ * 5. Notifications. A push from the server is shown as one — see
  *    `src/data/reminder.server.ts` — and tapping it opens the page it is
  *    about: in a window of the app already open, where there is one. One sent
  *    with a notification code may bring a picture, and a link off the app,

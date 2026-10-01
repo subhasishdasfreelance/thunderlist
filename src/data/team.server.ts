@@ -378,7 +378,6 @@ export async function deleteTeam(teamId: string, actor: string): Promise<void> {
 		current.countdowns.deleteMany(owned),
 		current.taskRefs.deleteMany(owned),
 		current.counters.deleteMany(owned),
-		current.reminders.deleteMany({ ownerId: teamId }),
 		current.notificationCodes.deleteMany({ teamId }),
 	]);
 	await current.members.deleteMany({ teamId });

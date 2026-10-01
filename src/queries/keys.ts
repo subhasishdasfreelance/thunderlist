@@ -58,8 +58,6 @@ export const queryKeys = {
 	tagCompleted: (tagId: string) => ["tags", tagId, "completed"] as const,
 	/** The tags with their progress, which only the Tags screen reads. */
 	tagSummaries: ["tag-summaries"] as const,
-	/** This person's daily reminders here; see `Reminder`. */
-	reminders: ["reminders"] as const,
 	/** Your notification codes here; see `NotificationCode`. */
 	notificationCodes: ["notification-codes"] as const,
 	/** Every plan, without its body; see `PlanSummary`. */

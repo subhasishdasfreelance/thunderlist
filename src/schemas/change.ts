@@ -22,7 +22,6 @@ import {
 	planIdInputSchema,
 	updatePlanInputSchema,
 } from "./plan";
-import { setReminderInputSchema } from "./reminder";
 import {
 	createTagInputSchema,
 	tagIdInputSchema,
@@ -213,11 +212,6 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("countdown.delete"),
 		...countdownIdInputSchema.entries,
-	}),
-
-	v.object({
-		kind: v.literal("reminder.set"),
-		...setReminderInputSchema.entries,
 	}),
 
 	/**

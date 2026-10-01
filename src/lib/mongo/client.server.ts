@@ -26,7 +26,6 @@ import type { Group } from "#/schemas/group";
 import type { CodeRecipients } from "#/schemas/notification-code";
 import type { NumberedKind } from "#/schemas/number";
 import type { Plan } from "#/schemas/plan";
-import type { ReminderTarget } from "#/schemas/reminder";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -78,21 +77,6 @@ export type TagDoc = Tag & Owned & Shared;
 /** `checklistId` is null for a task that belongs to no checklist. */
 export type PlanDoc = Plan & Owned;
 export type CountdownDoc = Countdown & Owned;
-
-/**
- * One person's daily reminder; see `Reminder`. `ownerId` is the space it
- * is about.
- */
-export type ReminderDoc = {
-	email: string;
-	ownerId: string;
-	target: ReminderTarget;
-	targetId: string;
-	time: string;
-	timeZone: string;
-	/** The day, on its own clock, it last went out. */
-	lastSentOn?: string | null;
-};
 
 /**
  * The last number handed out for one kind of thing in a space; see
@@ -228,7 +212,6 @@ export type Collections = {
 	settings: Collection<SettingsDoc>;
 	plans: Collection<PlanDoc>;
 	countdowns: Collection<CountdownDoc>;
-	reminders: Collection<ReminderDoc>;
 	preferences: Collection<PreferencesDoc>;
 	counters: Collection<CounterDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
@@ -279,7 +262,6 @@ function collectionsOf(database: Db): Collections {
 		settings: database.collection<SettingsDoc>("settings"),
 		plans: database.collection<PlanDoc>("plans"),
 		countdowns: database.collection<CountdownDoc>("countdowns"),
-		reminders: database.collection<ReminderDoc>("reminders"),
 		preferences: database.collection<PreferencesDoc>("preferences"),
 		counters: database.collection<CounterDoc>("counters"),
 		pushSubscriptions:
@@ -319,11 +301,6 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.plans.createIndex({ userId: 1, updatedAt: -1 }),
 		current.countdowns.createIndex({ countdownId: 1 }, { unique: true }),
 		current.countdowns.createIndex({ userId: 1, date: 1 }),
-		// One reminder per person per thing, however often it is set.
-		current.reminders.createIndex(
-			{ email: 1, ownerId: 1, target: 1, targetId: 1 },
-			{ unique: true },
-		),
 		current.preferences.createIndex({ userId: 1 }, { unique: true }),
 		// One counter per kind per space, however many first numbers race.
 		current.counters.createIndex({ userId: 1, kind: 1 }, { unique: true }),

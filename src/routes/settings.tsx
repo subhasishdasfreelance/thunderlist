@@ -276,7 +276,7 @@ function SettingsPage() {
 
 			<Section
 				title="Notifications"
-				description="Reminders from the installed app, at the times you choose, for any tracker or tag from its edit dialog."
+				description="Team messages, tasks given to you, and notifications sent with a code, on the devices you turn on here."
 			>
 				<NotificationSettings />
 			</Section>
