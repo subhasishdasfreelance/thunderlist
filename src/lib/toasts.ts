@@ -28,10 +28,30 @@ export function useToast(): ShowToastFn {
 				},
 			});
 			showing.add(dismiss);
+			// Once the toast is drawn, so there is a viewport to find.
+			requestAnimationFrame(raiseAboveDialogs);
 			return dismiss;
 		},
 		[show],
 	);
+}
+
+/**
+ * Bring the toasts back above every dialog.
+ *
+ * Astryx puts its toast viewport in the browser's top layer once, as the app
+ * starts, and the top layer stacks by arrival: a dialog opened since then —
+ * the whole screen, on a phone — sits over it, toasts and all. Showing the
+ * viewport again makes it the newest arrival, so the toast is seen.
+ */
+function raiseAboveDialogs() {
+	const viewport = document
+		.querySelector("[data-toast-id]")
+		?.closest<HTMLElement>("[popover]");
+	if (!viewport?.matches(":popover-open")) return;
+
+	viewport.hidePopover();
+	viewport.showPopover();
 }
 
 /** Close every toast on screen. Whether there was one to close. */

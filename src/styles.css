@@ -2492,9 +2492,9 @@ body {
 }
 
 /*
- * Number fields and the search box are search fields to the browser (see
- * `NumberField`), which would otherwise draw one as a rounded search box with
- * a clear button.
+ * Every one-line text field is a search field to the browser (see
+ * `useNoAutofill`), which would otherwise draw one as a rounded search box
+ * with a clear button.
  */
 input[type="search"] {
 	appearance: none;
