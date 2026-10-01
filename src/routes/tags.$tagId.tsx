@@ -49,6 +49,7 @@ import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { TagTasks } from "#/components/tags/tag-tasks";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
+import { TasksEditDialog } from "#/components/tasks/tasks-edit-dialog";
 import { TypeFilter } from "#/components/tasks/type-filter";
 import { AccessButton } from "#/components/teams/access-button";
 import { AssignDialog } from "#/components/teams/assign-dialog";
@@ -75,6 +76,7 @@ import {
 	toggleAssigneeOnAll,
 	toggleFlagOnAll,
 	toggleSpecialTagOnAll,
+	updateAllAlike,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -202,6 +204,10 @@ function TagDetailPage() {
 	const team = space?.team ?? null;
 
 	const [renaming, setRenaming] = useState<Task | null>(null);
+	// Every task picked out, edited together; see `TasksEditDialog`.
+	const [editingMany, setEditingMany] = useState<ReadonlyArray<Task> | null>(
+		null,
+	);
 	// The tasks a move is being picked for: one from its own menu, or every
 	// task picked out at once; see `SelectionBar`.
 	const [moving, setMoving] = useState<ReadonlyArray<TagTaskEntry> | null>(
@@ -1159,6 +1165,11 @@ function TagDetailPage() {
 							? undefined
 							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
+					onEdit={() =>
+						pickedTasks.length === 1
+							? setRenaming(pickedTasks[0])
+							: setEditingMany(pickedTasks)
+					}
 					onClear={clear}
 				/>
 			)}
@@ -1180,6 +1191,18 @@ function TagDetailPage() {
 				tags={tags}
 				canCreate={canManageContent}
 				onClose={() => setTagging(null)}
+			/>
+
+			<TasksEditDialog
+				isOpen={editingMany !== null}
+				onOpenChange={(isOpen) => {
+					if (!isOpen) setEditingMany(null);
+				}}
+				tasks={editingMany}
+				onSave={(edit) => {
+					if (editingMany) updateAllAlike(apply, editingMany, edit);
+					setEditingMany(null);
+				}}
 			/>
 
 			<TaskTypeDialog

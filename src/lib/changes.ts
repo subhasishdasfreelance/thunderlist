@@ -597,6 +597,50 @@ export function toggleFlagOnAll(
 	});
 }
 
+/**
+ * One edit to every task picked out — the bulk edit's; see `TasksEditDialog`.
+ * Each task is sent only what the edit changes on it, and one it changes
+ * nothing on is left out.
+ */
+export function updateAllAlike(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<
+		Pick<
+			Task,
+			"taskId" | "typeId" | "caption" | "deadline" | "urgent" | "important"
+		>
+	>,
+	edit: Pick<
+		TaskPatch,
+		"typeId" | "caption" | "deadline" | "urgent" | "important"
+	>,
+): void {
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			const own: TaskPatch = {};
+			if (edit.typeId !== undefined && edit.typeId !== (task.typeId ?? null)) {
+				own.typeId = edit.typeId;
+			}
+			if (edit.caption !== undefined && edit.caption !== (task.caption ?? "")) {
+				own.caption = edit.caption;
+			}
+			if (
+				edit.deadline !== undefined &&
+				edit.deadline !== (task.deadline ?? null)
+			) {
+				own.deadline = edit.deadline;
+			}
+			if (edit.urgent !== undefined && edit.urgent !== task.urgent) {
+				own.urgent = edit.urgent;
+			}
+			if (edit.important !== undefined && edit.important !== task.important) {
+				own.important = edit.important;
+			}
+			if (Object.keys(own).length > 0) updateTask(collect, task.taskId, own);
+		}
+	});
+}
+
 /** Give every task one type, or none; K over a pick. */
 export function setTypeOnAll(
 	apply: ApplyChange,

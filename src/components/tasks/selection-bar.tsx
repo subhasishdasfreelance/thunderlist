@@ -6,6 +6,7 @@ import {
 	ArrowRight,
 	Check,
 	FolderInput,
+	Pencil,
 	Tag as TagIcon,
 	Trash2,
 	X,
@@ -41,7 +42,7 @@ import { TASK_SHORTCUTS } from "./task-actions";
  * on for all of them, or off where all have it — and is saved as one change
  * for them all; see `applyBatched`. With the rows picked from the keyboard
  * (see `useTaskSelection`), a run of tasks is dealt with without the pointer.
- * Editing is the one left out: it is about one task.
+ * E and Enter edit what they can share, all at once; see `TasksEditDialog`.
  *
  * The keys with no button of their own here are the row's quick ones, there
  * for whoever is already at the keyboard; on a phone the bar is as it was.
@@ -52,6 +53,7 @@ export function SelectionBar({
 	stages,
 	onMoveTo,
 	onDone,
+	onEdit,
 	onMoveToChecklist,
 	onAddTag,
 	onDelete,
@@ -71,6 +73,8 @@ export function SelectionBar({
 	onMoveTo?: (stageId: string) => void;
 	/** Finish them. Left out when none of them can be finished by hand. */
 	onDone?: () => void;
+	/** Edit them, together; see `TasksEditDialog`. */
+	onEdit: () => void;
 	/**
 	 * Move all of them into another checklist, picked in a dialog. Left out
 	 * for anyone whose role may not move tasks; see `Capability`.
@@ -100,6 +104,9 @@ export function SelectionBar({
 }) {
 	const keys: Record<string, (() => void) | undefined> = {
 		[TASK_SHORTCUTS.complete]: onNextStage ?? onDone,
+		[TASK_SHORTCUTS.edit]: onEdit,
+		// Opening what is picked, as Enter does anywhere.
+		enter: onEdit,
 		[TASK_SHORTCUTS.today]: onToggleToday,
 		[TASK_SHORTCUTS.backlog]: onBacklog,
 		[TASK_SHORTCUTS.move]: onMoveToChecklist,
@@ -123,9 +130,9 @@ export function SelectionBar({
 			) {
 				return;
 			}
-			// Space presses the button or box focus is on, as ever.
+			// Space and Enter press the button or box focus is on, as ever.
 			if (
-				event.key === " " &&
+				(event.key === " " || event.key === "Enter") &&
 				event.target instanceof Element &&
 				event.target.closest(PRESSABLE) !== null
 			) {
@@ -193,6 +200,15 @@ export function SelectionBar({
 					onClick={onDone}
 				/>
 			)}
+
+			<Button
+				label="Edit"
+				tooltip={`Edit (${TASK_SHORTCUTS.edit.toUpperCase()})`}
+				variant="secondary"
+				size="sm"
+				icon={<Pencil aria-hidden />}
+				onClick={onEdit}
+			/>
 
 			{onAddTag === undefined ? null : (
 				<Button

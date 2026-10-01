@@ -68,7 +68,7 @@ const GROUPS: Array<Group> = [
 			},
 			{
 				keys: ["Task keys"],
-				what: `Every key for one task, to all picked at once — all but ${TASK_SHORTCUTS.edit}`,
+				what: `Every key for one task, to all picked at once — ${TASK_SHORTCUTS.edit.toUpperCase()} edits them together`,
 			},
 			{ keys: ["Esc"], what: "Drop the pick" },
 		],
