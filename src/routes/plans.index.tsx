@@ -7,7 +7,12 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	saveArrangement,
+} from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
@@ -18,13 +23,23 @@ import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { plansQuery } from "#/queries/plans";
 import { primeQuery } from "#/queries/prime";
+import { arrangementsQuery } from "#/queries/space";
+import { EMPTY_ARRANGEMENT, manualOrder } from "#/schemas/arrangement";
 import { todayDateOnly } from "#/schemas/common";
 import type { PlanSummary } from "#/schemas/plan";
 
 export const Route = createFileRoute("/plans/")({
-	loader: ({ context }) => primeQuery(context.queryClient, plansQuery()),
+	// The order is the space's, and read with the list, so it is drawn in it
+	// from the start rather than rearranged after.
+	loader: ({ context }) =>
+		Promise.all([
+			primeQuery(context.queryClient, plansQuery()),
+			primeQuery(context.queryClient, arrangementsQuery()),
+		]).then(() => undefined),
 	component: PlansPage,
 });
+
+const planIdOf = (plan: PlanSummary) => plan.planId;
 
 /** How long a plan is, roughly: "12 KB". */
 function sizeOf(plan: PlanSummary): string {
@@ -37,17 +52,24 @@ function sizeOf(plan: PlanSummary): string {
 
 /**
  * Plans: long Markdown documents — a roadmap, a design, a spec — kept beside
- * the work they are about. A card each, most recently changed first; each
- * opens onto its own page to be read.
+ * the work they are about. A card each, in the order arranged by hand — any
+ * not placed yet after those, most recently changed first; each opens onto
+ * its own page to be read.
  */
 function PlansPage() {
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	const [isCreating, setIsCreating] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 
 	const { data, isPending, isError, error, refetch } = useQuery(plansQuery());
-	const plans = data ?? [];
+	const arrangement =
+		useQuery(arrangementsQuery()).data?.plans ?? EMPTY_ARRANGEMENT;
+	const plans = useMemo(
+		() => manualOrder(data ?? [], planIdOf, arrangement.order),
+		[data, arrangement.order],
+	);
 	// The day on the viewer's clock, once the browser has it; see `useNow`.
 	const now = useNow();
 	const dayOf = (at: string) =>
@@ -78,9 +100,14 @@ function PlansPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<Text type="label" weight="semibold">
-						{plans.length} {plans.length === 1 ? "plan" : "plans"}
-					</Text>
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<Text type="label" weight="semibold">
+							{plans.length} {plans.length === 1 ? "plan" : "plans"}
+						</Text>
+						{canManageContent ? (
+							<ArrangeButton onClick={() => setIsArranging(true)} />
+						) : null}
+					</HStack>
 					{plans.map((plan) => (
 						<ClickableCard
 							key={plan.planId}
@@ -100,6 +127,18 @@ function PlansPage() {
 					))}
 				</VStack>
 			)}
+
+			<ArrangeDialog
+				isOpen={isArranging}
+				onOpenChange={setIsArranging}
+				noun="plans"
+				items={plans.map((plan) => ({ id: plan.planId, label: plan.title }))}
+				arrangement={arrangement}
+				onSave={(next) => {
+					saveArrangement(apply, "plans", next);
+					setIsArranging(false);
+				}}
+			/>
 
 			<PlanFormDialog
 				isOpen={isCreating}

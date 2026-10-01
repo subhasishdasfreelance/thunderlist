@@ -88,11 +88,13 @@ export async function setArrangement(
 	);
 }
 
-const KIND_OF_LIST: Record<keyof Arrangements, GroupItemKind> = {
-	checklists: "checklist",
-	trackers: "tracker",
-	tags: "tag",
-};
+/** The lists that once kept groups of their own; plans never did. */
+const KIND_OF_LIST: Record<"checklists" | "trackers" | "tags", GroupItemKind> =
+	{
+		checklists: "checklist",
+		trackers: "tracker",
+		tags: "tag",
+	};
 
 /**
  * The space's groups.
@@ -115,7 +117,7 @@ export async function listGroups(userId: string): Promise<Array<Group>> {
 	for (const [list, arrangement] of Object.entries(
 		settings?.arrangements ?? {},
 	)) {
-		const kind = KIND_OF_LIST[list as keyof Arrangements];
+		const kind = KIND_OF_LIST[list as keyof typeof KIND_OF_LIST];
 		for (const old of arrangement?.groups ?? []) {
 			const key = old.name.toLowerCase();
 			const group = byName.get(key) ?? {

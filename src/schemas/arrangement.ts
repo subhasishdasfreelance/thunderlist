@@ -2,7 +2,8 @@ import * as v from "valibot";
 import { idSchema } from "./common";
 
 /**
- * How a space orders its checklists, its trackers and its tags by hand.
+ * How a space orders its checklists, its trackers, its tags and its plans by
+ * hand.
  *
  * One per list, kept in the space's settings, so it is one write however much
  * moves and a team sees the same order. Something new is last in the order
@@ -14,7 +15,7 @@ import { idSchema } from "./common";
  * so nobody's arranging loses a place in the order they cannot see.
  */
 
-const ARRANGED_LISTS = ["checklists", "trackers", "tags"] as const;
+const ARRANGED_LISTS = ["checklists", "trackers", "tags", "plans"] as const;
 
 export type ArrangedList = (typeof ARRANGED_LISTS)[number];
 
