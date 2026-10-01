@@ -2,8 +2,9 @@
  * Applying one change. Server only.
  *
  * Every mutation in the app arrives here as a single command and goes straight
- * to the database. There is no queue and no batch: what the user did is done by
- * the time the screen refetches.
+ * to the database. There is no queue: what the user did is done by the time the
+ * screen refetches. Many tasks changed at once arrive as one command, a
+ * `task.batch`, so a pick of twenty costs one request rather than twenty.
  *
  * Each operation is idempotent — creating something that already exists returns
  * it, deleting something already gone is a no-op — so a retry after a dropped
@@ -19,9 +20,9 @@
  */
 
 import { AppError } from "#/lib/errors";
-import { collections } from "#/lib/mongo/client.server";
+import { collections, type TaskDoc } from "#/lib/mongo/client.server";
 import { type AccessEntry, type AccessLevel, reaches } from "#/schemas/access";
-import type { Change } from "#/schemas/change";
+import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
 import type { TaskPatch } from "#/schemas/task";
 import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
@@ -34,6 +35,7 @@ import {
 	moveTask,
 	updateChecklist,
 	updateTask,
+	updateTasks,
 } from "./checklist.server";
 import {
 	createCountdown,
@@ -196,6 +198,60 @@ async function run(
 	}
 }
 
+/** As much of a task as asking whether a change to it is allowed needs. */
+type TaskFacts = Pick<
+	TaskDoc,
+	"taskId" | "checklistId" | "tagIds" | "dependsOn" | "assignees"
+>;
+
+/** Where the checks below read a task from; see `readEach` and `readAll`. */
+type ReadTask = (taskId: string) => Promise<TaskFacts | null>;
+
+const FACT_FIELDS = {
+	_id: 0,
+	taskId: 1,
+	checklistId: 1,
+	tagIds: 1,
+	dependsOn: 1,
+	assignees: 1,
+} as const;
+
+/** Each task read as it is asked about: for one change, which names one. */
+function readEach(scope: Scope): ReadTask {
+	return async (taskId) => {
+		const current = await collections();
+		return current.tasks.findOne(
+			{ taskId, userId: scope.ownerId },
+			{ projection: FACT_FIELDS },
+		);
+	};
+}
+
+/**
+ * Every task a batch names read in one go, the first time any is asked about
+ * — in your own space, where nothing is asked, never. Any other task, one a
+ * task waits on say, is read as it is asked about.
+ */
+function readAll(scope: Scope, taskIds: ReadonlySet<string>): ReadTask {
+	const each = readEach(scope);
+	let found: Promise<Map<string, TaskFacts>> | null = null;
+
+	return async (taskId) => {
+		if (!taskIds.has(taskId)) return each(taskId);
+
+		found ??= collections().then(async (current) => {
+			const tasks = await current.tasks
+				.find(
+					{ userId: scope.ownerId, taskId: { $in: [...taskIds] } },
+					{ projection: FACT_FIELDS },
+				)
+				.toArray();
+			return new Map(tasks.map((task) => [task.taskId, task]));
+		});
+		return (await found).get(taskId) ?? null;
+	};
+}
+
 /**
  * What a role needs to be allowed a change; see `Capability`.
  *
@@ -229,7 +285,11 @@ function capabilityFor(change: Change): Capability {
  * A change that reaches something not on their list at all is answered as for
  * something deleted, because to them that is what it is.
  */
-async function assertAllowed(scope: Scope, change: Change): Promise<void> {
+async function assertAllowed(
+	scope: Scope,
+	change: Change,
+	read: ReadTask = readEach(scope),
+): Promise<void> {
 	const { team } = scope;
 	if (team === null) return;
 
@@ -292,11 +352,11 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 
 		case "task.move":
 			assertLevel(scope, "checklists", change.checklistId, "full");
-			await assertTaskAllowed(scope, change.taskId, "full");
+			await assertTaskAllowed(scope, change.taskId, "full", read);
 			return;
 
 		case "task.delete":
-			await assertTaskAllowed(scope, change.taskId, "full");
+			await assertTaskAllowed(scope, change.taskId, "full", read);
 			return;
 
 		// All or nothing: one task they may not delete refuses the lot.
@@ -309,8 +369,8 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 			return;
 
 		case "task.update":
-			await assertTaskAllowed(scope, change.taskId, "edit");
-			await assertReachesAdded(scope, change.taskId, change.patch);
+			await assertTaskAllowed(scope, change.taskId, "edit", read);
+			await assertReachesAdded(scope, change.taskId, change.patch, read);
 			return;
 
 		case "tag.update":
@@ -388,15 +448,12 @@ async function assertTaskAllowed(
 	scope: Scope,
 	taskId: string,
 	needed: AccessLevel,
+	read: ReadTask = readEach(scope),
 ): Promise<void> {
 	const { hidden, levels } = scope;
 	if (levels === null) return;
 
-	const current = await collections();
-	const task = await current.tasks.findOne(
-		{ taskId, userId: scope.ownerId },
-		{ projection: { _id: 0, checklistId: 1, tagIds: 1 } },
-	);
+	const task = await read(taskId);
 	// Already gone, or never theirs: the write itself is the no-op that answers.
 	if (!task) return;
 
@@ -437,14 +494,11 @@ async function assertReachesAdded(
 	scope: Scope,
 	taskId: string,
 	patch: TaskPatch,
+	read: ReadTask,
 ): Promise<void> {
 	if (patch.tagIds === undefined && patch.dependsOn === undefined) return;
 
-	const current = await collections();
-	const task = await current.tasks.findOne(
-		{ taskId, userId: scope.ownerId },
-		{ projection: { _id: 0, tagIds: 1, dependsOn: 1 } },
-	);
+	const task = await read(taskId);
 	if (!task) return;
 
 	for (const tagId of patch.tagIds ?? []) {
@@ -456,8 +510,9 @@ async function assertReachesAdded(
 		if (had.some((each) => each.kind === ref.kind && each.id === ref.id)) {
 			continue;
 		}
-		if (ref.kind === "task") await assertTaskAllowed(scope, ref.id, "read");
-		else assertLevel(scope, `${ref.kind}s`, ref.id, "read");
+		if (ref.kind === "task") {
+			await assertTaskAllowed(scope, ref.id, "read", read);
+		} else assertLevel(scope, `${ref.kind}s`, ref.id, "read");
 	}
 }
 
@@ -470,6 +525,7 @@ async function assertReachesAdded(
 async function keepingHiddenTags(
 	scope: Scope,
 	change: Change,
+	read: ReadTask = readEach(scope),
 ): Promise<Change> {
 	if (
 		change.kind !== "task.update" ||
@@ -479,11 +535,7 @@ async function keepingHiddenTags(
 		return change;
 	}
 
-	const current = await collections();
-	const task = await current.tasks.findOne(
-		{ taskId: change.taskId, userId: scope.ownerId },
-		{ projection: { _id: 0, tagIds: 1 } },
-	);
+	const task = await read(change.taskId);
 	const sent = change.patch.tagIds;
 	const kept = (task?.tagIds ?? []).filter(
 		(tagId) => scope.hidden.tagIds.has(tagId) && !sent.includes(tagId),
@@ -553,6 +605,7 @@ function includingActor(scope: Scope, change: Change): Change {
 async function assigneesBefore(
 	scope: Scope,
 	change: Change,
+	read: ReadTask = readEach(scope),
 ): Promise<ReadonlyArray<string> | null> {
 	if (
 		scope.team === null ||
@@ -562,34 +615,110 @@ async function assigneesBefore(
 		return null;
 	}
 
-	const current = await collections();
-	const task = await current.tasks.findOne(
-		{ taskId: change.taskId, userId: scope.ownerId },
-		{ projection: { _id: 0, assignees: 1 } },
-	);
+	const task = await read(change.taskId);
 	return task?.assignees ?? [];
+}
+
+/** Make one change, as long as this person may. */
+async function applyOne(scope: Scope, change: Change): Promise<void> {
+	await assertAllowed(scope, change);
+	const assignedBefore = await assigneesBefore(scope, change);
+	await run(
+		scope.ownerId,
+		await keepingHiddenTags(scope, includingActor(scope, change)),
+		scope.email,
+	);
+	if (assignedBefore !== null && change.kind === "task.update") {
+		// Saved whatever happens to the notification; it is only news.
+		await sendAssigned(
+			scope.ownerId,
+			scope.email,
+			change.taskId,
+			assignedBefore,
+		).catch((error) =>
+			console.error("[thunderlist] assignment push failed:", error),
+		);
+	}
+}
+
+/**
+ * Make many changes at once; see `task.batch`. Each is asked about as if it
+ * had come alone, so nothing a batch carries is allowed that one change would
+ * not be — but from one read of all their tasks rather than one a change, and
+ * then they are made together; see `updateTasks`.
+ *
+ * A task refused keeps what its changes before that made, as when they went
+ * one at a time — parking one is an edit and then a move — and the other
+ * tasks go ahead. The first refusal is the answer.
+ */
+async function applyBatch(
+	scope: Scope,
+	changes: ReadonlyArray<BatchedChange>,
+): Promise<void> {
+	const read = readAll(scope, new Set(changes.map((change) => change.taskId)));
+
+	const asked = await Promise.all(
+		changes.map(async (change) => {
+			try {
+				await assertAllowed(scope, change, read);
+				const kept = await keepingHiddenTags(scope, change, read);
+				return {
+					change: isBatchable(kept) ? kept : change,
+					assignedBefore: await assigneesBefore(scope, change, read),
+					refusal: null,
+				};
+			} catch (error) {
+				return { change, assignedBefore: null, refusal: error };
+			}
+		}),
+	);
+
+	let refusal: unknown = null;
+	const refused = new Set<string>();
+	const allowed: Array<BatchedChange> = [];
+	const assignedBefore = new Map<BatchedChange, ReadonlyArray<string>>();
+	for (const each of asked) {
+		if (refused.has(each.change.taskId)) continue;
+		if (each.refusal !== null) {
+			refused.add(each.change.taskId);
+			if (refusal === null) refusal = each.refusal;
+			continue;
+		}
+		allowed.push(each.change);
+		if (each.assignedBefore !== null) {
+			assignedBefore.set(each.change, each.assignedBefore);
+		}
+	}
+
+	const result = await updateTasks(scope.ownerId, allowed);
+
+	// Saved whatever happens to the notifications; they are only news.
+	await Promise.all(
+		result.made.map(async (change) => {
+			const before = assignedBefore.get(change);
+			if (before === undefined) return;
+			await sendAssigned(
+				scope.ownerId,
+				scope.email,
+				change.taskId,
+				before,
+			).catch((error) =>
+				console.error("[thunderlist] assignment push failed:", error),
+			);
+		}),
+	);
+
+	if (refusal === null) refusal = result.refusal;
+	if (refusal !== null) throw refusal;
 }
 
 /** Log the real cause, hand back something a person can act on. */
 export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
-		await assertAllowed(scope, change);
-		const assignedBefore = await assigneesBefore(scope, change);
-		await run(
-			scope.ownerId,
-			await keepingHiddenTags(scope, includingActor(scope, change)),
-			scope.email,
-		);
-		if (assignedBefore !== null && change.kind === "task.update") {
-			// Saved whatever happens to the notification; it is only news.
-			await sendAssigned(
-				scope.ownerId,
-				scope.email,
-				change.taskId,
-				assignedBefore,
-			).catch((error) =>
-				console.error("[thunderlist] assignment push failed:", error),
-			);
+		if (change.kind === "task.batch") {
+			await applyBatch(scope, change.changes);
+		} else {
+			await applyOne(scope, change);
 		}
 	} catch (error) {
 		if (error instanceof AppError) {

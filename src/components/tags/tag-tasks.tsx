@@ -1,4 +1,9 @@
-import { createTagResolver, setTag, useApplyChange } from "#/lib/changes";
+import {
+	applyBatched,
+	createTagResolver,
+	setTag,
+	useApplyChange,
+} from "#/lib/changes";
 import { sharedTagIds } from "#/lib/tasks/tasks";
 import type { Tag } from "#/schemas/tag";
 import type { Task } from "#/schemas/task";
@@ -45,11 +50,13 @@ export function TagTasks({
 		if (tasks === null) return;
 
 		const isOnAll = tasks.every((task) => task.tagIds.includes(tag.tagId));
-		for (const task of tasks) {
-			if (task.tagIds.includes(tag.tagId) !== !isOnAll) {
-				setTag(apply, task, tag, !isOnAll);
+		applyBatched(apply, (collect) => {
+			for (const task of tasks) {
+				if (task.tagIds.includes(tag.tagId) !== !isOnAll) {
+					setTag(collect, task, tag, !isOnAll);
+				}
 			}
-		}
+		});
 		onClose();
 	}
 

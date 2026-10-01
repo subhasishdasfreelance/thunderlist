@@ -66,6 +66,10 @@ const GROUPS: Array<Group> = [
 				keys: [TASK_SHORTCUTS.complete],
 				what: "Each picked task on to its next stage, or done",
 			},
+			{
+				keys: ["Task keys"],
+				what: `Every key for one task, to all picked at once — all but ${TASK_SHORTCUTS.edit}`,
+			},
 			{ keys: ["Esc"], what: "Drop the pick" },
 		],
 	},

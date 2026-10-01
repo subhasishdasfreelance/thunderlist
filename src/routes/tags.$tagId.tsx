@@ -60,15 +60,21 @@ import {
 	getTagOpenTasksFn,
 } from "#/functions/tag.functions";
 import {
+	applyBatched,
 	createTagResolver,
 	createTasks,
+	moveManyToBacklog,
 	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
 	setSpecialTag,
 	setTag,
+	setTypeOnAll,
 	toggleAssignee,
+	toggleAssigneeOnAll,
+	toggleFlagOnAll,
+	toggleSpecialTagOnAll,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -201,7 +207,7 @@ function TagDetailPage() {
 	const [moving, setMoving] = useState<ReadonlyArray<TagTaskEntry> | null>(
 		null,
 	);
-	const [typing, setTyping] = useState<Task | null>(null);
+	const [typing, setTyping] = useState<ReadonlyArray<Task> | null>(null);
 	// The tasks a tag is being put on: the one pointed at, or every one
 	// picked out; see `TagPickerDialog`.
 	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
@@ -487,6 +493,14 @@ function TagDetailPage() {
 				picked.has(entry.task.taskId),
 			)
 		: [];
+	const pickedTasks = pickedEntries.map((entry) => entry.task);
+	// Every picked task parked, but those in the Backlog already.
+	const parkable =
+		backlog === null || !canManageContent
+			? []
+			: pickedEntries.flatMap((entry) =>
+					entry.checklistId === backlog.checklistId ? [] : [entry.task],
+				);
 	const isFinishable = (task: Task) =>
 		!task.completed && task.trackerId == null && task.linkedChecklistId == null;
 
@@ -515,20 +529,24 @@ function TagDetailPage() {
 
 	/** Every picked task on to the next stage of its own checklist. */
 	function moveOn() {
-		for (const { task, checklistId } of pickedEntries) {
-			const next = nextStageId(task, stagesFor(checklistId));
-			if (next !== null) updateTask(apply, task.taskId, { stageId: next });
-		}
+		applyBatched(apply, (collect) => {
+			for (const { task, checklistId } of pickedEntries) {
+				const next = nextStageId(task, stagesFor(checklistId));
+				if (next !== null) updateTask(collect, task.taskId, { stageId: next });
+			}
+		});
 		clear();
 	}
 
 	/** Every picked task done that can be made done by hand. */
 	function finish() {
-		for (const { task } of pickedEntries) {
-			if (isFinishable(task)) {
-				updateTask(apply, task.taskId, { completed: true });
+		applyBatched(apply, (collect) => {
+			for (const { task } of pickedEntries) {
+				if (isFinishable(task)) {
+					updateTask(collect, task.taskId, { completed: true });
+				}
 			}
-		}
+		});
 		clear();
 	}
 
@@ -602,15 +620,17 @@ function TagDetailPage() {
 		await queryClient.cancelQueries({ queryKey: queryKeys.tag(tagId) });
 		emptyTagPage(queryClient, tagId);
 
+		// All in one change; see `applyBatched`.
 		const cleared = new Set<string>();
-		const untag = (entries: ReadonlyArray<TagTaskEntry>) => {
-			for (const { task } of entries) {
-				if (cleared.has(task.taskId)) continue;
-				cleared.add(task.taskId);
-				if (special === null) setTag(apply, task, tag, false);
-				else setSpecialTag(apply, task, special, false, tags);
-			}
-		};
+		const untag = (entries: ReadonlyArray<TagTaskEntry>) =>
+			applyBatched(apply, (collect) => {
+				for (const { task } of entries) {
+					if (cleared.has(task.taskId)) continue;
+					cleared.add(task.taskId);
+					if (special === null) setTag(collect, task, tag, false);
+					else setSpecialTag(collect, task, special, false, tags);
+				}
+			});
 
 		/*
 		 * Every open task on it, a page at a time however many there are — all
@@ -679,7 +699,7 @@ function TagDetailPage() {
 					onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
 					onSetImportant: (important) =>
 						updateTask(apply, task.taskId, { important }),
-					onSetType: () => setTyping(task),
+					onSetType: () => setTyping([task]),
 					onAddTag: () => setTagging([task]),
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving([entry]),
@@ -1109,7 +1129,7 @@ function TagDetailPage() {
 					onMoveToChecklist={
 						canManageContent ? () => setMoving(pickedEntries) : undefined
 					}
-					onAddTag={() => setTagging(pickedEntries.map((entry) => entry.task))}
+					onAddTag={() => setTagging(pickedTasks)}
 					onDelete={
 						canManageContent
 							? () =>
@@ -1117,6 +1137,27 @@ function TagDetailPage() {
 										pickedEntries.map((entry) => entry.task.taskId),
 									)
 							: undefined
+					}
+					onToggleToday={() =>
+						toggleSpecialTagOnAll(apply, pickedTasks, "today", tags)
+					}
+					onBacklog={
+						backlog === null || parkable.length === 0
+							? undefined
+							: () => {
+									moveManyToBacklog(apply, parkable, backlog.checklistId, tags);
+									clear();
+								}
+					}
+					onToggleUrgent={() => toggleFlagOnAll(apply, pickedTasks, "urgent")}
+					onToggleImportant={() =>
+						toggleFlagOnAll(apply, pickedTasks, "important")
+					}
+					onSetType={() => setTyping(pickedTasks)}
+					onToggleMine={
+						space?.team == null
+							? undefined
+							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
 					onClear={clear}
 				/>
@@ -1146,9 +1187,9 @@ function TagDetailPage() {
 				onOpenChange={(isOpen) => {
 					if (!isOpen) setTyping(null);
 				}}
-				task={typing}
+				tasks={typing}
 				onPick={(typeId) => {
-					if (typing) updateTask(apply, typing.taskId, { typeId });
+					if (typing) setTypeOnAll(apply, typing, typeId);
 					setTyping(null);
 				}}
 			/>
@@ -1163,14 +1204,16 @@ function TagDetailPage() {
 				checklists={moveTargets}
 				isLoading={checklistsResult.isPending}
 				onPick={(target) => {
-					for (const entry of moving ?? []) {
-						if (entry.checklistId === target) continue;
-						apply({
-							kind: "task.move",
-							taskId: entry.task.taskId,
-							checklistId: target,
-						});
-					}
+					applyBatched(apply, (collect) => {
+						for (const entry of moving ?? []) {
+							if (entry.checklistId === target) continue;
+							collect({
+								kind: "task.move",
+								taskId: entry.task.taskId,
+								checklistId: target,
+							});
+						}
+					});
 					setMoving(null);
 					clear();
 				}}

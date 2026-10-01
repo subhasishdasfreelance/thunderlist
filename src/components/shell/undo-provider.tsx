@@ -10,7 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useApplyChange } from "#/lib/changes";
+import { applyBatched, useApplyChange } from "#/lib/changes";
 import { useToast } from "#/lib/toasts";
 import { invertChange, UndoContext, type UndoStep, useUndo } from "#/lib/undo";
 import { isTyping } from "#/lib/use-row-shortcuts";
@@ -42,7 +42,7 @@ const DEPTH = 20;
  */
 export function UndoProvider({ children }: { children: ReactNode }) {
 	const client = useQueryClient();
-	const { applyAsync } = useApplyChange();
+	const { apply } = useApplyChange();
 	const toast = useToast();
 	// Each with the change it undoes, so a refused change's can be taken out,
 	// and when it was made.
@@ -69,19 +69,22 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 	 * written already. Both are drawn now; the second is only sent once the
 	 * first has landed; see `sendingTasks`. A failure puts the screen back and
 	 * is reported by `useApplyChange`.
+	 *
+	 * Every edit and move in a step goes as one batch, so taking back a pick
+	 * of twenty is one request rather than twenty; see `applyBatched`.
 	 */
 	const run = useCallback(
 		(step: UndoStep) => {
-			for (const change of step.changes) {
-				applyAsync(change).catch(() => {});
-			}
+			applyBatched(apply, (collect) => {
+				for (const change of step.changes) collect(change);
+			});
 			toast({
 				body: `Undone: ${step.label.toLowerCase()}.`,
 				type: "info",
 				uniqueID: "undo",
 			});
 		},
-		[applyAsync, toast],
+		[apply, toast],
 	);
 
 	/** Take the last step back, asking first where it deletes or writes a task. */

@@ -21,7 +21,7 @@ export type RowShortcuts = Record<string, () => void>;
 const TASK_ROW = "[data-task-id]";
 
 /** What Space and Enter press, where focus is on one. */
-const PRESSABLE =
+export const PRESSABLE =
 	'button, a[href], input, [role="button"], [role="checkbox"], [role="switch"], [role="menuitem"], [role="tab"]';
 
 /*

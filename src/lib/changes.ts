@@ -27,7 +27,7 @@ import { useToast } from "#/lib/toasts";
 import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
-import type { Change } from "#/schemas/change";
+import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
 import type { Stage } from "#/schemas/checklist";
 import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import {
@@ -60,6 +60,12 @@ function checklistNeeded(change: Change): string | null {
 		case "task.createMany":
 		case "task.move":
 			return change.checklistId;
+		// Every move in one goes to the same checklist.
+		case "task.batch":
+			return (
+				change.changes.find((each) => each.kind === "task.move")?.checklistId ??
+				null
+			);
 		default:
 			return null;
 	}
@@ -102,6 +108,8 @@ function tasksOf(change: Change): ReadonlyArray<string> {
 			return change.tasks.map((task) => task.taskId);
 		case "task.deleteMany":
 			return change.taskIds;
+		case "task.batch":
+			return [...new Set(change.changes.map((each) => each.taskId))];
 		default:
 			return [];
 	}
@@ -183,7 +191,10 @@ async function sendNow(change: Change): Promise<void> {
  * when, and a move retried after the connection comes back keeps the moment
  * it was made.
  */
-function withMovedAt(change: Change): Change {
+function withMovedAt<T extends Change>(change: T): T {
+	if (change.kind === "task.batch") {
+		return { ...change, changes: change.changes.map(withMovedAt) };
+	}
 	if (change.kind !== "task.move" || change.at !== undefined) return change;
 
 	const now = new Date();
@@ -324,14 +335,39 @@ export function useApplyChange() {
 		[queryClient, toast],
 	);
 
+	/*
+	 * A batch goes without the changes in it that would be refused alone, as
+	 * if each had been made by itself: one task of five waiting on another
+	 * is left as it is, and the other four are ticked. `null` when nothing in
+	 * it is left to make.
+	 */
+	const withoutBlocked = useCallback(
+		(change: Change): Change | null => {
+			if (change.kind !== "task.batch") return change;
+
+			const reasons = change.changes.map((each) =>
+				whyBlocked(queryClient, each),
+			);
+			const reason = reasons.find((each) => each !== null);
+			if (reason === undefined) return change;
+
+			toast({ body: reason, type: "error", uniqueID: "depends" });
+			const kept = change.changes.filter((_, at) => reasons[at] === null);
+			return kept.length === 0 ? null : { ...change, changes: kept };
+		},
+		[queryClient, toast],
+	);
+
 	// Heard the moment it is made, as it is drawn; the save follows behind.
 	const apply = useCallback(
 		(change: Change) => {
 			if (refusal(change) !== null) return;
-			playChangeSound(change);
-			mutation.mutate(withMovedAt(change));
+			const made = withoutBlocked(change);
+			if (made === null) return;
+			playChangeSound(made);
+			mutation.mutate(withMovedAt(made));
 		},
-		[mutation.mutate, refusal],
+		[mutation.mutate, refusal, withoutBlocked],
 	);
 
 	/** For a caller that needs one change to land before it makes the next. */
@@ -339,10 +375,12 @@ export function useApplyChange() {
 		(change: Change) => {
 			const reason = refusal(change);
 			if (reason !== null) return Promise.reject(new Error(reason));
-			playChangeSound(change);
-			return mutation.mutateAsync(withMovedAt(change));
+			const made = withoutBlocked(change);
+			if (made === null) return Promise.reject(new Error("Nothing to do."));
+			playChangeSound(made);
+			return mutation.mutateAsync(withMovedAt(made));
 		},
-		[mutation.mutateAsync, refusal],
+		[mutation.mutateAsync, refusal, withoutBlocked],
 	);
 
 	return { apply, applyAsync, isSaving: mutation.isPending };
@@ -467,6 +505,35 @@ export function createTasks(
 	}
 }
 
+/**
+ * Make many changes as one: every edit and move `make` applies — through the
+ * builders here, a task at a time — is gathered into a single `task.batch`,
+ * drawn at once, undone at once, and saved in one request rather than one a
+ * task. Anything else it applies goes as it is. More than a request may carry
+ * — a tag cleared off every task in a big space — goes in parts.
+ */
+export function applyBatched(
+	apply: ApplyChange,
+	make: (collect: ApplyChange) => void,
+): void {
+	const changes: Array<BatchedChange> = [];
+	make((change) => {
+		if (isBatchable(change)) changes.push(change);
+		else apply(change);
+	});
+
+	if (changes.length === 1) {
+		apply(changes[0]);
+		return;
+	}
+	for (let at = 0; at < changes.length; at += MAX_TASKS_AT_ONCE) {
+		apply({
+			kind: "task.batch",
+			changes: changes.slice(at, at + MAX_TASKS_AT_ONCE),
+		});
+	}
+}
+
 export function updateTask(
 	apply: ApplyChange,
 	taskId: string,
@@ -489,6 +556,59 @@ export function toggleAssignee(
 		assignees: current.includes(email)
 			? current.filter((each) => each !== email)
 			: [...current, email],
+	});
+}
+
+/**
+ * Assign the person pressing it to every task, or — where every one is
+ * theirs already — take them off every one; Space over a pick.
+ */
+export function toggleAssigneeOnAll(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "assignees">>,
+	email: string,
+): void {
+	const isOnAll = tasks.every((task) => (task.assignees ?? []).includes(email));
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			if ((task.assignees ?? []).includes(email) === isOnAll) {
+				toggleAssignee(collect, task, email);
+			}
+		}
+	});
+}
+
+/**
+ * Urgent or important on for every task, or — where every one has it — off
+ * for every one; U and I over a pick.
+ */
+export function toggleFlagOnAll(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "urgent" | "important">>,
+	flag: "urgent" | "important",
+): void {
+	const isOnAll = tasks.every((task) => task[flag]);
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			if (task[flag] === isOnAll) {
+				updateTask(collect, task.taskId, { [flag]: !isOnAll });
+			}
+		}
+	});
+}
+
+/** Give every task one type, or none; K over a pick. */
+export function setTypeOnAll(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "typeId">>,
+	typeId: string | null,
+): void {
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			if ((task.typeId ?? null) !== typeId) {
+				updateTask(collect, task.taskId, { typeId });
+			}
+		}
 	});
 }
 
@@ -540,6 +660,55 @@ export function setSpecialTag(
 }
 
 /**
+ * One of the special tags on every task, or — where every one has it — off
+ * every one; T over a pick puts them all on Today.
+ */
+export function toggleSpecialTagOnAll(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "title" | "tagIds">>,
+	kind: SpecialTag,
+	tags: ReadonlyArray<Tag>,
+): void {
+	const tag = specialTag(tags, kind);
+	if (tag === null) return;
+
+	const isOnAll = tasks.every((task) => task.tagIds.includes(tag.tagId));
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			if (task.tagIds.includes(tag.tagId) === isOnAll) {
+				setTag(collect, task, tag, !isOnAll);
+			}
+		}
+	});
+}
+
+/** What parking a task is: Today taken off it, then the move; see below. */
+function parkingChanges(
+	task: Pick<Task, "taskId" | "title" | "tagIds">,
+	backlogId: string,
+	tags: ReadonlyArray<Tag>,
+): Array<BatchedChange> {
+	const today = specialTag(tags, "today");
+	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
+
+	return [
+		...(isOnToday && today !== null
+			? [
+					{
+						kind: "task.update" as const,
+						taskId: task.taskId,
+						patch: {
+							title: withoutInlineTag(task.title, today.name),
+							tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
+						},
+					},
+				]
+			: []),
+		{ kind: "task.move", taskId: task.taskId, checklistId: backlogId },
+	];
+}
+
+/**
  * Park a task in the Backlog: off Today, since a task is planned or parked
  * but never both, and then into the Backlog checklist.
  *
@@ -557,31 +726,32 @@ export async function moveToBacklog(
 	backlogId: string,
 	tags: ReadonlyArray<Tag>,
 ): Promise<void> {
-	const today = specialTag(tags, "today");
-	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
-
-	const patch: TaskPatch =
-		isOnToday && today !== null
-			? {
-					title: withoutInlineTag(task.title, today.name),
-					tagIds: task.tagIds.filter((tagId) => tagId !== today.tagId),
-				}
-			: {};
-
 	try {
-		await Promise.all([
-			...(Object.keys(patch).length > 0
-				? [applyAsync({ kind: "task.update", taskId: task.taskId, patch })]
-				: []),
-			applyAsync({
-				kind: "task.move",
-				taskId: task.taskId,
-				checklistId: backlogId,
-			}),
-		]);
+		await Promise.all(
+			parkingChanges(task, backlogId, tags).map((change) => applyAsync(change)),
+		);
 	} catch {
 		// Already reported by `useApplyChange`.
 	}
+}
+
+/**
+ * Park every task picked out in the Backlog, as one change; see
+ * `moveToBacklog`. Each one's edit goes before its move, there as here.
+ */
+export function moveManyToBacklog(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "title" | "tagIds">>,
+	backlogId: string,
+	tags: ReadonlyArray<Tag>,
+): void {
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			for (const change of parkingChanges(task, backlogId, tags)) {
+				collect(change);
+			}
+		}
+	});
 }
 
 /** Resolves once the server has written it; see `createChecklist`. */

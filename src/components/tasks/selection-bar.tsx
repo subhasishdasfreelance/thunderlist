@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { StageDot } from "#/components/common/stage-dot";
-import { isTyping } from "#/lib/use-row-shortcuts";
+import { isTyping, PRESSABLE } from "#/lib/use-row-shortcuts";
 import { type Stage, stageColor } from "#/schemas/checklist";
 import { TASK_SHORTCUTS } from "./task-actions";
 
@@ -36,9 +36,15 @@ import { TASK_SHORTCUTS } from "./task-actions";
  * is picked, so the rows picked can be far down a list and the bar still in
  * reach; on a phone it sits above the bottom bar.
  *
- * The tick key does for the pick what it does for one row: each on to its next
- * stage, or done where none has one. With the rows picked from the keyboard
- * (see `useTaskSelection`), a run of tasks moves on without the pointer.
+ * Every key a row answers to does for the pick what it does for one row — the
+ * tick key each on to its next stage, or done where none has one; T, U and I
+ * on for all of them, or off where all have it — and is saved as one change
+ * for them all; see `applyBatched`. With the rows picked from the keyboard
+ * (see `useTaskSelection`), a run of tasks is dealt with without the pointer.
+ * Editing is the one left out: it is about one task.
+ *
+ * The keys with no button of their own here are the row's quick ones, there
+ * for whoever is already at the keyboard; on a phone the bar is as it was.
  */
 export function SelectionBar({
 	count,
@@ -49,6 +55,12 @@ export function SelectionBar({
 	onMoveToChecklist,
 	onAddTag,
 	onDelete,
+	onToggleToday,
+	onBacklog,
+	onToggleUrgent,
+	onToggleImportant,
+	onSetType,
+	onToggleMine,
 	onClear,
 }: {
 	count: number;
@@ -74,16 +86,35 @@ export function SelectionBar({
 	 * role may not delete tasks; see `Capability`.
 	 */
 	onDelete?: () => void;
+	/** Today on for all of them, or off. Left out until the tags are known. */
+	onToggleToday?: () => void;
+	/** Park them all in the Backlog. Left out where there is none to go to. */
+	onBacklog?: () => void;
+	onToggleUrgent: () => void;
+	onToggleImportant: () => void;
+	/** Say what kind of work all of them are, picked in a dialog. */
+	onSetType: () => void;
+	/** Take them all on, or give them all back. Left out outside a team. */
+	onToggleMine?: () => void;
 	onClear: () => void;
 }) {
-	const tick = onNextStage ?? onDone;
+	const keys: Record<string, (() => void) | undefined> = {
+		[TASK_SHORTCUTS.complete]: onNextStage ?? onDone,
+		[TASK_SHORTCUTS.today]: onToggleToday,
+		[TASK_SHORTCUTS.backlog]: onBacklog,
+		[TASK_SHORTCUTS.move]: onMoveToChecklist,
+		[TASK_SHORTCUTS.urgent]: onToggleUrgent,
+		[TASK_SHORTCUTS.important]: onToggleImportant,
+		[TASK_SHORTCUTS.type]: onSetType,
+		[TASK_SHORTCUTS.tag]: onAddTag,
+		[TASK_SHORTCUTS.assign]: onToggleMine,
+		[TASK_SHORTCUTS.delete]: onDelete,
+	};
 
 	useEffect(() => {
-		if (tick === undefined) return;
-		const run = tick;
-
 		function handle(event: KeyboardEvent) {
-			if (event.key.toLowerCase() !== TASK_SHORTCUTS.complete) return;
+			const run = keys[event.key.toLowerCase()];
+			if (run === undefined) return;
 			if (event.metaKey || event.ctrlKey || event.altKey) return;
 			if (isTyping(event.target)) return;
 			if (
@@ -92,8 +123,16 @@ export function SelectionBar({
 			) {
 				return;
 			}
+			// Space presses the button or box focus is on, as ever.
+			if (
+				event.key === " " &&
+				event.target instanceof Element &&
+				event.target.closest(PRESSABLE) !== null
+			) {
+				return;
+			}
 
-			// Ahead of the row under the pointer, which would tick itself too.
+			// Ahead of the row under the pointer, which would act on itself too.
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			run();
@@ -101,7 +140,7 @@ export function SelectionBar({
 
 		window.addEventListener("keydown", handle, true);
 		return () => window.removeEventListener("keydown", handle, true);
-	}, [tick]);
+	});
 
 	return (
 		<div

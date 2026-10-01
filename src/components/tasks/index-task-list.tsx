@@ -14,11 +14,17 @@ import { SelectionBar } from "#/components/tasks/selection-bar";
 import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import {
+	applyBatched,
 	createTagResolver,
+	moveManyToBacklog,
 	moveToBacklog,
 	resolveTags,
 	setSpecialTag,
+	setTypeOnAll,
 	toggleAssignee,
+	toggleAssigneeOnAll,
+	toggleFlagOnAll,
+	toggleSpecialTagOnAll,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -42,7 +48,8 @@ import {
  * this way.
  *
  * Several can be picked out at once by dragging across them, and moved on,
- * tagged, moved to a checklist or deleted together; see `SelectionBar`.
+ * flagged, tagged, moved to a checklist or deleted together, in one change;
+ * see `SelectionBar`.
  */
 export function IndexTaskList({
 	tasks,
@@ -73,7 +80,7 @@ export function IndexTaskList({
 	// Its title stays on the question while it closes; see `useHeld`.
 	const shownDelete = useHeld(pendingDelete);
 	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
-	const [typing, setTyping] = useState<TaggedTask | null>(null);
+	const [typing, setTyping] = useState<ReadonlyArray<TaggedTask> | null>(null);
 	// The tasks a tag is being put on, moved or deleted: the one pointed at,
 	// or every one picked out; see `SelectionBar`.
 	const [tagging, setTagging] = useState<ReadonlyArray<TaggedTask> | null>(
@@ -107,22 +114,32 @@ export function IndexTaskList({
 
 	/** Every picked task on to the next stage of its own checklist. */
 	function moveOn() {
-		for (const task of pickedTasks) {
-			const next = nextStageId(task, stagesFor(task.checklistId));
-			if (next !== null) updateTask(apply, task.taskId, { stageId: next });
-		}
+		applyBatched(apply, (collect) => {
+			for (const task of pickedTasks) {
+				const next = nextStageId(task, stagesFor(task.checklistId));
+				if (next !== null) updateTask(collect, task.taskId, { stageId: next });
+			}
+		});
 		clear();
 	}
 
 	/** Every picked task done that can be made done by hand. */
 	function finish() {
-		for (const task of pickedTasks) {
-			if (isFinishable(task)) {
-				updateTask(apply, task.taskId, { completed: true });
+		applyBatched(apply, (collect) => {
+			for (const task of pickedTasks) {
+				if (isFinishable(task)) {
+					updateTask(collect, task.taskId, { completed: true });
+				}
 			}
-		}
+		});
 		clear();
 	}
+
+	/** Every picked task parked, but those in the Backlog already. */
+	const parkable =
+		backlog === null || !canManageContent
+			? []
+			: pickedTasks.filter((task) => task.checklistId !== backlog.checklistId);
 
 	/** One task, as a tag's page draws it. */
 	const taskRow = (task: TaggedTask) => {
@@ -172,7 +189,7 @@ export function IndexTaskList({
 					onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
 					onSetImportant: (important) =>
 						updateTask(apply, task.taskId, { important }),
-					onSetType: () => setTyping(task),
+					onSetType: () => setTyping([task]),
 					onAddTag: () => setTagging([task]),
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving([task]),
@@ -224,6 +241,27 @@ export function IndexTaskList({
 					onDelete={
 						canManageContent ? () => setDeleting(pickedTasks) : undefined
 					}
+					onToggleToday={() =>
+						toggleSpecialTagOnAll(apply, pickedTasks, "today", tags)
+					}
+					onBacklog={
+						backlog === null || parkable.length === 0
+							? undefined
+							: () => {
+									moveManyToBacklog(apply, parkable, backlog.checklistId, tags);
+									clear();
+								}
+					}
+					onToggleUrgent={() => toggleFlagOnAll(apply, pickedTasks, "urgent")}
+					onToggleImportant={() =>
+						toggleFlagOnAll(apply, pickedTasks, "important")
+					}
+					onSetType={() => setTyping(pickedTasks)}
+					onToggleMine={
+						space?.team == null
+							? undefined
+							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
+					}
 					onClear={clear}
 				/>
 			)}
@@ -252,9 +290,9 @@ export function IndexTaskList({
 				onOpenChange={(open) => {
 					if (!open) setTyping(null);
 				}}
-				task={typing}
+				tasks={typing}
 				onPick={(typeId) => {
-					if (typing) updateTask(apply, typing.taskId, { typeId });
+					if (typing) setTypeOnAll(apply, typing, typeId);
 					setTyping(null);
 				}}
 			/>
@@ -281,14 +319,16 @@ export function IndexTaskList({
 				)}
 				isLoading={checklistsResult.isPending}
 				onPick={(target) => {
-					for (const task of moving ?? []) {
-						if (task.checklistId === target) continue;
-						apply({
-							kind: "task.move",
-							taskId: task.taskId,
-							checklistId: target,
-						});
-					}
+					applyBatched(apply, (collect) => {
+						for (const task of moving ?? []) {
+							if (task.checklistId === target) continue;
+							collect({
+								kind: "task.move",
+								taskId: task.taskId,
+								checklistId: target,
+							});
+						}
+					});
 					setMoving(null);
 					clear();
 				}}

@@ -50,6 +50,7 @@ import {
 	shortTitle,
 } from "#/lib/tasks/tasks";
 import type { AccessEntry } from "#/schemas/access";
+import type { BatchedChange } from "#/schemas/change";
 import {
 	type Checklist,
 	type ChecklistSummary,
@@ -1308,6 +1309,50 @@ export async function updateTask(
 				{ projection: { _id: 0, tagIds: 1, stages: 1 } },
 			)
 		: null;
+
+	const changes = await editedFields(
+		current,
+		userId,
+		existing,
+		checklist,
+		patch,
+	);
+
+	const next = await current.tasks.findOneAndUpdate(
+		{ taskId, userId },
+		{ $set: changes },
+		{ returnDocument: "after", projection: TASK_FIELDS },
+	);
+
+	if (!next) throw new AppError("not_found", "That task no longer exists.");
+
+	return next;
+}
+
+/** As much of a task as working out an edit to it needs. */
+type TaskBeforeEdit = Pick<
+	TaskDoc,
+	| "trackerId"
+	| "linkedChecklistId"
+	| "checklistId"
+	| "completed"
+	| "stageId"
+	| "dependsOn"
+	| "subtasks"
+>;
+
+/**
+ * What an edit writes to a task, given the task as it is — `null` where the
+ * edit needed nothing of it — and its checklist; see `updateTask`. Refuses an
+ * edit the task cannot take.
+ */
+async function editedFields(
+	current: Collections,
+	userId: string,
+	existing: TaskBeforeEdit | null,
+	checklist: Pick<Checklist, "tagIds" | "stages"> | null,
+	patch: TaskPatch,
+): Promise<Partial<TaskDoc>> {
 	const stages = checklistStages(checklist ?? {});
 	const last = stages[stages.length - 1].stageId;
 
@@ -1405,7 +1450,7 @@ export async function updateTask(
 	 * sends the tags written in the title, and the checklist's are added back
 	 * here, so no screen has to know which of a task's tags came from where.
 	 */
-	const changes = {
+	return {
 		...patch,
 		...(moved === null
 			? {}
@@ -1423,16 +1468,6 @@ export async function updateTask(
 					tagIds: [...new Set([...patch.tagIds, ...(checklist?.tagIds ?? [])])],
 				}),
 	};
-
-	const next = await current.tasks.findOneAndUpdate(
-		{ taskId, userId },
-		{ $set: changes },
-		{ returnDocument: "after", projection: TASK_FIELDS },
-	);
-
-	if (!next) throw new AppError("not_found", "That task no longer exists.");
-
-	return next;
 }
 
 /**
@@ -1491,10 +1526,7 @@ export async function moveTask(
 					{ checklistId: task.checklistId, userId },
 					{ projection: { _id: 0, tagIds: 1, title: 1, special: 1 } },
 				);
-	const joining = target.tagIds ?? [];
-	const leaving = (source?.tagIds ?? []).filter(
-		(tagId) => !joining.includes(tagId),
-	);
+	const leaving = leavingTags(source, target);
 
 	const names =
 		leaving.length === 0
@@ -1505,31 +1537,213 @@ export async function moveTask(
 						{ projection: { _id: 0, tagId: 1, name: 1 } },
 					)
 					.toArray();
-	const dropped = untypedTags(
-		task.title,
-		leaving,
-		new Map(names.map((tag) => [tag.tagId, tag.name])),
-	);
-	const notes = notesAfterMove(task.notes, source, target, at);
 
 	await current.tasks.updateOne(
 		{ taskId, userId },
 		{
-			$set: {
-				checklistId,
-				// Its stage was the old checklist's; see `stageOf`.
-				stageId: null,
-				addedAt: new Date().toISOString(),
-				tagIds: [
-					...new Set([
-						...task.tagIds.filter((tagId) => !dropped.includes(tagId)),
-						...joining,
-					]),
-				],
-				...(notes === null ? {} : { notes }),
-			},
+			$set: movedFields(
+				task,
+				source,
+				target,
+				new Map(names.map((tag) => [tag.tagId, tag.name])),
+				at,
+			),
 		},
 	);
+}
+
+/** As much of a checklist as a task moving out of it needs. */
+type MoveSource = Pick<Checklist, "tagIds" | "title" | "special">;
+
+/** The tags of the checklist a task leaves that the one it joins has not. */
+function leavingTags(
+	source: MoveSource | null,
+	target: Checklist,
+): Array<string> {
+	const joining = target.tagIds ?? [];
+	return (source?.tagIds ?? []).filter((tagId) => !joining.includes(tagId));
+}
+
+/**
+ * What moving a task from `source` into `target` writes to it; see
+ * `moveTask`. `names` holds the names of the tags it may lose, to tell which
+ * its title writes; see `untypedTags`.
+ */
+function movedFields(
+	task: Pick<TaskDoc, "title" | "tagIds" | "notes">,
+	source: MoveSource | null,
+	target: Checklist,
+	names: ReadonlyMap<string, string>,
+	at: { date: string; time: string } | undefined,
+): Partial<TaskDoc> {
+	const joining = target.tagIds ?? [];
+	const dropped = untypedTags(task.title, leavingTags(source, target), names);
+	const notes = notesAfterMove(task.notes, source, target, at);
+
+	return {
+		checklistId: target.checklistId,
+		// Its stage was the old checklist's; see `stageOf`.
+		stageId: null,
+		addedAt: new Date().toISOString(),
+		tagIds: [
+			...new Set([
+				...task.tagIds.filter((tagId) => !dropped.includes(tagId)),
+				...joining,
+			]),
+		],
+		...(notes === null ? {} : { notes }),
+	};
+}
+
+/**
+ * Many edits and moves at once — every task picked out; see `task.batch`.
+ *
+ * Each is worked out as `updateTask` and `moveTask` work out one, but from
+ * three reads made for all of them — the tasks, the checklists they are in
+ * and going to, and the names of the tags a move could take off — and written
+ * in one go. A pick of fifty costs four round trips rather than a few hundred.
+ *
+ * A task's changes are worked out in the order they were made, each from the
+ * task as the one before left it: parking one is an edit and then a move. A
+ * task whose change is refused keeps what the ones before it made, and the
+ * other tasks go ahead. What was made comes back, with the first refusal.
+ */
+export async function updateTasks(
+	userId: string,
+	changes: ReadonlyArray<BatchedChange>,
+): Promise<{ made: Array<BatchedChange>; refusal: unknown }> {
+	const made: Array<BatchedChange> = [];
+	if (changes.length === 0) return { made, refusal: null };
+
+	const current = await collections();
+	const tasks = new Map(
+		(
+			await current.tasks
+				.find(
+					{
+						userId,
+						taskId: { $in: [...new Set(changes.map((each) => each.taskId))] },
+					},
+					{
+						projection: {
+							_id: 0,
+							taskId: 1,
+							title: 1,
+							tagIds: 1,
+							notes: 1,
+							checklistId: 1,
+							trackerId: 1,
+							linkedChecklistId: 1,
+							completed: 1,
+							stageId: 1,
+							dependsOn: 1,
+							subtasks: 1,
+						},
+					},
+				)
+				.toArray()
+		).map((task) => [task.taskId, task]),
+	);
+
+	const checklistIds = new Set([
+		...[...tasks.values()].flatMap((task) => task.checklistId ?? []),
+		...changes.flatMap((each) =>
+			each.kind === "task.move" ? [each.checklistId] : [],
+		),
+	]);
+	const checklists = new Map(
+		(
+			await current.checklists
+				.find(
+					{ userId, checklistId: { $in: [...checklistIds] } },
+					{ projection: DOMAIN_FIELDS },
+				)
+				.toArray()
+		).map((checklist) => [checklist.checklistId, checklist]),
+	);
+
+	// Any of their tags a move could take off; see `untypedTags`.
+	const tagIds = changes.some((each) => each.kind === "task.move")
+		? [
+				...new Set(
+					[...checklists.values()].flatMap((each) => each.tagIds ?? []),
+				),
+			]
+		: [];
+	const names = new Map(
+		(tagIds.length === 0
+			? []
+			: await current.tags
+					.find(
+						{ userId, tagId: { $in: tagIds } },
+						{ projection: { _id: 0, tagId: 1, name: 1 } },
+					)
+					.toArray()
+		).map((tag) => [tag.tagId, tag.name]),
+	);
+
+	const writes = new Map<string, Partial<TaskDoc>>();
+	const refused = new Set<string>();
+	let refusal: unknown = null;
+
+	for (const change of changes) {
+		if (refused.has(change.taskId)) continue;
+
+		try {
+			const task = tasks.get(change.taskId);
+			if (!task) throw new AppError("not_found", "That task no longer exists.");
+			const source =
+				task.checklistId === null
+					? null
+					: (checklists.get(task.checklistId) ?? null);
+
+			let fields: Partial<TaskDoc>;
+			if (change.kind === "task.update") {
+				fields = await editedFields(
+					current,
+					userId,
+					task,
+					source,
+					change.patch,
+				);
+			} else {
+				const target = checklists.get(change.checklistId);
+				if (!target) {
+					throw new AppError("not_found", "That checklist no longer exists.");
+				}
+				// Already there is the outcome this asked for, not a failure.
+				if (task.checklistId === change.checklistId) continue;
+				if (task.linkedChecklistId != null) {
+					await assertCanContain(
+						current,
+						userId,
+						change.checklistId,
+						task.linkedChecklistId,
+					);
+				}
+				fields = movedFields(task, source, target, names, change.at);
+			}
+
+			// The next change to it is worked out from the task as this leaves it.
+			Object.assign(task, fields);
+			writes.set(change.taskId, { ...writes.get(change.taskId), ...fields });
+			made.push(change);
+		} catch (error) {
+			refused.add(change.taskId);
+			if (refusal === null) refusal = error;
+		}
+	}
+
+	if (writes.size > 0) {
+		await current.tasks.bulkWrite(
+			[...writes].map(([taskId, fields]) => ({
+				updateOne: { filter: { taskId, userId }, update: { $set: fields } },
+			})),
+			{ ordered: false },
+		);
+	}
+
+	return { made, refusal };
 }
 
 /** Delete a task. Already gone is the outcome this asked for, not a failure. */

@@ -163,6 +163,11 @@ function soundFor(change: Change): Sound {
 			return "progress";
 		case "task.move":
 			return "move";
+		// Heard once for the lot: a move where it moves any, as parking does.
+		case "task.batch":
+			return change.changes.some((each) => each.kind === "task.move")
+				? "move"
+				: soundFor(change.changes[0]);
 		case "task.update":
 			if (change.patch.completed === true) return "check";
 			if (change.patch.completed === false) return "uncheck";

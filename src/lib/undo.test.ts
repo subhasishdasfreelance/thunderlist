@@ -132,4 +132,30 @@ describe("invertChange", () => {
 			},
 		]);
 	});
+
+	it("undoes a batch in one batch, last change first", () => {
+		const queryClient = client([
+			task({ taskId: "tsk_1" }),
+			task({ taskId: "tsk_2", urgent: true }),
+		]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.batch",
+			changes: [
+				{ kind: "task.update", taskId: "tsk_1", patch: { urgent: true } },
+				{ kind: "task.update", taskId: "tsk_2", patch: { urgent: false } },
+			],
+		});
+
+		expect(step?.label).toBe("Changes to 2 tasks");
+		expect(step?.changes).toEqual([
+			{
+				kind: "task.batch",
+				changes: [
+					{ kind: "task.update", taskId: "tsk_2", patch: { urgent: true } },
+					{ kind: "task.update", taskId: "tsk_1", patch: { urgent: false } },
+				],
+			},
+		]);
+	});
 });

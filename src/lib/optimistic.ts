@@ -1761,6 +1761,11 @@ function patchFor(client: QueryClient, change: Change): void {
 			clearDependencies(client, "task", change.taskIds);
 			return;
 
+		// Drawn as if each had been made alone, in the order they were made.
+		case "task.batch":
+			for (const each of change.changes) patchFor(client, each);
+			return;
+
 		case "task.move": {
 			/*
 			 * Out of the list it left and into the one it joined, in one go.

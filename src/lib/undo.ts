@@ -18,7 +18,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
 import { dependentsOf, findCachedTask, stagesOf } from "#/lib/optimistic";
 import { shortTitle } from "#/lib/tasks/tasks";
-import type { Change } from "#/schemas/change";
+import { type Change, isBatchable } from "#/schemas/change";
 import { type Stage, stageOf } from "#/schemas/checklist";
 import type { Task, TaskPatch } from "#/schemas/task";
 
@@ -262,6 +262,33 @@ export function invertChange(
 					putBack(client, each.task, each.checklistId),
 				),
 				question: `Undo deleting ${count}? They will be put back.`,
+			};
+		}
+
+		/*
+		 * Made at once, so undone at once: every one put back, last first, in
+		 * one batch of its own.
+		 */
+		case "task.batch": {
+			const steps = change.changes
+				.map((each) => invertChange(client, each))
+				.filter((step) => step !== null);
+			if (steps.length === 0) return null;
+
+			const count = new Set(change.changes.map((each) => each.taskId)).size;
+
+			return {
+				label: count === 1 ? steps[0].label : `Changes to ${count} tasks`,
+				changes: [
+					{
+						kind: "task.batch",
+						changes: steps
+							.reverse()
+							.flatMap((step) => step.changes)
+							.filter(isBatchable),
+					},
+				],
+				question: null,
 			};
 		}
 

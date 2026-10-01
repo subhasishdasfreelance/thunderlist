@@ -15,7 +15,8 @@ import type { Task } from "#/schemas/task";
 import { TaskTypesDialog } from "./task-types-dialog";
 
 /**
- * Say what kind of work a task is — K, while pointing at it.
+ * Say what kind of work a task is — K, while pointing at it — or every task
+ * picked out.
  *
  * The space's list, with a filter above it, as a checklist is picked to move a
  * task into: two letters and Enter is quicker than finding the row. Picking
@@ -28,12 +29,13 @@ import { TaskTypesDialog } from "./task-types-dialog";
 export function TaskTypeDialog({
 	isOpen,
 	onOpenChange,
-	task,
+	tasks,
 	onPick,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
-	task: Pick<Task, "title" | "typeId"> | null;
+	/** The tasks being given a type, or `null` while none is. */
+	tasks: ReadonlyArray<Pick<Task, "title" | "typeId">> | null;
 	onPick: (typeId: string | null) => void;
 }) {
 	const types = useTaskTypes();
@@ -51,7 +53,12 @@ export function TaskTypeDialog({
 	const shown = types.filter((type) =>
 		type.name.toLowerCase().includes(needle),
 	);
-	const current = task?.typeId ?? null;
+	// The type every one of them has, where they share one.
+	const first = tasks?.[0]?.typeId ?? null;
+	const current =
+		tasks?.every((task) => (task.typeId ?? null) === first) === true
+			? first
+			: null;
 
 	const pick = (typeId: string | null) =>
 		onPick(typeId === current ? null : typeId);
@@ -62,7 +69,9 @@ export function TaskTypeDialog({
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				title="Type"
-				subtitle={task?.title}
+				subtitle={
+					tasks?.length === 1 ? tasks[0].title : `${tasks?.length ?? 0} tasks`
+				}
 				width={380}
 				actions={
 					canManageContent

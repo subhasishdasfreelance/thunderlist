@@ -31,6 +31,7 @@ import {
 	createTasksInputSchema,
 	deleteTaskInputSchema,
 	deleteTasksInputSchema,
+	MAX_TASKS_AT_ONCE,
 	moveTaskInputSchema,
 	updateTaskInputSchema,
 } from "./task";
@@ -43,6 +44,16 @@ import {
 	updateProgressEntryInputSchema,
 	updateTrackerInputSchema,
 } from "./tracker";
+
+const taskUpdateSchema = v.object({
+	kind: v.literal("task.update"),
+	...updateTaskInputSchema.entries,
+});
+
+const taskMoveSchema = v.object({
+	kind: v.literal("task.move"),
+	...moveTaskInputSchema.entries,
+});
 
 /**
  * One change to the data, as the browser asks for it.
@@ -78,10 +89,7 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("task.createMany"),
 		...createTasksInputSchema.entries,
 	}),
-	v.object({
-		kind: v.literal("task.update"),
-		...updateTaskInputSchema.entries,
-	}),
+	taskUpdateSchema,
 	v.object({
 		kind: v.literal("task.delete"),
 		...deleteTaskInputSchema.entries,
@@ -90,9 +98,19 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("task.deleteMany"),
 		...deleteTasksInputSchema.entries,
 	}),
+	taskMoveSchema,
+	/**
+	 * Edits and moves to many tasks at once — every task picked out — sent as
+	 * one request rather than one a task; see `applyChange`. Two a task at
+	 * most: parking one is an edit and then a move; see `moveToBacklog`.
+	 */
 	v.object({
-		kind: v.literal("task.move"),
-		...moveTaskInputSchema.entries,
+		kind: v.literal("task.batch"),
+		changes: v.pipe(
+			v.array(v.variant("kind", [taskUpdateSchema, taskMoveSchema])),
+			v.minLength(1, "Pick at least one task"),
+			v.maxLength(2 * MAX_TASKS_AT_ONCE, "Too many tasks at once"),
+		),
 	}),
 
 	v.object({
@@ -175,5 +193,15 @@ const changeSchema = v.variant("kind", [
 ]);
 
 export type Change = v.InferOutput<typeof changeSchema>;
+
+/** A change that can go in a `task.batch`. */
+export type BatchedChange = Extract<
+	Change,
+	{ kind: "task.update" | "task.move" }
+>;
+
+export function isBatchable(change: Change): change is BatchedChange {
+	return change.kind === "task.update" || change.kind === "task.move";
+}
 
 export const applyChangeInputSchema = v.object({ change: changeSchema });

@@ -45,15 +45,21 @@ import { AssignDialog } from "#/components/teams/assign-dialog";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { MessageDialog } from "#/components/teams/message-dialog";
 import {
+	applyBatched,
 	type ChecklistValues,
 	createTagResolver,
 	createTasks,
+	moveManyToBacklog,
 	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
 	setSpecialTag,
+	setTypeOnAll,
 	toggleAssignee,
+	toggleAssigneeOnAll,
+	toggleFlagOnAll,
+	toggleSpecialTagOnAll,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
@@ -175,7 +181,7 @@ function ChecklistDetailPage() {
 	// The tasks a move is being picked for: one from its own menu, or every
 	// task picked out at once; see `SelectionBar`.
 	const [moving, setMoving] = useState<ReadonlyArray<Task> | null>(null);
-	const [typing, setTyping] = useState<Task | null>(null);
+	const [typing, setTyping] = useState<ReadonlyArray<Task> | null>(null);
 	// The tasks a tag is being put on: the one pointed at, or every one
 	// picked out; see `TagPickerDialog`.
 	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
@@ -392,7 +398,7 @@ function ChecklistDetailPage() {
 				onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
 				onSetImportant: (important) =>
 					updateTask(apply, task.taskId, { important }),
-				onSetType: () => setTyping(task),
+				onSetType: () => setTyping([task]),
 				onAddTag: () => setTagging([task]),
 				onRename: () => setRenaming(task),
 				onMove: () => setMoving([task]),
@@ -421,10 +427,12 @@ function ChecklistDetailPage() {
 
 	/** Every picked task on to its next stage; see `nextStageId`. */
 	function moveOn() {
-		for (const task of pickedTasks) {
-			const next = nextStageId(task, stages);
-			if (next !== null) updateTask(apply, task.taskId, { stageId: next });
-		}
+		applyBatched(apply, (collect) => {
+			for (const task of pickedTasks) {
+				const next = nextStageId(task, stages);
+				if (next !== null) updateTask(collect, task.taskId, { stageId: next });
+			}
+		});
 		clear();
 	}
 
@@ -433,13 +441,15 @@ function ChecklistDetailPage() {
 	 * finished by a tracker or a checklist, which cannot be made done by hand.
 	 */
 	function moveTo(target: string) {
-		for (const task of pickedTasks) {
-			const isTracked =
-				task.trackerId != null || task.linkedChecklistId != null;
-			if (stageOf(task, stages) === target) continue;
-			if (isTracked && target === lastStage.stageId) continue;
-			updateTask(apply, task.taskId, { stageId: target });
-		}
+		applyBatched(apply, (collect) => {
+			for (const task of pickedTasks) {
+				const isTracked =
+					task.trackerId != null || task.linkedChecklistId != null;
+				if (stageOf(task, stages) === target) continue;
+				if (isTracked && target === lastStage.stageId) continue;
+				updateTask(collect, task.taskId, { stageId: target });
+			}
+		});
 		clear();
 	}
 
@@ -850,6 +860,32 @@ function ChecklistDetailPage() {
 							? () => setDeletingPicked(pickedTasks.map((task) => task.taskId))
 							: undefined
 					}
+					onToggleToday={() =>
+						toggleSpecialTagOnAll(apply, pickedTasks, "today", tags)
+					}
+					onBacklog={
+						backlog === null || !canManageContent
+							? undefined
+							: () => {
+									moveManyToBacklog(
+										apply,
+										pickedTasks,
+										backlog.checklistId,
+										tags,
+									);
+									clear();
+								}
+					}
+					onToggleUrgent={() => toggleFlagOnAll(apply, pickedTasks, "urgent")}
+					onToggleImportant={() =>
+						toggleFlagOnAll(apply, pickedTasks, "important")
+					}
+					onSetType={() => setTyping(pickedTasks)}
+					onToggleMine={
+						space?.team == null
+							? undefined
+							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
+					}
 					onClear={clear}
 				/>
 			)}
@@ -878,9 +914,9 @@ function ChecklistDetailPage() {
 				onOpenChange={(open) => {
 					if (!open) setTyping(null);
 				}}
-				task={typing}
+				tasks={typing}
 				onPick={(typeId) => {
-					if (typing) updateTask(apply, typing.taskId, { typeId });
+					if (typing) setTypeOnAll(apply, typing, typeId);
 					setTyping(null);
 				}}
 			/>
@@ -915,13 +951,15 @@ function ChecklistDetailPage() {
 				checklists={otherChecklists}
 				isLoading={checklistsResult.isPending}
 				onPick={(target) => {
-					for (const task of moving ?? []) {
-						apply({
-							kind: "task.move",
-							taskId: task.taskId,
-							checklistId: target,
-						});
-					}
+					applyBatched(apply, (collect) => {
+						for (const task of moving ?? []) {
+							collect({
+								kind: "task.move",
+								taskId: task.taskId,
+								checklistId: target,
+							});
+						}
+					});
 					setMoving(null);
 					clear();
 				}}

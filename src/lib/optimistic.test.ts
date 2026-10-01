@@ -444,6 +444,27 @@ describe("applyOptimistically", () => {
 		expect(toDo(queryClient)?.total).toBe(0);
 	});
 
+	it("draws every change in a batch at once", () => {
+		const queryClient = client();
+		queryClient.setQueryData<StagePage>(
+			queryKeys.checklistPage("chk_1", VIEW),
+			stagePage([task({ taskId: "tsk_1" }), task({ taskId: "tsk_2" })]),
+		);
+
+		applyOptimistically(queryClient, {
+			kind: "task.batch",
+			changes: [
+				{ kind: "task.update", taskId: "tsk_1", patch: { urgent: true } },
+				{ kind: "task.update", taskId: "tsk_2", patch: { completed: true } },
+			],
+		});
+
+		expect(toDo(queryClient)?.items).toMatchObject([
+			{ taskId: "tsk_1", urgent: true },
+		]);
+		expect(toDo(queryClient)?.counts).toEqual({ todo: 1, done: 1 });
+	});
+
 	it("draws a task typed into no checklist on the Across screen's Inbox stage", () => {
 		const queryClient = new QueryClient();
 		queryClient.setQueryData<Array<ChecklistSummary>>(queryKeys.checklists, [
