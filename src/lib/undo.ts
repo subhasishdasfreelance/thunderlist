@@ -103,6 +103,72 @@ function restOfTask(
 	return Object.keys(rest).length === 0 ? null : rest;
 }
 
+/** A deleted task as adding it again writes it; see `putBack`. */
+function asAdded(task: Task) {
+	return {
+		// Its own id, so it comes back as the task it was rather than as a
+		// copy of it; see `changeSchema`.
+		taskId: task.taskId,
+		title: task.title,
+		addedAt: task.addedAt,
+		tagIds: [...task.tagIds],
+		trackerId: task.trackerId ?? null,
+		linkedChecklistId: task.linkedChecklistId ?? null,
+		urgent: task.urgent,
+		important: task.important,
+		...(task.number === undefined ? {} : { number: task.number }),
+	};
+}
+
+/**
+ * Many deleted tasks written back, as `putBack` writes one, in as few changes
+ * as there can be: the tasks in one go for each checklist they were in, then
+ * the rest of what they carried and what waited on them, which the undo
+ * sends as one batch; see `UndoProvider`.
+ */
+function putBackMany(
+	client: QueryClient,
+	found: ReadonlyArray<{ task: Task; checklistId: string | null }>,
+): Array<Change> {
+	const byChecklist = new Map<string | null, Array<Task>>();
+	for (const { task, checklistId } of found) {
+		byChecklist.set(checklistId, [
+			...(byChecklist.get(checklistId) ?? []),
+			task,
+		]);
+	}
+
+	const rest = found.flatMap(({ task, checklistId }) => {
+		const patch = restOfTask(task, stagesOf(client, checklistId));
+		return patch === null
+			? []
+			: [{ kind: "task.update" as const, taskId: task.taskId, patch }];
+	});
+
+	// Each waiting task once, however many of these it waited on.
+	const deleted = new Set(found.map(({ task }) => task.taskId));
+	const waiting = new Map<string, Task>();
+	for (const { task } of found) {
+		for (const each of dependentsOf(client, task.taskId)) {
+			if (!deleted.has(each.taskId)) waiting.set(each.taskId, each);
+		}
+	}
+
+	return [
+		...[...byChecklist].map(([checklistId, tasks]) => ({
+			kind: "task.createMany" as const,
+			checklistId,
+			tasks: tasks.map(asAdded),
+		})),
+		...rest,
+		...[...waiting.values()].map((each) => ({
+			kind: "task.update" as const,
+			taskId: each.taskId,
+			patch: { dependsOn: [...(each.dependsOn ?? [])] },
+		})),
+	];
+}
+
 /**
  * The changes that write a deleted task back as it was: under its own number,
  * and waited on again by whatever waited on it, since deleting it took their
@@ -116,21 +182,7 @@ function putBack(
 	const rest = restOfTask(task, stagesOf(client, checklistId));
 
 	return [
-		{
-			kind: "task.create",
-			checklistId,
-			// Its own id, so it comes back as the task it was rather than as a
-			// copy of it; see `changeSchema`.
-			taskId: task.taskId,
-			title: task.title,
-			addedAt: task.addedAt,
-			tagIds: [...task.tagIds],
-			trackerId: task.trackerId ?? null,
-			linkedChecklistId: task.linkedChecklistId ?? null,
-			urgent: task.urgent,
-			important: task.important,
-			...(task.number === undefined ? {} : { number: task.number }),
-		},
+		{ kind: "task.create", checklistId, ...asAdded(task) },
 		// Adding a task is one line of typing, so the rest of what it carried
 		// is a second change; see `restOfTask`.
 		...(rest === null
@@ -258,9 +310,7 @@ export function invertChange(
 
 			return {
 				label: `Deleting ${count}`,
-				changes: found.flatMap((each) =>
-					putBack(client, each.task, each.checklistId),
-				),
+				changes: putBackMany(client, found),
 				question: `Undo deleting ${count}? They will be put back.`,
 			};
 		}

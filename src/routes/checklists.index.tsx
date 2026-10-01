@@ -18,10 +18,12 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
+	SelectButton,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
+import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
 import {
 	type ChecklistValues,
@@ -33,6 +35,7 @@ import {
 import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { firstPage } from "#/lib/use-pages";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -86,6 +89,8 @@ function ChecklistsPage() {
 	const [isArranging, setIsArranging] = useState(false);
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
+	// Several picked out, to delete, group or share together; see `usePickMode`.
+	const pick = usePickMode();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
@@ -198,7 +203,10 @@ function ChecklistsPage() {
 								onChange={arranged.setOrder}
 							/>
 							{canManageContent ? (
-								<ArrangeButton onClick={() => setIsArranging(true)} />
+								<>
+									<SelectButton onClick={pick.start} />
+									<ArrangeButton onClick={() => setIsArranging(true)} />
+								</>
 							) : null}
 						</HStack>
 					</HStack>
@@ -206,9 +214,27 @@ function ChecklistsPage() {
 						items={arranged.ordered}
 						idOf={checklistIdOf}
 						render={(checklist) => <ChecklistCard checklist={checklist} />}
+						pick={{
+							mode: pick,
+							labelOf: (checklist) => checklist.title,
+							// The Inbox and the Backlog are everyone's, and stay.
+							isPickable: (checklist) => checklist.special == null,
+						}}
 					/>
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<PickedItemsBar
+					of="checklist"
+					items={checklists.flatMap((checklist) =>
+						pick.picked.has(checklist.checklistId)
+							? [{ id: checklist.checklistId, access: checklist.access }]
+							: [],
+					)}
+					onDone={pick.stop}
+				/>
+			) : null}
 
 			<ArrangeDialog
 				isOpen={isArranging}

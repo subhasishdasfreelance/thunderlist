@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTyping } from "#/lib/use-row-shortcuts";
 
-/** A task's row carries its id; see the lists on a checklist's and a tag's page. */
-const ROW = "[data-task-id]";
+/**
+ * What can be picked out: tasks, or a tracker's readings, or the things on
+ * an index screen — checklists, trackers, tags, plans, countdowns. Each row
+ * carries its id as `data-task-id`, `data-entry-id` or `data-item-id`.
+ */
+export type PickedRow = "task" | "entry" | "item";
 
 /** Places whose arrow keys are their own: a dialog, a menu, tabs, a list box. */
 const OWN_ARROWS =
@@ -39,7 +43,7 @@ function firstInView(rows: ReadonlyArray<HTMLElement>): number {
  * press lands. It ends with a press on a row, a selection made somewhere else,
  * Escape, or `clear`.
  */
-export function useTaskSelection(): {
+export function useTaskSelection(kind: PickedRow = "task"): {
 	picked: ReadonlySet<string>;
 	clear: () => void;
 } {
@@ -55,6 +59,9 @@ export function useTaskSelection(): {
 	}, []);
 
 	useEffect(() => {
+		const ROW = `[data-${kind}-id]`;
+		const idOf = (row: HTMLElement) => row.dataset[`${kind}Id`];
+
 		function onSelectionChange() {
 			const selection = document.getSelection();
 			if (selection === null || selection.isCollapsed) return;
@@ -63,7 +70,7 @@ export function useTaskSelection(): {
 			const range = selection.getRangeAt(0);
 			const ids = [...document.querySelectorAll<HTMLElement>(ROW)]
 				.filter((row) => range.intersectsNode(row))
-				.flatMap((row) => row.dataset.taskId ?? []);
+				.flatMap((row) => idOf(row) ?? []);
 
 			// The arrow keys carry on from a pick made with the pointer.
 			anchor.current = ids[0] ?? null;
@@ -96,7 +103,7 @@ export function useTaskSelection(): {
 
 			const rows = [...document.querySelectorAll<HTMLElement>(ROW)];
 			if (rows.length === 0) return;
-			const ids = rows.map((row) => row.dataset.taskId ?? "");
+			const ids = rows.map((row) => idOf(row) ?? "");
 
 			const at = cursor.current === null ? -1 : ids.indexOf(cursor.current);
 			let next: number;
@@ -136,7 +143,7 @@ export function useTaskSelection(): {
 			document.removeEventListener("pointerdown", onPointerDown);
 			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [clear]);
+	}, [clear, kind]);
 
 	return { picked, clear };
 }

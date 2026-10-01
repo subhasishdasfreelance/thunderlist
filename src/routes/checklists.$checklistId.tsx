@@ -47,9 +47,11 @@ import { MemberFilter } from "#/components/teams/member-filter";
 import { MessageDialog } from "#/components/teams/message-dialog";
 import {
 	applyBatched,
+	assignAlike,
 	type ChecklistValues,
 	createTagResolver,
 	createTasks,
+	moveAllToStage,
 	moveManyToBacklog,
 	moveToBacklog,
 	resolveChecklistName,
@@ -102,7 +104,6 @@ import {
 	checklistStages,
 	nextStageId,
 	specialChecklist,
-	stageOf,
 	stageParts,
 } from "#/schemas/checklist";
 import type { Task, TaskFilter } from "#/schemas/task";
@@ -191,7 +192,9 @@ function ChecklistDetailPage() {
 	// The tasks a tag is being put on: the one pointed at, or every one
 	// picked out; see `TagPickerDialog`.
 	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
-	const [assigning, setAssigning] = useState<Task | null>(null);
+	// The tasks being given to people: the one pointed at, or every one
+	// picked out; see `AssignDialog`.
+	const [assigning, setAssigning] = useState<ReadonlyArray<Task> | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	// Its title stays on the question while it closes; see `useHeld`.
@@ -409,7 +412,7 @@ function ChecklistDetailPage() {
 				onRename: () => setRenaming(task),
 				onMove: () => setMoving([task]),
 				onDelete: () => setPendingDelete(task),
-				onAssign: team === null ? undefined : () => setAssigning(task),
+				onAssign: team === null ? undefined : () => setAssigning([task]),
 				onToggleMine:
 					space?.team == null
 						? undefined
@@ -447,15 +450,11 @@ function ChecklistDetailPage() {
 	 * finished by a tracker or a checklist, which cannot be made done by hand.
 	 */
 	function moveTo(target: string) {
-		applyBatched(apply, (collect) => {
-			for (const task of pickedTasks) {
-				const isTracked =
-					task.trackerId != null || task.linkedChecklistId != null;
-				if (stageOf(task, stages) === target) continue;
-				if (isTracked && target === lastStage.stageId) continue;
-				updateTask(collect, task.taskId, { stageId: target });
-			}
-		});
+		moveAllToStage(
+			apply,
+			pickedTasks.map((task) => ({ task, stages })),
+			target,
+		);
 		clear();
 	}
 
@@ -892,6 +891,7 @@ function ChecklistDetailPage() {
 							? undefined
 							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
+					onAssign={team === null ? undefined : () => setAssigning(pickedTasks)}
 					onEdit={() =>
 						pickedTasks.length === 1
 							? setRenaming(pickedTasks[0])
@@ -906,9 +906,9 @@ function ChecklistDetailPage() {
 				onOpenChange={(open) => {
 					if (!open) setAssigning(null);
 				}}
-				task={assigning}
+				tasks={assigning}
 				onSubmit={(assignees) => {
-					if (assigning) updateTask(apply, assigning.taskId, { assignees });
+					if (assigning) assignAlike(apply, assigning, assignees);
 					setAssigning(null);
 				}}
 			/>

@@ -43,7 +43,7 @@ import { queryKeys } from "#/queries/keys";
 import type { TaggedTask } from "#/queries/system";
 import type { AccessEntry } from "#/schemas/access";
 import type { Arrangements } from "#/schemas/arrangement";
-import type { Change } from "#/schemas/change";
+import type { Change, PickableKind, ShareableKind } from "#/schemas/change";
 import {
 	type ChecklistProgress,
 	type ChecklistSummary,
@@ -1692,6 +1692,39 @@ function followChecklists(client: QueryClient): void {
 	}
 }
 
+/** One of an `items.delete`, as deleting it alone is asked for. */
+function deletingOne(of: PickableKind, id: string): Change {
+	switch (of) {
+		case "checklist":
+			return { kind: "checklist.delete", checklistId: id };
+		case "tracker":
+			return { kind: "tracker.delete", trackerId: id };
+		case "tag":
+			return { kind: "tag.delete", tagId: id };
+		case "plan":
+			return { kind: "plan.delete", planId: id };
+		case "countdown":
+			return { kind: "countdown.delete", countdownId: id };
+	}
+}
+
+/** One of an `items.share`, as sharing it alone is asked for. */
+function sharingOne(
+	of: ShareableKind,
+	id: string,
+	{ access }: Pick<Extract<Change, { kind: "items.share" }>, "access">,
+): Change {
+	const patch = { access: access === null ? null : [...access] };
+	switch (of) {
+		case "checklist":
+			return { kind: "checklist.update", checklistId: id, patch };
+		case "tracker":
+			return { kind: "tracker.update", trackerId: id, patch };
+		case "tag":
+			return { kind: "tag.update", tagId: id, patch };
+	}
+}
+
 /** The patches for one change; see `applyOptimistically`. */
 function patchFor(client: QueryClient, change: Change): void {
 	switch (change.kind) {
@@ -1764,6 +1797,17 @@ function patchFor(client: QueryClient, change: Change): void {
 		// Drawn as if each had been made alone, in the order they were made.
 		case "task.batch":
 			for (const each of change.changes) patchFor(client, each);
+			return;
+
+		// Each drawn as deleting or sharing that one would be.
+		case "items.delete":
+			for (const id of change.ids) patchFor(client, deletingOne(change.of, id));
+			return;
+
+		case "items.share":
+			for (const id of change.ids) {
+				patchFor(client, asStored(client, sharingOne(change.of, id, change)));
+			}
 			return;
 
 		case "task.move": {
@@ -2188,6 +2232,14 @@ function patchFor(client: QueryClient, change: Change): void {
 				history.filter((entry) => entry.entryId !== change.entryId),
 			);
 			return;
+
+		case "entry.deleteMany": {
+			const gone = new Set(change.entryIds);
+			patchHistory(client, change.trackerId, (history) =>
+				history.filter((entry) => !gone.has(entry.entryId)),
+			);
+			return;
+		}
 
 		case "tag.create": {
 			const createdAt = new Date().toISOString();

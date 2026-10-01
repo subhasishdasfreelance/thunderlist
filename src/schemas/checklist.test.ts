@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { restaged, type Stage } from "./checklist";
+import { restaged, type Stage, sharedStages } from "./checklist";
 
 const TODO: Stage = { stageId: "todo", name: "To do" };
 const REVIEW: Stage = { stageId: "review", name: "Review" };
@@ -46,5 +46,28 @@ describe("restaged", () => {
 				[TODO, DONE],
 			),
 		).toBeNull();
+	});
+});
+
+describe("sharedStages", () => {
+	it("offers the stages every checklist has alike", () => {
+		const stages = [TODO, REVIEW, DONE];
+		expect(sharedStages([stages, [TODO, REVIEW, DONE]])).toEqual(stages);
+	});
+
+	it("offers none where any checklist's stages differ", () => {
+		expect(
+			sharedStages([
+				[TODO, REVIEW, DONE],
+				[TODO, DONE],
+			]),
+		).toBeNull();
+		expect(
+			sharedStages([
+				[TODO, DONE],
+				[TODO, { stageId: "done", name: "Shipped" }],
+			]),
+		).toBeNull();
+		expect(sharedStages([])).toBeNull();
 	});
 });

@@ -126,6 +126,17 @@ export function sharedTagIds(
 	);
 }
 
+/** The people every one of these tasks is assigned to; see `assignAlike`. */
+export function sharedAssignees(
+	tasks: ReadonlyArray<Pick<Task, "assignees">> | null,
+): Array<string> {
+	if (tasks === null || tasks.length === 0) return [];
+
+	return (tasks[0].assignees ?? []).filter((email) =>
+		tasks.every((task) => (task.assignees ?? []).includes(email)),
+	);
+}
+
 /**
  * A task's title cut short, for a confirmation that names it: enough to know
  * it by, never the whole of a long one.

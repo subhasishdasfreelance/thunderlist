@@ -154,6 +154,8 @@ function soundFor(change: Change): Sound {
 		case "task.deleteMany":
 		case "tracker.delete":
 		case "entry.delete":
+		case "entry.deleteMany":
+		case "items.delete":
 		case "tag.delete":
 		case "group.delete":
 			return "delete";

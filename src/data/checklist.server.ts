@@ -899,32 +899,55 @@ export async function deleteChecklist(
 	userId: string,
 	checklistId: string,
 ): Promise<void> {
-	const current = await collections();
+	await deleteChecklists(userId, [checklistId]);
+}
 
-	const checklist = await current.checklists.findOne(
-		{ checklistId, userId },
-		{ projection: { _id: 0, special: 1, title: 1 } },
+/**
+ * Delete several checklists and all their tasks at once — a pick of them on
+ * the Checklists screen — in a handful of writes for all of them. The Inbox
+ * and the Backlog are never among them; one asked for refuses the lot.
+ */
+export async function deleteChecklists(
+	userId: string,
+	checklistIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	const ids = [...checklistIds];
+
+	const special = await current.checklists.findOne(
+		{ userId, checklistId: { $in: ids }, special: { $ne: null } },
+		{ projection: { _id: 0, title: 1 } },
 	);
-	if (checklist?.special != null) {
-		throw new AppError(
-			"invalid_data",
-			`"${checklist.title}" can't be deleted.`,
-		);
+	if (special) {
+		throw new AppError("invalid_data", `"${special.title}" can't be deleted.`);
 	}
 
-	// Asked before its tasks go, while there is still something to ask.
-	const isFinished =
-		(await checklistsFinished(current, userId, [checklistId], new Set())).get(
-			checklistId,
-		) ?? false;
+	// Asked before their tasks go, while there is still something to ask.
+	const finished = await checklistsFinished(current, userId, ids, new Set());
+	const isFinished = (checklistId: string) =>
+		finished.get(checklistId) ?? false;
 
 	const gone = await current.tasks
-		.find({ checklistId, userId }, { projection: { _id: 0, taskId: 1 } })
+		.find(
+			{ userId, checklistId: { $in: ids } },
+			{ projection: { _id: 0, taskId: 1 } },
+		)
 		.toArray();
-	await current.tasks.deleteMany({ checklistId, userId });
-	await current.checklists.deleteOne({ checklistId, userId });
-	await releaseFollowers(userId, "linkedChecklistId", checklistId, isFinished);
-	await clearDependencies(userId, "checklist", [checklistId]);
+	await current.tasks.deleteMany({ userId, checklistId: { $in: ids } });
+	await current.checklists.deleteMany({ userId, checklistId: { $in: ids } });
+	await releaseFollowers(
+		userId,
+		"linkedChecklistId",
+		ids.filter(isFinished),
+		true,
+	);
+	await releaseFollowers(
+		userId,
+		"linkedChecklistId",
+		ids.filter((checklistId) => !isFinished(checklistId)),
+		false,
+	);
+	await clearDependencies(userId, "checklist", ids);
 	await clearDependencies(
 		userId,
 		"task",
@@ -940,13 +963,14 @@ export async function deleteChecklist(
 export async function releaseFollowers(
 	userId: string,
 	link: "trackerId" | "linkedChecklistId",
-	id: string,
+	ids: ReadonlyArray<string>,
 	isDone: boolean,
 ): Promise<void> {
+	if (ids.length === 0) return;
 	const current = await collections();
 
 	await current.tasks.updateMany(
-		{ userId, [link]: id },
+		{ userId, [link]: { $in: [...ids] } },
 		{
 			$set: {
 				[link]: null,
@@ -976,19 +1000,29 @@ export async function clearDependencies(
 	);
 }
 
+/** A thing a task waits on, as a key to look it up by. */
+function refKey(ref: ItemRef): string {
+	return `${ref.kind}:${ref.id}`;
+}
+
 /**
- * The first thing on a task's list that is not done yet, named the way the
- * refusal says it — `task "Write the brief"` — or `null` when all are done.
- * Done is judged as everywhere else: a tracker by its target, a checklist or
- * a tag once it has tasks and every one is done; see `withTrackedCompletion`.
+ * Everything among `refs` that is not done yet, each named the way a refusal
+ * says it — `task "Write the brief"` — by `refKey`. Done is judged as
+ * everywhere else: a tracker by its target, a checklist or a tag once it has
+ * tasks and every one is done; see `withTrackedCompletion`.
+ *
+ * Read in one go however many tasks it is asked for, so a batch finishing
+ * fifty tasks asks once rather than fifty times; see `updateTasks`.
  */
-async function firstUndone(
+async function undoneAmong(
 	current: Collections,
 	userId: string,
 	refs: ReadonlyArray<ItemRef>,
-): Promise<string | null> {
-	const idsOf = (kind: ItemKind) =>
-		refs.filter((ref) => ref.kind === kind).map((ref) => ref.id);
+): Promise<Map<string, string>> {
+	const undone = new Map<string, string>();
+	const idsOf = (kind: ItemKind) => [
+		...new Set(refs.filter((ref) => ref.kind === kind).map((ref) => ref.id)),
+	];
 
 	const taskIds = idsOf("task");
 	if (taskIds.length > 0) {
@@ -1001,6 +1035,7 @@ async function firstUndone(
 					{
 						projection: {
 							_id: 0,
+							taskId: 1,
 							title: 1,
 							completed: 1,
 							trackerId: 1,
@@ -1010,8 +1045,13 @@ async function firstUndone(
 				)
 				.toArray(),
 		);
-		const open = tasks.find((task) => !task.completed);
-		if (open) return `task "${shortTitle(open.title, 40)}"`;
+		for (const task of tasks) {
+			if (task.completed) continue;
+			undone.set(
+				refKey({ kind: "task", id: task.taskId }),
+				`task "${shortTitle(task.title, 40)}"`,
+			);
+		}
 	}
 
 	const checklistIds = idsOf("checklist");
@@ -1022,47 +1062,88 @@ async function firstUndone(
 			checklistIds,
 			new Set(),
 		);
-		const open = checklistIds.find((id) => finished.get(id) !== true);
-		if (open !== undefined) {
-			const found = await current.checklists.findOne(
-				{ userId, checklistId: open },
-				{ projection: { _id: 0, title: 1 } },
+		const open = checklistIds.filter((id) => finished.get(id) !== true);
+		const found =
+			open.length === 0
+				? []
+				: await current.checklists
+						.find(
+							{ userId, checklistId: { $in: open } },
+							{ projection: { _id: 0, checklistId: 1, title: 1 } },
+						)
+						.toArray();
+		for (const checklist of found) {
+			undone.set(
+				refKey({ kind: "checklist", id: checklist.checklistId }),
+				`checklist "${shortTitle(checklist.title, 40)}"`,
 			);
-			if (found) return `checklist "${shortTitle(found.title, 40)}"`;
 		}
 	}
 
 	const trackerIds = idsOf("tracker");
 	if (trackerIds.length > 0) {
 		const reached = await trackersReached(current, userId, trackerIds);
-		const open = trackerIds.find((id) => reached.get(id) === false);
-		if (open !== undefined) {
-			const found = await current.trackers.findOne(
-				{ userId, trackerId: open },
-				{ projection: { _id: 0, title: 1 } },
+		const open = trackerIds.filter((id) => reached.get(id) === false);
+		const found =
+			open.length === 0
+				? []
+				: await current.trackers
+						.find(
+							{ userId, trackerId: { $in: open } },
+							{ projection: { _id: 0, trackerId: 1, title: 1 } },
+						)
+						.toArray();
+		for (const tracker of found) {
+			undone.set(
+				refKey({ kind: "tracker", id: tracker.trackerId }),
+				`tracker "${shortTitle(tracker.title, 40)}"`,
 			);
-			if (found) return `tracker "${shortTitle(found.title, 40)}"`;
 		}
 	}
 
-	for (const tagId of idsOf("tag")) {
-		const tag = await current.tags.findOne(
-			{ userId, tagId },
-			{ projection: { _id: 0, name: 1 } },
-		);
-		if (!tag) continue;
-		const tasks = await withTrackedCompletion(
-			current,
-			userId,
-			await current.tasks
-				.find({ userId, tagIds: tagId }, { projection: PROGRESS_FIELDS })
+	const tagIds = idsOf("tag");
+	if (tagIds.length > 0) {
+		const [tags, tagged] = await Promise.all([
+			current.tags
+				.find(
+					{ userId, tagId: { $in: tagIds } },
+					{ projection: { _id: 0, tagId: 1, name: 1 } },
+				)
 				.toArray(),
-		);
-		if (tasks.length === 0 || tasks.some((task) => !task.completed)) {
-			return `tag #${tag.name}`;
+			current.tasks
+				.find(
+					{ userId, tagIds: { $in: tagIds } },
+					{ projection: PROGRESS_FIELDS },
+				)
+				.toArray(),
+		]);
+		const tasks = await withTrackedCompletion(current, userId, tagged);
+		for (const tag of tags) {
+			const own = tasks.filter((task) => task.tagIds.includes(tag.tagId));
+			if (own.length === 0 || own.some((task) => !task.completed)) {
+				undone.set(refKey({ kind: "tag", id: tag.tagId }), `tag #${tag.name}`);
+			}
 		}
 	}
 
+	return undone;
+}
+
+/**
+ * The first thing on a task's list that is not done yet, as `undoneAmong`
+ * names it, or `null` when all are done: a task first, then a checklist, a
+ * tracker and a tag.
+ */
+function firstUndone(
+	refs: ReadonlyArray<ItemRef>,
+	undone: ReadonlyMap<string, string>,
+): string | null {
+	for (const kind of ["task", "checklist", "tracker", "tag"] as const) {
+		const ref = refs.find(
+			(each) => each.kind === kind && undone.has(refKey(each)),
+		);
+		if (ref !== undefined) return undone.get(refKey(ref)) ?? null;
+	}
 	return null;
 }
 
@@ -1170,6 +1251,8 @@ export async function createTasks(
 		important: boolean;
 		trackerId: string | null;
 		linkedChecklistId: string | null;
+		/** The number it had, for one put back; see `createTasksInputSchema`. */
+		number?: number;
 	}>,
 ): Promise<void> {
 	const current = await collections();
@@ -1194,10 +1277,29 @@ export async function createTasks(
 		await assertCanContain(current, userId, listId, linkedChecklistId);
 	}
 
-	const first = await nextNumbers(current, userId, "task", fresh.length);
-	const tasks = fresh.map((input, index) => ({
+	// The numbers they had, put back by an undo, while nothing else has taken
+	// them; the rest are given the next ones, as one is by `createTask`.
+	const asked = fresh.flatMap((input) => input.number ?? []);
+	const taken = new Set(
+		asked.length === 0
+			? []
+			: (
+					await current.tasks
+						.find(
+							{ userId, number: { $in: asked } },
+							{ projection: { _id: 0, number: 1 } },
+						)
+						.toArray()
+				).map((task) => task.number),
+	);
+	const keeps = (input: (typeof fresh)[number]) =>
+		input.number !== undefined && !taken.has(input.number);
+	const needing = fresh.filter((input) => !keeps(input)).length;
+	let next =
+		needing === 0 ? 0 : await nextNumbers(current, userId, "task", needing);
+	const tasks = fresh.map((input) => ({
 		taskId: input.taskId,
-		number: first + index,
+		number: keeps(input) ? (input.number as number) : next++,
 		title: input.title,
 		completed: false,
 		completedAt: null,
@@ -1352,6 +1454,11 @@ async function editedFields(
 	existing: TaskBeforeEdit | null,
 	checklist: Pick<Checklist, "tagIds" | "stages"> | null,
 	patch: TaskPatch,
+	/**
+	 * What is not done among what it waits on, read already for a batch;
+	 * see `undoneAmong`. Read here when left out.
+	 */
+	undone?: ReadonlyMap<string, string>,
 ): Promise<Partial<TaskDoc>> {
 	const stages = checklistStages(checklist ?? {});
 	const last = stages[stages.length - 1].stageId;
@@ -1411,15 +1518,15 @@ async function editedFields(
 		const subtasks = subtasksBlocking(patch.subtasks ?? existing?.subtasks);
 		if (subtasks !== null) throw new AppError("invalid_data", subtasks);
 
-		const undone = await firstUndone(
-			current,
-			userId,
-			existing?.dependsOn ?? [],
+		const refs = existing?.dependsOn ?? [];
+		const first = firstUndone(
+			refs,
+			undone ?? (await undoneAmong(current, userId, refs)),
 		);
-		if (undone !== null) {
+		if (first !== null) {
 			throw new AppError(
 				"invalid_data",
-				`Can't complete this yet: ${undone} is not done.`,
+				`Can't complete this yet: ${first} is not done.`,
 			);
 		}
 	}
@@ -1682,6 +1789,18 @@ export async function updateTasks(
 		).map((tag) => [tag.tagId, tag.name]),
 	);
 
+	// What every task it may finish waits on, read once for all of them.
+	const undone = await undoneAmong(
+		current,
+		userId,
+		changes.flatMap((each) =>
+			each.kind === "task.update" &&
+			(each.patch.completed === true || each.patch.stageId !== undefined)
+				? (tasks.get(each.taskId)?.dependsOn ?? [])
+				: [],
+		),
+	);
+
 	const writes = new Map<string, Partial<TaskDoc>>();
 	const refused = new Set<string>();
 	let refusal: unknown = null;
@@ -1705,6 +1824,7 @@ export async function updateTasks(
 					task,
 					source,
 					change.patch,
+					undone,
 				);
 			} else {
 				const target = checklists.get(change.checklistId);
@@ -1764,24 +1884,4 @@ export async function deleteTasks(
 	const current = await collections();
 	await current.tasks.deleteMany({ taskId: { $in: [...taskIds] }, userId });
 	await clearDependencies(userId, "task", taskIds);
-}
-
-/**
- * Strip a tag from every task carrying it.
- *
- * Called when a tag is deleted. Tasks reference tags by id, so leaving the id
- * behind would show a task tagged with something that no longer exists.
- */
-export async function removeTagFromTasks(
-	userId: string,
-	tagId: string,
-): Promise<number> {
-	const current = await collections();
-
-	const result = await current.tasks.updateMany(
-		{ userId, tagIds: tagId },
-		{ $pull: { tagIds: tagId } },
-	);
-
-	return result.modifiedCount;
 }

@@ -23,12 +23,13 @@ import {
 	withInlineTag,
 	withoutInlineTag,
 } from "#/lib/tags/inline-tags";
+import { sharedAssignees } from "#/lib/tasks/tasks";
 import { useToast } from "#/lib/toasts";
 import { useRememberUndo } from "#/lib/undo";
 import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
 import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
-import type { Stage } from "#/schemas/checklist";
+import { type Stage, stageOf } from "#/schemas/checklist";
 import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import {
 	PICKABLE_COLORS,
@@ -579,6 +580,37 @@ export function toggleAssigneeOnAll(
 }
 
 /**
+ * People given to every task picked out, as `AssignDialog` picks them — the
+ * way a tag goes on several: whoever is picked goes on all of them, whoever
+ * all of them had and is no longer picked comes off all of them, and anyone
+ * on only some is left where they are. For one task, that is the people
+ * picked.
+ */
+export function assignAlike(
+	apply: ApplyChange,
+	tasks: ReadonlyArray<Pick<Task, "taskId" | "assignees">>,
+	chosen: ReadonlyArray<string>,
+): void {
+	const shared = sharedAssignees(tasks);
+	const added = chosen.filter((email) => !shared.includes(email));
+	const removed = shared.filter((email) => !chosen.includes(email));
+
+	applyBatched(apply, (collect) => {
+		for (const task of tasks) {
+			const own = task.assignees ?? [];
+			const next = [
+				...own.filter((email) => !removed.includes(email)),
+				...added.filter((email) => !own.includes(email)),
+			];
+			const isSame =
+				next.length === own.length &&
+				next.every((email) => own.includes(email));
+			if (!isSame) updateTask(collect, task.taskId, { assignees: next });
+		}
+	});
+}
+
+/**
  * Urgent or important on for every task, or — where every one has it — off
  * for every one; U and I over a pick.
  */
@@ -637,6 +669,34 @@ export function updateAllAlike(
 				own.important = edit.important;
 			}
 			if (Object.keys(own).length > 0) updateTask(collect, task.taskId, own);
+		}
+	});
+}
+
+/**
+ * Every task to one stage of its checklist's — "Move to" over a pick — but
+ * those already there, and those finished by a tracker or a checklist, which
+ * cannot be made done by hand.
+ */
+export function moveAllToStage(
+	apply: ApplyChange,
+	entries: ReadonlyArray<{
+		task: Pick<
+			Task,
+			"taskId" | "stageId" | "completed" | "trackerId" | "linkedChecklistId"
+		>;
+		stages: ReadonlyArray<Stage>;
+	}>,
+	stageId: string,
+): void {
+	applyBatched(apply, (collect) => {
+		for (const { task, stages } of entries) {
+			const isTracked =
+				task.trackerId != null || task.linkedChecklistId != null;
+			const isDone = stageId === stages[stages.length - 1].stageId;
+			if (stageOf(task, stages) === stageId) continue;
+			if (isTracked && isDone) continue;
+			updateTask(collect, task.taskId, { stageId });
 		}
 	});
 }

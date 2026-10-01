@@ -74,6 +74,23 @@ const GROUPS: Array<Group> = [
 		],
 	},
 	{
+		title: "Several of anything else",
+		rows: [
+			{
+				keys: ["Select"],
+				what: "On Checklists, Trackers, Tags, Plans and Countdowns: press cards to pick them",
+			},
+			{
+				keys: ["Drag"],
+				what: "Across a tracker's readings, as across tasks",
+			},
+			{
+				keys: [TASK_SHORTCUTS.delete],
+				what: "Delete what is picked — group and share from the bar",
+			},
+		],
+	},
+	{
 		title: "Writing a task",
 		rows: [
 			{ keys: ["Ctrl", "/"], what: "Go to the add-task box" },

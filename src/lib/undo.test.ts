@@ -133,6 +133,37 @@ describe("invertChange", () => {
 		]);
 	});
 
+	it("puts tasks deleted together back in one go, under their numbers", () => {
+		const queryClient = client([
+			task({ taskId: "tsk_1", number: 7, stageId: "review" }),
+			task({ taskId: "tsk_2", number: 8 }),
+			task({ taskId: "tsk_3", dependsOn: [{ kind: "task", id: "tsk_1" }] }),
+		]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.deleteMany",
+			taskIds: ["tsk_1", "tsk_2"],
+		});
+
+		expect(step?.changes).toMatchObject([
+			{
+				kind: "task.createMany",
+				checklistId: "chk_1",
+				tasks: [
+					{ taskId: "tsk_1", number: 7 },
+					{ taskId: "tsk_2", number: 8 },
+				],
+			},
+			{ kind: "task.update", taskId: "tsk_1", patch: { stageId: "review" } },
+			{
+				kind: "task.update",
+				taskId: "tsk_3",
+				patch: { dependsOn: [{ kind: "task", id: "tsk_1" }] },
+			},
+		]);
+		expect(step?.changes).toHaveLength(3);
+	});
+
 	it("undoes a batch in one batch, last change first", () => {
 		const queryClient = client([
 			task({ taskId: "tsk_1" }),

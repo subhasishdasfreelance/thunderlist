@@ -285,24 +285,62 @@ export async function deleteTracker(
 	userId: string,
 	trackerId: string,
 ): Promise<void> {
+	await deleteTrackers(userId, [trackerId]);
+}
+
+/**
+ * Delete several trackers and all their readings at once — a pick of them on
+ * the Trackers screen — in a handful of writes for all of them.
+ */
+export async function deleteTrackers(
+	userId: string,
+	trackerIds: ReadonlyArray<string>,
+): Promise<void> {
 	const current = await collections();
+	const ids = [...trackerIds];
 
-	const tracker = await current.trackers.findOne(
-		{ trackerId, userId },
-		{ projection: { _id: 0, currentValue: 1, targetValue: 1, startValue: 1 } },
+	const trackers = await current.trackers
+		.find(
+			{ trackerId: { $in: ids }, userId },
+			{
+				projection: {
+					_id: 0,
+					trackerId: 1,
+					currentValue: 1,
+					targetValue: 1,
+					startValue: 1,
+				},
+			},
+		)
+		.toArray();
+	const reached = new Set(
+		trackers
+			.filter(
+				(tracker) =>
+					trackerProgress(
+						tracker.currentValue,
+						tracker.targetValue,
+						tracker.startValue,
+					).percent >= 100,
+			)
+			.map((tracker) => tracker.trackerId),
 	);
-	const isReached =
-		tracker !== null &&
-		trackerProgress(
-			tracker.currentValue,
-			tracker.targetValue,
-			tracker.startValue,
-		).percent >= 100;
 
-	await current.entries.deleteMany({ trackerId, userId });
-	await current.trackers.deleteOne({ trackerId, userId });
-	await releaseFollowers(userId, "trackerId", trackerId, isReached);
-	await clearDependencies(userId, "tracker", [trackerId]);
+	await current.entries.deleteMany({ trackerId: { $in: ids }, userId });
+	await current.trackers.deleteMany({ trackerId: { $in: ids }, userId });
+	await releaseFollowers(
+		userId,
+		"trackerId",
+		ids.filter((id) => reached.has(id)),
+		true,
+	);
+	await releaseFollowers(
+		userId,
+		"trackerId",
+		ids.filter((id) => !reached.has(id)),
+		false,
+	);
+	await clearDependencies(userId, "tracker", ids);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -448,5 +486,27 @@ export async function deleteProgressEntry(
 
 	// Already gone is the outcome this asked for, not a failure.
 	await current.entries.deleteOne({ entryId, trackerId, userId });
+	await refreshCurrentValue(current, userId, trackerId, tracker.startValue);
+}
+
+/**
+ * Delete several readings at once — a pick of them — in one write, the
+ * tracker's figures worked out again once rather than once each. Any already
+ * gone are simply skipped.
+ */
+export async function deleteProgressEntries(
+	userId: string,
+	trackerId: string,
+	entryIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+
+	const tracker = await requireTracker(current, userId, trackerId);
+
+	await current.entries.deleteMany({
+		entryId: { $in: [...entryIds] },
+		trackerId,
+		userId,
+	});
 	await refreshCurrentValue(current, userId, trackerId, tracker.startValue);
 }

@@ -95,3 +95,12 @@ export async function deletePlan(
 	const current = await collections();
 	await current.plans.deleteOne({ planId, userId });
 }
+
+/** Delete several plans at once: a pick of them on the Plans screen. */
+export async function deletePlans(
+	userId: string,
+	planIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	await current.plans.deleteMany({ planId: { $in: [...planIds] }, userId });
+}

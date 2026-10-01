@@ -7,7 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SelectButton } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
+import { Pickable } from "#/components/common/pickable";
+import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
 import { CountdownFormDialog } from "#/components/countdowns/countdown-form-dialog";
@@ -16,6 +19,7 @@ import { formatDate } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { useFocusRow } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { countdownsQuery } from "#/queries/countdowns";
 import { primeQuery } from "#/queries/prime";
@@ -202,6 +206,8 @@ function CountdownTile({
 function CountdownsPage() {
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
+	// Several picked out, to change together; see `usePickMode`.
+	const pick = usePickMode();
 	const [isCreating, setIsCreating] = useState(false);
 	const [editing, setEditing] = useState<Countdown | null>(null);
 
@@ -229,12 +235,17 @@ function CountdownsPage() {
 					<Text color="secondary">The days you are heading for.</Text>
 				</VStack>
 				{canManageContent ? (
-					<Button
-						label="New countdown"
-						variant="primary"
-						icon={<Plus aria-hidden />}
-						onClick={() => setIsCreating(true)}
-					/>
+					<HStack gap={1} vAlign="center">
+						{(data ?? []).length === 0 ? null : (
+							<SelectButton onClick={pick.start} />
+						)}
+						<Button
+							label="New countdown"
+							variant="primary"
+							icon={<Plus aria-hidden />}
+							onClick={() => setIsCreating(true)}
+						/>
+					</HStack>
 				) : null}
 			</HStack>
 
@@ -252,13 +263,20 @@ function CountdownsPage() {
 					{upcoming.length === 0 ? null : (
 						<div className="thunderlist-countdown-grid">
 							{upcoming.map((countdown) => (
-								<CountdownTile
+								<Pickable
 									key={countdown.countdownId}
-									countdown={countdown}
-									now={now}
-									onOpen={open(countdown)}
-									isFocused={countdown.countdownId === focusId}
-								/>
+									isPicking={pick.isPicking}
+									isPicked={pick.picked.has(countdown.countdownId)}
+									label={countdown.title}
+									onToggle={() => pick.toggle(countdown.countdownId)}
+								>
+									<CountdownTile
+										countdown={countdown}
+										now={now}
+										onOpen={open(countdown)}
+										isFocused={countdown.countdownId === focusId}
+									/>
+								</Pickable>
 							))}
 						</div>
 					)}
@@ -269,19 +287,38 @@ function CountdownsPage() {
 							</Text>
 							<div className="thunderlist-countdown-grid">
 								{past.map((countdown) => (
-									<CountdownTile
+									<Pickable
 										key={countdown.countdownId}
-										countdown={countdown}
-										now={now}
-										onOpen={open(countdown)}
-										isFocused={countdown.countdownId === focusId}
-									/>
+										isPicking={pick.isPicking}
+										isPicked={pick.picked.has(countdown.countdownId)}
+										label={countdown.title}
+										onToggle={() => pick.toggle(countdown.countdownId)}
+									>
+										<CountdownTile
+											countdown={countdown}
+											now={now}
+											onOpen={open(countdown)}
+											isFocused={countdown.countdownId === focusId}
+										/>
+									</Pickable>
 								))}
 							</div>
 						</VStack>
 					)}
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<PickedItemsBar
+					of="countdown"
+					items={(data ?? []).flatMap((countdown) =>
+						pick.picked.has(countdown.countdownId)
+							? [{ id: countdown.countdownId }]
+							: [],
+					)}
+					onDone={pick.stop}
+				/>
+			) : null}
 
 			<CountdownFormDialog
 				isOpen={isCreating}

@@ -11,15 +11,19 @@ import { useMemo, useState } from "react";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
+	SelectButton,
 	saveArrangement,
 } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
+import { Pickable } from "#/components/common/pickable";
+import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
 import { useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { useNow } from "#/lib/use-now";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { plansQuery } from "#/queries/plans";
 import { primeQuery } from "#/queries/prime";
@@ -60,6 +64,8 @@ function PlansPage() {
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
+	// Several picked out, to change together; see `usePickMode`.
+	const pick = usePickMode();
 	const [isCreating, setIsCreating] = useState(false);
 	const [isArranging, setIsArranging] = useState(false);
 
@@ -105,28 +111,48 @@ function PlansPage() {
 							{plans.length} {plans.length === 1 ? "plan" : "plans"}
 						</Text>
 						{canManageContent ? (
-							<ArrangeButton onClick={() => setIsArranging(true)} />
+							<HStack gap={1} vAlign="center">
+								<SelectButton onClick={pick.start} />
+								<ArrangeButton onClick={() => setIsArranging(true)} />
+							</HStack>
 						) : null}
 					</HStack>
 					{plans.map((plan) => (
-						<ClickableCard
+						<Pickable
 							key={plan.planId}
+							isPicking={pick.isPicking}
+							isPicked={pick.picked.has(plan.planId)}
 							label={plan.title}
-							href={`/plans/${plan.planId}`}
-							padding={3}
+							onToggle={() => pick.toggle(plan.planId)}
 						>
-							<VStack gap={1}>
-								<Text weight="medium" maxLines={1}>
-									{plan.title}
-								</Text>
-								<Text type="supporting">
-									Updated {dayOf(plan.updatedAt)} · {sizeOf(plan)}
-								</Text>
-							</VStack>
-						</ClickableCard>
+							<ClickableCard
+								label={plan.title}
+								href={`/plans/${plan.planId}`}
+								padding={3}
+							>
+								<VStack gap={1}>
+									<Text weight="medium" maxLines={1}>
+										{plan.title}
+									</Text>
+									<Text type="supporting">
+										Updated {dayOf(plan.updatedAt)} · {sizeOf(plan)}
+									</Text>
+								</VStack>
+							</ClickableCard>
+						</Pickable>
 					))}
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<PickedItemsBar
+					of="plan"
+					items={plans.flatMap((plan) =>
+						pick.picked.has(plan.planId) ? [{ id: plan.planId }] : [],
+					)}
+					onDone={pick.stop}
+				/>
+			) : null}
 
 			<ArrangeDialog
 				isOpen={isArranging}

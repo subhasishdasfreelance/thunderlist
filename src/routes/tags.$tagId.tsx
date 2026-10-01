@@ -62,8 +62,10 @@ import {
 } from "#/functions/tag.functions";
 import {
 	applyBatched,
+	assignAlike,
 	createTagResolver,
 	createTasks,
+	moveAllToStage,
 	moveManyToBacklog,
 	moveToBacklog,
 	resolveChecklistName,
@@ -123,6 +125,7 @@ import { trackersQuery } from "#/queries/trackers";
 import {
 	checklistStages,
 	nextStageId,
+	sharedStages,
 	specialChecklist,
 	stageProgress,
 } from "#/schemas/checklist";
@@ -217,7 +220,9 @@ function TagDetailPage() {
 	// The tasks a tag is being put on: the one pointed at, or every one
 	// picked out; see `TagPickerDialog`.
 	const [tagging, setTagging] = useState<ReadonlyArray<Task> | null>(null);
-	const [assigning, setAssigning] = useState<Task | null>(null);
+	// The tasks being given to people: the one pointed at, or every one
+	// picked out; see `AssignDialog`.
+	const [assigning, setAssigning] = useState<ReadonlyArray<Task> | null>(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
 	const [isDeletingTag, setIsDeletingTag] = useState(false);
@@ -544,6 +549,25 @@ function TagDetailPage() {
 		clear();
 	}
 
+	// The stages to move them to, where every one's checklist has the same.
+	const pickedStages =
+		sharedStages(
+			pickedEntries.map(({ checklistId }) => stagesFor(checklistId)),
+		) ?? undefined;
+
+	/** Every picked task to one stage of its checklist's; see `sharedStages`. */
+	function moveTo(target: string) {
+		moveAllToStage(
+			apply,
+			pickedEntries.map(({ task, checklistId }) => ({
+				task,
+				stages: stagesFor(checklistId),
+			})),
+			target,
+		);
+		clear();
+	}
+
 	/** Every picked task done that can be made done by hand. */
 	function finish() {
 		applyBatched(apply, (collect) => {
@@ -710,7 +734,7 @@ function TagDetailPage() {
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving([entry]),
 					onDelete: () => setPendingDelete(task),
-					onAssign: team === null ? undefined : () => setAssigning(task),
+					onAssign: team === null ? undefined : () => setAssigning([task]),
 					onToggleMine:
 						space?.team == null
 							? undefined
@@ -1127,6 +1151,8 @@ function TagDetailPage() {
 							? moveOn
 							: undefined
 					}
+					stages={pickedStages}
+					onMoveTo={moveTo}
 					onDone={
 						pickedEntries.some(({ task }) => isFinishable(task))
 							? finish
@@ -1165,6 +1191,7 @@ function TagDetailPage() {
 							? undefined
 							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
+					onAssign={team === null ? undefined : () => setAssigning(pickedTasks)}
 					onEdit={() =>
 						pickedTasks.length === 1
 							? setRenaming(pickedTasks[0])
@@ -1179,9 +1206,9 @@ function TagDetailPage() {
 				onOpenChange={(isOpen) => {
 					if (!isOpen) setAssigning(null);
 				}}
-				task={assigning}
+				tasks={assigning}
 				onSubmit={(assignees) => {
-					if (assigning) updateTask(apply, assigning.taskId, { assignees });
+					if (assigning) assignAlike(apply, assigning, assignees);
 					setAssigning(null);
 				}}
 			/>

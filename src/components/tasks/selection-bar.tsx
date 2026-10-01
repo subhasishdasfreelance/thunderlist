@@ -9,11 +9,11 @@ import {
 	Pencil,
 	Tag as TagIcon,
 	Trash2,
+	Users,
 	X,
 } from "lucide-react";
-import { useEffect } from "react";
 import { StageDot } from "#/components/common/stage-dot";
-import { isTyping, PRESSABLE } from "#/lib/use-row-shortcuts";
+import { usePickKeys } from "#/lib/use-pick-keys";
 import { type Stage, stageColor } from "#/schemas/checklist";
 import { TASK_SHORTCUTS } from "./task-actions";
 
@@ -63,6 +63,7 @@ export function SelectionBar({
 	onToggleImportant,
 	onSetType,
 	onToggleMine,
+	onAssign,
 	onClear,
 }: {
 	count: number;
@@ -100,6 +101,8 @@ export function SelectionBar({
 	onSetType: () => void;
 	/** Take them all on, or give them all back. Left out outside a team. */
 	onToggleMine?: () => void;
+	/** Give them all to people, picked in a dialog. Left out outside a team. */
+	onAssign?: () => void;
 	onClear: () => void;
 }) {
 	const keys: Record<string, (() => void) | undefined> = {
@@ -118,36 +121,7 @@ export function SelectionBar({
 		[TASK_SHORTCUTS.delete]: onDelete,
 	};
 
-	useEffect(() => {
-		function handle(event: KeyboardEvent) {
-			const run = keys[event.key.toLowerCase()];
-			if (run === undefined) return;
-			if (event.metaKey || event.ctrlKey || event.altKey) return;
-			if (isTyping(event.target)) return;
-			if (
-				event.target instanceof Element &&
-				event.target.closest('dialog, [role="dialog"]')
-			) {
-				return;
-			}
-			// Space and Enter press the button or box focus is on, as ever.
-			if (
-				(event.key === " " || event.key === "Enter") &&
-				event.target instanceof Element &&
-				event.target.closest(PRESSABLE) !== null
-			) {
-				return;
-			}
-
-			// Ahead of the row under the pointer, which would act on itself too.
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			run();
-		}
-
-		window.addEventListener("keydown", handle, true);
-		return () => window.removeEventListener("keydown", handle, true);
-	});
+	usePickKeys(keys);
 
 	return (
 		<div
@@ -217,6 +191,16 @@ export function SelectionBar({
 					size="sm"
 					icon={<TagIcon aria-hidden />}
 					onClick={onAddTag}
+				/>
+			)}
+
+			{onAssign === undefined ? null : (
+				<Button
+					label="Assign"
+					variant="secondary"
+					size="sm"
+					icon={<Users aria-hidden />}
+					onClick={onAssign}
 				/>
 			)}
 

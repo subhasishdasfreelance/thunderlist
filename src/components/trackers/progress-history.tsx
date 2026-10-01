@@ -38,6 +38,7 @@ export function ProgressHistory({
 	onEdit,
 	onDelete,
 	focusEntryId,
+	picked,
 }: {
 	/** Oldest first, as stored; this reverses them for display. */
 	entries: ReadonlyArray<ProgressEntry>;
@@ -55,6 +56,11 @@ export function ProgressHistory({
 	 * is scrolled to and ringed; see `useFocusRow`.
 	 */
 	focusEntryId?: string;
+	/**
+	 * The readings picked out, to be deleted together; see `useTaskSelection`
+	 * and `PickBar`.
+	 */
+	picked?: ReadonlySet<string>;
 }) {
 	const history = [...entries].reverse();
 	const paging = usePages(
@@ -104,6 +110,7 @@ export function ProgressHistory({
 								className="thunderlist-row thunderlist-entry-row"
 								data-entry-id={entry.entryId}
 								data-focused={entry.entryId === focusEntryId}
+								data-picked={picked?.has(entry.entryId) === true}
 								onMouseEnter={() => setHovered(entry)}
 								onMouseLeave={() => setHovered(null)}
 							>

@@ -85,3 +85,15 @@ export async function deleteCountdown(
 	const current = await collections();
 	await current.countdowns.deleteOne({ countdownId, userId });
 }
+
+/** Delete several countdowns at once: a pick of them on their screen. */
+export async function deleteCountdowns(
+	userId: string,
+	countdownIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	await current.countdowns.deleteMany({
+		countdownId: { $in: [...countdownIds] },
+		userId,
+	});
+}

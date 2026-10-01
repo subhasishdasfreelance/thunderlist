@@ -1,10 +1,12 @@
 import * as v from "valibot";
+import { accessSchema } from "./access";
 import { arrangementInputSchema } from "./arrangement";
 import {
 	checklistIdInputSchema,
 	createChecklistInputSchema,
 	updateChecklistInputSchema,
 } from "./checklist";
+import { idSchema } from "./common";
 import {
 	countdownIdInputSchema,
 	createCountdownInputSchema,
@@ -39,6 +41,7 @@ import { taskTypesInputSchema } from "./task-type";
 import {
 	createProgressEntryInputSchema,
 	createTrackerInputSchema,
+	deleteProgressEntriesInputSchema,
 	deleteProgressEntryInputSchema,
 	trackerIdInputSchema,
 	updateProgressEntryInputSchema,
@@ -54,6 +57,28 @@ const taskMoveSchema = v.object({
 	kind: v.literal("task.move"),
 	...moveTaskInputSchema.entries,
 });
+
+/** What can be picked out on its screen and deleted together; see `PickBar`. */
+export const PICKABLE_KINDS = [
+	"checklist",
+	"tracker",
+	"tag",
+	"plan",
+	"countdown",
+] as const;
+
+export type PickableKind = (typeof PICKABLE_KINDS)[number];
+
+/** Of those, what has an access list, to be shared together. */
+export const SHAREABLE_KINDS = ["checklist", "tracker", "tag"] as const;
+
+export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
+
+const pickedIdsSchema = v.pipe(
+	v.array(idSchema),
+	v.minLength(1, "Pick at least one"),
+	v.maxLength(500, "Too many at once"),
+);
 
 /**
  * One change to the data, as the browser asks for it.
@@ -138,6 +163,10 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("entry.delete"),
 		...deleteProgressEntryInputSchema.entries,
 	}),
+	v.object({
+		kind: v.literal("entry.deleteMany"),
+		...deleteProgressEntriesInputSchema.entries,
+	}),
 
 	v.object({ kind: v.literal("tag.create"), ...createTagInputSchema.entries }),
 	v.object({ kind: v.literal("tag.update"), ...updateTagInputSchema.entries }),
@@ -189,6 +218,23 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("reminder.set"),
 		...setReminderInputSchema.entries,
+	}),
+
+	/**
+	 * Several checklists, trackers, tags, plans or countdowns picked out on
+	 * their screen, deleted in one request; see `deleteItems`.
+	 */
+	v.object({
+		kind: v.literal("items.delete"),
+		of: v.picklist(PICKABLE_KINDS),
+		ids: pickedIdsSchema,
+	}),
+	/** Several of them given one access list; see `shareItems`. */
+	v.object({
+		kind: v.literal("items.share"),
+		of: v.picklist(SHAREABLE_KINDS),
+		ids: pickedIdsSchema,
+		access: accessSchema,
 	}),
 ]);
 

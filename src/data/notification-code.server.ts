@@ -17,7 +17,12 @@ import type {
 	NotifyInput,
 } from "#/schemas/notification-code";
 import { roleCan, storedRole } from "#/schemas/team";
-import { MESSAGE_TTL, pushPublicKey, sendTo } from "./reminder.server";
+import {
+	MESSAGE_TTL,
+	pushPublicKey,
+	sendTo,
+	sendToEach,
+} from "./reminder.server";
 
 /**
  * Who a stored code notifies. One made before a code could name several
@@ -185,13 +190,18 @@ export async function notifyWithCode(
 		image: input.image,
 	};
 
-	let people = 0;
-	let devices = 0;
-	for (const devicesOf of recipients) {
-		const sent = await sendTo(devicesOf, message, MESSAGE_TTL);
-		if (sent > 0) people += 1;
-		devices += sent;
-	}
+	// One device is sent to as itself; people, all their devices in one go.
+	const { people, devices } =
+		to.kind === "device"
+			? await sendTo(recipients[0], message, MESSAGE_TTL).then((sent) => ({
+					people: sent > 0 ? 1 : 0,
+					devices: sent,
+				}))
+			: await sendToEach(
+					recipients.map((each) => each.email),
+					message,
+					MESSAGE_TTL,
+				);
 
 	await current.notificationCodes.updateOne(
 		{ code: found.code },

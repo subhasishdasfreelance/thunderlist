@@ -65,7 +65,6 @@ import {
 	clearDependencies,
 	ensureBacklog,
 	ensureInbox,
-	removeTagFromTasks,
 	withTrackedCompletion,
 } from "./checklist.server";
 import { nextNumber } from "./numbers.server";
@@ -890,31 +889,40 @@ async function renameInTitles(
  * that no longer exists would render as nothing at all.
  */
 export async function deleteTag(userId: string, tagId: string): Promise<void> {
-	const current = await collections();
+	await deleteTags(userId, [tagId]);
+}
 
-	const tag = await current.tags.findOne(
-		{ tagId, userId },
-		{ projection: { _id: 0, special: 1 } },
+/**
+ * Delete several tags at once — a pick of them on the Tags screen — taking
+ * them off everything carrying them in one write each for tasks, checklists
+ * and trackers. Today is never among them; asked for, it refuses the lot.
+ */
+export async function deleteTags(
+	userId: string,
+	tagIds: ReadonlyArray<string>,
+): Promise<void> {
+	const current = await collections();
+	const ids = [...tagIds];
+
+	const special = await current.tags.findOne(
+		{ tagId: { $in: ids }, userId, special: { $ne: null } },
+		{ projection: { _id: 1 } },
 	);
-	if (tag?.special) {
+	if (special) {
 		throw new AppError(
 			"invalid_data",
 			"This tag can be renamed, but not deleted.",
 		);
 	}
 
-	await removeTagFromTasks(userId, tagId);
+	const carrying = { userId, tagIds: { $in: ids } };
+	const off = { $pull: { tagIds: { $in: ids } } };
 	await Promise.all([
-		current.checklists.updateMany(
-			{ userId, tagIds: tagId },
-			{ $pull: { tagIds: tagId } },
-		),
-		current.trackers.updateMany(
-			{ userId, tagIds: tagId },
-			{ $pull: { tagIds: tagId } },
-		),
+		current.tasks.updateMany(carrying, off),
+		current.checklists.updateMany(carrying, off),
+		current.trackers.updateMany(carrying, off),
 	]);
 	// Already gone is the outcome this asked for, not a failure.
-	await current.tags.deleteOne({ tagId, userId });
-	await clearDependencies(userId, "tag", [tagId]);
+	await current.tags.deleteMany({ tagId: { $in: ids }, userId });
+	await clearDependencies(userId, "tag", ids);
 }

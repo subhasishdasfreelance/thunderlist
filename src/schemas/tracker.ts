@@ -257,3 +257,13 @@ export const deleteProgressEntryInputSchema = v.object({
 	trackerId: idSchema,
 	entryId: idSchema,
 });
+
+/** Deleting several of a tracker's readings in one request: a pick of them. */
+export const deleteProgressEntriesInputSchema = v.object({
+	trackerId: idSchema,
+	entryIds: v.pipe(
+		v.array(idSchema),
+		v.minLength(1, "Pick at least one reading"),
+		v.maxLength(10_000, "Too many readings at once"),
+	),
+});

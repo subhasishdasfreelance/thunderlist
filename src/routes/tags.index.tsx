@@ -12,10 +12,13 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
+	SelectButton,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
+import { Pickable } from "#/components/common/pickable";
+import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
@@ -24,6 +27,7 @@ import { UntaggedCard } from "#/components/tags/untagged-card";
 import { createTag, useApplyChange } from "#/lib/changes";
 import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { arrangementsQuery } from "#/queries/space";
@@ -74,6 +78,8 @@ function TagsPage() {
 	const [isCreating, setIsCreating] = useState(false);
 	const [isArranging, setIsArranging] = useState(false);
 	const { canManageContent } = usePermissions();
+	// Several picked out, to change together; see `usePickMode`.
+	const pick = usePickMode();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		tagSummariesQuery(),
@@ -152,7 +158,10 @@ function TagsPage() {
 										onChange={arranged.setOrder}
 									/>
 									{canManageContent ? (
-										<ArrangeButton onClick={() => setIsArranging(true)} />
+										<>
+											<SelectButton onClick={pick.start} />
+											<ArrangeButton onClick={() => setIsArranging(true)} />
+										</>
 									) : null}
 								</HStack>
 							</HStack>
@@ -160,6 +169,12 @@ function TagsPage() {
 								items={arranged.ordered}
 								idOf={tagIdOf}
 								render={(tag) => <TagCard tag={tag} />}
+								pick={{
+									mode: pick,
+									labelOf: (tag) => `#${tag.name}`,
+									// Today is everyone's, and stays.
+									isPickable: (tag) => tag.special == null,
+								}}
 							/>
 						</>
 					)}
@@ -172,10 +187,31 @@ function TagsPage() {
 					) : index.isPending ? (
 						<SectionSpinner label="Loading untagged tasks…" />
 					) : untagged.length === 0 ? null : (
-						<UntaggedCard tasks={untagged} />
+						// Not a tag, so nothing to pick.
+						<Pickable
+							isPicking={pick.isPicking}
+							isPicked={false}
+							isPickable={false}
+							label="Untagged"
+							onToggle={() => {}}
+						>
+							<UntaggedCard tasks={untagged} />
+						</Pickable>
 					)}
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<PickedItemsBar
+					of="tag"
+					items={tags.flatMap((tag) =>
+						pick.picked.has(tag.tagId)
+							? [{ id: tag.tagId, access: tag.access }]
+							: [],
+					)}
+					onDone={pick.stop}
+				/>
+			) : null}
 
 			<ArrangeDialog
 				isOpen={isArranging}

@@ -16,7 +16,9 @@ import { TasksEditDialog } from "#/components/tasks/tasks-edit-dialog";
 import { AssignDialog } from "#/components/teams/assign-dialog";
 import {
 	applyBatched,
+	assignAlike,
 	createTagResolver,
+	moveAllToStage,
 	moveManyToBacklog,
 	moveToBacklog,
 	resolveTags,
@@ -40,6 +42,7 @@ import { tagsQuery } from "#/queries/tags";
 import {
 	checklistStages,
 	nextStageId,
+	sharedStages,
 	specialChecklist,
 } from "#/schemas/checklist";
 
@@ -84,7 +87,11 @@ export function IndexTaskList({
 	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
 	// Its title stays on the question while it closes; see `useHeld`.
 	const shownDelete = useHeld(pendingDelete);
-	const [assigning, setAssigning] = useState<TaggedTask | null>(null);
+	// The tasks being given to people: the one pointed at, or every one
+	// picked out; see `AssignDialog`.
+	const [assigning, setAssigning] = useState<ReadonlyArray<TaggedTask> | null>(
+		null,
+	);
 	const [typing, setTyping] = useState<ReadonlyArray<TaggedTask> | null>(null);
 	// The tasks a tag is being put on, moved or deleted: the one pointed at,
 	// or every one picked out; see `SelectionBar`.
@@ -125,6 +132,24 @@ export function IndexTaskList({
 				if (next !== null) updateTask(collect, task.taskId, { stageId: next });
 			}
 		});
+		clear();
+	}
+
+	// The stages to move them to, where every one's checklist has the same.
+	const pickedStages =
+		sharedStages(pickedTasks.map((task) => stagesFor(task.checklistId))) ??
+		undefined;
+
+	/** Every picked task to one stage of its checklist's; see `sharedStages`. */
+	function moveTo(target: string) {
+		moveAllToStage(
+			apply,
+			pickedTasks.map((task) => ({
+				task,
+				stages: stagesFor(task.checklistId),
+			})),
+			target,
+		);
 		clear();
 	}
 
@@ -199,7 +224,7 @@ export function IndexTaskList({
 					onRename: () => setRenaming(task),
 					onMove: () => setMoving([task]),
 					onDelete: () => setPendingDelete(task),
-					onAssign: team === null ? undefined : () => setAssigning(task),
+					onAssign: team === null ? undefined : () => setAssigning([task]),
 					onToggleMine:
 						space?.team == null
 							? undefined
@@ -238,6 +263,8 @@ export function IndexTaskList({
 							? moveOn
 							: undefined
 					}
+					stages={pickedStages}
+					onMoveTo={moveTo}
 					onDone={pickedTasks.some(isFinishable) ? finish : undefined}
 					onMoveToChecklist={
 						canManageContent ? () => setMoving(pickedTasks) : undefined
@@ -267,6 +294,7 @@ export function IndexTaskList({
 							? undefined
 							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
+					onAssign={team === null ? undefined : () => setAssigning(pickedTasks)}
 					onEdit={() =>
 						pickedTasks.length === 1
 							? setRenaming(pickedTasks[0])
@@ -281,9 +309,9 @@ export function IndexTaskList({
 				onOpenChange={(open) => {
 					if (!open) setAssigning(null);
 				}}
-				task={assigning}
+				tasks={assigning}
 				onSubmit={(assignees) => {
-					if (assigning) updateTask(apply, assigning.taskId, { assignees });
+					if (assigning) assignAlike(apply, assigning, assignees);
 					setAssigning(null);
 				}}
 			/>

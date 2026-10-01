@@ -22,6 +22,7 @@ import { FadeImage } from "#/components/common/fade-image";
 import { numberTitle } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
+import { PickBar } from "#/components/common/pick-bar";
 import {
 	type ChartPoint,
 	ProgressChart,
@@ -60,8 +61,10 @@ import {
 	trackerProgress,
 } from "#/lib/progress";
 import { withInlineTag } from "#/lib/tags/inline-tags";
+import { useHeld } from "#/lib/use-held";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
+import { useTaskSelection } from "#/lib/use-task-selection";
 import { useItemPermissions, useSpace } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
@@ -127,6 +130,11 @@ function TrackerDetailPage() {
 	});
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingEntry, setPendingEntry] = useState<ProgressEntry | null>(null);
+	// Readings picked out to delete together, asked about first; see `PickBar`.
+	const { picked, clear } = useTaskSelection("entry");
+	const [deletingPicked, setDeletingPicked] =
+		useState<ReadonlyArray<string> | null>(null);
+	const shownDeletingPicked = useHeld(deletingPicked);
 	const [isDeletingTracker, setIsDeletingTracker] = useState(false);
 	const [isMessaging, setIsMessaging] = useState(false);
 	// In a team, what one person logged rather than everyone's; see `MemberFilter`.
@@ -201,6 +209,10 @@ function TrackerDetailPage() {
 					detail.startValue,
 				);
 	const who = team?.members.find((member) => member.email === person);
+	// The readings on show that are picked out; see `PickBar`.
+	const pickedEntries = (theirs ?? entries).filter((entry) =>
+		picked.has(entry.entryId),
+	);
 	const personNote =
 		person === undefined
 			? null
@@ -490,9 +502,45 @@ function TrackerDetailPage() {
 						canDelete={canManageContent}
 						onEdit={(entry) => setEntryDialog({ mode: "edit", entry })}
 						onDelete={setPendingEntry}
+						picked={canManageContent ? picked : undefined}
 					/>
 				)}
 			</VStack>
+
+			{/* Deleting readings is all a pick is for, and a project manager's. */}
+			{!canManageContent || pickedEntries.length === 0 ? null : (
+				<PickBar
+					count={pickedEntries.length}
+					noun={["reading", "readings"]}
+					onDelete={() =>
+						setDeletingPicked(pickedEntries.map((entry) => entry.entryId))
+					}
+					onClear={clear}
+				/>
+			)}
+
+			<AlertDialog
+				isOpen={deletingPicked !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeletingPicked(null);
+				}}
+				title={`Delete ${shownDeletingPicked?.length ?? 0} ${
+					shownDeletingPicked?.length === 1 ? "reading" : "readings"
+				}?`}
+				description="Every reading picked out will be deleted."
+				actionLabel="Delete"
+				onAction={() => {
+					if (deletingPicked) {
+						apply({
+							kind: "entry.deleteMany",
+							trackerId,
+							entryIds: [...deletingPicked],
+						});
+					}
+					setDeletingPicked(null);
+					clear();
+				}}
+			/>
 
 			<EntryFormDialog
 				isOpen={entryDialog.mode !== "closed"}

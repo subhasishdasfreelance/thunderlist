@@ -16,10 +16,12 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
+	SelectButton,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
+import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { TrackerCard } from "#/components/trackers/tracker-card";
@@ -35,6 +37,7 @@ import { searchText } from "#/lib/filter-search";
 import { lagFraction } from "#/lib/progress";
 import { isAssignedTo } from "#/lib/tasks/tasks";
 import { useNow } from "#/lib/use-now";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { arrangementsQuery } from "#/queries/space";
@@ -101,6 +104,8 @@ function TrackersPage() {
 		});
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
+	// Several picked out, to change together; see `usePickMode`.
+	const pick = usePickMode();
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackersQuery(),
@@ -212,7 +217,10 @@ function TrackersPage() {
 								onChange={arranged.setOrder}
 							/>
 							{canManageContent ? (
-								<ArrangeButton onClick={() => setIsArranging(true)} />
+								<>
+									<SelectButton onClick={pick.start} />
+									<ArrangeButton onClick={() => setIsArranging(true)} />
+								</>
 							) : null}
 						</HStack>
 					</HStack>
@@ -227,9 +235,22 @@ function TrackersPage() {
 						items={arranged.ordered}
 						idOf={trackerIdOf}
 						render={(tracker) => <TrackerCard tracker={tracker} tags={tags} />}
+						pick={{ mode: pick, labelOf: (tracker) => tracker.title }}
 					/>
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<PickedItemsBar
+					of="tracker"
+					items={allTrackers.flatMap((tracker) =>
+						pick.picked.has(tracker.trackerId)
+							? [{ id: tracker.trackerId, access: tracker.access }]
+							: [],
+					)}
+					onDone={pick.stop}
+				/>
+			) : null}
 
 			<ArrangeDialog
 				isOpen={isArranging}

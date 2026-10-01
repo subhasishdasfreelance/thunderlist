@@ -319,12 +319,13 @@ export const MAX_TASKS_AT_ONCE = 10_000;
 
 /**
  * Adding many tasks to one checklist in one request: a pasted list, one task a
- * line. Each is a new task, so none carries a number to be put back.
+ * line, or tasks deleted together and put back by an undo — each of those
+ * with the number it had.
  */
 export const createTasksInputSchema = v.object({
 	checklistId: v.nullable(idSchema),
 	tasks: v.pipe(
-		v.array(v.omit(createTaskInputSchema, ["checklistId", "number"])),
+		v.array(v.omit(createTaskInputSchema, ["checklistId"])),
 		v.minLength(1, "Add at least one task"),
 		v.maxLength(MAX_TASKS_AT_ONCE, "Too many tasks at once"),
 	),

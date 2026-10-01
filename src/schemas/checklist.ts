@@ -256,6 +256,26 @@ export function tagStageKey(
 }
 
 /**
+ * The stages every one of these checklists goes through, where they all go
+ * through the same — named alike, in the same order — or `null`. Tasks from
+ * several checklists picked at once can be moved to one stage only then; see
+ * `SelectionBar`.
+ */
+export function sharedStages(
+	lists: ReadonlyArray<ReadonlyArray<Stage>>,
+): ReadonlyArray<Stage> | null {
+	const [first] = lists;
+	if (first === undefined) return null;
+	const same = (stages: ReadonlyArray<Stage>) =>
+		stages.length === first.length &&
+		stages.every(
+			(stage, at) =>
+				stage.stageId === first[at].stageId && stage.name === first[at].name,
+		);
+	return lists.every(same) ? first : null;
+}
+
+/**
  * The stage a task goes on to from the one it is at, or `null` once it is
  * done. A task following a tracker or another checklist is finished by that,
  * never by hand, so it goes no further than the stage before done.

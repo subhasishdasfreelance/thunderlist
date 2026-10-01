@@ -9,11 +9,14 @@ import {
 	Check,
 	Clock,
 	GripVertical,
+	ListChecks,
 	type LucideIcon,
 	TriangleAlert,
 } from "lucide-react";
 import { type ReactNode, useMemo, useSyncExternalStore } from "react";
+import { Pickable } from "#/components/common/pickable";
 import type { ApplyChange } from "#/lib/changes";
+import type { usePickMode } from "#/lib/use-pick-mode";
 import { arrangementsQuery } from "#/queries/space";
 import {
 	type ArrangedList,
@@ -167,17 +170,61 @@ export function ArrangedCards<T>({
 	items,
 	idOf,
 	render,
+	pick,
 }: {
 	items: ReadonlyArray<T>;
 	idOf: (item: T) => string;
 	render: (item: T) => ReactNode;
+	/**
+	 * Picking cards to do something to all of them, while the screen is; see
+	 * `usePickMode`. `labelOf` names a card for a screen reader.
+	 */
+	pick?: {
+		mode: ReturnType<typeof usePickMode>;
+		labelOf: (item: T) => string;
+		isPickable?: (item: T) => boolean;
+	};
 }) {
 	return (
 		<VStack gap={3}>
-			{items.map((item) => (
-				<div key={idOf(item)}>{render(item)}</div>
-			))}
+			{items.map((item) => {
+				const id = idOf(item);
+				return (
+					<div key={id}>
+						{pick === undefined ? (
+							render(item)
+						) : (
+							<Pickable
+								isPicking={pick.mode.isPicking}
+								isPicked={pick.mode.picked.has(id)}
+								isPickable={pick.isPickable?.(item) ?? true}
+								label={pick.labelOf(item)}
+								onToggle={() => pick.mode.toggle(id)}
+							>
+								{render(item)}
+							</Pickable>
+						)}
+					</div>
+				);
+			})}
 		</VStack>
+	);
+}
+
+/**
+ * Starts picking cards, to delete or change several at once; see
+ * `usePickMode`.
+ */
+export function SelectButton({ onClick }: { onClick: () => void }) {
+	return (
+		<IconButton
+			label="Select"
+			tooltip="Select several"
+			variant="ghost"
+			size="sm"
+			icon={<ListChecks aria-hidden />}
+			onClick={onClick}
+		/>
 	);
 }
 

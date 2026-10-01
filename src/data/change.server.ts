@@ -30,6 +30,7 @@ import {
 	createTask,
 	createTasks,
 	deleteChecklist,
+	deleteChecklists,
 	deleteTask,
 	deleteTasks,
 	moveTask,
@@ -40,10 +41,12 @@ import {
 import {
 	createCountdown,
 	deleteCountdown,
+	deleteCountdowns,
 	updateCountdown,
 } from "./countdown.server";
-import { createPlan, deletePlan, updatePlan } from "./plan.server";
-import { sendAssigned, setReminder } from "./reminder.server";
+import { shareItems } from "./items.server";
+import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
+import { sendAssigned, sendAssignedMany, setReminder } from "./reminder.server";
 import {
 	createGroup,
 	deleteGroup,
@@ -51,13 +54,15 @@ import {
 	setTaskTypes,
 	updateGroup,
 } from "./settings.server";
-import { createTag, deleteTag, updateTag } from "./tag.server";
+import { createTag, deleteTag, deleteTags, updateTag } from "./tag.server";
 import type { Scope } from "./team.server";
 import {
 	createProgressEntry,
 	createTracker,
+	deleteProgressEntries,
 	deleteProgressEntry,
 	deleteTracker,
+	deleteTrackers,
 	updateProgressEntry,
 	updateTracker,
 } from "./tracker.server";
@@ -135,6 +140,10 @@ async function run(
 			await deleteProgressEntry(userId, change.trackerId, change.entryId);
 			return;
 
+		case "entry.deleteMany":
+			await deleteProgressEntries(userId, change.trackerId, change.entryIds);
+			return;
+
 		case "tag.create":
 			await createTag(userId, change);
 			return;
@@ -194,6 +203,30 @@ async function run(
 
 		case "reminder.set":
 			await setReminder(userId, actor, change);
+			return;
+
+		case "items.delete":
+			switch (change.of) {
+				case "checklist":
+					await deleteChecklists(userId, change.ids);
+					return;
+				case "tracker":
+					await deleteTrackers(userId, change.ids);
+					return;
+				case "tag":
+					await deleteTags(userId, change.ids);
+					return;
+				case "plan":
+					await deletePlans(userId, change.ids);
+					return;
+				case "countdown":
+					await deleteCountdowns(userId, change.ids);
+					return;
+			}
+			return;
+
+		case "items.share":
+			await shareItems(userId, change.of, change.ids, change.access);
 			return;
 	}
 }
@@ -347,6 +380,7 @@ async function assertAllowed(
 		case "entry.create":
 		case "entry.update":
 		case "entry.delete":
+		case "entry.deleteMany":
 			assertLevel(scope, "trackers", change.trackerId, "edit");
 			return;
 
@@ -376,6 +410,21 @@ async function assertAllowed(
 		case "tag.update":
 		case "tag.delete":
 			assertLevel(scope, "tags", change.tagId, "full");
+			return;
+
+		// All or nothing: one they may not change refuses the lot. Plans and
+		// countdowns have no list of their own; the role alone says.
+		case "items.delete":
+		case "items.share":
+			if (
+				change.of === "checklist" ||
+				change.of === "tracker" ||
+				change.of === "tag"
+			) {
+				for (const id of change.ids) {
+					assertLevel(scope, `${change.of}s`, id, "full");
+				}
+			}
 			return;
 
 		default:
@@ -430,6 +479,8 @@ function namedPeople(change: Change): ReadonlyArray<string> {
 				...(change.patch.assignees ?? []),
 				...listed(change.patch.access),
 			];
+		case "items.share":
+			return listed(change.access);
 		default:
 			return [];
 	}
@@ -592,6 +643,9 @@ function includingActor(scope: Scope, change: Change): Change {
 				: { ...change, patch: { ...change.patch, access: including(access) } };
 		}
 
+		case "items.share":
+			return { ...change, access: including(change.access) };
+
 		default:
 			return change;
 	}
@@ -692,20 +746,17 @@ async function applyBatch(
 
 	const result = await updateTasks(scope.ownerId, allowed);
 
-	// Saved whatever happens to the notifications; they are only news.
-	await Promise.all(
-		result.made.map(async (change) => {
+	// One notification a person, however many they were given; saved
+	// whatever happens to it, since it is only news.
+	await sendAssignedMany(
+		scope.ownerId,
+		scope.email,
+		result.made.flatMap((change) => {
 			const before = assignedBefore.get(change);
-			if (before === undefined) return;
-			await sendAssigned(
-				scope.ownerId,
-				scope.email,
-				change.taskId,
-				before,
-			).catch((error) =>
-				console.error("[thunderlist] assignment push failed:", error),
-			);
+			return before === undefined ? [] : [{ taskId: change.taskId, before }];
 		}),
+	).catch((error) =>
+		console.error("[thunderlist] assignment push failed:", error),
 	);
 
 	if (refusal === null) refusal = result.refusal;
