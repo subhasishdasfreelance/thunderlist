@@ -40,6 +40,7 @@ Not prioritized yet. Subtopics come in the next stage.
 | 17 | Durable workflows & background processing | Job queues, schedulers, long-running workflows, Temporal / Step Functions, sagas |
 | 18 | Classic system design case studies ★ Market | Interview-style designs: chat, feed, notifications, payments, rate limiter, etc. |
 | 19 | GenAI & agentic system design case studies ★ Market | Interview-style designs: enterprise RAG, copilot, multi-agent platform, AI gateway |
+| | Scaling architecture patterns (advanced) | Scaling 0 → millions of users, multi-region active-active, cell-based architecture, hot keys, thundering herd, autoscaling |
 
 ## 4. Data & Databases
 
@@ -50,119 +51,132 @@ Not prioritized yet. Subtopics come in the next stage.
 | 22 | Data engineering & pipeline orchestration | ETL/ELT, Airflow / Prefect, data quality, lineage |
 | 23 | Big data & lakehouse | Spark / PySpark, Databricks, Dask, Parquet / Delta, Snowflake |
 | 24 | Search & information retrieval | Elasticsearch, inverted indexes, BM25, relevance tuning |
+| | Advanced database internals & performance | Storage engines (B-tree vs LSM), WAL, query planner, vacuum, buffer cache, advanced tuning |
+| | Database scaling & high availability | Connection pooling, read replicas, sharding at scale, distributed SQL, multi-region, failover, backups / PITR |
 
-## 5. Frontend & Full-Stack
+## 5. Frontend, Full-Stack & AI Full-Stack
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 25 | React & Next.js | React 18+, hooks, state management, routing, SSR / RSC; awareness of Angular / Vue |
-| 26 | Frontend engineering at scale | Performance, bundling, testing, accessibility, component systems |
-| 27 | Real-time & streaming web | WebSockets, SSE, streaming responses, full-duplex apps |
-| 28 | UX & interfaces for AI products | Chat / copilot UIs, making agent work legible, review & approval queues, approval fatigue |
+| 25 | React & Next.js | React 18/19, hooks, state management, routing, SSR / RSC, server actions |
+| 26 | Angular | Standalone components, signals, RxJS, change detection, NgRx, routing, forms |
+| 27 | Vue.js & Nuxt | Composition API, reactivity, Pinia, Nuxt rendering modes |
+| 28 | React Native | Mobile apps with React Native & Expo, navigation, performance, releases |
+| 29 | Modern full-stack TypeScript stack | tRPC, Zod, Prisma / Drizzle, Auth.js, Turborepo, Vercel / edge deployment |
+| 30 | Frontend engineering at scale | Performance, bundling, testing, accessibility, component systems |
+| 31 | Real-time & streaming web | WebSockets, SSE, streaming responses, full-duplex apps |
+| 32 | UX & interfaces for AI products | Chat / copilot UIs, making agent work legible, review & approval queues, approval fatigue |
+| 33 | Full-stack AI application development ★ Market | End-to-end AI apps: streaming chat, RAG web apps, chat persistence, per-user isolation, quotas, AI in existing CRUD apps |
+| 34 | AI SDKs for TypeScript & Java ★ Market | Vercel AI SDK, LangChain.js, LangGraph.js, Mastra, Spring AI, LangChain4j |
 
 ## 6. AI / LLM Engineering
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 29 | LLM foundations | Transformers, tokenization, embeddings, sampling, context windows, reasoning models, failure modes |
-| 30 | Foundation model APIs & model selection | OpenAI, Anthropic, Bedrock, Azure OpenAI, Vertex, Hugging Face; open vs closed, small models, build vs buy |
-| 31 | Prompt & context engineering | Prompt design, context shaping, pruning, compaction, prompt chaining |
-| 32 | Structured outputs & tool calling | JSON schemas, function calling, parallel tool calls, validation |
-| 33 | RAG foundations | Chunking, embeddings, vector search, end-to-end RAG pipelines |
-| 34 | Advanced retrieval | Hybrid search, reranking, query rewriting, metadata and permission-aware filtering, response validation |
-| 35 | Vector databases & embedding strategies | Pinecone, Weaviate, Milvus, FAISS, pgvector, MongoDB Atlas vector search |
-| 36 | Knowledge graphs & GraphRAG | Graph modeling, graph-based retrieval, enterprise knowledge grounding |
-| 37 | Document AI & unstructured data ingestion | PDF parsing, OCR, LLM extraction / classification / summarization, provenance |
-| 38 | AI agent architecture & patterns | Agent loop, planning, ReAct, reflection, agentic vs deterministic workflows |
-| 39 | Multi-agent systems & orchestration | Supervisor / handoff patterns, agent-to-agent (A2A) communication |
-| 40 | Agent frameworks & SDKs | LangGraph, LangChain, LlamaIndex, CrewAI, AutoGen, Semantic Kernel, Claude Agent SDK, Google ADK, Strands |
-| 41 | Model Context Protocol (MCP) | MCP servers & clients, tool design, FastMCP, MCP infrastructure |
-| 42 | Agent memory & state management | Short/long-term memory, checkpoints, session state |
-| 43 | Human-in-the-loop design | Approval gates, escalation, confidence-based routing, review workflows |
-| 44 | LLM & agent evaluation | Offline eval sets, LLM-as-judge, RAG eval (Ragas), online eval, regression detection, error analysis |
-| 45 | LLM observability & tracing | LangSmith, Langfuse, agent traces, output quality monitoring |
-| 46 | Guardrails & reliability for non-deterministic systems | Validators, policy checks, self-correction, fallbacks, circuit breakers, graceful degradation |
-| 47 | LLM cost & latency optimization | Token economics, caching, model routing, batching, streaming |
-| 48 | Fine-tuning & model adaptation | PEFT / LoRA, continued pre-training, RLHF / preference tuning, synthetic data |
-| 49 | LLM serving & inference infrastructure | Open-source model deployment, GPU-aware scaling, vLLM / BentoML / Ray |
-| 50 | LLMOps & AI platform engineering | Prompt & model versioning, CI/CD for AI, AI gateways, AI control planes |
-| 51 | Multimodal & voice AI | Vision, speech-to-text, text-to-speech, speech-to-speech, realtime voice |
-| 52 | AI security | Prompt injection, output sanitization, least-privilege tool access, data leakage, red-teaming |
-| 53 | Responsible AI, governance & compliance | AI governance frameworks, auditability, AI regulation, Responsible AI practices |
+| 35 | LLM foundations | Transformers, tokenization, embeddings, sampling, context windows, reasoning models, failure modes |
+| 36 | Foundation model APIs & model selection | OpenAI, Anthropic, Bedrock, Azure OpenAI, Vertex, Hugging Face; open vs closed, small models, build vs buy |
+| 37 | Prompt & context engineering | Prompt design, context shaping, pruning, compaction, prompt chaining |
+| 38 | Structured outputs & tool calling | JSON schemas, function calling, parallel tool calls, validation |
+| 39 | RAG foundations | Chunking, embeddings, vector search, end-to-end RAG pipelines |
+| 40 | Advanced retrieval | Hybrid search, reranking, query rewriting, metadata and permission-aware filtering, response validation |
+| 41 | Vector databases & embedding strategies | Pinecone, Weaviate, Milvus, FAISS, pgvector, MongoDB Atlas vector search |
+| 42 | Knowledge graphs & GraphRAG | Graph modeling, graph-based retrieval, enterprise knowledge grounding |
+| 43 | Document AI & unstructured data ingestion | PDF parsing, OCR, LLM extraction / classification / summarization, provenance |
+| 44 | AI agent architecture & patterns | Agent loop, planning, ReAct, reflection, agentic vs deterministic workflows |
+| 45 | Multi-agent systems & orchestration | Supervisor / handoff patterns, agent-to-agent (A2A) communication |
+| 46 | Agent frameworks & SDKs | LangGraph, LangChain, LlamaIndex, CrewAI, AutoGen, Semantic Kernel, Claude Agent SDK, Google ADK, Strands |
+| 47 | Model Context Protocol (MCP) | MCP servers & clients, tool design, FastMCP, MCP infrastructure |
+| 48 | Agent memory & state management | Short/long-term memory, checkpoints, session state |
+| 49 | Human-in-the-loop design | Approval gates, escalation, confidence-based routing, review workflows |
+| 50 | LLM & agent evaluation | Offline eval sets, LLM-as-judge, RAG eval (Ragas), online eval, regression detection, error analysis |
+| 51 | LLM observability & tracing | LangSmith, Langfuse, agent traces, output quality monitoring |
+| 52 | Guardrails & reliability for non-deterministic systems | Validators, policy checks, self-correction, fallbacks, circuit breakers, graceful degradation |
+| 53 | LLM cost & latency optimization | Token economics, caching, model routing, batching, streaming |
+| 54 | Fine-tuning & model adaptation | PEFT / LoRA, continued pre-training, RLHF / preference tuning, synthetic data |
+| 55 | LLM serving & inference infrastructure | Open-source model deployment, GPU-aware scaling, vLLM / BentoML / Ray |
+| 56 | LLMOps & AI platform engineering | Prompt & model versioning, CI/CD for AI, AI gateways, AI control planes |
+| 57 | Multimodal & voice AI | Vision, speech-to-text, text-to-speech, speech-to-speech, realtime voice |
+| 58 | AI security | Prompt injection, output sanitization, least-privilege tool access, data leakage, red-teaming |
+| 59 | Responsible AI, governance & compliance | AI governance frameworks, auditability, AI regulation, Responsible AI practices |
 
 ## 7. Machine Learning
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 54 | ML fundamentals | Supervised / unsupervised learning, feature engineering, model evaluation |
-| 55 | Deep learning & PyTorch | Neural networks, training, PyTorch / TensorFlow |
-| 56 | Statistics & experimentation | Probability, hypothesis testing, experiment design, A/B testing |
-| 57 | Applied ML problem types | NLP, computer vision, ranking / recommendations, forecasting, anomaly detection |
-| 58 | MLOps | Experiment tracking (MLflow), model registry, feature stores, drift monitoring |
+| 60 | ML fundamentals | Supervised / unsupervised learning, feature engineering, model evaluation |
+| 61 | Deep learning & PyTorch | Neural networks, training, PyTorch / TensorFlow |
+| 62 | Statistics & experimentation | Probability, hypothesis testing, experiment design, A/B testing |
+| 63 | Applied ML problem types | NLP, computer vision, ranking / recommendations, forecasting, anomaly detection |
+| 64 | MLOps | Experiment tracking (MLflow), model registry, feature stores, drift monitoring |
 
 ## 8. AI-Driven SDLC
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 59 | AI coding agents in daily engineering | Claude Code, Copilot (incl. Cloud Agent), Cursor, Codex; effective agentic workflows |
-| 60 | Agentic SDLC & AI adoption at team / org level | AI usage guidelines, traceability, human validation, adoption metrics |
+| 65 | AI coding agents in daily engineering | Claude Code, Copilot (incl. Cloud Agent), Cursor, Codex; effective agentic workflows |
+| 66 | Agentic SDLC & AI adoption at team / org level | AI usage guidelines, traceability, human validation, adoption metrics |
 
 ## 9. Cloud, DevOps & Production
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 61 | AWS | ECS / EKS, Lambda, S3, DynamoDB, Step Functions, IAM, Bedrock / AgentCore, SageMaker |
-| 62 | Azure & GCP for AI workloads | Azure OpenAI, Azure AI Foundry, Azure ML, Vertex AI |
-| 63 | Docker & Kubernetes | Containers, Kubernetes, Helm, scaling |
-| 64 | Infrastructure as Code | Terraform, CloudFormation, reusable modules |
-| 65 | CI/CD & GitOps | GitHub Actions, Jenkins, release strategies, GitOps |
-| 66 | Observability | Logs, metrics, traces, OpenTelemetry, Datadog / Prometheus / Grafana |
-| 67 | Reliability engineering & incident management | SLOs, on-call, P1/P2 incidents, RCA, runbooks |
-| 68 | Cloud architecture & cost management | Networking, identity, environments, serverless, FinOps |
+| 67 | AWS | ECS / EKS, Lambda, S3, DynamoDB, Step Functions, IAM, Bedrock / AgentCore, SageMaker |
+| | AWS deep dive: IAM & security | Advanced IAM policies, cross-account roles, permission boundaries, KMS, security services |
+| | AWS deep dive: serverless | Lambda internals & tuning, API Gateway, Step Functions, EventBridge, serverless patterns |
+| | AWS deep dive: containers (ECS & EKS) | ECS / Fargate and EKS in production: networking, scaling, IAM for pods, deployments |
+| | AWS deep dive: data services | Aurora, DynamoDB advanced, ElastiCache, S3 at scale |
+| | AWS deep dive: generative AI (Bedrock & AgentCore) | Bedrock models, knowledge bases, agents, guardrails, AgentCore runtime / gateway / memory |
+| 68 | Azure & GCP for AI workloads | Azure OpenAI, Azure AI Foundry, Azure ML, Vertex AI |
+| 69 | Docker & Kubernetes | Containers, Kubernetes, Helm, scaling |
+| 70 | Infrastructure as Code | Terraform, CloudFormation, reusable modules |
+| 71 | CI/CD & GitOps | GitHub Actions, Jenkins, release strategies, GitOps |
+| 72 | Observability | Logs, metrics, traces, OpenTelemetry, Datadog / Prometheus / Grafana |
+| 73 | Reliability engineering & incident management | SLOs, on-call, P1/P2 incidents, RCA, runbooks |
+| 74 | Cloud architecture & cost management | Networking, identity, environments, serverless, FinOps |
 
 ## 10. Security
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 69 | Application & API security | OWASP Top 10, secure coding, threat modeling |
-| 70 | Identity & access management | OAuth2 / OIDC, JWT, SSO, RBAC / ABAC, multi-tenancy |
-| 71 | Data protection & privacy | Encryption, secrets (Vault), PII / PHI, HIPAA, GDPR, India DPDP |
+| 75 | Application & API security | OWASP Top 10, secure coding, threat modeling |
+| 76 | Identity & access management | OAuth2 / OIDC, JWT, SSO, RBAC / ABAC, multi-tenancy |
+| 77 | Data protection & privacy | Encryption, secrets (Vault), PII / PHI, HIPAA, GDPR, India DPDP |
 
 ## 11. Quality & Engineering Practices
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 72 | Testing strategy & test automation | Unit / integration / e2e, pytest, Jest, Cypress, testability, shift-left |
-| 73 | Engineering standards & code review | Coding standards, review practices, linting, monorepos, quality gates |
-| 74 | Debugging & production troubleshooting | Tracing issues across services, root-causing, working in unfamiliar codebases |
+| 78 | Testing strategy & test automation | Unit / integration / e2e, pytest, Jest, Cypress, testability, shift-left |
+| 79 | Engineering standards & code review | Coding standards, review practices, linting, monorepos, quality gates |
+| 80 | Debugging & production troubleshooting | Tracing issues across services, root-causing, working in unfamiliar codebases |
 
 ## 12. Leadership & Technical Decision-Making
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 75 | Technical leadership & strategy | Technical vision, roadmaps, ADRs, tech debt, trade-off decisions |
-| 76 | Mentoring & raising team capability | Coaching, design / code review as teaching, growing engineers to independence |
-| 77 | People management | Hiring, performance, career growth, team building |
-| 78 | Stakeholder management & influence | Influence without authority, cross-team alignment, executive / client communication |
-| 79 | Technical communication & writing | Design docs, RFCs, documentation, presenting, storytelling |
-| 80 | Execution & delivery management | Agile / SAFe, scoping, estimation, risks & dependencies, breaking work into increments |
-| 81 | Engineering excellence & org change | Standards adoption, RACI, change management, delivery metrics (DORA) |
-| 82 | Behavioral interviews & leadership stories ★ Market | STAR stories, conflict, failure, ownership, ambiguity |
+| 81 | Technical leadership & strategy | Technical vision, roadmaps, ADRs, tech debt, trade-off decisions |
+| 82 | Mentoring & raising team capability | Coaching, design / code review as teaching, growing engineers to independence |
+| 83 | People management | Hiring, performance, career growth, team building |
+| 84 | Stakeholder management & influence | Influence without authority, cross-team alignment, executive / client communication |
+| 85 | Technical communication & writing | Design docs, RFCs, documentation, presenting, storytelling |
+| 86 | Execution & delivery management | Agile / SAFe, scoping, estimation, risks & dependencies, breaking work into increments |
+| 87 | Engineering excellence & org change | Standards adoption, RACI, change management, delivery metrics (DORA) |
+| 88 | Behavioral interviews & leadership stories ★ Market | STAR stories, conflict, failure, ownership, ambiguity |
 
 ## 13. Product & Business
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 83 | Product thinking & discovery | Problem framing, user pain points, user value |
-| 84 | Requirements & product artifacts | User stories, acceptance criteria, PRDs, success metrics |
-| 85 | Prioritization & roadmapping | Backlog management, prioritization frameworks, roadmaps |
-| 86 | Prototype to production | PoC, MVP, hardening, iterating on real usage |
-| 87 | Forward-deployed & customer-facing engineering | Client discovery, demos, deploying into client environments, enablement & adoption |
-| 88 | Product metrics & ROI of AI | Telemetry, adoption, value dashboards, measuring AI impact |
-| 89 | Building internal platforms & tools | Tools and platforms others extend, low-code / template systems, developer platforms |
+| 89 | Product thinking & discovery | Problem framing, user pain points, user value |
+| 90 | Requirements & product artifacts | User stories, acceptance criteria, PRDs, success metrics |
+| 91 | Prioritization & roadmapping | Backlog management, prioritization frameworks, roadmaps |
+| 92 | Prototype to production | PoC, MVP, hardening, iterating on real usage |
+| 93 | Forward-deployed & customer-facing engineering | Client discovery, demos, deploying into client environments, enablement & adoption |
+| 94 | Product metrics & ROI of AI | Telemetry, adoption, value dashboards, measuring AI impact |
+| 95 | Building internal platforms & tools | Tools and platforms others extend, low-code / template systems, developer platforms |
 
 ## 14. Career Assets
 
 | # | Topic | Covers |
 |---|-------|--------|
-| 90 | Public technical presence ★ Market | Open-source contributions, portfolio projects, technical blogging, talks |
+| 96 | Public technical presence ★ Market | Open-source contributions, portfolio projects, technical blogging, talks |
