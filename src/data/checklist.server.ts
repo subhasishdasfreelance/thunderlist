@@ -21,7 +21,11 @@
  * yours, and a row belonging to someone else is simply not found.
  */
 
-import { type AnyBulkWriteOperation, MongoServerError } from "mongodb";
+import {
+	type AnyBulkWriteOperation,
+	MongoBulkWriteError,
+	MongoServerError,
+} from "mongodb";
 import { AppError } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import {
@@ -71,7 +75,7 @@ import {
 	type TaskPageView,
 	type TaskPatch,
 } from "#/schemas/task";
-import { nextNumber } from "./numbers.server";
+import { nextNumber, nextNumbers } from "./numbers.server";
 import { listTaskTypes } from "./settings.server";
 import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
 
@@ -1144,6 +1148,79 @@ export async function createTask(
 	}
 
 	return task;
+}
+
+/**
+ * Add many tasks to one checklist at once — a pasted list — with one read, one
+ * run of numbers and one write, rather than a round trip each.
+ *
+ * Asked again after a dropped connection, the ones already written are left
+ * as they are and only the rest are added, as `createTask` does for one.
+ */
+export async function createTasks(
+	userId: string,
+	checklistId: string | null,
+	inputs: ReadonlyArray<{
+		taskId: string;
+		title: string;
+		addedAt: string;
+		tagIds: Array<string>;
+		urgent: boolean;
+		important: boolean;
+		trackerId: string | null;
+		linkedChecklistId: string | null;
+	}>,
+): Promise<void> {
+	const current = await collections();
+	const listId = checklistId ?? (await ensureInbox(userId));
+	const checklist = await requireChecklist(current, userId, listId);
+
+	const written = await current.tasks
+		.find(
+			{ userId, taskId: { $in: inputs.map((input) => input.taskId) } },
+			{ projection: { _id: 0, taskId: 1 } },
+		)
+		.toArray();
+	const isWritten = new Set(written.map((task) => task.taskId));
+	const fresh = inputs.filter((input) => !isWritten.has(input.taskId));
+	if (fresh.length === 0) return;
+
+	const linked = new Set(
+		fresh.flatMap((input) => input.linkedChecklistId ?? []),
+	);
+	for (const linkedChecklistId of linked) {
+		await requireChecklist(current, userId, linkedChecklistId);
+		await assertCanContain(current, userId, listId, linkedChecklistId);
+	}
+
+	const first = await nextNumbers(current, userId, "task", fresh.length);
+	const tasks = fresh.map((input, index) => ({
+		taskId: input.taskId,
+		number: first + index,
+		title: input.title,
+		completed: false,
+		completedAt: null,
+		addedAt: input.addedAt || new Date().toISOString(),
+		tagIds: [...new Set([...input.tagIds, ...(checklist.tagIds ?? [])])],
+		urgent: input.urgent,
+		important: input.important,
+		trackerId: input.trackerId,
+		linkedChecklistId: input.linkedChecklistId,
+		userId,
+		checklistId: listId,
+	}));
+
+	try {
+		// Unordered, so one a retry overlapping the first try already wrote
+		// does not stop the rest.
+		await current.tasks.insertMany(tasks, { ordered: false });
+	} catch (error) {
+		if (!(error instanceof MongoBulkWriteError)) throw error;
+		const failures = [error.writeErrors].flat();
+		const isOnlyDuplicates =
+			failures.length > 0 && failures.every((each) => each.code === 11000);
+		if (!isOnlyDuplicates) throw error;
+	}
 }
 
 /**

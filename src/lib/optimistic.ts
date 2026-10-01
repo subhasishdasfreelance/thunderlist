@@ -837,11 +837,13 @@ function arriveOnTagPages(
 			},
 		});
 		if (!after.completed) {
-			addToTagPages(client, address, {
-				task: after,
-				checklistId,
-				checklistTitle: checklistTitleOf(client, checklistId),
-			});
+			addToTagPages(client, address, [
+				{
+					task: after,
+					checklistId,
+					checklistTitle: checklistTitleOf(client, checklistId),
+				},
+			]);
 		}
 	}
 }
@@ -1029,32 +1031,50 @@ function tasksIn(client: QueryClient, checklistId: string): Set<string> {
 function addToChecklistPages(
 	client: QueryClient,
 	checklistId: string,
-	task: Task,
+	tasks: ReadonlyArray<Task>,
 ): void {
-	// Where it arrives: the first stage for a new task, the last for one
-	// moved in already done.
-	const at = stageOf(task, stagesOf(client, checklistId));
+	const stages = stagesOf(client, checklistId);
 
 	for (const [key, page] of client.getQueriesData<StagePage>({
 		queryKey: queryKeys.checklistPages(checklistId),
 	})) {
-		if (!page || !matchesFilter(task, viewOf(key))) continue;
+		if (!page) continue;
 
-		const isHere = page.stageId === at;
+		const view = viewOf(key);
+		const counts = { ...page.counts };
+		const arriving: Array<Task> = [];
+		let isCounted = false;
+		for (const task of tasks) {
+			if (!matchesFilter(task, view)) continue;
+
+			// Where it arrives: the first stage for a new task, the last for one
+			// moved in already done.
+			const at = stageOf(task, stages);
+			counts[at] = (counts[at] ?? 0) + 1;
+			isCounted = true;
+			if (at === page.stageId) arriving.push(task);
+		}
+		if (!isCounted) continue;
+
 		client.setQueryData<StagePage>(key, {
 			...page,
-			counts: { ...page.counts, [at]: (page.counts[at] ?? 0) + 1 },
-			items: isHere && page.page === 1 ? [...page.items, task] : page.items,
-			total: isHere ? page.total + 1 : page.total,
+			counts,
+			// A long paste draws a page's worth of rows, not every one of them.
+			items:
+				page.page === 1
+					? [...page.items, ...arriving.slice(0, view.limit)]
+					: page.items,
+			total: page.total + arriving.length,
 		});
 	}
 
 	// The finished tasks are read whole, for the Done stage; see
 	// `checklistCompletedQuery`.
-	if (task.completed) {
+	const finished = tasks.filter((task) => task.completed);
+	if (finished.length > 0) {
 		client.setQueryData<Array<Task>>(
 			queryKeys.checklistCompleted(checklistId),
-			(done) => (done === undefined ? done : [task, ...done]),
+			(done) => (done === undefined ? done : [...finished, ...done]),
 		);
 	}
 }
@@ -1079,25 +1099,28 @@ function isAtTagStage(
 function addToTagPages(
 	client: QueryClient,
 	address: string,
-	entry: TagTaskEntry,
+	entries: ReadonlyArray<TagTaskEntry>,
 ): void {
 	for (const [key, page] of client.getQueriesData<Page<TagTaskEntry>>({
 		queryKey: queryKeys.tagOpen(address),
 	})) {
 		const view = viewOf(key);
-		if (
-			!page ||
-			view.assignee !== undefined ||
-			!matchesFilter(entry.task, view) ||
-			!isAtTagStage(client, entry, view)
-		) {
-			continue;
-		}
+		if (!page || view.assignee !== undefined) continue;
+
+		const arriving = entries.filter(
+			(entry) =>
+				matchesFilter(entry.task, view) && isAtTagStage(client, entry, view),
+		);
+		if (arriving.length === 0) continue;
 
 		client.setQueryData<Page<TagTaskEntry>>(key, {
 			...page,
-			items: page.page === 1 ? [...page.items, entry] : page.items,
-			total: page.total + 1,
+			// A long paste draws a page's worth of rows, not every one of them.
+			items:
+				page.page === 1
+					? [...page.items, ...arriving.slice(0, view.limit)]
+					: page.items,
+			total: page.total + arriving.length,
 		});
 	}
 }
@@ -1397,6 +1420,143 @@ function patchTag(
 	}
 }
 
+/** A task as `task.create` asks for it, less where it goes. */
+type NewTask = Omit<
+	Extract<Change, { kind: "task.create" }>,
+	"kind" | "checklistId"
+>;
+
+/**
+ * Tasks just added to one checklist, drawn wherever they will be listed.
+ *
+ * Each list is patched once for the lot rather than once a task, so a pasted
+ * list of ten thousand draws about as quickly as one task typed in.
+ */
+function addNewTasks(
+	client: QueryClient,
+	askedChecklistId: string | null,
+	added: ReadonlyArray<NewTask>,
+): void {
+	// One asked for in no checklist lands in the Inbox, at the Inbox's first
+	// stage, as the server files it; see `ensureInbox`. Drawn in the default
+	// stages instead, it would sit under a tab that is not there.
+	const checklistId =
+		askedChecklistId ??
+		specialChecklist(
+			client.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists) ?? [],
+			"inbox",
+		)?.checklistId ??
+		null;
+
+	// A task added to a checklist carries its tags as well, just as the server
+	// will store it; see `createTask`.
+	const inherited = checklistTagsOf(client, checklistId) ?? [];
+
+	const first = stagesOf(client, checklistId)[0].stageId;
+	const tasks: Array<Task> = added.map((each) => ({
+		taskId: each.taskId,
+		title: each.title,
+		completed: false,
+		completedAt: null,
+		trackerId: each.trackerId,
+		linkedChecklistId: each.linkedChecklistId,
+		addedAt: each.addedAt,
+		tagIds: [...new Set([...each.tagIds, ...inherited])],
+		urgent: each.urgent,
+		important: each.important,
+		stageId: first,
+		// Its old number, for one an undo puts back; see `createTask`.
+		...(each.number === undefined ? {} : { number: each.number }),
+	}));
+
+	for (const task of tasks) {
+		patchSummaries(client, null, null, task, checklistId);
+	}
+
+	if (checklistId !== null) {
+		client.setQueryData<ChecklistSummary>(
+			queryKeys.checklist(checklistId),
+			(checklist) =>
+				checklist
+					? {
+							...checklist,
+							progress: tasks.reduce(
+								(progress, task) => ({
+									...shift(progress, null, task),
+									byStage: moveStage(progress.byStage, null, first),
+								}),
+								checklist.progress,
+							),
+						}
+					: checklist,
+		);
+		addToChecklistPages(client, checklistId, tasks);
+	}
+
+	// Named when this browser holds the checklist — the Inbox, for one typed
+	// onto Today — and otherwise left to the refetch.
+	const checklistTitle = checklistTitleOf(client, checklistId);
+
+	// The Across lists screen gathers every task, so one just added is one of
+	// them whichever checklist it went into. Each of its pages keeps only a
+	// page's worth, so this stays quick however many there are.
+	for (const task of tasks) {
+		addToAcrossPages(client, {
+			...task,
+			checklistId,
+			checklistTitle,
+			caption: "",
+		});
+	}
+
+	// So does the search index, which Priority and search list from.
+	client.setQueryData<SearchIndex>(queryKeys.searchIndex, (index) => {
+		if (index === undefined) return index;
+
+		const known = new Set(index.tasks.map((each) => each.taskId));
+		const arriving = tasks.filter((task) => !known.has(task.taskId));
+		if (arriving.length === 0) return index;
+
+		return {
+			...index,
+			tasks: [
+				...index.tasks,
+				...arriving.map((task) => ({
+					...task,
+					checklistId,
+					checklistTitle,
+					caption: "",
+				})),
+			],
+		};
+	});
+
+	// A task typed on a tag's page is drawn there at once instead of waiting
+	// for a refetch to reveal it.
+	for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
+		if (key.length !== 2) continue;
+
+		const detail = client.getQueryData<TagDetail>(key);
+		if (!detail) continue;
+
+		const tagged = tasks.filter((task) => task.tagIds.includes(detail.tagId));
+		if (tagged.length === 0) continue;
+
+		client.setQueryData<TagDetail>(key, {
+			...detail,
+			progress: tagged.reduce(
+				(progress, task) => shift(progress, null, task),
+				detail.progress,
+			),
+		});
+		addToTagPages(
+			client,
+			String(key[1]),
+			tagged.map((task) => ({ task, checklistId, checklistTitle })),
+		);
+	}
+}
+
 /** A plan as the list shows it; see `PlanSummary`. */
 function summaryOf({ body, ...rest }: Plan): PlanSummary {
 	return { ...rest, length: body.length };
@@ -1691,7 +1851,7 @@ function patchFor(client: QueryClient, change: Change): void {
 					},
 				);
 			}
-			addToChecklistPages(client, change.checklistId, moved);
+			addToChecklistPages(client, change.checklistId, [moved]);
 
 			// Everywhere else it is drawn it is the same task, in another list.
 			const landed = {
@@ -1716,107 +1876,13 @@ function patchFor(client: QueryClient, change: Change): void {
 			return;
 		}
 
-		case "task.create": {
-			// One asked for in no checklist lands in the Inbox, at the Inbox's
-			// first stage, as the server files it; see `ensureInbox`. Drawn in the
-			// default stages instead, it would sit under a tab that is not there.
-			const checklistId =
-				change.checklistId ??
-				specialChecklist(
-					client.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists) ??
-						[],
-					"inbox",
-				)?.checklistId ??
-				null;
-
-			// A task added to a checklist carries its tags as well, just as the
-			// server will store it; see `createTask`.
-			const inherited = checklistTagsOf(client, checklistId) ?? [];
-
-			const first = stagesOf(client, checklistId)[0].stageId;
-			const task: Task = {
-				taskId: change.taskId,
-				title: change.title,
-				completed: false,
-				completedAt: null,
-				trackerId: change.trackerId,
-				linkedChecklistId: change.linkedChecklistId,
-				addedAt: change.addedAt,
-				tagIds: [...new Set([...change.tagIds, ...inherited])],
-				urgent: change.urgent,
-				important: change.important,
-				stageId: first,
-				// Its old number, for one an undo puts back; see `createTask`.
-				...(change.number === undefined ? {} : { number: change.number }),
-			};
-
-			patchSummaries(client, null, null, task, checklistId);
-
-			if (checklistId !== null) {
-				client.setQueryData<ChecklistSummary>(
-					queryKeys.checklist(checklistId),
-					(checklist) =>
-						checklist
-							? {
-									...checklist,
-									progress: {
-										...shift(checklist.progress, null, task),
-										byStage: moveStage(checklist.progress.byStage, null, first),
-									},
-								}
-							: checklist,
-				);
-				addToChecklistPages(client, checklistId, task);
-			}
-
-			// Named when this browser holds the checklist — the Inbox, for one
-			// typed onto Today — and otherwise left to the refetch.
-			const checklistTitle = checklistTitleOf(client, checklistId);
-
-			// The Across lists screen gathers every task, so one just added is one
-			// of them whichever checklist it went into.
-			addToAcrossPages(client, {
-				...task,
-				checklistId,
-				checklistTitle,
-				caption: "",
-			});
-
-			// So does the search index, which Priority and search list from.
-			client.setQueryData<SearchIndex>(queryKeys.searchIndex, (index) =>
-				index === undefined ||
-				index.tasks.some((each) => each.taskId === task.taskId)
-					? index
-					: {
-							...index,
-							tasks: [
-								...index.tasks,
-								{ ...task, checklistId, checklistTitle, caption: "" },
-							],
-						},
-			);
-
-			// A task typed on a tag's page is drawn there at once instead of
-			// waiting for a refetch to reveal it.
-			for (const [key] of client.getQueriesData({ queryKey: queryKeys.tags })) {
-				if (key.length !== 2) continue;
-
-				const detail = client.getQueryData<TagDetail>(key);
-				if (!detail || !task.tagIds.includes(detail.tagId)) continue;
-
-				client.setQueryData<TagDetail>(key, {
-					...detail,
-					progress: shift(detail.progress, null, task),
-				});
-				addToTagPages(client, String(key[1]), {
-					task,
-					checklistId,
-					checklistTitle,
-				});
-			}
-
+		case "task.create":
+			addNewTasks(client, change.checklistId, [change]);
 			return;
-		}
+
+		case "task.createMany":
+			addNewTasks(client, change.checklistId, change.tasks);
+			return;
 
 		case "checklist.create": {
 			/*

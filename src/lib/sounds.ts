@@ -144,6 +144,7 @@ function soundFor(change: Change): Sound {
 	switch (change.kind) {
 		case "checklist.create":
 		case "task.create":
+		case "task.createMany":
 		case "tracker.create":
 		case "tag.create":
 		case "group.create":

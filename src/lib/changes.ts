@@ -37,7 +37,7 @@ import {
 	type Tag,
 	type TagColor,
 } from "#/schemas/tag";
-import type { Task, TaskPatch } from "#/schemas/task";
+import { MAX_TASKS_AT_ONCE, type Task, type TaskPatch } from "#/schemas/task";
 import type { Tracker, TrackerSummary } from "#/schemas/tracker";
 
 /**
@@ -57,6 +57,7 @@ function checklistNeeded(change: Change): string | null {
 		case "checklist.update":
 		case "checklist.delete":
 		case "task.create":
+		case "task.createMany":
 		case "task.move":
 			return change.checklistId;
 		default:
@@ -97,6 +98,8 @@ function tasksOf(change: Change): ReadonlyArray<string> {
 		case "task.delete":
 		case "task.move":
 			return [change.taskId];
+		case "task.createMany":
+			return change.tasks.map((task) => task.taskId);
 		case "task.deleteMany":
 			return change.taskIds;
 		default:
@@ -425,6 +428,43 @@ export function createTask(
 	});
 
 	return taskId;
+}
+
+/**
+ * Add many tasks to one checklist — a pasted list — as one change, so ten
+ * thousand lines are drawn once and saved in one request rather than one at a
+ * time. One task goes as one, as if typed.
+ */
+export function createTasks(
+	apply: ApplyChange,
+	checklistId: string | null,
+	inputs: ReadonlyArray<Omit<Parameters<typeof createTask>[1], "checklistId">>,
+): void {
+	if (inputs.length === 1) {
+		createTask(apply, { checklistId, ...inputs[0] });
+		return;
+	}
+
+	// A millisecond apart, first line newest, so a newest-first list reads in
+	// the order it was pasted rather than shuffled by id.
+	const now = Date.now();
+	const tasks = inputs.map((input, index) => ({
+		taskId: createId(ID_PREFIX.task),
+		addedAt: new Date(now - index).toISOString(),
+		urgent: false,
+		important: false,
+		trackerId: null,
+		linkedChecklistId: null,
+		...input,
+	}));
+
+	for (let at = 0; at < tasks.length; at += MAX_TASKS_AT_ONCE) {
+		apply({
+			kind: "task.createMany",
+			checklistId,
+			tasks: tasks.slice(at, at + MAX_TASKS_AT_ONCE),
+		});
+	}
 }
 
 export function updateTask(

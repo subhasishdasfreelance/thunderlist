@@ -22,7 +22,7 @@ import type { AcrossTask } from "#/data/across.server";
 import { getAcrossTasksFn } from "#/functions/across.functions";
 import {
 	createTagResolver,
-	createTask,
+	createTasks,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
@@ -239,7 +239,7 @@ function StagesPage() {
 	function addTasks(lines: Array<ParsedTitle>) {
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
-		for (const line of lines) {
+		const inputs = lines.map((line) => {
 			// A line naming a tracker or a checklist becomes a task that follows
 			// it, titled with its own title. A name matching nothing stays text.
 			const tracker = resolveTrackerName(trackers, line.trackerName);
@@ -247,16 +247,17 @@ function StagesPage() {
 				? null
 				: resolveChecklistName(checklists, line.trackerName);
 
-			createTask(apply, {
-				checklistId: null,
+			return {
 				title: tracker?.title ?? linked?.title ?? line.title,
 				tagIds: tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
 				trackerId: tracker?.trackerId ?? null,
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
-			});
-		}
+			};
+		});
+
+		createTasks(apply, null, inputs);
 	}
 
 	return (

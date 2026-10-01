@@ -218,6 +218,21 @@ export function invertChange(
 			};
 		}
 
+		case "task.createMany": {
+			const count = `${change.tasks.length} tasks`;
+
+			return {
+				label: `Adding ${count}`,
+				changes: [
+					{
+						kind: "task.deleteMany",
+						taskIds: change.tasks.map((task) => task.taskId),
+					},
+				],
+				question: `Undo adding ${count}? They will be deleted.`,
+			};
+		}
+
 		case "task.delete": {
 			const found = findCachedTask(client, change.taskId);
 			if (found === null) return null;

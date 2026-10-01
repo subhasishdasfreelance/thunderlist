@@ -27,6 +27,7 @@ import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
 	createChecklist,
 	createTask,
+	createTasks,
 	deleteChecklist,
 	deleteTask,
 	deleteTasks,
@@ -81,6 +82,10 @@ async function run(
 
 		case "task.create":
 			await createTask(userId, change);
+			return;
+
+		case "task.createMany":
+			await createTasks(userId, change.checklistId, change.tasks);
 			return;
 
 		case "task.update":
@@ -262,17 +267,15 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 			if (change.checklistId !== null) {
 				assertLevel(scope, "checklists", change.checklistId, "full");
 			}
-			// Standing for something is only reading it: a task that waits on a
-			// checklist or a tracker changes neither.
-			if (change.linkedChecklistId != null) {
-				assertLevel(scope, "checklists", change.linkedChecklistId, "read");
+			assertNewTaskReaches(scope, change);
+			return;
+
+		// All or nothing, as deleting many is.
+		case "task.createMany":
+			if (change.checklistId !== null) {
+				assertLevel(scope, "checklists", change.checklistId, "full");
 			}
-			if (change.trackerId != null) {
-				assertLevel(scope, "trackers", change.trackerId, "read");
-			}
-			for (const tagId of change.tagIds) {
-				assertLevel(scope, "tags", tagId, "read");
-			}
+			for (const task of change.tasks) assertNewTaskReaches(scope, task);
 			return;
 
 		case "tracker.update":
@@ -317,6 +320,30 @@ async function assertAllowed(scope: Scope, change: Change): Promise<void> {
 
 		default:
 			return;
+	}
+}
+
+/**
+ * Refuse a new task that stands for, or is tagged with, something this person
+ * cannot see. Standing for something is only reading it: a task that waits on
+ * a checklist or a tracker changes neither.
+ */
+function assertNewTaskReaches(
+	scope: Scope,
+	task: {
+		linkedChecklistId: string | null;
+		trackerId: string | null;
+		tagIds: ReadonlyArray<string>;
+	},
+): void {
+	if (task.linkedChecklistId != null) {
+		assertLevel(scope, "checklists", task.linkedChecklistId, "read");
+	}
+	if (task.trackerId != null) {
+		assertLevel(scope, "trackers", task.trackerId, "read");
+	}
+	for (const tagId of task.tagIds) {
+		assertLevel(scope, "tags", tagId, "read");
 	}
 }
 

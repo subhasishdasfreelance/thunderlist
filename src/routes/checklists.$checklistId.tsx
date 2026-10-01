@@ -47,7 +47,7 @@ import { MessageDialog } from "#/components/teams/message-dialog";
 import {
 	type ChecklistValues,
 	createTagResolver,
-	createTask,
+	createTasks,
 	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
@@ -452,7 +452,7 @@ function ChecklistDetailPage() {
 	function addTasks(lines: Array<ParsedTitle>) {
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
-		for (const line of lines) {
+		const inputs = lines.map((line) => {
 			// A line naming a tracker or another checklist becomes a task that
 			// follows it, titled with its own title. A name matching nothing stays
 			// ordinary text.
@@ -461,16 +461,17 @@ function ChecklistDetailPage() {
 				? null
 				: resolveChecklistName(otherChecklists, line.trackerName);
 
-			createTask(apply, {
-				checklistId,
+			return {
 				title: tracker?.title ?? linked?.title ?? line.title,
 				tagIds: tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
 				trackerId: tracker?.trackerId ?? null,
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
-			});
-		}
+			};
+		});
+
+		createTasks(apply, checklistId, inputs);
 	}
 
 	const daily = detail.dailyWindow ?? null;

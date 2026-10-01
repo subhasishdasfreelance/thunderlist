@@ -583,6 +583,31 @@ describe("applyOptimistically", () => {
 		expect(page?.total).toBe(3);
 	});
 
+	it("draws a pasted list counted whole, with a page's worth of rows", () => {
+		const queryClient = client();
+		const tasks = Array.from({ length: 10_000 }, (_, index) => ({
+			taskId: `tsk_new_${index}`,
+			title: `Line ${index}`,
+			addedAt: "2026-01-02T00:00:00.000Z",
+			tagIds: [],
+			trackerId: null,
+			linkedChecklistId: null,
+			urgent: false,
+			important: false,
+		}));
+
+		applyOptimistically(queryClient, {
+			kind: "task.createMany",
+			checklistId: "chk_1",
+			tasks,
+		});
+
+		expect(checklist(queryClient)?.progress.total).toBe(10_001);
+		expect(checklist(queryClient)?.progress.byStage.todo).toBe(10_001);
+		expect(toDo(queryClient)?.total).toBe(10_001);
+		expect(toDo(queryClient)?.items).toHaveLength(1 + VIEW.limit);
+	});
+
 	it("takes a moved task out of the checklist it left", () => {
 		const queryClient = client();
 

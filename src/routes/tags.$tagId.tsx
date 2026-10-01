@@ -61,7 +61,7 @@ import {
 } from "#/functions/tag.functions";
 import {
 	createTagResolver,
-	createTask,
+	createTasks,
 	moveToBacklog,
 	resolveChecklistName,
 	resolveTags,
@@ -542,7 +542,7 @@ function TagDetailPage() {
 		if (detail === null) return;
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
-		for (const line of lines) {
+		const inputs = lines.map((line) => {
 			// A line naming a tracker or a checklist becomes a task that follows
 			// it, titled with its own title. A name matching nothing stays text.
 			const tracker = resolveTrackerName(trackers, line.trackerName);
@@ -552,9 +552,7 @@ function TagDetailPage() {
 			const written =
 				tracker || linked ? [] : resolveTags(resolveTag, line.tagNames);
 
-			// No checklist: it goes into the Inbox; see `ensureInbox`.
-			createTask(apply, {
-				checklistId: null,
+			return {
 				title: withInlineTag(
 					tracker?.title ?? linked?.title ?? line.title,
 					detail.name,
@@ -564,8 +562,11 @@ function TagDetailPage() {
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
-			});
-		}
+			};
+		});
+
+		// No checklist: they go into the Inbox; see `ensureInbox`.
+		createTasks(apply, null, inputs);
 	}
 
 	const special = detail.special;

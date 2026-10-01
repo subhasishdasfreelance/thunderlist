@@ -26,6 +26,17 @@ export async function nextNumber(
 	return (await reserve(current, userId, kind, 1)) + 1;
 }
 
+/** The first of `count` numbers in a row, taken at once for things made together. */
+export async function nextNumbers(
+	current: Collections,
+	userId: string,
+	kind: NumberedKind,
+	count: number,
+): Promise<number> {
+	await ensureNumbered(current, userId);
+	return (await reserve(current, userId, kind, count)) + 1;
+}
+
 /**
  * Take `count` numbers at once. Answers the last number handed out before
  * them, so the first is one more than it.

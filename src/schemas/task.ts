@@ -314,6 +314,22 @@ export const createTaskInputSchema = v.object({
 	number: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
 
+/** The most tasks one request adds; a longer paste is sent in parts. */
+export const MAX_TASKS_AT_ONCE = 10_000;
+
+/**
+ * Adding many tasks to one checklist in one request: a pasted list, one task a
+ * line. Each is a new task, so none carries a number to be put back.
+ */
+export const createTasksInputSchema = v.object({
+	checklistId: v.nullable(idSchema),
+	tasks: v.pipe(
+		v.array(v.omit(createTaskInputSchema, ["checklistId", "number"])),
+		v.minLength(1, "Add at least one task"),
+		v.maxLength(MAX_TASKS_AT_ONCE, "Too many tasks at once"),
+	),
+});
+
 /**
  * A partial edit. Every field is optional, but at least one must be present so
  * a no-op edit does not cost a database round trip.
