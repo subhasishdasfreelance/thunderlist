@@ -1,0 +1,22 @@
+Lead engineering team to build and deploy LLM-based GenAI applications, develop technical roadmaps, optimize models using prompt engineering, RAG, and agents, and collaborate with cross-functional teams Job match score Not matched Early Applicant Not matched Key Skills Matched Location Matched Work Experience
+8 - 13 Years
+1 Vacancy
+₹ 35-65 Lacs P.A
+Bengaluru, Hyderabad, Bangalore Rural
+Hybrid Key skills Agentic Ai, Langgraph, Langchain Job description What you’ll do
+Principal Forward Deployed AI Engineer
+Bengaluru, Hyderabad, India
+About Turing:
+Based in San Francisco, California, Turing is the world's leading research accelerator for frontier AI labs and a trusted partner for global enterprises looking to deploy advanced AI systems. Turing accelerates frontier research with high-quality data, specialized talent, and training pipelines that advance thinking, reasoning, coding, multimodality, and STEM. For enterprises, Turing builds proprietary intelligence systems that integrate AI into mission-critical workflows, unlock transformative outcomes, and drive lasting competitive advantage.
+Recognized by Forbes, The Information, and Fast Company among the world's top innovators,
+Turing's leadership team includes AI technologists from Meta, Google, Microsoft, Apple, Amazon,McKinsey, Bain, Stanford, Caltech, and MIT. Learn more at www.turing.com
+About the role:
+Turing is looking for people with LLM experience to join us in solving business problems for our Fortune 500 customers. You will be a key member of the Turing GenAI delivery organization and part of a GenAI project. You will be required to work with a team of other Turing engineers across different skill sets. In the past, the Turing GenAI delivery organization has implemented industry leading multi-agent LLM systems, RAG systems, and Open Source LLM deployments for major enterprises.
+Required skills:
+8+ years of professional, hands-on engineering experience, including 46+ years specializing in building and deploying AI/ML models and systems. 1+ year of experience in developing Generative AI (LLM) applications using techniques like prompt engineering, RAG, and/or agents. Expert in architecting GenAI applications/systems using various frameworks & cloud services Good proficiency in using various cloud services from Azure, GCP, or AWS for building the GenAI applications Expert proficiency in programming skills in Python, Langchain/Langgraph and SQL is a must. Experience in driving the engineering team toward a technical roadmap. Excellent communication skills to effectively collaborate with business SMEs
+Roles & Responsibilities :
+Build the technical roadmap given a business requirement and own the delivery of the same. Lead the engineering team toward a technical roadmap and ensure timely execution of the roadmap to achieve customer satisfaction. Develop and optimize LLM-based solutions: Lead the design, training, fine-tuning, and deployment of large language models, leveraging techniques like prompt engineering, retrieval augmented generation (RAG), and agent-based architectures. Codebase ownership: Maintain high-quality, efficient code in Python (using frameworks like LangChain/LangGraph) and SQL, focusing on reusable components, scalability, and performance best practices. Cloud integration: Aide in deployment of GenAI applications on cloud platforms (Azure, GCP, or AWS), optimizing resource usage and ensuring robust CI/CD processes. Cross-functional collaboration: Work closely with product owners, data scientists, and business SMEs to define project requirements, translate technical details, and deliver impactful AI products. Mentoring and guidance: Provide technical leadership and knowledge-sharing to the engineering team, fostering best practices in machine learning and large language model development. Continuous innovation: Stay abreast of the latest advancements in LLM research and generative AI, proposing and experimenting with emerging techniques to drive ongoing improvements in model performance.
+Education :
+Bachelor's, Master's, or Ph.D. in Computer Science, Engineering, or a related technical field.
+Values :
+We are client first: We put our clients at the center of everything we do, because their success is the ultimate measure of our value. We work at Start-Up Speed: We move fast, stay agile and favor action because momentum is the foundation of perfection We are AI forward: We help our clients build the future of Al and implement it in our own roles and workflow to amplify productivity.

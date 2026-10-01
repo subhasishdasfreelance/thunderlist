@@ -1345,6 +1345,14 @@ body {
 	}
 
 	/*
+	 * Text pasted in keeps its line breaks and spacing, rather than Markdown
+	 * folding each line into the one before it.
+	 */
+	.thunderlist-plan-body [role="paragraph"] {
+		white-space: pre-wrap;
+	}
+
+	/*
 	 * Search results: a list the box drives with ↑ ↓ and Enter, so the lit
 	 * one wears the same wash the pointer gives it; see `SearchDialog`.
 	 */

@@ -2,12 +2,13 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Card } from "@astryxdesign/core/Card";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Heading } from "@astryxdesign/core/Heading";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
@@ -17,6 +18,7 @@ import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
 import { useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
+import { useToast } from "#/lib/toasts";
 import { useNow } from "#/lib/use-now";
 import { usePermissions } from "#/lib/use-team";
 import { planQuery } from "#/queries/plans";
@@ -54,6 +56,7 @@ function PlanPage() {
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
+	const toast = useToast();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 
@@ -74,6 +77,18 @@ function PlanPage() {
 		);
 	}
 
+	function copy(body: string) {
+		navigator.clipboard.writeText(body).then(
+			() => toast({ body: "Plan copied.", uniqueID: "plan-copy" }),
+			() =>
+				toast({
+					body: "Couldn't copy it. Download the .md instead.",
+					type: "error",
+					uniqueID: "plan-copy",
+				}),
+		);
+	}
+
 	return (
 		<VStack gap={4}>
 			<BackButton to="/plans" label="Plans" />
@@ -91,52 +106,63 @@ function PlanPage() {
 					</Text>
 				</VStack>
 
-				<DropdownMenu
-					hasChevron={false}
-					placement="below"
-					alignment="end"
-					button={{
-						label: "Plan actions",
-						tooltip: "Plan actions",
-						variant: "ghost",
-						isIconOnly: true,
-						icon: <MoreHorizontal aria-hidden />,
-					}}
-					items={[
-						// Headed by its number; see `numberTitle`.
-						{
-							type: "section" as const,
-							title: numberTitle("plan", data.number),
-							items: [
-								...(canManageContent
-									? [
-											{
-												label: "Edit plan",
-												icon: Pencil,
-												onClick: () => setIsEditing(true),
-											},
-										]
-									: []),
-								{
-									label: "Download .md",
-									icon: Download,
-									onClick: () => download(data.title, data.body),
-								},
-							],
-						},
-						...(canManageContent
-							? [
-									{ type: "divider" as const },
+				<HStack gap={1} vAlign="center">
+					{data.body.trim() === "" ? null : (
+						<IconButton
+							label="Copy plan"
+							tooltip="Copy plan"
+							icon={<Copy aria-hidden />}
+							variant="ghost"
+							onClick={() => copy(data.body)}
+						/>
+					)}
+					<DropdownMenu
+						hasChevron={false}
+						placement="below"
+						alignment="end"
+						button={{
+							label: "Plan actions",
+							tooltip: "Plan actions",
+							variant: "ghost",
+							isIconOnly: true,
+							icon: <MoreHorizontal aria-hidden />,
+						}}
+						items={[
+							// Headed by its number; see `numberTitle`.
+							{
+								type: "section" as const,
+								title: numberTitle("plan", data.number),
+								items: [
+									...(canManageContent
+										? [
+												{
+													label: "Edit plan",
+													icon: Pencil,
+													onClick: () => setIsEditing(true),
+												},
+											]
+										: []),
 									{
-										label: "Delete plan",
-										icon: Trash2,
-										variant: "destructive" as const,
-										onClick: () => setIsDeleting(true),
+										label: "Download .md",
+										icon: Download,
+										onClick: () => download(data.title, data.body),
 									},
-								]
-							: []),
-					]}
-				/>
+								],
+							},
+							...(canManageContent
+								? [
+										{ type: "divider" as const },
+										{
+											label: "Delete plan",
+											icon: Trash2,
+											variant: "destructive" as const,
+											onClick: () => setIsDeleting(true),
+										},
+									]
+								: []),
+						]}
+					/>
+				</HStack>
 			</HStack>
 
 			<Card padding={4}>
@@ -146,6 +172,9 @@ function PlanPage() {
 					<div className="thunderlist-plan-body">
 						<Markdown
 							components={MARKDOWN_COMPONENTS}
+							// Wider than Astryx's 680px default, and centred in the card.
+							contentWidth={800}
+							contentAlign="center"
 							// A link opens beside the app, not in place of it.
 							onLinkClick={(href) => {
 								window.open(href, "_blank", "noopener,noreferrer");
