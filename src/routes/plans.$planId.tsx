@@ -165,16 +165,15 @@ function PlanPage() {
 				</HStack>
 			</HStack>
 
-			<Card padding={4}>
+			<Card padding={6}>
 				{data.body.trim() === "" ? (
 					<Text type="supporting">Nothing written yet.</Text>
 				) : (
 					<div className="thunderlist-plan-body">
 						<Markdown
 							components={MARKDOWN_COMPONENTS}
-							// Wider than Astryx's 680px default, and centred in the card.
-							contentWidth={800}
-							contentAlign="center"
+							// The full width of the card, not Astryx's 680px default.
+							contentWidth="100%"
 							// A link opens beside the app, not in place of it.
 							onLinkClick={(href) => {
 								window.open(href, "_blank", "noopener,noreferrer");
