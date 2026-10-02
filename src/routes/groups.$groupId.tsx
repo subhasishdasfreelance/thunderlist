@@ -202,7 +202,8 @@ function GroupPage() {
 		<VStack gap={4}>
 			<BackButton to="/groups" label="Groups" />
 
-			<HStack gap={2} hAlign="between" vAlign="start">
+			{/* Wraps: the title and three buttons are wider than a phone. */}
+			<HStack gap={2} hAlign="between" vAlign="start" wrap="wrap">
 				<HStack gap={3} vAlign="center">
 					<GroupBadge group={group} size="lg" />
 					<VStack gap={0.5}>
