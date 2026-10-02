@@ -20,12 +20,14 @@ import {
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
+import { editableTracker } from "#/components/common/items-edit-dialog";
 import { LoadingState } from "#/components/common/loading-state";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
+import { trackersBehind } from "#/lib/behind";
 import {
 	createTagResolver,
 	createTracker,
@@ -34,7 +36,6 @@ import {
 	useApplyChange,
 } from "#/lib/changes";
 import { searchText } from "#/lib/filter-search";
-import { lagFraction } from "#/lib/progress";
 import { isAssignedTo } from "#/lib/tasks/tasks";
 import { useNow } from "#/lib/use-now";
 import { usePickMode } from "#/lib/use-pick-mode";
@@ -45,22 +46,6 @@ import { tagsQuery } from "#/queries/tags";
 import { trackerQuery, trackersQuery } from "#/queries/trackers";
 import { manualOrder } from "#/schemas/arrangement";
 import type { TrackerSummary } from "#/schemas/tracker";
-
-/**
- * How far behind a tracker is, worst first.
- *
- * The same measure the pace label on the card is drawn from, so the order
- * agrees with what each card says about itself.
- */
-function lag(tracker: TrackerSummary, now: number): number {
-	return lagFraction({
-		startDate: tracker.startDate,
-		deadline: tracker.deadline,
-		deadlineTime: tracker.deadlineTime,
-		now,
-		fractionComplete: tracker.progress.percent / 100,
-	});
-}
 
 const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
 const createdAtOf = (tracker: TrackerSummary) => tracker.createdAt;
@@ -131,10 +116,7 @@ function TrackersPage() {
 	// the browser has it.
 	const now = useNow();
 	const behind = useMemo(
-		() =>
-			now === null
-				? null
-				: (a: TrackerSummary, b: TrackerSummary) => lag(b, now) - lag(a, now),
+		() => (now === null ? null : trackersBehind(now)),
 		[now],
 	);
 	const arranged = useArrangedList({
@@ -245,7 +227,13 @@ function TrackersPage() {
 					of="tracker"
 					items={allTrackers.flatMap((tracker) =>
 						pick.picked.has(tracker.trackerId)
-							? [{ id: tracker.trackerId, access: tracker.access }]
+							? [
+									{
+										id: tracker.trackerId,
+										access: tracker.access,
+										editable: editableTracker(tracker),
+									},
+								]
 							: [],
 					)}
 					onDone={pick.stop}

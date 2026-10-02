@@ -50,7 +50,7 @@ export type Stage = v.InferOutput<typeof stageSchema>;
  * something to do and it being done — which is what every checklist has until
  * it is given more.
  */
-const stagesSchema = v.pipe(
+export const stagesSchema = v.pipe(
 	v.array(stageSchema),
 	v.minLength(2, "A checklist needs at least two stages"),
 	v.maxLength(12, "At most 12 stages"),
@@ -478,6 +478,12 @@ const checklistSchema = v.object({
 	/** The steps its tasks go through; absent for `DEFAULT_STAGES`. */
 	stages: v.optional(v.array(stageSchema)),
 	/**
+	 * Flagged urgent, important or both, as a task is; absent for neither.
+	 * A group can be ordered by it; see `priorityRank`.
+	 */
+	urgent: v.optional(v.boolean()),
+	important: v.optional(v.boolean()),
+	/**
 	 * Which special checklist this is, or `null` or absent for any other; see
 	 * `SPECIAL_CHECKLISTS`. `"inbox"` holds the tasks that belong to no other —
 	 * typed straight onto Today, say — and `"backlog"` the parked ones. Both
@@ -527,6 +533,8 @@ export const createChecklistInputSchema = v.object({
 	tagIds: v.optional(tagIdsSchema, []),
 	access: v.optional(accessSchema, null),
 	stages: v.optional(stagesSchema),
+	urgent: v.optional(v.boolean()),
+	important: v.optional(v.boolean()),
 });
 
 export const updateChecklistInputSchema = v.object({
@@ -542,6 +550,8 @@ export const updateChecklistInputSchema = v.object({
 			tagIds: v.optional(tagIdsSchema),
 			access: v.optional(accessSchema),
 			stages: v.optional(stagesSchema),
+			urgent: v.optional(v.boolean()),
+			important: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { stagesSchema } from "./checklist";
 import {
 	dateOnlySchema,
 	descriptionSchema,
@@ -61,6 +62,13 @@ export type Group = {
 	color: TagColor;
 	items: Array<GroupItem>;
 	/**
+	 * Ids of what it holds, in the order picked by hand on its page; absent
+	 * until it is arranged. Kept apart from `items`, which stay in the order
+	 * they were added, so "Newest first" still reads from them. See
+	 * `manualOrder`.
+	 */
+	order?: Array<string>;
+	/**
 	 * The day its pace is measured from; absent on a group made before groups
 	 * had a schedule, which is paced from the day it was made. See
 	 * `groupStartDate`.
@@ -105,6 +113,12 @@ export const updateGroupInputSchema = v.object({
 			name: v.optional(groupNameSchema),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			items: v.optional(groupItemsSchema),
+			order: v.optional(
+				v.pipe(
+					v.array(idSchema),
+					v.maxLength(MAX_GROUP_ITEMS, "At most 500 things in a group"),
+				),
+			),
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
@@ -120,6 +134,12 @@ const outlineChecklistsSchema = v.pipe(
 			checklistId: idSchema,
 			title: titleSchema,
 			description: descriptionSchema,
+			/** Read off its heading; see `parseChecklistTitle`. */
+			urgent: v.optional(v.boolean()),
+			important: v.optional(v.boolean()),
+			stages: v.optional(stagesSchema),
+			deadline: v.optional(dateOnlySchema),
+			deadlineTime: v.optional(timeOfDaySchema),
 			tasks: v.array(
 				v.pick(createTaskInputSchema, [
 					"taskId",

@@ -46,7 +46,7 @@ import {
 	deleteCountdowns,
 	updateCountdown,
 } from "./countdown.server";
-import { shareItems } from "./items.server";
+import { shareItems, updateItems } from "./items.server";
 import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
 import { sendAssigned, sendAssignedMany } from "./reminder.server";
 import {
@@ -258,6 +258,10 @@ async function run(
 		case "items.share":
 			await shareItems(userId, change.of, change.ids, change.access);
 			return;
+
+		case "items.update":
+			await updateItems(userId, change.items, change.patch);
+			return;
 	}
 }
 
@@ -461,6 +465,20 @@ async function assertAllowed(
 				for (const id of change.ids) {
 					assertLevel(scope, `${change.of}s`, id, "full");
 				}
+			}
+			return;
+
+		// All or nothing, as above; and only tags they can see, put on or
+		// taken off.
+		case "items.update":
+			for (const item of change.items) {
+				assertLevel(scope, `${item.kind}s`, item.id, "full");
+			}
+			for (const tagId of [
+				...(change.patch.addTagIds ?? []),
+				...(change.patch.removeTagIds ?? []),
+			]) {
+				assertLevel(scope, "tags", tagId, "read");
 			}
 			return;
 
@@ -852,6 +870,9 @@ async function tagsAtRisk(
 			if (change.of === "checklist") goneChecklistIds.push(...change.ids);
 			if (change.of === "tracker") trackerIds.push(...change.ids);
 			break;
+		// Only what it takes off can be left on nothing.
+		case "items.update":
+			return [...(change.patch.removeTagIds ?? [])];
 		default:
 			return [];
 	}

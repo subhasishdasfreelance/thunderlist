@@ -4,6 +4,10 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
+	PriorityMarks,
+	priorityWords,
+} from "#/components/common/priority-marks";
+import {
 	formatExpectedTasks,
 	ProgressMeter,
 } from "#/components/common/progress-meter";
@@ -50,13 +54,13 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 
 	return (
 		<ClickableCard
-			label={`${checklist.title}, ${progress.percent}% complete`}
+			label={`${checklist.title}, ${progress.percent}% complete${priorityWords(checklist)}`}
 			href={`/checklists/${checklist.checklistId}`}
 			padding={3}
 		>
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
-					<HStack gap={1.5} vAlign="center">
+					<HStack gap={1.5} vAlign="center" className="thunderlist-card-title">
 						{/* The Inbox and the Backlog carry their marks, so they read as
 						    the two they are. */}
 						{checklist.special == null ? null : (
@@ -72,6 +76,7 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 								({progress.percent}%)
 							</Text>
 						</Text>
+						<PriorityMarks {...checklist} />
 					</HStack>
 					<PaceLabel status={pace.status} />
 				</HStack>

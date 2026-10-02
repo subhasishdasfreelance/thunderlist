@@ -14,6 +14,7 @@ import {
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
+import { editableTag } from "#/components/common/items-edit-dialog";
 import { LoadingState } from "#/components/common/loading-state";
 import { Pickable } from "#/components/common/pickable";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
@@ -21,8 +22,8 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
 import { UntaggedCard } from "#/components/tags/untagged-card";
+import { tagsBehind } from "#/lib/behind";
 import { useApplyChange } from "#/lib/changes";
-import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
@@ -30,23 +31,7 @@ import { deferQuery, primeQuery } from "#/queries/prime";
 import { arrangementsQuery } from "#/queries/space";
 import { searchIndexQuery } from "#/queries/system";
 import { tagSummariesQuery } from "#/queries/tags";
-import { type TagSummary, tagStartDate } from "#/schemas/tag";
-
-/**
- * Where a tag stands against its schedule, for ordering the most behind first
- * — the same measure its pace label is drawn from, as on the Checklists
- * screen; see `compareBehind`.
- */
-function standing(tag: TagSummary, now: number) {
-	return {
-		startDate: tagStartDate(tag),
-		deadline: tag.deadline,
-		deadlineTime: tag.deadlineTime,
-		dailyWindow: tag.dailyWindow,
-		now,
-		fractionComplete: tag.progress.percent / 100,
-	};
-}
+import type { TagSummary } from "#/schemas/tag";
 
 const tagIdOf = (tag: TagSummary) => tag.tagId;
 const createdAtOf = (tag: TagSummary) => tag.createdAt;
@@ -100,14 +85,7 @@ function TagsPage() {
 	// Your order, newest first or most behind first; see `useArrangedList`. Behind is judged on the viewer's clock, so only once
 	// the browser has it.
 	const now = useNow();
-	const behind = useMemo(
-		() =>
-			now === null
-				? null
-				: (a: TagSummary, b: TagSummary) =>
-						compareBehind(standing(a, now), standing(b, now)),
-		[now],
-	);
+	const behind = useMemo(() => (now === null ? null : tagsBehind(now)), [now]);
 	const arranged = useArrangedList({
 		list: "tags",
 		items: tags,
@@ -192,7 +170,13 @@ function TagsPage() {
 					of="tag"
 					items={tags.flatMap((tag) =>
 						pick.picked.has(tag.tagId)
-							? [{ id: tag.tagId, access: tag.access }]
+							? [
+									{
+										id: tag.tagId,
+										access: tag.access,
+										editable: editableTag(tag),
+									},
+								]
 							: [],
 					)}
 					onDone={pick.stop}

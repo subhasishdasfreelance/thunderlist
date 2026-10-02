@@ -16,9 +16,12 @@ export const idSchema = v.pipe(
  * Tag ids carried by a task, a checklist or a tracker, in the order the user
  * applied them.
  */
+/** The most tags one thing can carry. */
+export const MAX_TAGS = 20;
+
 export const tagIdsSchema = v.pipe(
 	v.array(idSchema),
-	v.maxLength(20, "At most 20 tags can be applied"),
+	v.maxLength(MAX_TAGS, `At most ${MAX_TAGS} tags can be applied`),
 );
 
 /** An email address, lower-cased: how a team knows its people. */

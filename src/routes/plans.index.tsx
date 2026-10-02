@@ -117,30 +117,32 @@ function PlansPage() {
 							</HStack>
 						) : null}
 					</HStack>
-					{plans.map((plan) => (
-						<Pickable
-							key={plan.planId}
-							isPicking={pick.isPicking}
-							isPicked={pick.picked.has(plan.planId)}
-							label={plan.title}
-							onToggle={() => pick.toggle(plan.planId)}
-						>
-							<ClickableCard
+					<div className="thunderlist-card-grid">
+						{plans.map((plan) => (
+							<Pickable
+								key={plan.planId}
+								isPicking={pick.isPicking}
+								isPicked={pick.picked.has(plan.planId)}
 								label={plan.title}
-								href={`/plans/${plan.planId}`}
-								padding={3}
+								onToggle={() => pick.toggle(plan.planId)}
 							>
-								<VStack gap={1}>
-									<Text weight="medium" maxLines={1}>
-										{plan.title}
-									</Text>
-									<Text type="supporting">
-										Updated {dayOf(plan.updatedAt)} · {sizeOf(plan)}
-									</Text>
-								</VStack>
-							</ClickableCard>
-						</Pickable>
-					))}
+								<ClickableCard
+									label={plan.title}
+									href={`/plans/${plan.planId}`}
+									padding={3}
+								>
+									<VStack gap={1}>
+										<Text weight="medium" maxLines={1}>
+											{plan.title}
+										</Text>
+										<Text type="supporting">
+											Updated {dayOf(plan.updatedAt)} · {sizeOf(plan)}
+										</Text>
+									</VStack>
+								</ClickableCard>
+							</Pickable>
+						))}
+					</div>
 				</VStack>
 			)}
 

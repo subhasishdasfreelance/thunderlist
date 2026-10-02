@@ -18,6 +18,14 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	ArrangedCards,
+	ListOrderMenu,
+	SelectButton,
+	useListOrder,
+} from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { numberTitle } from "#/components/common/item-number";
 import {
@@ -40,6 +48,8 @@ import {
 } from "#/components/groups/group-contents";
 import { GroupFormDialog } from "#/components/groups/group-form-dialog";
 import { GroupImportDialog } from "#/components/groups/group-import-dialog";
+import { arrangeRows, orderContents } from "#/components/groups/group-order";
+import { GroupPickedBar } from "#/components/groups/group-picked-bar";
 import { TagCard } from "#/components/tags/tag-card";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
@@ -49,10 +59,11 @@ import {
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
-import { computeVelocity, localMoment } from "#/lib/progress";
 import type { OutlineChecklist } from "#/lib/outline";
+import { computeVelocity, localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
+import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -132,6 +143,12 @@ function GroupPage() {
 	const finished = useQuery(groupFinishedQuery(groupId)).data;
 	const now = useNow();
 	const group = data?.find((each) => each.groupId === groupId);
+	// Your order, newest added, most behind or priority first; see
+	// `orderContents`.
+	const [order, setOrder] = useListOrder(`group:${groupId}`);
+	const [isArranging, setIsArranging] = useState(false);
+	// Several picked out, to change together; see `usePickMode`.
+	const pick = usePickMode();
 
 	if (group === undefined) {
 		return (
@@ -152,6 +169,7 @@ function GroupPage() {
 	}
 
 	const contents = contentsOf(group);
+	const shown = orderContents(group, contents, order, now);
 	const { total, completed } = contents;
 	const startDate = groupStartDate(group);
 	const schedule = {
@@ -325,39 +343,84 @@ function GroupPage() {
 					/>
 				)
 			) : (
-				<VStack gap={5}>
-					<Section
-						kind="checklist"
-						title="Checklists"
-						count={contents.checklists.length}
-					>
-						{contents.checklists.map((checklist) => (
-							<ChecklistCard
-								key={checklist.checklistId}
-								checklist={checklist}
+				<VStack gap={3}>
+					<HStack gap={1} hAlign="end" vAlign="center">
+						<ListOrderMenu
+							order={order}
+							onChange={setOrder}
+							newestLabel="Newest added first"
+							hasPriority
+						/>
+						{canManageContent ? (
+							<>
+								<SelectButton onClick={pick.start} />
+								<ArrangeButton onClick={() => setIsArranging(true)} />
+							</>
+						) : null}
+					</HStack>
+					<VStack gap={5}>
+						<Section
+							kind="checklist"
+							title="Checklists"
+							count={shown.checklists.length}
+						>
+							<ArrangedCards
+								items={shown.checklists}
+								idOf={(checklist) => checklist.checklistId}
+								render={(checklist) => <ChecklistCard checklist={checklist} />}
+								pick={{ mode: pick, labelOf: (checklist) => checklist.title }}
 							/>
-						))}
-					</Section>
-					<Section
-						kind="tracker"
-						title="Trackers"
-						count={contents.trackers.length}
-					>
-						{contents.trackers.map((tracker) => (
-							<TrackerCard
-								key={tracker.trackerId}
-								tracker={tracker}
-								tags={tags}
+						</Section>
+						<Section
+							kind="tracker"
+							title="Trackers"
+							count={shown.trackers.length}
+						>
+							<ArrangedCards
+								items={shown.trackers}
+								idOf={(tracker) => tracker.trackerId}
+								render={(tracker) => (
+									<TrackerCard tracker={tracker} tags={tags} />
+								)}
+								pick={{ mode: pick, labelOf: (tracker) => tracker.title }}
 							/>
-						))}
-					</Section>
-					<Section kind="tag" title="Tags" count={contents.tags.length}>
-						{contents.tags.map((tag) => (
-							<TagCard key={tag.tagId} tag={tag} />
-						))}
-					</Section>
+						</Section>
+						<Section kind="tag" title="Tags" count={shown.tags.length}>
+							<ArrangedCards
+								items={shown.tags}
+								idOf={(tag) => tag.tagId}
+								render={(tag) => <TagCard tag={tag} />}
+								pick={{ mode: pick, labelOf: (tag) => `#${tag.name}` }}
+							/>
+						</Section>
+					</VStack>
 				</VStack>
 			)}
+
+			{pick.isPicking ? (
+				<GroupPickedBar
+					group={group}
+					contents={contents}
+					picked={pick.picked}
+					onDone={pick.stop}
+				/>
+			) : null}
+
+			<ArrangeDialog
+				isOpen={isArranging}
+				onOpenChange={setIsArranging}
+				noun="items"
+				items={arrangeRows(group, contents)}
+				arrangement={{ order: group.order ?? [] }}
+				onSave={(next) => {
+					apply({
+						kind: "group.update",
+						groupId,
+						patch: { order: next.order },
+					});
+					setIsArranging(false);
+				}}
+			/>
 
 			<ItemPickerDialog
 				isOpen={isAdding}

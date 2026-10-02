@@ -22,9 +22,11 @@ import {
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
+import { editableChecklist } from "#/components/common/items-edit-dialog";
 import { LoadingState } from "#/components/common/loading-state";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
+import { checklistsBehind } from "#/lib/behind";
 import {
 	type ChecklistValues,
 	createChecklist,
@@ -32,7 +34,6 @@ import {
 	resolveTags,
 	useApplyChange,
 } from "#/lib/changes";
-import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { firstPage } from "#/lib/use-pages";
 import { usePickMode } from "#/lib/use-pick-mode";
@@ -42,24 +43,6 @@ import { deferQuery, primeQuery } from "#/queries/prime";
 import { arrangementsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
-
-/**
- * Where a checklist stands against its schedule, for ordering the most behind
- * first; see `compareBehind`.
- *
- * The same measure the pace label on the card is drawn from, so the order
- * agrees with what each card says about itself.
- */
-function standing(checklist: ChecklistSummary, now: number) {
-	return {
-		startDate: checklist.startDate,
-		deadline: checklist.deadline,
-		deadlineTime: checklist.deadlineTime,
-		dailyWindow: checklist.dailyWindow,
-		now,
-		fractionComplete: checklist.progress.percent / 100,
-	};
-}
 
 const checklistIdOf = (checklist: ChecklistSummary) => checklist.checklistId;
 const createdAtOf = (checklist: ChecklistSummary) => checklist.createdAt;
@@ -117,11 +100,7 @@ function ChecklistsPage() {
 		idOf: checklistIdOf,
 		createdAt: createdAtOf,
 		compareBehind: useMemo(
-			() =>
-				now === null
-					? null
-					: (a: ChecklistSummary, b: ChecklistSummary) =>
-							compareBehind(standing(a, now), standing(b, now)),
+			() => (now === null ? null : checklistsBehind(now)),
 			[now],
 		),
 	});
@@ -229,7 +208,13 @@ function ChecklistsPage() {
 					of="checklist"
 					items={checklists.flatMap((checklist) =>
 						pick.picked.has(checklist.checklistId)
-							? [{ id: checklist.checklistId, access: checklist.access }]
+							? [
+									{
+										id: checklist.checklistId,
+										access: checklist.access,
+										editable: editableChecklist(checklist),
+									},
+								]
 							: [],
 					)}
 					onDone={pick.stop}

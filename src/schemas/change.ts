@@ -6,7 +6,13 @@ import {
 	createChecklistInputSchema,
 	updateChecklistInputSchema,
 } from "./checklist";
-import { idSchema } from "./common";
+import {
+	dailyWindowSchema,
+	dateOnlySchema,
+	idSchema,
+	tagIdsSchema,
+	timeOfDaySchema,
+} from "./common";
 import {
 	countdownIdInputSchema,
 	createCountdownInputSchema,
@@ -80,6 +86,33 @@ const pickedIdsSchema = v.pipe(
 	v.minLength(1, "Pick at least one"),
 	v.maxLength(500, "Too many at once"),
 );
+
+/**
+ * What can be set on several checklists, trackers and tags at once; see
+ * `updateItems`. Each takes what it has: a tracker has no daily window, and a
+ * tag carries no tags. Tags are added and taken off rather than replaced, so
+ * each keeps the rest of its own.
+ */
+const itemsPatchSchema = v.pipe(
+	v.object({
+		startDate: v.optional(dateOnlySchema),
+		deadline: v.optional(v.nullable(dateOnlySchema)),
+		deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+		dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
+		addTagIds: v.optional(tagIdsSchema),
+		removeTagIds: v.optional(tagIdsSchema),
+		urgent: v.optional(v.boolean()),
+		important: v.optional(v.boolean()),
+	}),
+	v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
+	v.check(
+		({ addTagIds = [], removeTagIds = [] }) =>
+			!addTagIds.some((tagId) => removeTagIds.includes(tagId)),
+		"A tag can't be added and taken off at once",
+	),
+);
+
+export type ItemsPatch = v.InferOutput<typeof itemsPatchSchema>;
 
 /**
  * One change to the data, as the browser asks for it.
@@ -234,6 +267,19 @@ const changeSchema = v.variant("kind", [
 		kind: v.literal("items.delete"),
 		of: v.picklist(PICKABLE_KINDS),
 		ids: pickedIdsSchema,
+	}),
+	/**
+	 * Several checklists, trackers and tags — of one kind, or a group's mix —
+	 * given one schedule, or tags, in one request; see `updateItems`.
+	 */
+	v.object({
+		kind: v.literal("items.update"),
+		items: v.pipe(
+			v.array(v.object({ kind: v.picklist(SHAREABLE_KINDS), id: idSchema })),
+			v.minLength(1, "Pick at least one"),
+			v.maxLength(500, "Too many at once"),
+		),
+		patch: itemsPatchSchema,
 	}),
 	/** Several of them given one access list; see `shareItems`. */
 	v.object({

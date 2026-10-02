@@ -38,7 +38,7 @@ const MAX_TAG_NAME = 40;
  */
 const PRIORITY_SUFFIX = /\s+-(ui|u|i)$/i;
 
-function readPriority(
+export function readPriority(
 	line: string,
 ): Pick<ParsedTitle, "title" | "urgent" | "important"> {
 	const match = PRIORITY_SUFFIX.exec(line);

@@ -1184,6 +1184,48 @@ body {
 	}
 
 	/*
+	 * The cards of a list — checklists, trackers, tags, groups, plans — one to
+	 * a row on a phone, two from where the column is wide enough for two cards
+	 * a phone's width. Tasks are rows, not cards, and stay one to a line.
+	 *
+	 * They are read, and tabbed through, a row at a time in the order the list
+	 * puts them: the grid changes where they sit, never their order. Each cell
+	 * is a grid of one, so a card fills its row's height and the two in a row
+	 * line up.
+	 */
+	.thunderlist-card-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.75rem;
+	}
+
+	.thunderlist-card-grid > *,
+	.thunderlist-card-grid .thunderlist-pickable {
+		display: grid;
+		/* Never wider than the cell, or a long title pushes past the screen. */
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	/*
+	 * A card's title gives way, cut short with an ellipsis, so the pace label
+	 * beside it always shows — a card is a phone's width, wherever it is.
+	 */
+	.thunderlist-card-title {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+
+	.thunderlist-card-title > * {
+		min-width: 0;
+	}
+
+	@media (min-width: 48rem) {
+		.thunderlist-card-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	/*
 	 * Countdowns: a tile each, the number of days large and in the
 	 * countdown's colour over a wash of it, so the screen reads at a glance.
 	 */

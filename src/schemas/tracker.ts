@@ -125,6 +125,12 @@ const trackerSchema = v.object({
 	 * everyone, each at whatever their role allows. See `accessSchema`.
 	 */
 	access: v.optional(accessSchema),
+	/**
+	 * Flagged urgent, important or both, as a task is; absent for neither.
+	 * A group can be ordered by it; see `priorityRank`.
+	 */
+	urgent: v.optional(v.boolean()),
+	important: v.optional(v.boolean()),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -220,6 +226,8 @@ export const updateTrackerInputSchema = v.object({
 			tagIds: v.optional(tagIdsSchema),
 			assignees: v.optional(assigneesSchema),
 			access: v.optional(accessSchema),
+			urgent: v.optional(v.boolean()),
+			important: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

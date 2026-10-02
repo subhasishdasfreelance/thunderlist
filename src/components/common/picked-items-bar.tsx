@@ -4,6 +4,10 @@ import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+	type EditableItem,
+	EditItemsButton,
+} from "#/components/common/items-edit-dialog";
 import { PickBar } from "#/components/common/pick-bar";
 import { AccessDialog } from "#/components/teams/access-dialog";
 import { useApplyChange } from "#/lib/changes";
@@ -24,7 +28,7 @@ const NOUNS: Record<PickableKind, readonly [string, string]> = {
 };
 
 /** What deleting them takes with it, said before it is done. */
-const DELETING: Record<PickableKind, string> = {
+export const DELETING: Record<PickableKind, string> = {
 	checklist: "Each checklist and all of its tasks will be deleted.",
 	tracker: "Each tracker and all of its readings will be deleted.",
 	tag: "They will be taken off every task. The tasks themselves are not deleted.",
@@ -37,9 +41,10 @@ const DELETING: Record<PickableKind, string> = {
  * `usePickMode`. Each is one change for all of them.
  *
  * Deleting them, asked about first, for every kind. For checklists, trackers
- * and tags — what a group holds and an access list covers — putting them all
- * into a group, and in a team giving them all one access list. A button is
- * only there when it has something to do: no groups, no group menu.
+ * and tags — what a group holds and an access list covers — editing what they
+ * share, putting them all into a group, and in a team giving them all one
+ * access list. A button is only there when it has something to do: no
+ * groups, no group menu.
  */
 export function PickedItemsBar({
 	of,
@@ -51,6 +56,8 @@ export function PickedItemsBar({
 	items: ReadonlyArray<{
 		id: string;
 		access?: ReadonlyArray<AccessEntry> | null;
+		/** What Edit changes; Edit is there when every one has it. */
+		editable?: EditableItem;
 	}>;
 	/** Stop picking: closed, or done with them. */
 	onDone: () => void;
@@ -84,6 +91,11 @@ export function PickedItemsBar({
 	const named = (count: number) =>
 		`${count} ${count === 1 ? noun[0] : noun[1]}`;
 
+	const editables = items.flatMap((item) =>
+		item.editable === undefined ? [] : [item.editable],
+	);
+	const canEdit = items.length > 0 && editables.length === items.length;
+
 	return (
 		<>
 			<PickBar
@@ -92,6 +104,8 @@ export function PickedItemsBar({
 				onDelete={items.length === 0 ? undefined : () => setIsDeleting(true)}
 				onClear={onDone}
 			>
+				{canEdit ? <EditItemsButton items={editables} onDone={onDone} /> : null}
+
 				{groupable === null ||
 				groups.length === 0 ||
 				items.length === 0 ? null : (

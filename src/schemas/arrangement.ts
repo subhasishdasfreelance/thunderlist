@@ -37,8 +37,11 @@ export const arrangementInputSchema = v.object({
 	arrangement: arrangementSchema,
 });
 
-/** How a list of cards is ordered; see `ListOrderMenu`. */
-export type ListOrder = "behind" | "newest" | "manual";
+/**
+ * How a list of cards is ordered; see `ListOrderMenu`. By priority only where
+ * the cards carry one: a group's.
+ */
+export type ListOrder = "behind" | "newest" | "manual" | "priority";
 
 /**
  * `items` in the order picked by hand: the ones placed first, as placed, then

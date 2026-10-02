@@ -16,7 +16,7 @@ import { whyBlocked } from "#/lib/depends";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
-import type { OutlineChecklist } from "#/lib/outline";
+import { type OutlineChecklist, parseChecklistTitle } from "#/lib/outline";
 import { playChangeSound } from "#/lib/sounds";
 import {
 	sameTagName,
@@ -442,13 +442,27 @@ export type ChecklistValues = {
 /**
  * Resolves with the new id once the server has written it, so the caller can
  * go into it knowing it is there; rejects if it was refused.
+ *
+ * Its title is read for a priority and stages typed into it, which are taken
+ * off it; see `parseChecklistTitle`. Stages typed there win over the form's.
  */
 export async function createChecklist(
 	applyAsync: ApplyChangeAsync,
 	values: ChecklistValues,
 ): Promise<string> {
 	const checklistId = createId(ID_PREFIX.checklist);
-	await applyAsync({ kind: "checklist.create", checklistId, ...values });
+	const { title, urgent, important, stages } = parseChecklistTitle(
+		values.title,
+	);
+	await applyAsync({
+		kind: "checklist.create",
+		checklistId,
+		...values,
+		title,
+		urgent,
+		important,
+		...(stages === undefined ? {} : { stages }),
+	});
 	return checklistId;
 }
 
@@ -575,6 +589,13 @@ function outlineChecklists(
 		checklistId: createId(ID_PREFIX.checklist),
 		title: list.title,
 		description: list.description,
+		urgent: list.urgent,
+		important: list.important,
+		...(list.stages === undefined ? {} : { stages: list.stages }),
+		...(list.deadline === undefined ? {} : { deadline: list.deadline }),
+		...(list.deadlineTime === undefined
+			? {}
+			: { deadlineTime: list.deadlineTime }),
 		tasks: list.tasks.map((line, index) => ({
 			taskId: createId(ID_PREFIX.task),
 			title: line.title,

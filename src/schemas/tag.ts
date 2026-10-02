@@ -173,6 +173,12 @@ const tagSchema = v.object({
 	 * keeps the colour its checklist gives it.
 	 */
 	stageColors: v.optional(stageColorsSchema),
+	/**
+	 * Flagged urgent, important or both, as a task is; absent for neither.
+	 * A group can be ordered by it; see `priorityRank`.
+	 */
+	urgent: v.optional(v.boolean()),
+	important: v.optional(v.boolean()),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -381,6 +387,8 @@ export const updateTagInputSchema = v.object({
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 			access: v.optional(accessSchema),
 			stageColors: v.optional(stageColorsSchema),
+			urgent: v.optional(v.boolean()),
+			important: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

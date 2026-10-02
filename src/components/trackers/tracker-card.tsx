@@ -4,6 +4,10 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { FadeImage } from "#/components/common/fade-image";
 import { PaceLabel } from "#/components/common/pace-label";
+import {
+	PriorityMarks,
+	priorityWords,
+} from "#/components/common/priority-marks";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
 import { Assignees } from "#/components/teams/assignees";
@@ -81,7 +85,7 @@ export function TrackerCard({
 
 	return (
 		<ClickableCard
-			label={`${tracker.title}, ${progress.percent}% complete`}
+			label={`${tracker.title}, ${progress.percent}% complete${priorityWords(tracker)}`}
 			href={`/trackers/${tracker.trackerId}`}
 			padding={3}
 		>
@@ -96,13 +100,18 @@ export function TrackerCard({
 
 				<VStack gap={2} width="100%">
 					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text weight="medium" maxLines={1}>
+						<Text
+							weight="medium"
+							maxLines={1}
+							className="thunderlist-card-title"
+						>
 							{tracker.title}{" "}
 							<Text color="secondary" weight="normal">
 								({progress.percent}%)
 							</Text>
 						</Text>
 						<HStack gap={2} vAlign="center">
+							<PriorityMarks {...tracker} />
 							<Assignees emails={tracker.assignees ?? []} />
 							<PaceLabel status={pace.status} />
 						</HStack>

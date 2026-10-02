@@ -43,7 +43,12 @@ import { queryKeys } from "#/queries/keys";
 import type { TaggedTask } from "#/queries/system";
 import type { AccessEntry } from "#/schemas/access";
 import type { Arrangements } from "#/schemas/arrangement";
-import type { Change, PickableKind, ShareableKind } from "#/schemas/change";
+import type {
+	Change,
+	ItemsPatch,
+	PickableKind,
+	ShareableKind,
+} from "#/schemas/change";
 import {
 	type ChecklistProgress,
 	type ChecklistSummary,
@@ -1732,6 +1737,67 @@ function sharingOne(
 	}
 }
 
+/**
+ * One of an `items.update`, as updating it alone is asked for — with the tags
+ * it carries worked out from what this browser holds; `null` where it is
+ * given nothing it has. See `updateItems`.
+ */
+function updatingOne(
+	client: QueryClient,
+	item: { kind: ShareableKind; id: string },
+	{ addTagIds = [], removeTagIds = [], dailyWindow, ...fields }: ItemsPatch,
+): Change | null {
+	const isRetagging = addTagIds.length > 0 || removeTagIds.length > 0;
+	const retagged = (had: ReadonlyArray<string> | undefined) =>
+		!isRetagging || had === undefined
+			? {}
+			: {
+					tagIds: [
+						...new Set([
+							...had.filter((tagId) => !removeTagIds.includes(tagId)),
+							...addTagIds,
+						]),
+					],
+				};
+	const windowed = dailyWindow === undefined ? {} : { dailyWindow };
+	const orNull = <T extends object>(patch: T) =>
+		Object.keys(patch).length === 0 ? null : patch;
+
+	switch (item.kind) {
+		case "checklist": {
+			const before = client
+				.getQueryData<Array<ChecklistSummary>>(queryKeys.checklists)
+				?.find((each) => each.checklistId === item.id);
+			const patch = orNull({
+				...fields,
+				...windowed,
+				...retagged(before === undefined ? undefined : (before.tagIds ?? [])),
+			});
+			return patch === null
+				? null
+				: { kind: "checklist.update", checklistId: item.id, patch };
+		}
+		case "tracker": {
+			const before = client
+				.getQueryData<Array<TrackerSummary>>(queryKeys.trackers)
+				?.find((each) => each.trackerId === item.id);
+			const patch = orNull({
+				...fields,
+				...retagged(before === undefined ? undefined : (before.tagIds ?? [])),
+			});
+			return patch === null
+				? null
+				: { kind: "tracker.update", trackerId: item.id, patch };
+		}
+		case "tag": {
+			const patch = orNull({ ...fields, ...windowed });
+			return patch === null
+				? null
+				: { kind: "tag.update", tagId: item.id, patch };
+		}
+	}
+}
+
 /** The patches for one change; see `applyOptimistically`. */
 function patchFor(client: QueryClient, change: Change): void {
 	switch (change.kind) {
@@ -1814,6 +1880,13 @@ function patchFor(client: QueryClient, change: Change): void {
 		case "items.share":
 			for (const id of change.ids) {
 				patchFor(client, asStored(client, sharingOne(change.of, id, change)));
+			}
+			return;
+
+		case "items.update":
+			for (const item of change.items) {
+				const one = updatingOne(client, item, change.patch);
+				if (one !== null) patchFor(client, one);
 			}
 			return;
 
@@ -1999,6 +2072,8 @@ function patchFor(client: QueryClient, change: Change): void {
 				tagIds: change.tagIds,
 				access: change.access,
 				stages: change.stages,
+				urgent: change.urgent,
+				important: change.important,
 				createdAt,
 				updatedAt: createdAt,
 				progress: { total: 0, completed: 0, percent: 0, byStage: {} },
@@ -2568,11 +2643,14 @@ function drawOutline(
 			title: list.title,
 			description: list.description,
 			startDate: change.startDate,
-			deadline: null,
-			deadlineTime: null,
+			deadline: list.deadline ?? null,
+			deadlineTime: list.deadlineTime ?? null,
 			dailyWindow: null,
 			tagIds: [],
 			access: null,
+			stages: list.stages,
+			urgent: list.urgent,
+			important: list.important,
 		});
 		if (list.tasks.length > 0) {
 			patchFor(client, {

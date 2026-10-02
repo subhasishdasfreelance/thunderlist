@@ -197,7 +197,13 @@ export async function updateGroup(
 	patch: Partial<
 		Pick<
 			Group,
-			"name" | "color" | "items" | "startDate" | "deadline" | "deadlineTime"
+			| "name"
+			| "color"
+			| "items"
+			| "order"
+			| "startDate"
+			| "deadline"
+			| "deadlineTime"
 		>
 	>,
 ): Promise<void> {

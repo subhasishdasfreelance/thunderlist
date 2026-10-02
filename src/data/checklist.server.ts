@@ -653,6 +653,8 @@ export async function createChecklist(
 		tagIds: Array<string>;
 		access: Array<AccessEntry> | null;
 		stages?: Array<Stage>;
+		urgent?: boolean;
+		important?: boolean;
 	},
 ): Promise<Checklist> {
 	const current = await collections();
@@ -679,6 +681,8 @@ export async function createChecklist(
 		tagIds: input.tagIds,
 		access: input.access,
 		...(input.stages === undefined ? {} : { stages: input.stages }),
+		...(input.urgent ? { urgent: true } : {}),
+		...(input.important ? { important: true } : {}),
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -726,17 +730,48 @@ async function retagTasks(
 	before: ReadonlyArray<string>,
 	after: ReadonlyArray<string>,
 ): Promise<void> {
-	const added = after.filter((tagId) => !before.includes(tagId));
-	const removed = before.filter((tagId) => !after.includes(tagId));
+	await retagManyTasks(current, userId, [
+		{
+			checklistId,
+			added: after.filter((tagId) => !before.includes(tagId)),
+			removed: before.filter((tagId) => !after.includes(tagId)),
+		},
+	]);
+}
 
-	if (added.length > 0) {
-		await current.tasks.updateMany(
-			{ userId, checklistId },
-			{ $addToSet: { tagIds: { $each: added } } },
+/**
+ * `retagTasks` for several checklists at once, each with the tags it gains
+ * and loses: one write for every task gaining one, one for every task losing
+ * one.
+ */
+export async function retagManyTasks(
+	current: Collections,
+	userId: string,
+	checklists: ReadonlyArray<{
+		checklistId: string;
+		added: ReadonlyArray<string>;
+		removed: ReadonlyArray<string>;
+	}>,
+): Promise<void> {
+	const adding = checklists.filter((each) => each.added.length > 0);
+	if (adding.length > 0) {
+		await current.tasks.bulkWrite(
+			adding.map((each) => ({
+				updateMany: {
+					filter: { userId, checklistId: each.checklistId },
+					update: { $addToSet: { tagIds: { $each: [...each.added] } } },
+				},
+			})),
 		);
 	}
 
-	if (removed.length === 0) return;
+	const removedFrom = new Map(
+		checklists
+			.filter((each) => each.removed.length > 0)
+			.map((each) => [each.checklistId, each.removed]),
+	);
+	if (removedFrom.size === 0) return;
+	const removed = [...new Set([...removedFrom.values()].flat())];
 
 	const [tags, tasks] = await Promise.all([
 		current.tags
@@ -747,8 +782,12 @@ async function retagTasks(
 			.toArray(),
 		current.tasks
 			.find(
-				{ userId, checklistId, tagIds: { $in: removed } },
-				{ projection: { _id: 0, taskId: 1, title: 1 } },
+				{
+					userId,
+					checklistId: { $in: [...removedFrom.keys()] },
+					tagIds: { $in: removed },
+				},
+				{ projection: { _id: 0, taskId: 1, title: 1, checklistId: 1 } },
 			)
 			.toArray(),
 	]);
@@ -762,7 +801,15 @@ async function retagTasks(
 			updateOne: {
 				filter: { taskId: task.taskId, userId },
 				update: {
-					$pull: { tagIds: { $in: untypedTags(task.title, removed, names) } },
+					$pull: {
+						tagIds: {
+							$in: untypedTags(
+								task.title,
+								removedFrom.get(task.checklistId ?? "") ?? [],
+								names,
+							),
+						},
+					},
 				},
 			},
 		})),
@@ -1378,11 +1425,14 @@ export async function importChecklists(
 					title: each.title,
 					description: each.description,
 					startDate: input.startDate,
-					deadline: null,
-					deadlineTime: null,
+					deadline: each.deadline ?? null,
+					deadlineTime: each.deadlineTime ?? null,
 					dailyWindow: null,
 					tagIds: [],
 					access: null,
+					...(each.stages === undefined ? {} : { stages: each.stages }),
+					...(each.urgent ? { urgent: true } : {}),
+					...(each.important ? { important: true } : {}),
 					createdAt: now,
 					updatedAt: now,
 					userId,

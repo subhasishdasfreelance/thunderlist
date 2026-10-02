@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parseOutline } from "./outline";
+import { parseChecklistTitle, parseOutline } from "./outline";
 
 describe("parseOutline", () => {
 	it("makes a checklist of each # heading, its ## line the description", () => {
@@ -79,7 +79,13 @@ describe("parseOutline", () => {
 			"# Empty\n# Notes\n## One\n### Two\ntask",
 		).checklists;
 
-		expect(first).toEqual({ title: "Empty", description: "", tasks: [] });
+		expect(first).toEqual({
+			title: "Empty",
+			urgent: false,
+			important: false,
+			description: "",
+			tasks: [],
+		});
 		expect(second.description).toBe("One\nTwo");
 	});
 
@@ -89,5 +95,128 @@ describe("parseOutline", () => {
 		).checklists;
 
 		expect(checklist.description).toHaveLength(500);
+	});
+});
+
+describe("parseChecklistTitle", () => {
+	const stageNames = (text: string) =>
+		parseChecklistTitle(text).stages?.map((stage) => stage.name);
+
+	it("reads a closing priority off the title", () => {
+		expect(parseChecklistTitle("Python -ui")).toEqual({
+			title: "Python",
+			urgent: true,
+			important: true,
+		});
+		expect(parseChecklistTitle("Python -u").urgent).toBe(true);
+		expect(parseChecklistTitle("Python -i").important).toBe(true);
+		expect(parseChecklistTitle("sign-in").title).toBe("sign-in");
+	});
+
+	it("reads stages in brackets, before or after the priority", () => {
+		const parsed = parseChecklistTitle(
+			'Python ["To do", "In progress", "Done"] -ui',
+		);
+		expect(parsed.title).toBe("Python");
+		expect(parsed.urgent && parsed.important).toBe(true);
+		expect(stageNames('Python ["To do", "In progress", "Done"] -ui')).toEqual([
+			"To do",
+			"In progress",
+			"Done",
+		]);
+		expect(stageNames('Python -i ["Todo","Done"]')).toEqual(["Todo", "Done"]);
+		expect(parseChecklistTitle('Python -i ["Todo","Done"]').important).toBe(
+			true,
+		);
+	});
+
+	it("leaves a list that would not make stages in the title", () => {
+		expect(parseChecklistTitle('Python ["Only"]')).toEqual({
+			title: 'Python ["Only"]',
+			urgent: false,
+			important: false,
+		});
+		expect(stageNames('Python ["Done", "done"]')).toBeUndefined();
+	});
+
+	it("never leaves a title empty", () => {
+		expect(parseChecklistTitle('["To do", "Done"]').title).toBe(
+			'["To do", "Done"]',
+		);
+	});
+});
+
+describe("parseOutline, on headings", () => {
+	it("reads a heading's priority and stages", () => {
+		const [checklist] = parseOutline(
+			'# Python ["To do", "Doing", "Done"] -ui\ntask',
+		).checklists;
+
+		expect(checklist.title).toBe("Python");
+		expect(checklist.urgent && checklist.important).toBe(true);
+		expect(checklist.stages?.map((stage) => stage.name)).toEqual([
+			"To do",
+			"Doing",
+			"Done",
+		]);
+	});
+});
+
+describe("parseOutline, on settings under a heading", () => {
+	const outline = parseOutline(
+		[
+			"# Python -ui",
+			"deadline: 2026-12-01",
+			'stages: ["To do", "Worked out", "In review", "Done"]',
+			"## Advanced language features, async, typing",
+			"python data model and dunder methods",
+			"python iterators, generators and yield from -i",
+			"",
+			"# TypeScript & Node.js -ui",
+			"Deadline: 2026-12-01 18:30",
+			'stages: ["To do", "Worked out", "In review", "Done"]',
+			"## Language depth, Node runtime",
+			"javascript event loop: microtasks vs macrotasks -ui",
+		].join("\n"),
+	);
+	const [python, typescript] = outline.checklists;
+
+	it("reads the deadline, the stages and the priority", () => {
+		expect(python.title).toBe("Python");
+		expect(python.urgent && python.important).toBe(true);
+		expect(python.deadline).toBe("2026-12-01");
+		expect(python.deadlineTime).toBeUndefined();
+		expect(python.stages?.map((stage) => stage.name)).toEqual([
+			"To do",
+			"Worked out",
+			"In review",
+			"Done",
+		]);
+		expect(python.description).toBe(
+			"Advanced language features, async, typing",
+		);
+		expect(typescript.deadlineTime).toBe("18:30");
+	});
+
+	it("keeps the settings out of the tasks", () => {
+		expect(python.tasks.map((task) => task.title)).toEqual([
+			"python data model and dunder methods",
+			"python iterators, generators and yield from",
+		]);
+		expect(typescript.tasks).toHaveLength(1);
+	});
+
+	it("keeps a setting it cannot read, or one after a task, as a task", () => {
+		const [checklist] = parseOutline(
+			'# Odd\ndeadline: someday\ntask\nstages: ["A", "B"]',
+		).checklists;
+
+		expect(checklist.deadline).toBeUndefined();
+		expect(checklist.stages).toBeUndefined();
+		expect(checklist.tasks.map((task) => task.title)).toEqual([
+			"deadline: someday",
+			"task",
+			'stages: ["A", "B"]',
+		]);
 	});
 });

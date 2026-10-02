@@ -5,6 +5,10 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
+	PriorityMarks,
+	priorityWords,
+} from "#/components/common/priority-marks";
+import {
 	formatExpectedTasks,
 	ProgressMeter,
 } from "#/components/common/progress-meter";
@@ -55,7 +59,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 
 	return (
 		<ClickableCard
-			label={`${tag.name}, ${progress.percent}% complete`}
+			label={`${tag.name}, ${progress.percent}% complete${priorityWords(tag)}`}
 			href={`/tags/${tagParam(tag)}`}
 			padding={3}
 		>
@@ -69,6 +73,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 							icon={Mark === null ? undefined : <Icon icon={Mark} size="xsm" />}
 						/>
 						<Text color="secondary">({progress.percent}%)</Text>
+						<PriorityMarks {...tag} />
 					</HStack>
 					<PaceLabel status={pace.status} />
 				</HStack>

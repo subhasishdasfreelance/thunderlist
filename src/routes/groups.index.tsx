@@ -101,13 +101,15 @@ function GroupsPage() {
 					<Text type="label" weight="semibold">
 						{groups.length} {groups.length === 1 ? "group" : "groups"}
 					</Text>
-					{groups.map((group) => (
-						<GroupCard
-							key={group.groupId}
-							group={group}
-							contents={contentsOf(group)}
-						/>
-					))}
+					<div className="thunderlist-card-grid">
+						{groups.map((group) => (
+							<GroupCard
+								key={group.groupId}
+								group={group}
+								contents={contentsOf(group)}
+							/>
+						))}
+					</div>
 				</VStack>
 			)}
 
