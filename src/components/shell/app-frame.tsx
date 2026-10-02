@@ -18,6 +18,7 @@ import { isTyping } from "#/lib/use-row-shortcuts";
 import { useSpaceWatch } from "#/lib/use-space-changed";
 import { useTaskCopy } from "#/lib/use-task-copy";
 import { useWarmPages } from "#/lib/use-warm-pages";
+import { useWebMcp } from "#/lib/use-webmcp";
 import { pageOf } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { BackdropDialog } from "./backdrop-dialog";
@@ -38,6 +39,12 @@ import { UserMenu } from "./user-menu";
 /** Watches for being taken out of the team; see `useSpaceWatch`. */
 function SpaceWatch() {
 	useSpaceWatch();
+	return null;
+}
+
+/** Offers the AI tools to an agent in the browser; see `useWebMcp`. */
+function WebMcp() {
+	useWebMcp();
 	return null;
 }
 
@@ -279,6 +286,7 @@ export function AppFrame({
 				{user === null ? null : <BottomNav />}
 				{/* Only with an account, which is what can be in a team. */}
 				{user === null ? null : <SpaceWatch />}
+				{user === null ? null : <WebMcp />}
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 				{user === null ? null : (

@@ -17,6 +17,7 @@ import { Route as PriorityRouteImport } from './routes/priority'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StagesRouteImport } from './routes/stages'
 import { Route as TodayRouteImport } from './routes/today'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as ApiNotifyRouteImport } from './routes/api/notify'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
@@ -69,6 +70,11 @@ const StagesRoute = StagesRouteImport.update({
 const TodayRoute = TodayRouteImport.update({
   id: '/today',
   path: '/today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiNotifyRoute = ApiNotifyRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/stages': typeof StagesRoute
   '/today': typeof TodayRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/mcp'
     | '/api/notify'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/mcp'
     | '/api/notify'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/stages'
     | '/today'
+    | '/api/mcp'
     | '/api/notify'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
@@ -288,6 +300,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   StagesRoute: typeof StagesRoute
   TodayRoute: typeof TodayRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiNotifyRoute: typeof ApiNotifyRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   GroupsGroupIdRoute: typeof GroupsGroupIdRoute
@@ -359,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/today'
       fullPath: '/today'
       preLoaderRoute: typeof TodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/notify': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   StagesRoute: StagesRoute,
   TodayRoute: TodayRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiNotifyRoute: ApiNotifyRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   GroupsGroupIdRoute: GroupsGroupIdRoute,

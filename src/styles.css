@@ -157,20 +157,6 @@ body,
 	}
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.thunderlist-scenery {
-		transition: none;
-	}
-
-	.thunderlist-scenery-art[data-entering] {
-		animation: none;
-	}
-
-	.thunderlist-scenery-art[data-leaving] {
-		display: none;
-	}
-}
-
 /* What keeps the top light: the shapes fade out before they reach it. */
 .thunderlist-scenery-veil {
 	position: absolute;
@@ -1841,18 +1827,6 @@ body {
 			animation: none;
 		}
 	}
-
-	/*
-	 * Asked for less motion, the screens still change — they simply stop
-	 * travelling, and cross-fade in place.
-	 */
-	@media (prefers-reduced-motion: reduce) {
-		::view-transition-old(root),
-		::view-transition-new(root) {
-			animation-name: thunderlist-fade;
-			animation-duration: var(--duration-fast);
-		}
-	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2304,12 +2278,6 @@ body {
 		opacity: 1;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.thunderlist-fade-image {
-			transition: none;
-		}
-	}
-
 	/*
 	 * A reading on the chart, to point at or tab to: a spot centred on its dot,
 	 * larger than the dot so a finger finds it, ringed while it is being read.
@@ -2501,43 +2469,6 @@ body {
 	}
 	to {
 		transform: scale(1);
-	}
-}
-
-/*
- * With reduced motion asked for, overlays fade without travelling and the rest
- * of the small motions above simply happen.
- */
-@layer components {
-	@media (prefers-reduced-motion: reduce) {
-		.astryx-dialog:not([open]),
-		[popover]:not(:popover-open) {
-			transform: none;
-		}
-
-		@starting-style {
-			.astryx-dialog[open],
-			[popover]:popover-open {
-				transform: none;
-			}
-		}
-
-		.thunderlist-collapse,
-		.thunderlist-disclosure-chevron,
-		.thunderlist-meter-target,
-		.thunderlist-stage-bar-part,
-		.astryx-segmented-control-item {
-			transition: none;
-		}
-
-		.thunderlist-flag[data-on="true"] svg {
-			animation: none;
-		}
-
-		/* Rows still arrive, but all at once rather than in sequence. */
-		.thunderlist-row {
-			animation-delay: 0ms;
-		}
 	}
 }
 

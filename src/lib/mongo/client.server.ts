@@ -121,6 +121,25 @@ export type NotificationCodeDoc = Owned & {
 	lastUsedAt: string | null;
 };
 
+/**
+ * An AI access token: what lets an assistant outside the browser act as its
+ * person through `/api/mcp`. Only a hash of the secret is kept, so a leaked
+ * database leaks no way in; see `AiToken`. `userId` is whose it is, and
+ * `teamId` the space it works in — `null` for their own — which the
+ * assistant can change; see `switch_space`.
+ */
+export type AiTokenDoc = {
+	tokenId: string;
+	tokenHash: string;
+	/** Its last four characters, to tell it apart in a list. */
+	hint: string;
+	label: string;
+	userId: string;
+	teamId: string | null;
+	createdAt: string;
+	lastUsedAt: string | null;
+};
+
 export type TaskDoc = Task & Owned & { checklistId: string | null };
 
 /**
@@ -216,6 +235,7 @@ export type Collections = {
 	counters: Collection<CounterDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
 	notificationCodes: Collection<NotificationCodeDoc>;
+	aiTokens: Collection<AiTokenDoc>;
 	teams: Collection<TeamDoc>;
 	members: Collection<MemberDoc>;
 	users: Collection<AuthUserDoc>;
@@ -268,6 +288,7 @@ function collectionsOf(database: Db): Collections {
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
 		notificationCodes:
 			database.collection<NotificationCodeDoc>("notificationCodes"),
+		aiTokens: database.collection<AiTokenDoc>("aiTokens"),
 		teams: database.collection<TeamDoc>("teams"),
 		members: database.collection<MemberDoc>("members"),
 		// Better Auth's own name for its accounts; see `authDatabase`.
@@ -308,6 +329,9 @@ async function ensureIndexes(current: Collections): Promise<void> {
 		current.pushSubscriptions.createIndex({ email: 1 }),
 		current.notificationCodes.createIndex({ code: 1 }, { unique: true }),
 		current.notificationCodes.createIndex({ userId: 1, createdBy: 1 }),
+		current.aiTokens.createIndex({ tokenHash: 1 }, { unique: true }),
+		current.aiTokens.createIndex({ tokenId: 1 }, { unique: true }),
+		current.aiTokens.createIndex({ userId: 1 }),
 		current.trackers.createIndex({ trackerId: 1 }, { unique: true }),
 		current.trackers.createIndex({ userId: 1 }),
 		current.tags.createIndex({ tagId: 1 }, { unique: true }),

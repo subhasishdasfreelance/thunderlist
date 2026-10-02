@@ -11,6 +11,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+	Bot,
 	ChevronRight,
 	KeyRound,
 	Megaphone,
@@ -22,6 +23,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
+import { AiTokens } from "#/components/shell/ai-tokens";
 import { NotificationCodes } from "#/components/shell/notification-codes";
 import { NotificationSettings } from "#/components/shell/notification-settings";
 import { TaskTypesDialog } from "#/components/tasks/task-types-dialog";
@@ -103,6 +105,7 @@ function SettingsPage() {
 	const [isManagingTypes, setIsManagingTypes] = useState(false);
 	const [isMessaging, setIsMessaging] = useState(false);
 	const [isMakingCode, setIsMakingCode] = useState(false);
+	const [isMakingToken, setIsMakingToken] = useState(false);
 	const [openTeamId, setOpenTeamId] = useState<string | null>(null);
 	// The space being moved into, while the move is on its way.
 	const [movingTo, setMovingTo] = useState<string | null | undefined>(
@@ -317,6 +320,24 @@ function SettingsPage() {
 					/>
 				</Section>
 			)}
+
+			<Section
+				title="AI assistants"
+				description="Let an AI assistant use Thunderlist for you — Claude Code, Claude Desktop or any MCP client — with a token. An agent in this browser needs none: it works in this tab, through WebMCP."
+				action={
+					<Button
+						label="New token"
+						icon={<Bot aria-hidden />}
+						variant="secondary"
+						onClick={() => setIsMakingToken(true)}
+					/>
+				}
+			>
+				<AiTokens
+					isCreating={isMakingToken}
+					onCreatingChange={setIsMakingToken}
+				/>
+			</Section>
 
 			<TaskTypesDialog
 				isOpen={isManagingTypes}

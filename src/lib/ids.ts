@@ -27,6 +27,8 @@ export const ID_PREFIX = {
 	plan: "pln",
 	/** A day counted down to; see `Countdown`. */
 	countdown: "cdn",
+	/** Names an AI access token; see `AiToken`. Not the secret itself. */
+	aiToken: "ait",
 	/** Minted on the server, which is the only place a team is made. */
 	team: "team",
 	/** Identifies a queued change in the browser; never written to the database. */
@@ -56,4 +58,13 @@ export function createId(prefix: IdPrefix): string {
  */
 export function createNotificationCode(): string {
 	return `ntf_${randomSuffix(32)}`;
+}
+
+/**
+ * An AI access token's secret; see `AiToken`. Like a notification code, all
+ * of it random and too long to guess — and it opens a whole account, so it is
+ * shown once and only its hash is kept.
+ */
+export function createAiTokenSecret(): string {
+	return `tla_${randomSuffix(40)}`;
 }

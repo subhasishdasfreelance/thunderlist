@@ -32,7 +32,7 @@ import { SPACE_COOKIE } from "./scope";
  * A year long, and read only by the server. It names a team and that is all:
  * whether this person may work in it is checked on every request.
  */
-const SPACE_COOKIE_OPTIONS = {
+export const SPACE_COOKIE_OPTIONS = {
 	path: "/",
 	httpOnly: true,
 	sameSite: "lax",

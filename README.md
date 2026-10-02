@@ -66,6 +66,7 @@ code; where something could not be checked, the text says so.
 | **Teams** | Shared spaces with four roles and an access list on each checklist, tracker and tag. | `src/schemas/team.ts`, `src/schemas/access.ts` |
 | **Team messages** | Project managers can push a message to a team, a role, everyone who can see a checklist, tag or tracker, or one person. | `sendTeamMessage` in `src/data/reminder.server.ts` |
 | **Notification codes** | Secrets that let an outside script send notifications through `POST /api/notify`. | `src/schemas/notification-code.ts` |
+| **AI agents** | Everything above can be done by an AI agent: through MCP at `/api/mcp` with an AI access token (Claude Code, Claude Desktop, Cursor…), or through WebMCP in the open tab. One tool catalog serves both (see [AI agents](#104-ai-agents-mcp-and-webmcp)). | `src/schemas/ai-tools.ts`, `src/data/ai-*.server.ts` |
 | **Backdrops** | A per-person choice of background design and palette for each section of the app. | `src/schemas/backdrop*.ts`, `src/components/shell/scenery.tsx` |
 | **Feedback** | "Send feedback…" in the account menu. It files a task in the maintainer's own account (see [Feedback](#710-feedback)). | `src/data/feedback.server.ts` |
 | **PWA** | Installable, with a service worker that caches the hashed bundle and keeps the last copy of Today for offline launches, and home-screen shortcuts to Today, Checklists and Priority. | `public/sw.js`, `public/manifest.webmanifest` |
@@ -99,6 +100,7 @@ generated from them; do not edit it.
 | `/settings` | `settings.tsx` | Account, where you work (spaces and teams), task types, notifications, team messages, notification codes. |
 | `/api/auth/$` | `api/auth/$.ts` | Better Auth handler (GET and POST). |
 | `/api/notify` | `api/notify.ts` | Public endpoint for notification codes. |
+| `/api/mcp` | `api/mcp.ts` | MCP server for AI agents, authenticated by an AI access token. |
 
 The navigation entries and their number-key shortcuts are defined in
 `src/components/shell/nav-items.ts`.
@@ -1000,6 +1002,7 @@ One database, `thunderlist`. Collection types are declared in
 | `counters` | (space, kind) | `userId` | `last` number handed out |
 | `pushSubscriptions` | device | `email` | web-push endpoint + keys |
 | `notificationCodes` | code | `userId` + `createdBy` | secret `ntf_…` |
+| `aiTokens` | AI access token | `userId` (always a person) | only the SHA-256 `tokenHash` of `tla_…`; `teamId` is the space it works in |
 | `preferences` | **person** (account, not space) | `userId` | `backdrops` per section |
 | `teams` | team | — | `teamId`, `name`, `createdAt` |
 | `members` | (team, person) | — | `teamId`, lower-cased `email`, `role`, `addedAt` |
@@ -1070,6 +1073,7 @@ has a globally unique index; every other index leads with `userId`.
 | `counters` | `userId, kind` unique |
 | `pushSubscriptions` | `endpoint` unique; `email` |
 | `notificationCodes` | `code` unique; `userId, createdBy` |
+| `aiTokens` | `tokenHash` unique; `tokenId` unique; `userId` |
 | `teams` | `teamId` unique |
 | `members` | `teamId, email` unique; `email` |
 | `taskRefs` | `itemId` unique; `userId, taskId`; `userId, list, sortOrder` |
@@ -1136,7 +1140,8 @@ Several of these (`ensureInbox`, `ensureBacklog`, `ensureNumbered`) cache
   `--duration-slow` and eases the wash colour across (a registered
   `--deco-1`). The fade is on each shape's opacity through `--deco-fade`,
   not on the drawing as a whole, so shapes keep blending into the wash
-  throughout. Reduced motion swaps them at once.
+  throughout. The app animates the same with or without a reduced-motion
+  setting.
 - **Touch targets**: on a coarse pointer the buttons on a task row are drawn
   at their mouse size (so a lit flag or pressed button is the same small
   square), with an invisible 44px pressable area around each, spaced so no
@@ -1268,6 +1273,52 @@ Responses: `200 { people, devices }`; or `{ error }` with status 400 (bad
 input), 403 (the team code's maker can no longer message the team), 404 (no
 such code), 503 (push keys missing), 502 or 500 (send failure). CORS allows
 any origin. **There is no rate limit.**
+
+### 10.4 AI agents: MCP and WebMCP
+
+Every feature can be driven by an AI agent. There is **one tool catalog**,
+`AI_TOOLS` in `src/schemas/ai-tools.ts` (55 tools: reading, tasks, checklists,
+tags, trackers and readings, groups, plans, countdowns, task types, ordering,
+sharing, backdrops, spaces, teams, team messages, notification codes and
+feedback), served two ways:
+
+| | MCP (`/api/mcp`) | WebMCP (in the tab) |
+|---|---|---|
+| For | An assistant outside the browser: Claude Code, Claude Desktop, Cursor, VS Code | An agent in the browser that supports WebMCP (`document.modelContext`; `navigator.modelContext` in Chrome before 150) |
+| Who it acts as | Whoever made the AI access token sent as `Authorization: Bearer tla_…` | Whoever the tab is signed in as |
+| Space | The token's `teamId`; `switch_space` changes it for later calls | The `thunderlist-space` cookie, as Settings sets it |
+| Changes are made | On the server, by `applyAiChanges` → `applyChange` | In the tab, by `useApplyChange`: drawn at once, undoable with Ctrl+Z |
+| Extra tool | — | `open_page`, to navigate the tab |
+
+How a call runs (`runAiTool` in `src/data/ai-tools.server.ts`):
+
+1. The input is checked against the tool's Valibot schema. Things are named
+   by id, number (`T-42`) or exact name (`src/data/ai-lookup.server.ts`); a
+   name several things share is refused with their numbers.
+2. Reads and account operations (`ai-reads.server.ts`, `ai-account.server.ts`)
+   run there, through the same repositories and checks as the screens.
+3. Content tools (`ai-writes.server.ts`) **write nothing**: they return the
+   `Change`s that do the job, built the way `src/lib/changes.ts` builds them
+   (ids minted, `#tags` written into titles, new tags made first, many tasks
+   as one `task.batch`). Each is validated against the `Change` schema, then
+   made by the caller, so roles, access lists and the app's rules apply
+   exactly as for a screen.
+
+The tab gets its tool list from `listAiToolsFn` and calls `runAiToolFn`
+(`src/lib/use-webmcp.ts`, mounted by `AppFrame`); nothing is requested in a
+browser without WebMCP. The MCP route is stateless (a server per request,
+JSON responses), so it runs wherever the app does.
+
+**AI access tokens** are made in Settings → AI assistants, which shows the
+`claude mcp add` command and a JSON config. A token is minted in the browser
+(`createAiTokenSecret`), shown once, and stored only as a SHA-256 hash; it
+works in the space it was made in. Deleting it stops it at once. Every use
+updates `lastUsedAt`. **There is no rate limit**, and claude.ai web
+connectors (which need OAuth) are not supported.
+
+To add a tool: add it to `AI_TOOLS`, then a handler under the same name in
+one of the three `ai-*.server.ts` files. `AiHandlers` makes the compiler
+insist on both.
 
 ---
 

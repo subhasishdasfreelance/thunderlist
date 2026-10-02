@@ -62,6 +62,8 @@ export const queryKeys = {
 	tagSummaries: ["tag-summaries"] as const,
 	/** Your notification codes here; see `NotificationCode`. */
 	notificationCodes: ["notification-codes"] as const,
+	/** Your AI access tokens, in every space; see `AiToken`. */
+	aiTokens: ["ai-tokens"] as const,
 	/** Every plan, without its body; see `PlanSummary`. */
 	plans: ["plans"] as const,
 	plan: (planId: string) => ["plans", planId] as const,
