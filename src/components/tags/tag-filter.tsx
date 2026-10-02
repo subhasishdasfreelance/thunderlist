@@ -32,10 +32,11 @@ export function TagFilter({
 		onClick: () => onChange(tag.tagId),
 	});
 
-	// Today is a plan rather than a subject, so it is kept apart from the
-	// rest. A group with nothing in it is left out.
-	const plans = tags.filter((tag) => tag.special !== null);
+	// Today is a plan rather than a subject, so it comes first, set apart from
+	// the rest by a divider.
+	const special = tags.filter((tag) => tag.special !== null);
 	const others = tags.filter((tag) => tag.special === null);
+	const divider = { type: "divider" as const };
 
 	return (
 		<DropdownMenu
@@ -54,27 +55,10 @@ export function TagFilter({
 					endContent: tick(value === undefined),
 					onClick: () => onChange(undefined),
 				},
-				{ type: "divider" as const },
-				...(plans.length === 0
-					? []
-					: [
-							{
-								type: "section" as const,
-								id: "plans",
-								title: "Plans",
-								items: plans.map(option),
-							},
-						]),
-				...(others.length === 0
-					? []
-					: [
-							{
-								type: "section" as const,
-								id: "tags",
-								title: "Tags",
-								items: others.map(option),
-							},
-						]),
+				divider,
+				...special.map(option),
+				...(special.length > 0 && others.length > 0 ? [divider] : []),
+				...others.map(option),
 			]}
 		/>
 	);

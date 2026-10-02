@@ -1,9 +1,118 @@
 # Master Topic List
 
 Extracted from the 33 JDs in `JD/`, plus topics added for current market demand (marked **★ Market**).
-Not prioritized yet. Subtopics come in the next stage.
+Prioritized for AI-native full-stack / forward-deployed engineer roles: `-ui` urgent and important, `-u` urgent, `-i` important. Subtopics are in `subtopics.md`, tagged with their topic's `#tag`.
 
 **What the JDs look like:** mostly Lead / Principal / Staff / Forward-Deployed AI Engineer roles (agents, RAG, LLMOps), plus Java/full-stack lead roles, a frontend role, and engineering-manager / practice-lead roles. Nearly every role expects full-stack production engineering *and* AI engineering *and* leadership.
+
+---
+
+## Priority list
+
+Python for production systems #python -ui
+TypeScript, JavaScript & Node.js #typescript -i
+Java & Spring Boot #java
+A systems language: Go or Rust #go-rust
+Concurrency & parallelism #concurrency
+OOP, SOLID & design patterns #design-patterns -u
+Low-level design (LLD) #lld
+Data structures #data-structures -u
+Algorithms & problem-solving patterns #algorithms -ui
+System design fundamentals #system-design -ui
+Distributed systems #distributed-systems
+Microservices architecture #microservices
+Event-driven architecture & messaging #event-driven
+API design & integration #api-design -i
+Architecture styles & domain-driven design #ddd
+Performance engineering & caching #performance
+Durable workflows & background processing #durable-workflows
+Classic system design case studies #sd-case-studies -u
+GenAI & agentic system design case studies #genai-system-design -ui
+Scaling architecture patterns (advanced) #scaling
+Relational databases & SQL #sql -i
+NoSQL databases #nosql
+Data engineering & pipeline orchestration #data-engineering
+Big data & lakehouse #big-data
+Search & information retrieval #search
+Advanced database internals & performance #db-internals
+Database scaling & high availability #db-scaling
+React & Next.js #react -i
+Angular #angular
+Vue.js & Nuxt #vue
+React Native #react-native
+Modern full-stack TypeScript stack #ts-fullstack
+Frontend engineering at scale #frontend
+Real-time & streaming web #realtime-web
+UX & interfaces for AI products #ai-ux
+Full-stack AI application development #ai-fullstack -ui
+AI SDKs for TypeScript & Java #ai-sdks
+LLM foundations #llm-foundations -i
+Foundation model APIs & model selection #model-apis
+Prompt & context engineering #prompting -i
+Structured outputs & tool calling #tool-calling -i
+RAG foundations #rag -ui
+Advanced retrieval #advanced-rag -i
+Vector databases & embedding strategies #vector-db
+Knowledge graphs & GraphRAG #graphrag
+Document AI & unstructured data ingestion #document-ai
+AI agent architecture & patterns #agents -ui
+Multi-agent systems & orchestration #multi-agent -i
+Agent frameworks & SDKs #agent-frameworks -i
+Model Context Protocol (MCP) #mcp -i
+Agent memory & state management #agent-memory
+Human-in-the-loop design #hitl
+LLM & agent evaluation #evals -ui
+LLM observability & tracing #llm-observability -i
+Guardrails & reliability for non-deterministic systems #guardrails -i
+LLM cost & latency optimization #llm-cost -i
+Fine-tuning & model adaptation #fine-tuning
+LLM serving & inference infrastructure #llm-serving
+LLMOps & AI platform engineering #llmops
+Multimodal & voice AI #multimodal
+AI security #ai-security -i
+Responsible AI, governance & compliance #responsible-ai
+ML fundamentals #ml
+Deep learning & PyTorch #deep-learning
+Statistics & experimentation #statistics
+Applied ML problem types #applied-ml
+MLOps #mlops
+AI coding agents in daily engineering #ai-coding -i
+Agentic SDLC & AI adoption at team / org level #agentic-sdlc
+AWS #aws -i
+AWS deep dive: IAM & security #aws-iam
+AWS deep dive: serverless #aws-serverless
+AWS deep dive: containers (ECS & EKS) #aws-containers
+AWS deep dive: data services #aws-data
+AWS deep dive: generative AI (Bedrock & AgentCore) #aws-bedrock
+Azure & GCP for AI workloads #azure-gcp
+Docker & Kubernetes #kubernetes
+Infrastructure as Code #iac
+CI/CD & GitOps #cicd
+Observability #observability
+Reliability engineering & incident management #reliability
+Cloud architecture & cost management #cloud-architecture
+Application & API security #appsec
+Identity & access management #iam
+Data protection & privacy #privacy
+Testing strategy & test automation #testing
+Engineering standards & code review #code-review
+Debugging & production troubleshooting #debugging
+Technical leadership & strategy #tech-leadership
+Mentoring & raising team capability #mentoring
+People management #people-management
+Stakeholder management & influence #stakeholders
+Technical communication & writing #tech-writing
+Execution & delivery management #delivery
+Engineering excellence & org change #eng-excellence
+Behavioral interviews & leadership stories #behavioral -ui
+Product thinking & discovery #product-thinking
+Requirements & product artifacts #requirements
+Prioritization & roadmapping #roadmapping
+Prototype to production #prototype-to-prod -i
+Forward-deployed & customer-facing engineering #fde -i
+Product metrics & ROI of AI #ai-roi
+Building internal platforms & tools #internal-platforms
+Public technical presence #public-presence -u
 
 ---
 
