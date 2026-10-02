@@ -32,6 +32,7 @@ export const getChecklistFn = createServerFn()
 			return getChecklist(scope.ownerId, data.checklistId, scope.hidden, {
 				assignee: data.assignee,
 				tag: data.tag,
+				type: data.type,
 			});
 		}),
 	);
