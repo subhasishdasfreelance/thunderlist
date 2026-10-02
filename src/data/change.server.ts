@@ -50,13 +50,21 @@ import { shareItems } from "./items.server";
 import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
 import { sendAssigned, sendAssignedMany } from "./reminder.server";
 import {
+	addToGroup,
+	assertGroupHasRoom,
 	createGroup,
 	deleteGroup,
 	setArrangement,
 	setTaskTypes,
 	updateGroup,
 } from "./settings.server";
-import { createTag, deleteTag, deleteTags, updateTag } from "./tag.server";
+import {
+	createTag,
+	deleteTag,
+	deleteTags,
+	deleteUnusedTags,
+	updateTag,
+} from "./tag.server";
 import type { Scope } from "./team.server";
 import {
 	createProgressEntry,
@@ -192,6 +200,16 @@ async function run(
 				deadlineTime: null,
 			});
 			return;
+
+		// Room checked first, so a full group is not left with checklists
+		// made for it and never put in it.
+		case "group.importInto": {
+			const items = importedItems(change.checklists);
+			await assertGroupHasRoom(userId, change.groupId, items);
+			await importChecklists(userId, change);
+			await addToGroup(userId, change.groupId, items);
+			return;
+		}
 
 		case "plan.create":
 			await createPlan(userId, change);
@@ -378,6 +396,7 @@ async function assertAllowed(
 
 		// Its checklists are new, so only the tags its tasks carry are asked about.
 		case "group.import":
+		case "group.importInto":
 			for (const list of change.checklists) {
 				for (const task of list.tasks) {
 					assertNewTaskReaches(scope, {
@@ -781,13 +800,110 @@ async function applyBatch(
 	if (refusal !== null) throw refusal;
 }
 
+/**
+ * The tags on whatever a change may take a tag off — by editing its tags,
+ * moving a task out of the checklist it took tags from, or deleting it — read
+ * before the change is made, so any it leaves on nothing can go after; see
+ * `deleteUnusedTags`.
+ */
+async function tagsAtRisk(
+	userId: string,
+	change: Change,
+): Promise<Array<string>> {
+	const taskIds: Array<string> = [];
+	const checklistIds: Array<string> = [];
+	// Deleted, so their tasks go with them.
+	const goneChecklistIds: Array<string> = [];
+	const trackerIds: Array<string> = [];
+
+	switch (change.kind) {
+		case "task.update":
+			if (change.patch.tagIds !== undefined) taskIds.push(change.taskId);
+			break;
+		case "task.move":
+		case "task.delete":
+			taskIds.push(change.taskId);
+			break;
+		case "task.deleteMany":
+			taskIds.push(...change.taskIds);
+			break;
+		case "task.batch":
+			for (const each of change.changes) {
+				if (each.kind === "task.move" || each.patch.tagIds !== undefined) {
+					taskIds.push(each.taskId);
+				}
+			}
+			break;
+		case "checklist.update":
+			if (change.patch.tagIds !== undefined) {
+				checklistIds.push(change.checklistId);
+			}
+			break;
+		case "checklist.delete":
+			goneChecklistIds.push(change.checklistId);
+			break;
+		case "tracker.update":
+			if (change.patch.tagIds !== undefined) trackerIds.push(change.trackerId);
+			break;
+		case "tracker.delete":
+			trackerIds.push(change.trackerId);
+			break;
+		case "items.delete":
+			if (change.of === "checklist") goneChecklistIds.push(...change.ids);
+			if (change.of === "tracker") trackerIds.push(...change.ids);
+			break;
+		default:
+			return [];
+	}
+
+	const current = await collections();
+	const allChecklistIds = [...checklistIds, ...goneChecklistIds];
+	const [onTasks, onChecklists, inChecklists, onTrackers] = await Promise.all([
+		taskIds.length === 0
+			? []
+			: current.tasks.distinct("tagIds", {
+					userId,
+					taskId: { $in: taskIds },
+				}),
+		allChecklistIds.length === 0
+			? []
+			: current.checklists.distinct("tagIds", {
+					userId,
+					checklistId: { $in: allChecklistIds },
+				}),
+		goneChecklistIds.length === 0
+			? []
+			: current.tasks.distinct("tagIds", {
+					userId,
+					checklistId: { $in: goneChecklistIds },
+				}),
+		trackerIds.length === 0
+			? []
+			: current.trackers.distinct("tagIds", {
+					userId,
+					trackerId: { $in: trackerIds },
+				}),
+	]);
+
+	// A checklist or tracker made before it could carry tags has no list.
+	return [...onTasks, ...onChecklists, ...inChecklists, ...onTrackers].filter(
+		(tagId) => tagId !== undefined,
+	);
+}
+
 /** Log the real cause, hand back something a person can act on. */
 export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
-		if (change.kind === "task.batch") {
-			await applyBatch(scope, change.changes);
-		} else {
-			await applyOne(scope, change);
+		const atRisk = await tagsAtRisk(scope.ownerId, change);
+		try {
+			if (change.kind === "task.batch") {
+				await applyBatch(scope, change.changes);
+			} else {
+				await applyOne(scope, change);
+			}
+		} finally {
+			// Even after a refusal: a batch refused part way made the rest.
+			await deleteUnusedTags(scope.ownerId, atRisk);
 		}
 	} catch (error) {
 		if (error instanceof AppError) {

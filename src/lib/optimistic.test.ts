@@ -1357,6 +1357,59 @@ describe("applyOptimistically, on the rest", () => {
 			}),
 		]);
 	});
+
+	it("draws an outline imported into a group, after what it holds", () => {
+		const queryClient = client();
+		queryClient.setQueryData<Array<Group>>(queryKeys.groups, [
+			{
+				groupId: "grp_1",
+				name: "Prep",
+				color: "blue",
+				items: [{ kind: "tracker", id: "trk_1" }],
+				createdAt: "2026-10-01T00:00:00.000Z",
+				updatedAt: "2026-10-01T00:00:00.000Z",
+			},
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "group.importInto",
+			groupId: "grp_1",
+			startDate: "2026-10-02",
+			checklists: [
+				{
+					checklistId: "chk_py",
+					title: "Python",
+					description: "",
+					tasks: [
+						{
+							taskId: "tsk_a",
+							title: "asyncio gather",
+							addedAt: "2026-10-02T00:00:00.000Z",
+							tagIds: [],
+							urgent: false,
+							important: false,
+						},
+					],
+				},
+			],
+		});
+
+		expect(
+			checklists(queryClient)?.map((each) => [
+				each.title,
+				each.progress.total,
+			]),
+		).toEqual([
+			["chk_1", 1],
+			["Python", 1],
+		]);
+		expect(
+			queryClient.getQueryData<Array<Group>>(queryKeys.groups)?.[0].items,
+		).toEqual([
+			{ kind: "tracker", id: "trk_1" },
+			{ kind: "checklist", id: "chk_py" },
+		]);
+	});
 });
 
 describe("applyOptimistically, moving a task", () => {

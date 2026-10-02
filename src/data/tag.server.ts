@@ -8,6 +8,9 @@
  * carrying it, because the title is where a name is read back from; see
  * `renameInTitles`.
  *
+ * A tag is made by putting it on something, and goes once nothing carries it;
+ * see `deleteUnusedTags`.
+ *
  * One tag is special: Today. Every account has it, it is made the first time
  * its tags are read, and it cannot be deleted; see `SPECIAL_TAGS`. The Backlog
  * was the other, and is a checklist now; see `ensureBacklog`.
@@ -193,7 +196,8 @@ function isDuplicateKey(error: unknown): boolean {
 
 /**
  * Make sure an account has its special tags, nothing left on the lists they
- * replaced, and no Backlog tag left from before the Backlog was a checklist.
+ * replaced, no Backlog tag left from before the Backlog was a checklist, and
+ * no tag left empty from before empty tags were deleted.
  *
  * Called on the way into every read of the tags, so a new account has them
  * before its first screen is drawn. A tag the account already has by that name
@@ -248,6 +252,7 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 
 	await moveListsIntoTags(current, userId);
 	await ensureBacklog(userId);
+	await deleteEmptyTags(current, userId);
 	ensured.add(userId);
 }
 
@@ -309,6 +314,24 @@ async function moveListsIntoTags(
 		userId,
 		itemId: { $in: refs.map((ref) => ref.itemId) },
 	});
+}
+
+/**
+ * Every tag of an account's that nothing carries, deleted; see
+ * `deleteUnusedTags`. Tags left empty before they were deleted as they emptied
+ * go the first time the account's tags are read.
+ */
+async function deleteEmptyTags(
+	current: Collections,
+	userId: string,
+): Promise<void> {
+	const tags = await current.tags
+		.find({ userId, special: null }, { projection: { _id: 0, tagId: 1 } })
+		.toArray();
+	await deleteUnusedTags(
+		userId,
+		tags.map((tag) => tag.tagId),
+	);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -925,4 +948,46 @@ export async function deleteTags(
 	// Already gone is the outcome this asked for, not a failure.
 	await current.tags.deleteMany({ tagId: { $in: ids }, userId });
 	await clearDependencies(userId, "tag", ids);
+}
+
+/**
+ * Delete whichever of these tags is now on nothing — no task, checklist or
+ * tracker carries it. A tag with nothing in it is not kept: it exists only by
+ * being on something. Today stays, empty or not.
+ *
+ * After a change, only the tags it may have taken off something are asked
+ * about, never every tag: a tag typed into a task is made a moment before the
+ * task that carries it is saved, and a sweep landing in between would take
+ * it; see `applyChange`. Every tag is asked about once, on the way in; see
+ * `deleteEmptyTags`.
+ */
+export async function deleteUnusedTags(
+	userId: string,
+	tagIds: ReadonlyArray<string>,
+): Promise<void> {
+	if (tagIds.length === 0) return;
+
+	const current = await collections();
+	const ids = [...new Set(tagIds)];
+	const carrying = { userId, tagIds: { $in: ids } };
+	const [onTasks, onChecklists, onTrackers] = await Promise.all([
+		current.tasks.distinct("tagIds", carrying),
+		current.checklists.distinct("tagIds", carrying),
+		current.trackers.distinct("tagIds", carrying),
+	]);
+	const used = new Set([...onTasks, ...onChecklists, ...onTrackers]);
+	const unused = ids.filter((tagId) => !used.has(tagId));
+	if (unused.length === 0) return;
+
+	const empty = await current.tags
+		.find(
+			{ userId, tagId: { $in: unused }, special: null },
+			{ projection: { _id: 0, tagId: 1 } },
+		)
+		.toArray();
+	if (empty.length === 0) return;
+
+	const emptyIds = empty.map((tag) => tag.tagId);
+	await current.tags.deleteMany({ userId, tagId: { $in: emptyIds } });
+	await clearDependencies(userId, "tag", emptyIds);
 }

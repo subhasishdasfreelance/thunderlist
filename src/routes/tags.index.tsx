@@ -1,11 +1,9 @@
-import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
@@ -22,9 +20,8 @@ import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { TagCard } from "#/components/tags/tag-card";
-import { TagFormDialog } from "#/components/tags/tag-form-dialog";
 import { UntaggedCard } from "#/components/tags/untagged-card";
-import { createTag, useApplyChange } from "#/lib/changes";
+import { useApplyChange } from "#/lib/changes";
 import { compareBehind } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { usePickMode } from "#/lib/use-pick-mode";
@@ -75,7 +72,6 @@ export const Route = createFileRoute("/tags/")({
  */
 function TagsPage() {
 	const { apply } = useApplyChange();
-	const [isCreating, setIsCreating] = useState(false);
 	const [isArranging, setIsArranging] = useState(false);
 	const { canManageContent } = usePermissions();
 	// Several picked out, to change together; see `usePickMode`.
@@ -122,17 +118,7 @@ function TagsPage() {
 
 	return (
 		<VStack gap={4}>
-			<HStack gap={2} hAlign="between" vAlign="center">
-				<Heading level={1}>Tags</Heading>
-				{canManageContent ? (
-					<Button
-						label="New tag"
-						variant="primary"
-						icon={<Plus aria-hidden />}
-						onClick={() => setIsCreating(true)}
-					/>
-				) : null}
-			</HStack>
+			<Heading level={1}>Tags</Heading>
 
 			{isError ? (
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
@@ -143,7 +129,7 @@ function TagsPage() {
 					{tags.length === 0 ? (
 						<EmptyState
 							title="No tags yet."
-							description="Create one here, or write #name in any task."
+							description="Write #name in any task to make one."
 						/>
 					) : (
 						<>
@@ -225,16 +211,6 @@ function TagsPage() {
 				onSave={(next) => {
 					saveArrangement(apply, "tags", next);
 					setIsArranging(false);
-				}}
-			/>
-
-			<TagFormDialog
-				isOpen={isCreating}
-				onOpenChange={setIsCreating}
-				existingNames={tags.map((tag) => tag.name)}
-				onSubmit={(values) => {
-					createTag(apply, values);
-					setIsCreating(false);
 				}}
 			/>
 		</VStack>

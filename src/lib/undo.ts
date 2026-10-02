@@ -18,8 +18,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
 import { dependentsOf, findCachedTask, stagesOf } from "#/lib/optimistic";
 import { shortTitle } from "#/lib/tasks/tasks";
+import { queryKeys } from "#/queries/keys";
 import { type Change, isBatchable } from "#/schemas/change";
 import { type Stage, stageOf } from "#/schemas/checklist";
+import type { Tag, TagSummary } from "#/schemas/tag";
 import type { Task, TaskPatch } from "#/schemas/task";
 
 /** One step back: what it puts right, and the changes that do it. */
@@ -197,6 +199,69 @@ function putBack(
 }
 
 /**
+ * The tags these tasks are losing, made again ahead of putting them back: a
+ * tag whose last task it came off was deleted with it; see
+ * `deleteUnusedTags`. Making one that is still there changes nothing, so a tag
+ * the Tags screen shows on other tasks too is left out, and Today, which is
+ * never deleted, always is.
+ */
+function tagsBack(
+	client: QueryClient,
+	tasks: ReadonlyArray<Pick<Task, "tagIds">>,
+): Array<Change> {
+	const summaries = client.getQueryData<Array<TagSummary>>(
+		queryKeys.tagSummaries,
+	);
+	const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
+
+	return tags.flatMap((tag) => {
+		if (tag.special != null) return [];
+		const losing = tasks.filter((task) => task.tagIds.includes(tag.tagId));
+		if (losing.length === 0) return [];
+		const total = summaries?.find((each) => each.tagId === tag.tagId)?.progress
+			.total;
+		if (total !== undefined && total > losing.length) return [];
+
+		return [
+			{
+				kind: "tag.create" as const,
+				tagId: tag.tagId,
+				name: tag.name,
+				color: tag.color,
+				description: tag.description ?? "",
+				startDate: tag.startDate ?? null,
+				deadline: tag.deadline ?? null,
+				deadlineTime: tag.deadlineTime ?? null,
+				dailyWindow: tag.dailyWindow ?? null,
+				access: tag.access ?? null,
+			},
+		];
+	});
+}
+
+/**
+ * The tags an edit or a move takes off a task: the ones an edit leaves out,
+ * and for a move all of them, since moving takes off those it had from the
+ * checklist it left.
+ */
+function tagsTakenOff(
+	client: QueryClient,
+	change: Extract<Change, { kind: "task.update" | "task.move" }>,
+): Pick<Task, "tagIds"> {
+	const found = findCachedTask(client, change.taskId);
+	if (found === null) return { tagIds: [] };
+	if (change.kind === "task.move") return found.task;
+
+	const { tagIds } = change.patch;
+	return {
+		tagIds:
+			tagIds === undefined
+				? []
+				: found.task.tagIds.filter((tagId) => !tagIds.includes(tagId)),
+	};
+}
+
+/**
  * What would put `change` back, read off the caches as they are before it is
  * applied. `null` for a change nothing here can reverse.
  */
@@ -218,7 +283,10 @@ export function invertChange(
 
 			return {
 				label: `Edit to "${shortTitle(found.task.title)}"`,
-				changes: [{ kind: "task.update", taskId: change.taskId, patch }],
+				changes: [
+					...tagsBack(client, [tagsTakenOff(client, change)]),
+					{ kind: "task.update", taskId: change.taskId, patch },
+				],
 				question: null,
 			};
 		}
@@ -239,6 +307,7 @@ export function invertChange(
 			return {
 				label: `Moving "${shortTitle(task.title)}"`,
 				changes: [
+					...tagsBack(client, [tagsTakenOff(client, change)]),
 					{
 						kind: "task.move",
 						taskId: change.taskId,
@@ -293,7 +362,10 @@ export function invertChange(
 
 			return {
 				label: `Deleting "${title}"`,
-				changes: putBack(client, found.task, found.checklistId),
+				changes: [
+					...tagsBack(client, [found.task]),
+					...putBack(client, found.task, found.checklistId),
+				],
 				question: `Undo deleting "${title}"? The task will be put back.`,
 			};
 		}
@@ -310,7 +382,13 @@ export function invertChange(
 
 			return {
 				label: `Deleting ${count}`,
-				changes: putBackMany(client, found),
+				changes: [
+					...tagsBack(
+						client,
+						found.map(({ task }) => task),
+					),
+					...putBackMany(client, found),
+				],
 				question: `Undo deleting ${count}? They will be put back.`,
 			};
 		}
@@ -330,6 +408,12 @@ export function invertChange(
 			return {
 				label: count === 1 ? steps[0].label : `Changes to ${count} tasks`,
 				changes: [
+					// Asked of them all together: a tag the batch took off its last
+					// three tasks is on others still for each one alone.
+					...tagsBack(
+						client,
+						change.changes.map((each) => tagsTakenOff(client, each)),
+					),
 					{
 						kind: "task.batch",
 						changes: steps

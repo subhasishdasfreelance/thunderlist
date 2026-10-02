@@ -9,6 +9,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { type OutlineChecklist, parseOutline } from "#/lib/outline";
+import type { Group } from "#/schemas/group";
 import { pickableColor, type TagColor } from "#/schemas/tag";
 import { MAX_TASKS_AT_ONCE } from "#/schemas/task";
 import { GroupBadge } from "./group-card";
@@ -35,15 +36,20 @@ export type GroupImportValues = {
  * Make a group from a pasted Markdown outline: each `#` heading a checklist,
  * the `##` line under it its description, and every other line a task in it.
  * See `parseOutline`.
+ *
+ * Given a `group`, the outline's checklists go into that one instead, so only
+ * the outline is asked for.
  */
 export function GroupImportDialog({
 	isOpen,
 	onOpenChange,
 	onSubmit,
+	group,
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
 	onSubmit: (values: GroupImportValues) => void;
+	group?: Group;
 }) {
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<TagColor>("blue");
@@ -62,13 +68,19 @@ export function GroupImportDialog({
 		(sum, each) => sum + each.tasks.length,
 		0,
 	);
+	const room = MAX_CHECKLISTS - (group?.items.length ?? 0);
 	const tooMany =
-		checklists.length > MAX_CHECKLISTS
-			? `At most ${MAX_CHECKLISTS} checklists in a group.`
+		checklists.length > room
+			? group === undefined
+				? `At most ${MAX_CHECKLISTS} checklists in a group.`
+				: `At most ${MAX_CHECKLISTS} things in a group; this one has room for ${room.toLocaleString()} more.`
 			: taskCount > MAX_TASKS_AT_ONCE
 				? `At most ${MAX_TASKS_AT_ONCE.toLocaleString()} tasks at once.`
 				: null;
-	const canImport = trimmed !== "" && checklists.length > 0 && tooMany === null;
+	const canImport =
+		(group !== undefined || trimmed !== "") &&
+		checklists.length > 0 &&
+		tooMany === null;
 
 	function submit(event: FormEvent) {
 		event.preventDefault();
@@ -80,8 +92,8 @@ export function GroupImportDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			number={{ kind: "group", number: undefined }}
-			title="Import group"
+			number={{ kind: "group", number: group?.number }}
+			title={group === undefined ? "Import group" : `Import into ${group.name}`}
 			onSubmit={submit}
 			actions={(formId) => (
 				<HStack gap={2} hAlign="end">
@@ -103,27 +115,31 @@ export function GroupImportDialog({
 			)}
 		>
 			<VStack gap={4}>
-				<HStack gap={3} vAlign="end">
-					<GroupBadge group={{ color }} size="lg" />
-					<span className="min-w-0 flex-1">
-						<TextInput
-							autoComplete="off"
-							label="Name"
-							isRequired
-							value={name}
-							onChange={setName}
-							placeholder="Interview prep, Q4…"
-							width="100%"
-						/>
-					</span>
-				</HStack>
+				{group === undefined ? (
+					<>
+						<HStack gap={3} vAlign="end">
+							<GroupBadge group={{ color }} size="lg" />
+							<span className="min-w-0 flex-1">
+								<TextInput
+									autoComplete="off"
+									label="Name"
+									isRequired
+									value={name}
+									onChange={setName}
+									placeholder="Interview prep, Q4…"
+									width="100%"
+								/>
+							</span>
+						</HStack>
 
-				<Selector
-					label="Colour"
-					options={COLOR_OPTIONS}
-					value={pickableColor(color)}
-					onChange={(next) => setColor(next as TagColor)}
-				/>
+						<Selector
+							label="Colour"
+							options={COLOR_OPTIONS}
+							value={pickableColor(color)}
+							onChange={(next) => setColor(next as TagColor)}
+						/>
+					</>
+				) : null}
 
 				<VStack gap={1}>
 					<TextArea

@@ -165,6 +165,7 @@ function checklistsMade(change: Change): ReadonlyArray<string> {
 		case "checklist.create":
 			return [change.checklistId];
 		case "group.import":
+		case "group.importInto":
 			return change.checklists.map((each) => each.checklistId);
 		default:
 			return [];
@@ -533,29 +534,56 @@ export function importGroup(
 	},
 	resolveTag: (name: string) => string | null,
 ): void {
-	// A millisecond apart, first line newest, as `createTasks` stamps a paste.
-	const now = Date.now();
-
 	apply({
 		kind: "group.import",
 		groupId: createId(ID_PREFIX.group),
 		name: values.name,
 		color: values.color,
 		startDate: todayDateOnly(),
-		checklists: values.checklists.map((list) => ({
-			checklistId: createId(ID_PREFIX.checklist),
-			title: list.title,
-			description: list.description,
-			tasks: list.tasks.map((line, index) => ({
-				taskId: createId(ID_PREFIX.task),
-				title: line.title,
-				addedAt: new Date(now - index).toISOString(),
-				tagIds: resolveTags(resolveTag, line.tagNames),
-				urgent: line.urgent,
-				important: line.important,
-			})),
-		})),
+		checklists: outlineChecklists(values.checklists, resolveTag),
 	});
+}
+
+/**
+ * Add a pasted outline to a group that exists: a checklist for each heading,
+ * each with its tasks, put after what the group holds — one change, as
+ * `importGroup` makes a new group.
+ */
+export function importIntoGroup(
+	apply: ApplyChange,
+	groupId: string,
+	checklists: ReadonlyArray<OutlineChecklist>,
+	resolveTag: (name: string) => string | null,
+): void {
+	apply({
+		kind: "group.importInto",
+		groupId,
+		startDate: todayDateOnly(),
+		checklists: outlineChecklists(checklists, resolveTag),
+	});
+}
+
+/** An outline's checklists with the ids, stamps and tags a change carries. */
+function outlineChecklists(
+	checklists: ReadonlyArray<OutlineChecklist>,
+	resolveTag: (name: string) => string | null,
+) {
+	// A millisecond apart, first line newest, as `createTasks` stamps a paste.
+	const now = Date.now();
+
+	return checklists.map((list) => ({
+		checklistId: createId(ID_PREFIX.checklist),
+		title: list.title,
+		description: list.description,
+		tasks: list.tasks.map((line, index) => ({
+			taskId: createId(ID_PREFIX.task),
+			title: line.title,
+			addedAt: new Date(now - index).toISOString(),
+			tagIds: resolveTags(resolveTag, line.tagNames),
+			urgent: line.urgent,
+			important: line.important,
+		})),
+	}));
 }
 
 /**

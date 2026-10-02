@@ -388,6 +388,21 @@ function TagDetailPage() {
 		if (focusTaskId !== undefined) completedPages.reset();
 	}, [arrival, focusTaskId]);
 
+	/*
+	 * Its last task taken off, the tag is deleted; see `deleteUnusedTags`. Once
+	 * the server says so — gone from the list of tags too, so a read that only
+	 * failed is not taken for it — the screen goes back to the Tags.
+	 */
+	const isGone =
+		isError &&
+		detail !== null &&
+		tagsResult.isSuccess &&
+		!tagsResult.isFetching &&
+		!tagsResult.data.some((tag) => tag.tagId === detail.tagId);
+	useEffect(() => {
+		if (isGone) void navigate({ to: "/tags", replace: true });
+	}, [isGone, navigate]);
+
 	const tags = tagsResult.data ?? [];
 	const trackers = trackersResult.data ?? [];
 	const checklists = checklistsResult.data ?? [];

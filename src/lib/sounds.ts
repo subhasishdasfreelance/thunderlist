@@ -149,6 +149,7 @@ function soundFor(change: Change): Sound {
 		case "tag.create":
 		case "group.create":
 		case "group.import":
+		case "group.importInto":
 			return "add";
 		case "checklist.delete":
 		case "task.delete":

@@ -3,6 +3,8 @@ import { QueryClient } from "@tanstack/react-query";
 import type { StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { ChecklistSummary } from "#/schemas/checklist";
+import type { Change } from "#/schemas/change";
+import type { TagSummary } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
 import { invertChange } from "./undo";
 
@@ -29,6 +31,44 @@ function task(partial: Partial<Task> & { taskId: string }): Task {
 		...partial,
 	};
 }
+
+/** A tag on the Tags screen, carried by `total` tasks and trackers. */
+function tag(tagId: string, total: number): TagSummary {
+	return {
+		tagId,
+		name: tagId,
+		color: "blue",
+		special: null,
+		description: "",
+		startDate: null,
+		deadline: null,
+		deadlineTime: null,
+		dailyWindow: null,
+		access: null,
+		createdAt: "2026-01-01T00:00:00.000Z",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		progress: { total, completed: 0, percent: 0, inProgress: 0 },
+	};
+}
+
+/** The same tags, both as every screen reads them and as the Tags screen does. */
+function withTags(queryClient: QueryClient, tags: Array<TagSummary>) {
+	queryClient.setQueryData(queryKeys.tags, tags);
+	queryClient.setQueryData(queryKeys.tagSummaries, tags);
+}
+
+const MADE_AGAIN: Change = {
+	kind: "tag.create",
+	tagId: "tag_1",
+	name: "tag_1",
+	color: "blue",
+	description: "",
+	startDate: null,
+	deadline: null,
+	deadlineTime: null,
+	dailyWindow: null,
+	access: null,
+};
 
 /** A browser showing one checklist with four stages, holding these tasks. */
 function client(tasks: Array<Task>): QueryClient {
@@ -188,5 +228,55 @@ describe("invertChange", () => {
 				],
 			},
 		]);
+	});
+	// Off its last task, the tag was deleted; the undo has to make it again.
+	it("makes a tag again before putting it back on its last task", () => {
+		const queryClient = client([task({ taskId: "tsk_1", tagIds: ["tag_1"] })]);
+		withTags(queryClient, [tag("tag_1", 1)]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { tagIds: [] },
+		});
+
+		expect(step?.changes).toEqual([
+			MADE_AGAIN,
+			{ kind: "task.update", taskId: "tsk_1", patch: { tagIds: ["tag_1"] } },
+		]);
+	});
+
+	it("leaves alone a tag still on other tasks", () => {
+		const queryClient = client([task({ taskId: "tsk_1", tagIds: ["tag_1"] })]);
+		withTags(queryClient, [tag("tag_1", 2)]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.update",
+			taskId: "tsk_1",
+			patch: { tagIds: [] },
+		});
+
+		expect(step?.changes).toEqual([
+			{ kind: "task.update", taskId: "tsk_1", patch: { tagIds: ["tag_1"] } },
+		]);
+	});
+
+	it("counts a batch's tasks together when asking whether a tag emptied", () => {
+		const queryClient = client([
+			task({ taskId: "tsk_1", tagIds: ["tag_1"] }),
+			task({ taskId: "tsk_2", tagIds: ["tag_1"] }),
+		]);
+		withTags(queryClient, [tag("tag_1", 2)]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.batch",
+			changes: [
+				{ kind: "task.update", taskId: "tsk_1", patch: { tagIds: [] } },
+				{ kind: "task.update", taskId: "tsk_2", patch: { tagIds: [] } },
+			],
+		});
+
+		expect(step?.changes[0]).toEqual(MADE_AGAIN);
+		expect(step?.changes).toHaveLength(2);
 	});
 });

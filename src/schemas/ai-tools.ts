@@ -9,7 +9,7 @@ import {
 	timeOfDaySchema,
 } from "./common";
 import { COUNTDOWN_FORMATS } from "./countdown";
-import { GROUP_ITEM_KINDS } from "./group";
+import { GROUP_ITEM_KINDS, MAX_GROUP_NAME } from "./group";
 import { TAG_COLORS } from "./tag";
 import { GRANTED_ROLES, TEAM_ROLES } from "./team";
 
@@ -441,18 +441,6 @@ export const AI_TOOLS = {
 
 	/* Tags ------------------------------------------------------------------- */
 
-	create_tag: {
-		title: "Create tag",
-		description: "Make a tag, optionally with a schedule of its own.",
-		input: v.object({
-			name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40)),
-			color: v.optional(color),
-			description: v.optional(v.string()),
-			...schedule,
-			dailyWindow: v.optional(dailyWindow),
-			access: v.optional(access),
-		}),
-	},
 	update_tag: {
 		title: "Update tag",
 		description:
@@ -584,7 +572,7 @@ export const AI_TOOLS = {
 		description:
 			"Make a group holding any mix of checklists, trackers and tags.",
 		input: v.object({
-			name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40)),
+			name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(MAX_GROUP_NAME)),
 			color: v.optional(color),
 			items: v.optional(v.pipe(v.array(groupItemRef), v.maxLength(500))),
 			...schedule,
@@ -595,7 +583,7 @@ export const AI_TOOLS = {
 		description:
 			"Make a group from a Markdown outline: each '# Heading' starts a checklist, a deeper '## heading' under it is its description, and every other line is one of its tasks, written as add_tasks takes them (a leading '-', '*' or '1.' is dropped).",
 		input: v.object({
-			name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40)),
+			name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(MAX_GROUP_NAME)),
 			color: v.optional(color),
 			outline: v.pipe(v.string(), v.minLength(1)),
 		}),
@@ -607,7 +595,7 @@ export const AI_TOOLS = {
 		input: v.object({
 			group: ref("group", "G-1"),
 			name: v.optional(
-				v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40)),
+				v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(MAX_GROUP_NAME)),
 			),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			items: v.optional(

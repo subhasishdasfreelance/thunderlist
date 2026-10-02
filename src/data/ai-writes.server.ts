@@ -391,7 +391,6 @@ export const WRITE_TOOLS: AiHandlers<
 	| "create_checklist"
 	| "update_checklist"
 	| "delete_checklists"
-	| "create_tag"
 	| "update_tag"
 	| "delete_tags"
 	| "create_tracker"
@@ -690,34 +689,6 @@ export const WRITE_TOOLS: AiHandlers<
 	},
 
 	/* Tags ------------------------------------------------------------------- */
-
-	create_tag: async (context, input, look) => {
-		const existing = tagNamed(await look.tags(), input.name);
-		if (existing) {
-			throw new AppError(
-				"invalid_data",
-				`There is already a tag called ${existing.name}.`,
-			);
-		}
-		const tagId = createId(ID_PREFIX.tag);
-		return {
-			changes: [
-				{
-					kind: "tag.create",
-					tagId,
-					name: input.name,
-					color: input.color ?? randomColor(),
-					description: input.description ?? "",
-					startDate: input.startDate ?? null,
-					deadline: input.deadline ?? null,
-					deadlineTime: input.deadlineTime ?? null,
-					dailyWindow: input.dailyWindow ?? null,
-					access: input.access === undefined ? ownAlone(context) : input.access,
-				},
-			],
-			result: { tagId, name: input.name },
-		};
-	},
 
 	update_tag: async (_context, { tag: ref, ...fields }, look) => {
 		const tag = await findTag(look, ref);

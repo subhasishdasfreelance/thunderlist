@@ -6,13 +6,20 @@
  * never touched its types reads the defaults, and nothing is written for it.
  */
 
+import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
 import type {
 	ArrangedList,
 	Arrangement,
 	Arrangements,
 } from "#/schemas/arrangement";
-import type { Group, GroupItem, GroupItemKind } from "#/schemas/group";
+import {
+	type Group,
+	type GroupItem,
+	type GroupItemKind,
+	MAX_GROUP_ITEMS,
+	sameItem,
+} from "#/schemas/group";
 import { TAG_COLORS } from "#/schemas/tag";
 import { DEFAULT_TASK_TYPES, type TaskType } from "#/schemas/task-type";
 import { nextNumber } from "./numbers.server";
@@ -209,6 +216,51 @@ export async function updateGroup(
 				),
 				"groups.$.updatedAt": new Date().toISOString(),
 			},
+		},
+	);
+}
+
+/**
+ * Refuse to add `items` to a group that is gone, or that they would take past
+ * what a group holds. Anything it holds already is not counted again, so a
+ * retried add is not refused for what the first try put in.
+ */
+export async function assertGroupHasRoom(
+	userId: string,
+	groupId: string,
+	items: ReadonlyArray<GroupItem>,
+): Promise<void> {
+	const group = (await listGroups(userId)).find(
+		(each) => each.groupId === groupId,
+	);
+	if (group === undefined) {
+		throw new AppError("not_found", "That group no longer exists.");
+	}
+	const added = items.filter(
+		(item) => !group.items.some((each) => sameItem(each, item)),
+	);
+	if (group.items.length + added.length > MAX_GROUP_ITEMS) {
+		throw new AppError(
+			"invalid_data",
+			`At most ${MAX_GROUP_ITEMS} things in a group.`,
+		);
+	}
+}
+
+/** Put things in a group, after what it holds. Already in it stays put. */
+export async function addToGroup(
+	userId: string,
+	groupId: string,
+	items: ReadonlyArray<GroupItem>,
+): Promise<void> {
+	const current = await collections();
+	await listGroups(userId);
+
+	await current.settings.updateOne(
+		{ userId, "groups.groupId": groupId },
+		{
+			$addToSet: { "groups.$.items": { $each: [...items] } },
+			$set: { "groups.$.updatedAt": new Date().toISOString() },
 		},
 	);
 }

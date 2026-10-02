@@ -7,9 +7,15 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+	ClipboardPaste,
+	MoreHorizontal,
+	Pencil,
+	Plus,
+	Trash2,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
 import { BackButton } from "#/components/common/back-button";
@@ -33,12 +39,18 @@ import {
 	useGroupContents,
 } from "#/components/groups/group-contents";
 import { GroupFormDialog } from "#/components/groups/group-form-dialog";
+import { GroupImportDialog } from "#/components/groups/group-import-dialog";
 import { TagCard } from "#/components/tags/tag-card";
 import { TrackerCard } from "#/components/trackers/tracker-card";
-import { useApplyChange } from "#/lib/changes";
+import {
+	createTagResolver,
+	importIntoGroup,
+	useApplyChange,
+} from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
 import { computeVelocity, localMoment } from "#/lib/progress";
+import type { OutlineChecklist } from "#/lib/outline";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { usePermissions } from "#/lib/use-team";
@@ -111,6 +123,8 @@ function GroupPage() {
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isAdding, setIsAdding] = useState(false);
+	const [isImporting, setIsImporting] = useState(false);
+	const queryClient = useQueryClient();
 
 	const { data, isError, error, refetch } = useQuery(groupsQuery());
 	const tags = useQuery(tagsQuery()).data ?? [];
@@ -156,6 +170,21 @@ function GroupPage() {
 					now,
 				});
 
+	/**
+	 * A checklist for each heading, put in this group, in one change. The tags
+	 * its lines write are read first, so a tag that exists is not made again.
+	 */
+	async function importOutline(checklists: Array<OutlineChecklist>) {
+		setIsImporting(false);
+		const allTags = await queryClient.ensureQueryData(tagsQuery());
+		importIntoGroup(
+			apply,
+			groupId,
+			checklists,
+			createTagResolver(apply, allTags, canManageContent),
+		);
+	}
+
 	/** In or out of the group, drawn at once like every change. */
 	function toggle(current: Group, item: GroupItem) {
 		apply({
@@ -184,6 +213,12 @@ function GroupPage() {
 
 				{canManageContent ? (
 					<HStack gap={1} vAlign="center">
+						<Button
+							label="Import"
+							icon={<ClipboardPaste aria-hidden />}
+							variant="secondary"
+							onClick={() => setIsImporting(true)}
+						/>
 						<Button
 							label="Add"
 							icon={<Plus aria-hidden />}
@@ -330,6 +365,13 @@ function GroupPage() {
 				kinds={GROUP_ITEM_KINDS}
 				picked={group.items}
 				onToggle={(item) => toggle(group, item as GroupItem)}
+			/>
+
+			<GroupImportDialog
+				isOpen={isImporting}
+				onOpenChange={setIsImporting}
+				group={group}
+				onSubmit={(values) => void importOutline(values.checklists)}
 			/>
 
 			<GroupFormDialog

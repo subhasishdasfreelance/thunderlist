@@ -59,7 +59,7 @@ import {
 } from "#/schemas/checklist";
 import type { ItemKind, ItemRef } from "#/schemas/common";
 import type { Countdown } from "#/schemas/countdown";
-import { type Group, importedItems } from "#/schemas/group";
+import { type Group, importedItems, sameItem } from "#/schemas/group";
 import type { Plan, PlanSummary } from "#/schemas/plan";
 import {
 	shiftTagStages,
@@ -762,11 +762,15 @@ function patchSummaries(
 		}),
 	);
 
+	const emptied: Array<string> = [];
 	client.setQueryData<Array<TagSummary>>(queryKeys.tagSummaries, (list) =>
 		list?.map((tag) => {
 			const was = before?.tagIds.includes(tag.tagId) ?? false;
 			const is = after?.tagIds.includes(tag.tagId) ?? false;
 			if (!was && !is) return tag;
+			if (was && !is && tag.special == null && tag.progress.total === 1) {
+				emptied.push(tag.tagId);
+			}
 
 			const from =
 				was && before !== null
@@ -791,6 +795,10 @@ function patchSummaries(
 			};
 		}),
 	);
+
+	// Its last task gone, the tag goes too, as on the server; see
+	// `deleteUnusedTags`.
+	for (const tagId of emptied) patchTag(client, tagId, () => null);
 }
 
 /**
@@ -1812,31 +1820,7 @@ function patchFor(client: QueryClient, change: Change): void {
 		// Drawn as making each checklist, adding its tasks and then the group
 		// would be, which is what the server does in one go; see `importGroup`.
 		case "group.import":
-			for (const list of change.checklists) {
-				patchFor(client, {
-					kind: "checklist.create",
-					checklistId: list.checklistId,
-					title: list.title,
-					description: list.description,
-					startDate: change.startDate,
-					deadline: null,
-					deadlineTime: null,
-					dailyWindow: null,
-					tagIds: [],
-					access: null,
-				});
-				if (list.tasks.length > 0) {
-					patchFor(client, {
-						kind: "task.createMany",
-						checklistId: list.checklistId,
-						tasks: list.tasks.map((task) => ({
-							...task,
-							trackerId: null,
-							linkedChecklistId: null,
-						})),
-					});
-				}
-			}
+			drawOutline(client, change);
 			patchFor(client, {
 				kind: "group.create",
 				groupId: change.groupId,
@@ -1848,6 +1832,30 @@ function patchFor(client: QueryClient, change: Change): void {
 				deadlineTime: null,
 			});
 			return;
+
+		// The same, then put after what the group holds; see `importIntoGroup`.
+		case "group.importInto": {
+			drawOutline(client, change);
+			const added = importedItems(change.checklists);
+			const updatedAt = new Date().toISOString();
+			client.setQueryData<Array<Group>>(queryKeys.groups, (list) =>
+				list?.map((each) =>
+					each.groupId === change.groupId
+						? {
+								...each,
+								items: [
+									...each.items,
+									...added.filter(
+										(item) => !each.items.some((old) => sameItem(old, item)),
+									),
+								],
+								updatedAt,
+							}
+						: each,
+				),
+			);
+			return;
+		}
 
 		case "task.move": {
 			/*
@@ -2305,13 +2313,17 @@ function patchFor(client: QueryClient, change: Change): void {
 			 * list, and without the tag in it the row showed the task with its new
 			 * tag missing until the refetch.
 			 */
+			// Made again by an undo, it may still be on the lists; see `tagsBack`.
 			client.setQueryData<Array<Tag>>(queryKeys.tags, (tags) =>
-				tags === undefined ? tags : [...tags, tag],
+				tags === undefined || tags.some((each) => each.tagId === tag.tagId)
+					? tags
+					: [...tags, tag],
 			);
 			client.setQueryData<Array<TagSummary>>(
 				queryKeys.tagSummaries,
 				(summaries) =>
-					summaries === undefined
+					summaries === undefined ||
+					summaries.some((each) => each.tagId === tag.tagId)
 						? summaries
 						: [
 								...summaries,
@@ -2538,6 +2550,41 @@ function patchFor(client: QueryClient, change: Change): void {
 		default:
 			// Every kind of change a screen can make is patched above.
 			return;
+	}
+}
+
+/**
+ * An outline's checklists drawn as making each one and then adding its tasks
+ * would be; see `importChecklists`.
+ */
+function drawOutline(
+	client: QueryClient,
+	change: Extract<Change, { kind: "group.import" | "group.importInto" }>,
+): void {
+	for (const list of change.checklists) {
+		patchFor(client, {
+			kind: "checklist.create",
+			checklistId: list.checklistId,
+			title: list.title,
+			description: list.description,
+			startDate: change.startDate,
+			deadline: null,
+			deadlineTime: null,
+			dailyWindow: null,
+			tagIds: [],
+			access: null,
+		});
+		if (list.tasks.length > 0) {
+			patchFor(client, {
+				kind: "task.createMany",
+				checklistId: list.checklistId,
+				tasks: list.tasks.map((task) => ({
+					...task,
+					trackerId: null,
+					linkedChecklistId: null,
+				})),
+			});
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ import {
 	createGroupInputSchema,
 	groupIdInputSchema,
 	importGroupInputSchema,
+	importIntoGroupInputSchema,
 	updateGroupInputSchema,
 } from "./group";
 import {
@@ -195,6 +196,11 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("group.import"),
 		...importGroupInputSchema.entries,
+	}),
+	/** Checklists made from a pasted outline, into a group that exists. */
+	v.object({
+		kind: v.literal("group.importInto"),
+		...importIntoGroupInputSchema.entries,
 	}),
 
 	v.object({

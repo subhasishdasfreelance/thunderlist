@@ -34,14 +34,19 @@ const groupItemSchema = v.object({
 
 export type GroupItem = v.InferOutput<typeof groupItemSchema>;
 
+export const MAX_GROUP_NAME = 120;
+
 const groupNameSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.minLength(1, "Every group needs a name"),
-	v.maxLength(40, "Group names must be 40 characters or fewer"),
+	v.maxLength(
+		MAX_GROUP_NAME,
+		`Group names must be ${MAX_GROUP_NAME} characters or fewer`,
+	),
 );
 
-const MAX_GROUP_ITEMS = 500;
+export const MAX_GROUP_ITEMS = 500;
 
 const groupItemsSchema = v.pipe(
 	v.array(groupItemSchema),
@@ -108,6 +113,35 @@ export const updateGroupInputSchema = v.object({
 	),
 });
 
+/** The checklists a pasted outline makes, each with its tasks; see `parseOutline`. */
+const outlineChecklistsSchema = v.pipe(
+	v.array(
+		v.object({
+			checklistId: idSchema,
+			title: titleSchema,
+			description: descriptionSchema,
+			tasks: v.array(
+				v.pick(createTaskInputSchema, [
+					"taskId",
+					"title",
+					"addedAt",
+					"tagIds",
+					"urgent",
+					"important",
+				]),
+			),
+		}),
+	),
+	v.minLength(1, "Start a checklist with a # heading"),
+	v.maxLength(MAX_GROUP_ITEMS, "At most 500 checklists in a group"),
+	v.check(
+		(checklists) =>
+			checklists.reduce((sum, each) => sum + each.tasks.length, 0) <=
+			MAX_TASKS_AT_ONCE,
+		"Too many tasks at once",
+	),
+);
+
 /**
  * A group made from a pasted outline: a new checklist for each heading, each
  * with its tasks, and the group holding them all — written in one request.
@@ -119,33 +153,18 @@ export const importGroupInputSchema = v.object({
 	color: v.picklist(TAG_COLORS),
 	/** Every checklist starts on this day; see `Checklist.startDate`. */
 	startDate: dateOnlySchema,
-	checklists: v.pipe(
-		v.array(
-			v.object({
-				checklistId: idSchema,
-				title: titleSchema,
-				description: descriptionSchema,
-				tasks: v.array(
-					v.pick(createTaskInputSchema, [
-						"taskId",
-						"title",
-						"addedAt",
-						"tagIds",
-						"urgent",
-						"important",
-					]),
-				),
-			}),
-		),
-		v.minLength(1, "Start a checklist with a # heading"),
-		v.maxLength(MAX_GROUP_ITEMS, "At most 500 checklists in a group"),
-		v.check(
-			(checklists) =>
-				checklists.reduce((sum, each) => sum + each.tasks.length, 0) <=
-				MAX_TASKS_AT_ONCE,
-			"Too many tasks at once",
-		),
-	),
+	checklists: outlineChecklistsSchema,
+});
+
+/**
+ * A pasted outline added to a group that exists: its checklists made, as
+ * `importGroupInputSchema` makes them, and put after what the group holds.
+ */
+export const importIntoGroupInputSchema = v.object({
+	groupId: idSchema,
+	/** Every checklist starts on this day; see `Checklist.startDate`. */
+	startDate: dateOnlySchema,
+	checklists: outlineChecklistsSchema,
 });
 
 export type ImportGroupInput = v.InferOutput<typeof importGroupInputSchema>;

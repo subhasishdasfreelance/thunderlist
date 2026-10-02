@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { StageDot } from "#/components/common/stage-dot";
-import { AccessField, useOwnAlone } from "#/components/teams/access-field";
+import { AccessField } from "#/components/teams/access-field";
 import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { AccessEntry } from "#/schemas/access";
@@ -50,7 +50,8 @@ export const STAGE_COLOR_OPTIONS = COLOR_OPTIONS.filter(
 );
 
 /**
- * Create or edit a tag.
+ * Edit a tag. None is made here: a tag is made by writing it on something,
+ * and goes once nothing carries it; see `deleteUnusedTags`.
  *
  * Renaming here is enough to rename it everywhere: tasks reference a tag by id,
  * so the name lives in exactly one place.
@@ -58,8 +59,8 @@ export const STAGE_COLOR_OPTIONS = COLOR_OPTIONS.filter(
  * The description and dates are a checklist's, and all of them are optional: a
  * tag without dates still counts its tasks, it just has no pace to keep.
  *
- * Editing one, each stage its tasks are at can be given a colour of its own on
- * the tag's bar; left alone, a stage keeps the colour its checklist gives it.
+ * Each stage its tasks are at can be given a colour of its own on the tag's
+ * bar; left alone, a stage keeps the colour its checklist gives it.
  */
 export function TagFormDialog({
 	isOpen,
@@ -71,7 +72,7 @@ export function TagFormDialog({
 }: {
 	isOpen: boolean;
 	onOpenChange: (isOpen: boolean) => void;
-	tag?: Tag;
+	tag: Tag;
 	/** The stages its tasks are under way at, to colour; see `TagStage`. */
 	stages?: ReadonlyArray<TagStage>;
 	/** Every other tag name, so a duplicate is caught before it is queued. */
@@ -91,43 +92,33 @@ export function TagFormDialog({
 		undefined,
 	);
 	const [dailyWindow, setDailyWindow] = useState<DailyWindow | null>(null);
-	/*
-	 * Who it is for. A new one starts with nobody but its author — so adding
-	 * someone to a team hands them nothing until they are put on something —
-	 * and `null`, the whole team, stays a choice rather than the default; see
-	 * `AccessField`.
-	 */
-	const ownAlone = useOwnAlone();
+	// Who it is for; see `AccessField`.
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stageColors, setStageColors] = useState<Record<string, TagColor>>({});
 
 	useEffect(() => {
 		if (!isOpen) return;
-		setName(tag?.name ?? "");
-		setColor(tag?.color ?? "blue");
-		setDescription(tag?.description ?? "");
-		setStartDate((tag?.startDate as ISODateString | null) ?? undefined);
-		setDeadline((tag?.deadline as ISODateString | null) ?? undefined);
-		setDeadlineTime(tag?.deadlineTime ?? undefined);
-		setDailyWindow(tag?.dailyWindow ?? null);
-		setStageColors(tag?.stageColors ?? {});
-		setAccess(
-			tag === null || tag === undefined
-				? ownAlone
-				: ((tag.access ?? null) as Array<AccessEntry> | null),
-		);
-	}, [isOpen, tag, ownAlone]);
+		setName(tag.name);
+		setColor(tag.color);
+		setDescription(tag.description);
+		setStartDate((tag.startDate as ISODateString | null) ?? undefined);
+		setDeadline((tag.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(tag.deadlineTime ?? undefined);
+		setDailyWindow(tag.dailyWindow ?? null);
+		setStageColors(tag.stageColors ?? {});
+		setAccess((tag.access ?? null) as Array<AccessEntry> | null);
+	}, [isOpen, tag]);
 
 	const trimmed = name.trim();
 	const isDuplicate = existingNames.some(
 		(existing) =>
 			existing.toLowerCase() === trimmed.toLowerCase() &&
-			existing.toLowerCase() !== tag?.name.toLowerCase(),
+			existing.toLowerCase() !== tag.name.toLowerCase(),
 	);
 	// Today is written into titles by the bolt, so its name has to read back as
 	// the same tag; see `isInlineTagName`.
 	const isUnwritable =
-		tag?.special != null && trimmed !== "" && !isInlineTagName(trimmed);
+		tag.special != null && trimmed !== "" && !isInlineTagName(trimmed);
 	const isValid =
 		trimmed !== "" &&
 		!isDuplicate &&
@@ -149,8 +140,7 @@ export function TagFormDialog({
 					: null,
 			dailyWindow,
 			access,
-			// Only a tag that exists has stages to colour.
-			...(tag === undefined ? {} : { stageColors }),
+			stageColors,
 		});
 	}
 
@@ -164,8 +154,8 @@ export function TagFormDialog({
 		<FormDialog
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			number={{ kind: "tag", number: tag?.number }}
-			title={tag ? "Edit tag" : "New tag"}
+			number={{ kind: "tag", number: tag.number }}
+			title="Edit tag"
 			actions={() => (
 				<HStack gap={2} hAlign="end">
 					<Button
@@ -175,7 +165,7 @@ export function TagFormDialog({
 						onClick={() => onOpenChange(false)}
 					/>
 					<Button
-						label={tag ? "Save changes" : "Create tag"}
+						label="Save changes"
 						icon={<Check aria-hidden />}
 						variant="primary"
 						isDisabled={!isValid}
@@ -245,30 +235,28 @@ export function TagFormDialog({
 					isStartDateOptional
 				/>
 
-				{tag === undefined ? null : (
-					<VStack gap={2}>
-						<Text type="label" weight="semibold">
-							Stage colours
-						</Text>
-						{colorable.map((stage) => (
-							<Selector
-								key={stage.key}
-								label={stage.name}
-								options={STAGE_COLOR_OPTIONS}
-								value={pickableColor(stageColors[stage.key] ?? stage.color)}
-								onChange={(next) =>
-									setStageColors((held) => ({
-										...held,
-										[stage.key]: next as TagColor,
-									}))
-								}
-							/>
-						))}
-					</VStack>
-				)}
+				<VStack gap={2}>
+					<Text type="label" weight="semibold">
+						Stage colours
+					</Text>
+					{colorable.map((stage) => (
+						<Selector
+							key={stage.key}
+							label={stage.name}
+							options={STAGE_COLOR_OPTIONS}
+							value={pickableColor(stageColors[stage.key] ?? stage.color)}
+							onChange={(next) =>
+								setStageColors((held) => ({
+									...held,
+									[stage.key]: next as TagColor,
+								}))
+							}
+						/>
+					))}
+				</VStack>
 
 				{/* Today is everyone's, in a team as anywhere. */}
-				{tag?.special != null ? null : (
+				{tag.special != null ? null : (
 					<AccessField noun="tag" value={access} onChange={setAccess} />
 				)}
 			</VStack>
