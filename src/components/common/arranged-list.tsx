@@ -1,6 +1,7 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
+import { VStack } from "@astryxdesign/core/Stack";
 import { useQuery } from "@tanstack/react-query";
 import {
 	ArrowDownWideNarrow,
@@ -14,8 +15,10 @@ import {
 	TriangleAlert,
 } from "lucide-react";
 import { type ReactNode, useMemo, useSyncExternalStore } from "react";
+import { ListPagination } from "#/components/common/list-pagination";
 import { Pickable } from "#/components/common/pickable";
 import type { ApplyChange } from "#/lib/changes";
+import { usePages } from "#/lib/use-pages";
 import type { usePickMode } from "#/lib/use-pick-mode";
 import { arrangementsQuery } from "#/queries/space";
 import {
@@ -182,8 +185,9 @@ export function ListOrderMenu({
 }
 
 /**
- * The cards of a list, in the order picked, two to a row where there is room;
- * see `useArrangedList` and `.thunderlist-card-grid`.
+ * The cards of a list, in the order picked, two to a row where there is room,
+ * a page at a time; see `useArrangedList`, `.thunderlist-card-grid` and
+ * `usePages`.
  */
 export function ArrangedCards<T>({
 	items,
@@ -204,29 +208,38 @@ export function ArrangedCards<T>({
 		isPickable?: (item: T) => boolean;
 	};
 }) {
+	const paging = usePages(items);
+
 	return (
-		<div className="thunderlist-card-grid">
-			{items.map((item) => {
-				const id = idOf(item);
-				return (
-					<div key={id}>
-						{pick === undefined ? (
-							render(item)
-						) : (
-							<Pickable
-								isPicking={pick.mode.isPicking}
-								isPicked={pick.mode.picked.has(id)}
-								isPickable={pick.isPickable?.(item) ?? true}
-								label={pick.labelOf(item)}
-								onToggle={() => pick.mode.toggle(id)}
-							>
-								{render(item)}
-							</Pickable>
-						)}
-					</div>
-				);
-			})}
-		</div>
+		<VStack gap={2}>
+			<div className="thunderlist-card-grid">
+				{paging.shown.map((item) => {
+					const id = idOf(item);
+					return (
+						<div key={id}>
+							{pick === undefined ? (
+								render(item)
+							) : (
+								<Pickable
+									isPicking={pick.mode.isPicking}
+									isPicked={pick.mode.picked.has(id)}
+									isPickable={pick.isPickable?.(item) ?? true}
+									label={pick.labelOf(item)}
+									onToggle={() => pick.mode.toggle(id)}
+								>
+									{render(item)}
+								</Pickable>
+							)}
+						</div>
+					);
+				})}
+			</div>
+			<ListPagination
+				page={paging.page}
+				total={paging.total}
+				onChange={paging.setPage}
+			/>
+		</VStack>
 	);
 }
 

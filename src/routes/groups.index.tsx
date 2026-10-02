@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ClipboardPaste, Plus } from "lucide-react";
 import { useState } from "react";
+import { ListPagination } from "#/components/common/list-pagination";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { GroupCard } from "#/components/groups/group-card";
@@ -18,6 +19,7 @@ import {
 } from "#/components/groups/group-import-dialog";
 import { createTagResolver, importGroup, useApplyChange } from "#/lib/changes";
 import { createId, ID_PREFIX } from "#/lib/ids";
+import { usePages } from "#/lib/use-pages";
 import { usePermissions } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -50,6 +52,7 @@ function GroupsPage() {
 
 	const { data, isPending, isError, error, refetch } = useQuery(groupsQuery());
 	const groups = data ?? [];
+	const paging = usePages(groups);
 
 	/**
 	 * A group and a checklist for each heading, in one change. The tags its
@@ -101,15 +104,22 @@ function GroupsPage() {
 					<Text type="label" weight="semibold">
 						{groups.length} {groups.length === 1 ? "group" : "groups"}
 					</Text>
-					<div className="thunderlist-card-grid">
-						{groups.map((group) => (
-							<GroupCard
-								key={group.groupId}
-								group={group}
-								contents={contentsOf(group)}
-							/>
-						))}
-					</div>
+					<VStack gap={2}>
+						<div className="thunderlist-card-grid">
+							{paging.shown.map((group) => (
+								<GroupCard
+									key={group.groupId}
+									group={group}
+									contents={contentsOf(group)}
+								/>
+							))}
+						</div>
+						<ListPagination
+							page={paging.page}
+							total={paging.total}
+							onChange={paging.setPage}
+						/>
+					</VStack>
 				</VStack>
 			)}
 
