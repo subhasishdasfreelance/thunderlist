@@ -148,6 +148,7 @@ function soundFor(change: Change): Sound {
 		case "tracker.create":
 		case "tag.create":
 		case "group.create":
+		case "group.import":
 			return "add";
 		case "checklist.delete":
 		case "task.delete":

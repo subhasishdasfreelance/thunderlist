@@ -15,6 +15,8 @@ export const queryKeys = {
 	arrangements: ["arrangements"] as const,
 	/** The space's groups; see `groupsQuery`. */
 	groups: ["groups"] as const,
+	/** When everything a group counts was finished, for its chart. */
+	groupFinished: (groupId: string) => ["group-finished", groupId] as const,
 	searchIndex: ["search-index"] as const,
 	/** Every page of every group the Across lists screen reads, under one key. */
 	across: ["across"] as const,

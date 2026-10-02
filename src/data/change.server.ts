@@ -23,6 +23,7 @@ import { AppError } from "#/lib/errors";
 import { collections, type TaskDoc } from "#/lib/mongo/client.server";
 import { type AccessEntry, type AccessLevel, reaches } from "#/schemas/access";
 import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
+import { importedItems } from "#/schemas/group";
 import type { TaskPatch } from "#/schemas/task";
 import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
 import {
@@ -33,6 +34,7 @@ import {
 	deleteChecklists,
 	deleteTask,
 	deleteTasks,
+	importChecklists,
 	moveTask,
 	updateChecklist,
 	updateTask,
@@ -175,6 +177,20 @@ async function run(
 
 		case "group.delete":
 			await deleteGroup(userId, change.groupId);
+			return;
+
+		// The checklists first, so the group never holds one not yet written.
+		case "group.import":
+			await importChecklists(userId, change);
+			await createGroup(userId, {
+				groupId: change.groupId,
+				name: change.name,
+				color: change.color,
+				items: importedItems(change.checklists),
+				startDate: change.startDate,
+				deadline: null,
+				deadlineTime: null,
+			});
 			return;
 
 		case "plan.create":
@@ -358,6 +374,19 @@ async function assertAllowed(
 				assertLevel(scope, "checklists", change.checklistId, "full");
 			}
 			for (const task of change.tasks) assertNewTaskReaches(scope, task);
+			return;
+
+		// Its checklists are new, so only the tags its tasks carry are asked about.
+		case "group.import":
+			for (const list of change.checklists) {
+				for (const task of list.tasks) {
+					assertNewTaskReaches(scope, {
+						...task,
+						linkedChecklistId: null,
+						trackerId: null,
+					});
+				}
+			}
 			return;
 
 		case "tracker.update":

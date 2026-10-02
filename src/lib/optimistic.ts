@@ -59,7 +59,7 @@ import {
 } from "#/schemas/checklist";
 import type { ItemKind, ItemRef } from "#/schemas/common";
 import type { Countdown } from "#/schemas/countdown";
-import type { Group } from "#/schemas/group";
+import { type Group, importedItems } from "#/schemas/group";
 import type { Plan, PlanSummary } from "#/schemas/plan";
 import {
 	shiftTagStages,
@@ -1807,6 +1807,46 @@ function patchFor(client: QueryClient, change: Change): void {
 			for (const id of change.ids) {
 				patchFor(client, asStored(client, sharingOne(change.of, id, change)));
 			}
+			return;
+
+		// Drawn as making each checklist, adding its tasks and then the group
+		// would be, which is what the server does in one go; see `importGroup`.
+		case "group.import":
+			for (const list of change.checklists) {
+				patchFor(client, {
+					kind: "checklist.create",
+					checklistId: list.checklistId,
+					title: list.title,
+					description: list.description,
+					startDate: change.startDate,
+					deadline: null,
+					deadlineTime: null,
+					dailyWindow: null,
+					tagIds: [],
+					access: null,
+				});
+				if (list.tasks.length > 0) {
+					patchFor(client, {
+						kind: "task.createMany",
+						checklistId: list.checklistId,
+						tasks: list.tasks.map((task) => ({
+							...task,
+							trackerId: null,
+							linkedChecklistId: null,
+						})),
+					});
+				}
+			}
+			patchFor(client, {
+				kind: "group.create",
+				groupId: change.groupId,
+				name: change.name,
+				color: change.color,
+				items: importedItems(change.checklists),
+				startDate: change.startDate,
+				deadline: null,
+				deadlineTime: null,
+			});
 			return;
 
 		case "task.move": {

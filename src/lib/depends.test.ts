@@ -187,6 +187,9 @@ describe("groups", () => {
 			name: "Launch",
 			color: "blue",
 			items: [{ kind: "checklist", id: "chk_1" }],
+			startDate: "2026-01-01",
+			deadline: null,
+			deadlineTime: null,
 		});
 		expect(groups()?.map((each) => each.name)).toEqual(["Launch"]);
 

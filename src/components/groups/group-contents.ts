@@ -15,9 +15,15 @@ export type GroupContents = {
 	tags: Array<TagSummary>;
 	count: number;
 	/**
-	 * How far along it all is, 0-100: the average of each thing's own share
-	 * done, so a tracker counts as much as a checklist. `null` when empty.
+	 * Every task in its checklists and its tags, and each of its trackers as
+	 * one more thing to finish — the way a tag counts the trackers it carries.
+	 * A task in one of its checklists that also carries one of its tags is
+	 * counted under both.
 	 */
+	total: number;
+	/** Of those, the ones done: a tracker once it reaches its target. */
+	completed: number;
+	/** `completed` of `total`, 0-100. `null` when it holds nothing. */
 	percent: number | null;
 };
 
@@ -61,21 +67,30 @@ export function useGroupContents(): {
 				trackers: pick("tracker", maps.trackers),
 				tags: pick("tag", maps.tags),
 			};
-			const percents = [
-				...held.checklists.map((each) => each.progress.percent),
-				...held.trackers.map((each) => each.progress.percent),
-				...held.tags.map((each) => each.progress.percent),
+			const counted = [
+				...held.checklists.map((each) => each.progress),
+				...held.tags.map((each) => each.progress),
+				...held.trackers.map((each) => ({
+					total: 1,
+					completed: each.progress.percent >= 100 ? 1 : 0,
+				})),
 			];
+			const total = counted.reduce((sum, each) => sum + each.total, 0);
+			const completed = counted.reduce((sum, each) => sum + each.completed, 0);
+			const count =
+				held.checklists.length + held.trackers.length + held.tags.length;
 
 			return {
 				...held,
-				count: percents.length,
+				count,
+				total,
+				completed,
 				percent:
-					percents.length === 0
+					count === 0
 						? null
-						: Math.round(
-								percents.reduce((sum, each) => sum + each, 0) / percents.length,
-							),
+						: total === 0
+							? 0
+							: Math.round((completed / total) * 100),
 			};
 		},
 		[maps],

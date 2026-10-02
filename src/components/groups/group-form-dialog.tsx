@@ -1,4 +1,5 @@
 import { Button } from "@astryxdesign/core/Button";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Selector } from "@astryxdesign/core/Selector";
@@ -13,11 +14,14 @@ import {
 	ItemPickerDialog,
 	useItemDirectory,
 } from "#/components/common/item-picker-dialog";
+import { ScheduleFields } from "#/components/common/schedule-fields";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
+import { todayDateOnly } from "#/schemas/common";
 import {
 	GROUP_ITEM_KINDS,
 	type Group,
 	type GroupItem,
+	groupStartDate,
 	sameItem,
 } from "#/schemas/group";
 import { pickableColor, type TagColor } from "#/schemas/tag";
@@ -27,11 +31,16 @@ export type GroupValues = {
 	name: string;
 	color: TagColor;
 	items: Array<GroupItem>;
+	startDate: string;
+	deadline: string | null;
+	/** `HH:MM` on the deadline day; see `Group.deadlineTime`. */
+	deadlineTime: string | null;
 };
 
 /**
- * Make a group, or change one: its name, its colour, and what is in it —
- * checklists, trackers and tags, picked the way search finds them.
+ * Make a group, or change one: its name, its colour, its schedule — paced
+ * like a checklist, across every task in it — and what is in it: checklists,
+ * trackers and tags, picked the way search finds them.
  */
 export function GroupFormDialog({
 	isOpen,
@@ -48,6 +57,15 @@ export function GroupFormDialog({
 	const [name, setName] = useState("");
 	const [color, setColor] = useState<TagColor>("blue");
 	const [items, setItems] = useState<Array<GroupItem>>([]);
+	const [startDate, setStartDate] = useState<ISODateString | undefined>(
+		undefined,
+	);
+	const [deadline, setDeadline] = useState<ISODateString | undefined>(
+		undefined,
+	);
+	const [deadlineTime, setDeadlineTime] = useState<string | undefined>(
+		undefined,
+	);
 	const [isPicking, setIsPicking] = useState(false);
 	const directory = useItemDirectory(isOpen);
 
@@ -57,6 +75,13 @@ export function GroupFormDialog({
 		setName(group?.name ?? "");
 		setColor(group?.color ?? "blue");
 		setItems(group?.items ?? []);
+		setStartDate(
+			(group === undefined
+				? todayDateOnly()
+				: groupStartDate(group)) as ISODateString,
+		);
+		setDeadline((group?.deadline as ISODateString | null) ?? undefined);
+		setDeadlineTime(group?.deadlineTime ?? undefined);
 	}, [isOpen]);
 
 	const trimmed = name.trim();
@@ -77,8 +102,16 @@ export function GroupFormDialog({
 
 	function submit(event: FormEvent) {
 		event.preventDefault();
-		if (trimmed === "") return;
-		onSubmit({ name: trimmed, color, items });
+		if (trimmed === "" || startDate === undefined) return;
+		onSubmit({
+			name: trimmed,
+			color,
+			items,
+			startDate,
+			deadline: deadline ?? null,
+			// A time only means something on a day; see `ScheduleFields`.
+			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
+		});
 	}
 
 	return (
@@ -103,7 +136,7 @@ export function GroupFormDialog({
 							variant="primary"
 							type="submit"
 							form={formId}
-							isDisabled={trimmed === ""}
+							isDisabled={trimmed === "" || startDate === undefined}
 						/>
 					</HStack>
 				)}
@@ -129,6 +162,15 @@ export function GroupFormDialog({
 						options={COLOR_OPTIONS}
 						value={pickableColor(color)}
 						onChange={(next) => setColor(next as TagColor)}
+					/>
+
+					<ScheduleFields
+						startDate={startDate}
+						deadline={deadline}
+						deadlineTime={deadlineTime}
+						onStartDateChange={setStartDate}
+						onDeadlineChange={setDeadline}
+						onDeadlineTimeChange={setDeadlineTime}
 					/>
 
 					<VStack gap={2}>

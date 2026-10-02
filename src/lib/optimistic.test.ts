@@ -5,6 +5,7 @@ import type { Page, StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { ChecklistSummary } from "#/schemas/checklist";
+import type { Group } from "#/schemas/group";
 import type { Plan, PlanSummary } from "#/schemas/plan";
 import type { Tag, TagDetail, TagTaskEntry } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
@@ -1294,6 +1295,67 @@ describe("applyOptimistically, on the rest", () => {
 		expect(
 			queryClient.getQueryData<Array<TaskType>>(queryKeys.taskTypes),
 		).toEqual(types);
+	});
+
+	it("draws a group made from an outline, its checklists and their tasks", () => {
+		const queryClient = client();
+		queryClient.setQueryData<Array<Group>>(queryKeys.groups, []);
+
+		applyOptimistically(queryClient, {
+			kind: "group.import",
+			groupId: "grp_1",
+			name: "Prep",
+			color: "blue",
+			startDate: "2026-10-02",
+			checklists: [
+				{
+					checklistId: "chk_py",
+					title: "Python",
+					description: "Async and typing",
+					tasks: [
+						{
+							taskId: "tsk_a",
+							title: "asyncio gather",
+							addedAt: "2026-10-02T00:00:00.000Z",
+							tagIds: [],
+							urgent: false,
+							important: true,
+						},
+						{
+							taskId: "tsk_b",
+							title: "fastapi middleware",
+							addedAt: "2026-10-02T00:00:00.000Z",
+							tagIds: [],
+							urgent: false,
+							important: false,
+						},
+					],
+				},
+				{ checklistId: "chk_go", title: "Go", description: "", tasks: [] },
+			],
+		});
+
+		expect(
+			checklists(queryClient)?.map((each) => [
+				each.title,
+				each.description,
+				each.progress.total,
+			]),
+		).toEqual([
+			["chk_1", "", 1],
+			["Python", "Async and typing", 2],
+			["Go", "", 0],
+		]);
+		expect(queryClient.getQueryData<Array<Group>>(queryKeys.groups)).toEqual([
+			expect.objectContaining({
+				groupId: "grp_1",
+				name: "Prep",
+				items: [
+					{ kind: "checklist", id: "chk_py" },
+					{ kind: "checklist", id: "chk_go" },
+				],
+			}),
+		]);
 	});
 });
 

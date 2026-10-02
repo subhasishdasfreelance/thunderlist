@@ -16,6 +16,7 @@ import { whyBlocked } from "#/lib/depends";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
+import type { OutlineChecklist } from "#/lib/outline";
 import { playChangeSound } from "#/lib/sounds";
 import {
 	sameTagName,
@@ -158,6 +159,18 @@ function settleChange(change: Change): void {
 	}
 }
 
+/** The checklists a change makes, which changes after it may name. */
+function checklistsMade(change: Change): ReadonlyArray<string> {
+	switch (change.kind) {
+		case "checklist.create":
+			return [change.checklistId];
+		case "group.import":
+			return change.checklists.map((each) => each.checklistId);
+		default:
+			return [];
+	}
+}
+
 /** Send one change, once any checklist it depends on has been written. */
 async function sendNow(change: Change): Promise<void> {
 	const needed = checklistNeeded(change);
@@ -165,19 +178,19 @@ async function sendNow(change: Change): Promise<void> {
 
 	const request = applyChangeFn({ data: { change } });
 
-	if (change.kind === "checklist.create") {
-		const { checklistId } = change;
+	const made = checklistsMade(change);
+	if (made.length > 0) {
 		// A failed creation reports itself; anything waiting on it then goes
 		// ahead and fails on its own terms, which is the honest answer.
-		creatingChecklists.set(
-			checklistId,
-			request.catch(() => {}),
-		);
+		const settled = request.catch(() => {});
+		for (const checklistId of made) {
+			creatingChecklists.set(checklistId, settled);
+		}
 
 		try {
 			await request;
 		} finally {
-			creatingChecklists.delete(checklistId);
+			for (const checklistId of made) creatingChecklists.delete(checklistId);
 		}
 		return;
 	}
@@ -280,9 +293,9 @@ export function useApplyChange() {
 			 * they are emptied instead: the screen showing it asks again and hears
 			 * that it does not exist, rather than showing it as if saved.
 			 */
-			if (change.kind === "checklist.create") {
+			for (const checklistId of checklistsMade(change)) {
 				void queryClient.resetQueries({
-					queryKey: queryKeys.checklist(change.checklistId),
+					queryKey: queryKeys.checklist(checklistId),
 					exact: true,
 				});
 			}
@@ -504,6 +517,45 @@ export function createTasks(
 			tasks: tasks.slice(at, at + MAX_TASKS_AT_ONCE),
 		});
 	}
+}
+
+/**
+ * Make a group from a pasted outline: a checklist for each heading, each with
+ * its tasks, and the group holding them — one change, so a hundred checklists
+ * are drawn at once and saved in one request; see `parseOutline`.
+ */
+export function importGroup(
+	apply: ApplyChange,
+	values: {
+		name: string;
+		color: TagColor;
+		checklists: ReadonlyArray<OutlineChecklist>;
+	},
+	resolveTag: (name: string) => string | null,
+): void {
+	// A millisecond apart, first line newest, as `createTasks` stamps a paste.
+	const now = Date.now();
+
+	apply({
+		kind: "group.import",
+		groupId: createId(ID_PREFIX.group),
+		name: values.name,
+		color: values.color,
+		startDate: todayDateOnly(),
+		checklists: values.checklists.map((list) => ({
+			checklistId: createId(ID_PREFIX.checklist),
+			title: list.title,
+			description: list.description,
+			tasks: list.tasks.map((line, index) => ({
+				taskId: createId(ID_PREFIX.task),
+				title: line.title,
+				addedAt: new Date(now - index).toISOString(),
+				tagIds: resolveTags(resolveTag, line.tagNames),
+				urgent: line.urgent,
+				important: line.important,
+			})),
+		})),
+	});
 }
 
 /**

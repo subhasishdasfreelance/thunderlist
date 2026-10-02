@@ -172,6 +172,9 @@ export async function createGroup(
 					name: input.name,
 					color: input.color,
 					items: input.items,
+					startDate: input.startDate,
+					deadline: input.deadline ?? null,
+					deadlineTime: input.deadlineTime ?? null,
 					createdAt: now,
 					updatedAt: now,
 				},
@@ -184,7 +187,12 @@ export async function createGroup(
 export async function updateGroup(
 	userId: string,
 	groupId: string,
-	patch: Partial<Pick<Group, "name" | "color" | "items">>,
+	patch: Partial<
+		Pick<
+			Group,
+			"name" | "color" | "items" | "startDate" | "deadline" | "deadlineTime"
+		>
+	>,
 ): Promise<void> {
 	const current = await collections();
 	await listGroups(userId);

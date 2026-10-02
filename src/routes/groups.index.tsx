@@ -3,22 +3,26 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { ClipboardPaste, Plus } from "lucide-react";
 import { useState } from "react";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { GroupCard } from "#/components/groups/group-card";
 import { useGroupContents } from "#/components/groups/group-contents";
 import { GroupFormDialog } from "#/components/groups/group-form-dialog";
-import { useApplyChange } from "#/lib/changes";
+import {
+	GroupImportDialog,
+	type GroupImportValues,
+} from "#/components/groups/group-import-dialog";
+import { createTagResolver, importGroup, useApplyChange } from "#/lib/changes";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { usePermissions } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { groupsQuery } from "#/queries/space";
-import { tagSummariesQuery } from "#/queries/tags";
+import { tagSummariesQuery, tagsQuery } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
 
 export const Route = createFileRoute("/groups/")({
@@ -38,6 +42,8 @@ export const Route = createFileRoute("/groups/")({
  */
 function GroupsPage() {
 	const [isCreating, setIsCreating] = useState(false);
+	const [isImporting, setIsImporting] = useState(false);
+	const queryClient = useQueryClient();
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	const { contentsOf } = useGroupContents();
@@ -45,17 +51,39 @@ function GroupsPage() {
 	const { data, isPending, isError, error, refetch } = useQuery(groupsQuery());
 	const groups = data ?? [];
 
+	/**
+	 * A group and a checklist for each heading, in one change. The tags its
+	 * lines write are read first, so a tag that exists is not made again.
+	 */
+	async function importOutline(values: GroupImportValues) {
+		setIsImporting(false);
+		const tags = await queryClient.ensureQueryData(tagsQuery());
+		importGroup(
+			apply,
+			values,
+			createTagResolver(apply, tags, canManageContent),
+		);
+	}
+
 	return (
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
 				<Heading level={1}>Groups</Heading>
 				{canManageContent ? (
-					<Button
-						label="New group"
-						variant="primary"
-						icon={<Plus aria-hidden />}
-						onClick={() => setIsCreating(true)}
-					/>
+					<HStack gap={2}>
+						<Button
+							label="Import"
+							variant="secondary"
+							icon={<ClipboardPaste aria-hidden />}
+							onClick={() => setIsImporting(true)}
+						/>
+						<Button
+							label="New group"
+							variant="primary"
+							icon={<Plus aria-hidden />}
+							onClick={() => setIsCreating(true)}
+						/>
+					</HStack>
 				) : null}
 			</HStack>
 
@@ -94,6 +122,12 @@ function GroupsPage() {
 					});
 					setIsCreating(false);
 				}}
+			/>
+
+			<GroupImportDialog
+				isOpen={isImporting}
+				onOpenChange={setIsImporting}
+				onSubmit={(values) => void importOutline(values)}
 			/>
 		</VStack>
 	);

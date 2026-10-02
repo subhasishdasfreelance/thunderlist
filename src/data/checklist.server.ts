@@ -68,6 +68,7 @@ import {
 	type ItemRef,
 	todayDateOnly,
 } from "#/schemas/common";
+import type { ImportGroupInput } from "#/schemas/group";
 import { SPECIAL_TAGS } from "#/schemas/tag";
 import {
 	subtasksBlocking,
@@ -1323,6 +1324,114 @@ export async function createTasks(
 		const isOnlyDuplicates =
 			failures.length > 0 && failures.every((each) => each.code === 11000);
 		if (!isOnlyDuplicates) throw error;
+	}
+}
+
+/** A bulk write that failed only on things a first try already wrote. */
+function isOnlyDuplicates(error: unknown): boolean {
+	if (!(error instanceof MongoBulkWriteError)) return false;
+	const failures = [error.writeErrors].flat();
+	return failures.length > 0 && failures.every((each) => each.code === 11000);
+}
+
+/**
+ * Make many checklists at once, each with its tasks — an outline pasted onto
+ * the Groups screen — with one write for the checklists and one for the
+ * tasks, rather than a request each; see `importGroupInputSchema`.
+ *
+ * Asked again after a dropped connection, what is already written is left as
+ * it is and only the rest is added, as `createTasks` does.
+ */
+export async function importChecklists(
+	userId: string,
+	input: Pick<ImportGroupInput, "startDate" | "checklists">,
+): Promise<void> {
+	const current = await collections();
+
+	const writtenLists = await current.checklists
+		.find(
+			{
+				userId,
+				checklistId: { $in: input.checklists.map((each) => each.checklistId) },
+			},
+			{ projection: { _id: 0, checklistId: 1 } },
+		)
+		.toArray();
+	const isListWritten = new Set(writtenLists.map((each) => each.checklistId));
+	const freshLists = input.checklists.filter(
+		(each) => !isListWritten.has(each.checklistId),
+	);
+
+	if (freshLists.length > 0) {
+		const now = new Date().toISOString();
+		let next = await nextNumbers(
+			current,
+			userId,
+			"checklist",
+			freshLists.length,
+		);
+		try {
+			await current.checklists.insertMany(
+				freshLists.map((each) => ({
+					checklistId: each.checklistId,
+					number: next++,
+					title: each.title,
+					description: each.description,
+					startDate: input.startDate,
+					deadline: null,
+					deadlineTime: null,
+					dailyWindow: null,
+					tagIds: [],
+					access: null,
+					createdAt: now,
+					updatedAt: now,
+					userId,
+				})),
+				{ ordered: false },
+			);
+		} catch (error) {
+			if (!isOnlyDuplicates(error)) throw error;
+		}
+	}
+
+	const inputs = input.checklists.flatMap((list) =>
+		list.tasks.map((task) => ({ ...task, checklistId: list.checklistId })),
+	);
+	if (inputs.length === 0) return;
+
+	const writtenTasks = await current.tasks
+		.find(
+			{ userId, taskId: { $in: inputs.map((task) => task.taskId) } },
+			{ projection: { _id: 0, taskId: 1 } },
+		)
+		.toArray();
+	const isTaskWritten = new Set(writtenTasks.map((task) => task.taskId));
+	const fresh = inputs.filter((task) => !isTaskWritten.has(task.taskId));
+	if (fresh.length === 0) return;
+
+	let next = await nextNumbers(current, userId, "task", fresh.length);
+	try {
+		await current.tasks.insertMany(
+			fresh.map((task) => ({
+				taskId: task.taskId,
+				number: next++,
+				title: task.title,
+				completed: false,
+				completedAt: null,
+				addedAt: task.addedAt || new Date().toISOString(),
+				// New checklists carry no tags of their own to pass on.
+				tagIds: [...new Set(task.tagIds)],
+				urgent: task.urgent,
+				important: task.important,
+				trackerId: null,
+				linkedChecklistId: null,
+				userId,
+				checklistId: task.checklistId,
+			})),
+			{ ordered: false },
+		);
+	} catch (error) {
+		if (!isOnlyDuplicates(error)) throw error;
 	}
 }
 

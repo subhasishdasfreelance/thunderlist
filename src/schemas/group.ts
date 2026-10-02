@@ -1,6 +1,14 @@
 import * as v from "valibot";
-import { idSchema } from "./common";
+import {
+	dateOnlySchema,
+	descriptionSchema,
+	idSchema,
+	timeOfDaySchema,
+	titleSchema,
+	todayDateOnly,
+} from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
+import { createTaskInputSchema, MAX_TASKS_AT_ONCE } from "./task";
 
 /**
  * A group: a named collection of checklists, trackers and tags, mixed freely —
@@ -33,9 +41,11 @@ const groupNameSchema = v.pipe(
 	v.maxLength(40, "Group names must be 40 characters or fewer"),
 );
 
+const MAX_GROUP_ITEMS = 500;
+
 const groupItemsSchema = v.pipe(
 	v.array(groupItemSchema),
-	v.maxLength(500, "At most 500 things in a group"),
+	v.maxLength(MAX_GROUP_ITEMS, "At most 500 things in a group"),
 );
 
 export type Group = {
@@ -45,9 +55,26 @@ export type Group = {
 	name: string;
 	color: TagColor;
 	items: Array<GroupItem>;
+	/**
+	 * The day its pace is measured from; absent on a group made before groups
+	 * had a schedule, which is paced from the day it was made. See
+	 * `groupStartDate`.
+	 */
+	startDate?: string;
+	/** The day everything in it should be done by; absent or `null` for none. */
+	deadline?: string | null;
+	/** `HH:MM` on the deadline day; absent or `null` for that day's start. */
+	deadlineTime?: string | null;
 	createdAt: string;
 	updatedAt: string;
 };
+
+/** The day a group's figures are measured from; see `Group.startDate`. */
+export function groupStartDate(
+	group: Pick<Group, "startDate" | "createdAt">,
+): string {
+	return group.startDate ?? todayDateOnly(new Date(group.createdAt));
+}
 
 /** Whether two items name the same thing. */
 export function sameItem(a: GroupItem, b: GroupItem): boolean {
@@ -61,6 +88,9 @@ export const createGroupInputSchema = v.object({
 	name: groupNameSchema,
 	color: v.picklist(TAG_COLORS),
 	items: groupItemsSchema,
+	startDate: dateOnlySchema,
+	deadline: v.optional(v.nullable(dateOnlySchema), null),
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 });
 
 export const updateGroupInputSchema = v.object({
@@ -70,7 +100,62 @@ export const updateGroupInputSchema = v.object({
 			name: v.optional(groupNameSchema),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			items: v.optional(groupItemsSchema),
+			startDate: v.optional(dateOnlySchema),
+			deadline: v.optional(v.nullable(dateOnlySchema)),
+			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),
 });
+
+/**
+ * A group made from a pasted outline: a new checklist for each heading, each
+ * with its tasks, and the group holding them all — written in one request.
+ * See `parseOutline`.
+ */
+export const importGroupInputSchema = v.object({
+	groupId: idSchema,
+	name: groupNameSchema,
+	color: v.picklist(TAG_COLORS),
+	/** Every checklist starts on this day; see `Checklist.startDate`. */
+	startDate: dateOnlySchema,
+	checklists: v.pipe(
+		v.array(
+			v.object({
+				checklistId: idSchema,
+				title: titleSchema,
+				description: descriptionSchema,
+				tasks: v.array(
+					v.pick(createTaskInputSchema, [
+						"taskId",
+						"title",
+						"addedAt",
+						"tagIds",
+						"urgent",
+						"important",
+					]),
+				),
+			}),
+		),
+		v.minLength(1, "Start a checklist with a # heading"),
+		v.maxLength(MAX_GROUP_ITEMS, "At most 500 checklists in a group"),
+		v.check(
+			(checklists) =>
+				checklists.reduce((sum, each) => sum + each.tasks.length, 0) <=
+				MAX_TASKS_AT_ONCE,
+			"Too many tasks at once",
+		),
+	),
+});
+
+export type ImportGroupInput = v.InferOutput<typeof importGroupInputSchema>;
+
+/** What a group made from an outline holds: the checklists it made. */
+export function importedItems(
+	checklists: ReadonlyArray<{ checklistId: string }>,
+): Array<GroupItem> {
+	return checklists.map((each) => ({
+		kind: "checklist",
+		id: each.checklistId,
+	}));
+}

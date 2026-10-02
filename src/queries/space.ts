@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
+	getGroupFinishedFn,
 	listArrangementsFn,
 	listGroupsFn,
 	listTaskTypesFn,
@@ -70,6 +71,13 @@ export const groupsQuery = () =>
 	queryOptions({
 		queryKey: queryKeys.groups,
 		queryFn: () => listGroupsFn(),
+	});
+
+/** When everything a group counts was finished; see `getGroupFinished`. */
+export const groupFinishedQuery = (groupId: string) =>
+	queryOptions({
+		queryKey: queryKeys.groupFinished(groupId),
+		queryFn: () => getGroupFinishedFn({ data: { groupId } }),
 	});
 
 /** Where the space's arrangement is kept in this browser; see above. */
