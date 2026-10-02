@@ -8,8 +8,9 @@ type Flags = { urgent?: boolean; important?: boolean };
  * Urgent and important on a checklist, tracker or tag card, in the icons and
  * tints a task's flags use; see `TaskFlagButtons`. Nothing for neither.
  *
- * Only shown: the card is a link, and they are set with Edit over a pick.
- * Said in the card's own label instead; see `priorityWords`.
+ * Only shown: they are set with Edit over a pick — or, on a checklist's card,
+ * by its own flag buttons, which take these marks' place for anyone who may
+ * press them. Said in the card's own label instead; see `priorityWords`.
  */
 export function PriorityMarks({ urgent, important }: Flags) {
 	if (!urgent && !important) return null;

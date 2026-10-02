@@ -63,18 +63,23 @@ export function TaskFlagButtons({
 	urgent,
 	important,
 	actions,
+	hasShortcuts = true,
 }: {
 	title: string;
 	urgent: boolean;
 	important: boolean;
 	actions: Pick<TaskQuickActions, "onSetUrgent" | "onSetImportant">;
+	/** False where no key fires them, as on a checklist's card. */
+	hasShortcuts?: boolean;
 }) {
+	const key = (letter: string) => (hasShortcuts ? ` (${letter})` : "");
+
 	return (
 		<HStack gap={0} vAlign="center">
 			<span className="thunderlist-flag" data-flag="urgent" data-on={urgent}>
 				<IconButton
 					label={urgent ? `${title} is urgent` : `Mark ${title} urgent`}
-					tooltip={`${urgent ? "Urgent" : "Mark urgent"} (${TASK_SHORTCUTS.urgent})`}
+					tooltip={`${urgent ? "Urgent" : "Mark urgent"}${key(TASK_SHORTCUTS.urgent)}`}
 					variant="ghost"
 					size="sm"
 					icon={<CircleAlert aria-hidden />}
@@ -91,7 +96,7 @@ export function TaskFlagButtons({
 					label={
 						important ? `${title} is important` : `Mark ${title} important`
 					}
-					tooltip={`${important ? "Important" : "Mark important"} (${TASK_SHORTCUTS.important})`}
+					tooltip={`${important ? "Important" : "Mark important"}${key(TASK_SHORTCUTS.important)}`}
 					variant="ghost"
 					size="sm"
 					icon={<Star aria-hidden />}

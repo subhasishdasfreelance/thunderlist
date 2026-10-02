@@ -367,7 +367,9 @@ function GroupPage() {
 							<ArrangedCards
 								items={shown.checklists}
 								idOf={(checklist) => checklist.checklistId}
-								render={(checklist) => <ChecklistCard checklist={checklist} />}
+								render={(checklist) => (
+									<ChecklistCard checklist={checklist} groupId={groupId} />
+								)}
 								pick={{ mode: pick, labelOf: (checklist) => checklist.title }}
 							/>
 						</Section>

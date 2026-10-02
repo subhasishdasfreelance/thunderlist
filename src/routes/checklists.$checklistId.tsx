@@ -98,6 +98,7 @@ import {
 	checklistsQuery,
 } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
+import { groupsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
 import {
@@ -122,10 +123,13 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 		search: Record<string, unknown>,
 	): {
 		task: string | undefined;
+		group?: string;
 		stage?: string;
 		page?: number;
 	} & FilterSearch => ({
 		task: typeof search.task === "string" ? search.task : undefined,
+		// The group it was opened from, which Back returns to.
+		group: typeof search.group === "string" ? search.group : undefined,
 		// The order and filters too; see `filterSearch`.
 		...filterSearch(search),
 		// The stage and page on show, so leaving and coming back — Back, say —
@@ -136,8 +140,11 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 				? search.page
 				: undefined,
 	}),
-	loaderDeps: ({ search }) => ({ task: search.task }),
+	loaderDeps: ({ search }) => ({ task: search.task, group: search.group }),
 	loader: async ({ context, params, deps }) => {
+		// Back's label names the group, if it was opened from one.
+		if (deps.group !== undefined)
+			deferQuery(context.queryClient, groupsQuery());
 		// Quick-add needs the tags, the trackers and the checklists, but nobody
 		// is typing on the first frame, so none of them is waited for. The tags
 		// also say which tasks are on Today, which is the bolt on a row.
@@ -172,8 +179,18 @@ export const Route = createFileRoute("/checklists/$checklistId")({
  */
 function ChecklistDetailPage() {
 	const { checklistId } = Route.useParams();
-	const { task: focusTaskId } = Route.useSearch();
+	const { task: focusTaskId, group: fromGroupId } = Route.useSearch();
 	const navigate = useNavigate();
+	// Opened from a group, Back goes to it; otherwise, or once it is gone, to
+	// every checklist.
+	const fromGroup = useQuery({
+		...groupsQuery(),
+		enabled: fromGroupId !== undefined,
+	}).data?.find((group) => group.groupId === fromGroupId);
+	const back =
+		fromGroup === undefined
+			? { to: "/checklists", label: "Checklists" }
+			: { to: `/groups/${fromGroup.groupId}`, label: fromGroup.name };
 	const { apply, applyAsync } = useApplyChange();
 	const space = useSpace();
 	const team = space?.team ?? null;
@@ -340,7 +357,7 @@ function ChecklistDetailPage() {
 	if (detail === null) {
 		return (
 			<VStack gap={4}>
-				<BackButton to="/checklists" label="Checklists" />
+				<BackButton {...back} />
 				{isError ? (
 					<ErrorNotice error={error} onRetry={() => void refetch()} />
 				) : (
@@ -571,7 +588,7 @@ function ChecklistDetailPage() {
 	return (
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
-				<BackButton to="/checklists" label="Checklists" />
+				<BackButton {...back} />
 				{/* The Inbox and the Backlog are everyone's, in a team as anywhere. */}
 				{special !== null ? null : (
 					<AccessButton

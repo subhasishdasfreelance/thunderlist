@@ -12,9 +12,12 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { TaskFlagButtons } from "#/components/tasks/task-actions";
+import { useApplyChange } from "#/lib/changes";
 import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
+import { useItemPermissions } from "#/lib/use-team";
 import {
 	type ChecklistSummary,
 	checklistStages,
@@ -25,9 +28,29 @@ import { SPECIAL_CHECKLIST_ICONS } from "./special-checklist-icons";
 /**
  * A checklist at a glance: title with its percentage, pace, and a bar carrying
  * the point the work should have reached by now.
+ *
+ * Its urgent and important flags are the buttons a task row has, pressed to
+ * turn them on and off; to someone who may not change it, they are only marks.
  */
-export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
+export function ChecklistCard({
+	checklist,
+	groupId,
+}: {
+	checklist: ChecklistSummary;
+	/** The group it is shown in, so its screen leads back there. */
+	groupId?: string;
+}) {
 	const { progress } = checklist;
+	const { apply } = useApplyChange();
+	const { canManageContent } = useItemPermissions(checklist.access);
+
+	function setFlag(patch: { urgent: boolean } | { important: boolean }) {
+		apply({
+			kind: "checklist.update",
+			checklistId: checklist.checklistId,
+			patch,
+		});
+	}
 
 	const pace = usePace(
 		checklist,
@@ -55,12 +78,27 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 	return (
 		<ClickableCard
 			label={`${checklist.title}, ${progress.percent}% complete${priorityWords(checklist)}`}
-			href={`/checklists/${checklist.checklistId}`}
+			href={`/checklists/${checklist.checklistId}${groupId === undefined ? "" : `?group=${groupId}`}`}
 			padding={3}
 		>
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<HStack gap={1.5} vAlign="center" className="thunderlist-card-title">
+						{/* First, as on a task row; see `TaskFlagButtons`. */}
+						{canManageContent ? (
+							<div className="thunderlist-row-buttons flex shrink-0 items-center">
+								<TaskFlagButtons
+									title={checklist.title}
+									urgent={checklist.urgent ?? false}
+									important={checklist.important ?? false}
+									hasShortcuts={false}
+									actions={{
+										onSetUrgent: (urgent) => setFlag({ urgent }),
+										onSetImportant: (important) => setFlag({ important }),
+									}}
+								/>
+							</div>
+						) : null}
 						{/* The Inbox and the Backlog carry their marks, so they read as
 						    the two they are. */}
 						{checklist.special == null ? null : (
@@ -76,7 +114,7 @@ export function ChecklistCard({ checklist }: { checklist: ChecklistSummary }) {
 								({progress.percent}%)
 							</Text>
 						</Text>
-						<PriorityMarks {...checklist} />
+						{canManageContent ? null : <PriorityMarks {...checklist} />}
 					</HStack>
 					<PaceLabel status={pace.status} />
 				</HStack>
