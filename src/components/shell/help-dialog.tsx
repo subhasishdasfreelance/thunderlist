@@ -101,6 +101,10 @@ const GROUPS: Array<Group> = [
 				keys: ["-u", "-i", "-ui"],
 				what: "At the end: urgent, important, both",
 			},
+			{
+				keys: ["-deadline"],
+				what: "Then when it is due: tomorrow 5pm, 3rd Aug",
+			},
 			{ keys: ["Tab"], what: "Take the suggestion" },
 		],
 	},

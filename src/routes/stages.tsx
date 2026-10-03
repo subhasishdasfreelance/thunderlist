@@ -8,7 +8,10 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { QuickAddTask } from "#/components/checklists/quick-add-task";
+import {
+	type QuickAddLine,
+	QuickAddTask,
+} from "#/components/checklists/quick-add-task";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
@@ -33,7 +36,6 @@ import {
 	filterSearch,
 	sortParam,
 } from "#/lib/filter-search";
-import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { PAGE_SIZE } from "#/lib/use-pages";
 import { usePermissions } from "#/lib/use-team";
 import { acrossQuery } from "#/queries/across";
@@ -236,7 +238,7 @@ function StagesPage() {
 	 * Inbox; see `ensureInbox`. One resolver for the whole block, so a tag
 	 * written on three lines is created once rather than three times.
 	 */
-	function addTasks(lines: Array<ParsedTitle>) {
+	function addTasks(lines: Array<QuickAddLine>) {
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
 		const inputs = lines.map((line) => {
@@ -254,6 +256,8 @@ function StagesPage() {
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
+				deadline: line.deadline,
+				deadlineTime: line.deadlineTime,
 			};
 		});
 

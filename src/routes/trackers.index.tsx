@@ -41,10 +41,11 @@ import { useNow } from "#/lib/use-now";
 import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { arrangementsQuery } from "#/queries/space";
+import { arrangementsQuery, groupsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import { trackerQuery, trackersQuery } from "#/queries/trackers";
 import { manualOrder } from "#/schemas/arrangement";
+import { groupedIds } from "#/schemas/group";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
@@ -65,6 +66,8 @@ export const Route = createFileRoute("/trackers/")({
 		return Promise.all([
 			primeQuery(context.queryClient, trackersQuery()),
 			primeQuery(context.queryClient, arrangementsQuery()),
+			// Which are in a group, and left to it.
+			primeQuery(context.queryClient, groupsQuery()),
 		]).then(() => undefined);
 	},
 	component: TrackersPage,
@@ -96,9 +99,15 @@ function TrackersPage() {
 		trackersQuery(),
 	);
 	const tagsResult = useQuery(tagsQuery());
+	const groups = useQuery(groupsQuery()).data;
 
 	const allTrackers = data ?? [];
-	const trackers = allTrackers.filter((tracker) =>
+	// Only those in no group; one in a group is listed on its page.
+	const ungrouped = useMemo(() => {
+		const grouped = groupedIds(groups ?? [], "tracker");
+		return (data ?? []).filter((each) => !grouped.has(each.trackerId));
+	}, [data, groups]);
+	const trackers = ungrouped.filter((tracker) =>
 		isAssignedTo(tracker, assignee),
 	);
 	const tags = tagsResult.data ?? [];
@@ -210,7 +219,11 @@ function TrackersPage() {
 						<EmptyState
 							isCompact
 							title="Nothing here."
-							description="No tracker is assigned to them."
+							description={
+								assignee === undefined
+									? "Every tracker is in a group."
+									: "No tracker is assigned to them."
+							}
 						/>
 					) : null}
 					<ArrangedCards
@@ -245,7 +258,7 @@ function TrackersPage() {
 				onOpenChange={setIsArranging}
 				noun="trackers"
 				items={manualOrder(
-					allTrackers,
+					ungrouped,
 					trackerIdOf,
 					arranged.arrangement.order,
 				).map((tracker) => ({ id: tracker.trackerId, label: tracker.title }))}

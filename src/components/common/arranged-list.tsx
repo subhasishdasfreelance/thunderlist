@@ -238,6 +238,7 @@ export function ArrangedCards<T>({
 				page={paging.page}
 				total={paging.total}
 				onChange={paging.setPage}
+				hasDivider={false}
 			/>
 		</VStack>
 	);

@@ -94,6 +94,21 @@ export function sameItem(a: GroupItem, b: GroupItem): boolean {
 	return a.kind === b.kind && a.id === b.id;
 }
 
+/**
+ * Ids of the things of one kind that are in some group, which the screen
+ * listing that kind leaves to their groups.
+ */
+export function groupedIds(
+	groups: ReadonlyArray<Group>,
+	kind: GroupItemKind,
+): Set<string> {
+	return new Set(
+		groups.flatMap((group) =>
+			group.items.flatMap((item) => (item.kind === kind ? [item.id] : [])),
+		),
+	);
+}
+
 export const groupIdInputSchema = v.object({ groupId: idSchema });
 
 export const createGroupInputSchema = v.object({

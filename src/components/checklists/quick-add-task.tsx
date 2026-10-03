@@ -4,15 +4,25 @@ import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { TaskTitleField } from "#/components/checklists/task-title-field";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
+import { type InlineDeadline, readDeadline } from "#/lib/tasks/inline-deadline";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
-/** One task per non-blank line, each split into its title and its tags. */
-function parseLines(value: string): Array<ParsedTitle> {
+/** A line as it is added: its title and tags, and a deadline typed in it. */
+export type QuickAddLine = ParsedTitle & Omit<InlineDeadline, "title">;
+
+/**
+ * One task per non-blank line, each split into its title, its tags and its
+ * deadline; see `readDeadline`.
+ */
+function parseLines(value: string, now: Date): Array<QuickAddLine> {
 	return value
 		.split("\n")
-		.map((line) => parseInlineTags(line))
+		.map((line) => {
+			const { title, ...deadline } = readDeadline(line, now);
+			return { ...parseInlineTags(title), ...deadline };
+		})
 		.filter((parsed) => parsed.title !== "" || parsed.tagNames.length > 0)
 		.filter((parsed) => parsed.title !== "");
 }
@@ -32,7 +42,8 @@ function parseLines(value: string): Array<ParsedTitle> {
  * Tags are written in the same breath — "buy milk #shopping" — and completed as
  * they are typed. A line beginning `&` names a tracker or another checklist
  * instead: the task it makes is finished when that is, and cannot be ticked by
- * hand.
+ * hand. A deadline goes after `-deadline`, in plain words — "pay rent
+ * -deadline 3rd Aug, 2am" — and is taken out of the title.
  *
  * On a phone the field sits below the page's figures, so once it is scrolled
  * out of sight a round "+" floats above the bottom bar: pressing it brings the
@@ -52,10 +63,10 @@ export function QuickAddTask({
 	trackers?: ReadonlyArray<TrackerSummary>;
 	/** The checklists a line beginning `&` may also name. */
 	checklists?: ReadonlyArray<Pick<Checklist, "checklistId" | "title">>;
-	onAdd: (lines: Array<ParsedTitle>) => void;
+	onAdd: (lines: Array<QuickAddLine>) => void;
 }) {
 	const [value, setValue] = useState("");
-	const lines = parseLines(value);
+	const lines = parseLines(value, new Date());
 
 	function add() {
 		if (lines.length === 0) return;

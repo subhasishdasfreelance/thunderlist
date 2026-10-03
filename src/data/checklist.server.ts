@@ -1216,6 +1216,9 @@ export async function createTask(
 		trackerId?: string | null;
 		/** A checklist this task stands for; see `taskSchema`. */
 		linkedChecklistId?: string | null;
+		/** Typed as `-deadline` as it was added; see `readDeadline`. */
+		deadline?: string | null;
+		deadlineTime?: string | null;
 	},
 ): Promise<Task> {
 	const current = await collections();
@@ -1251,6 +1254,9 @@ export async function createTask(
 		important: input.important,
 		trackerId: input.trackerId ?? null,
 		linkedChecklistId,
+		// Only when one was typed; see `readDeadline`.
+		...(input.deadline == null ? {} : { deadline: input.deadline }),
+		...(input.deadlineTime == null ? {} : { deadlineTime: input.deadlineTime }),
 	};
 
 	// Its old number, put back by an undo, while nothing else has taken it.
@@ -1301,6 +1307,9 @@ export async function createTasks(
 		linkedChecklistId: string | null;
 		/** The number it had, for one put back; see `createTasksInputSchema`. */
 		number?: number;
+		/** Typed as `-deadline` as it was added; see `readDeadline`. */
+		deadline?: string | null;
+		deadlineTime?: string | null;
 	}>,
 ): Promise<void> {
 	const current = await collections();
@@ -1357,6 +1366,8 @@ export async function createTasks(
 		important: input.important,
 		trackerId: input.trackerId,
 		linkedChecklistId: input.linkedChecklistId,
+		...(input.deadline == null ? {} : { deadline: input.deadline }),
+		...(input.deadlineTime == null ? {} : { deadlineTime: input.deadlineTime }),
 		userId,
 		checklistId: listId,
 	}));

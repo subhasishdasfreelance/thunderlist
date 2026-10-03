@@ -12,24 +12,29 @@ import { PAGE_SIZE } from "#/lib/use-pages";
  * The pages are numbered, so any one of them is a click away — and turning one
  * brings the top of the list back into view, where the new page starts, rather
  * than leaving the reader at the bottom of it.
+ *
+ * Under a grid of cards there is no list card to carry on, so no divider.
  */
 export function ListPagination({
 	page,
 	total,
 	onChange,
+	hasDivider = true,
 }: {
 	/** The page shown, from 1. */
 	page: number;
 	/** Rows in the whole list. With a page's worth or fewer, nothing is drawn. */
 	total: number;
 	onChange: (page: number) => void;
+	/** False under a grid of cards; see above. */
+	hasDivider?: boolean;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
 	if (total <= PAGE_SIZE) return null;
 
 	return (
 		<div ref={ref} className="thunderlist-row thunderlist-pagination">
-			<Divider />
+			{hasDivider ? <Divider /> : null}
 			<HStack hAlign="center" paddingBlock={1}>
 				<Pagination
 					page={page}

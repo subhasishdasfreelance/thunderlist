@@ -69,6 +69,8 @@ function previousPatch(
 	if ("dependsOn" in patch) previous.dependsOn = [...(task.dependsOn ?? [])];
 	if ("subtasks" in patch) previous.subtasks = [...(task.subtasks ?? [])];
 	if ("deadline" in patch) previous.deadline = task.deadline ?? null;
+	if ("deadlineTime" in patch)
+		previous.deadlineTime = task.deadlineTime ?? null;
 
 	if ("stageId" in patch || "completed" in patch) {
 		previous.stageId = stageOf(task, stages);
@@ -93,6 +95,7 @@ function restOfTask(
 	if (task.dependsOn?.length) rest.dependsOn = [...task.dependsOn];
 	if (task.subtasks?.length) rest.subtasks = [...task.subtasks];
 	if (task.deadline) rest.deadline = task.deadline;
+	if (task.deadlineTime) rest.deadlineTime = task.deadlineTime;
 	// A task comes back at the stage it was taken from, which says whether it
 	// was done as well — finished when it was; see `previousPatch`.
 	const at = stageOf(task, stages);

@@ -4,6 +4,7 @@ import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { TextArea } from "@astryxdesign/core/TextArea";
+import { type ISOTimeString, TimeInput } from "@astryxdesign/core/TimeInput";
 import { useForm } from "@tanstack/react-form";
 import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
@@ -34,7 +35,13 @@ function fieldsOf(task: Task | null) {
 		dependsOn: task?.dependsOn ?? ([] as Array<ItemRef>),
 		subtasks: task?.subtasks ?? ([] as Array<Subtask>),
 		deadline: (task?.deadline ?? undefined) as ISODateString | undefined,
+		deadlineTime: task?.deadlineTime ?? undefined,
 	};
+}
+
+/** The time it is due by as it will be saved: none without a day. */
+function deadlineTimeOf(value: ReturnType<typeof fieldsOf>): string | null {
+	return value.deadline === undefined ? null : (value.deadlineTime ?? null);
 }
 
 /** The title as it will be saved: one line, its tags read out of it. */
@@ -59,6 +66,8 @@ export type TaskDetails = {
 	subtasks?: Array<Subtask>;
 	/** Only when it changed; `null` takes it off. See `Task.deadline`. */
 	deadline?: string | null;
+	/** Only when it changed; `null` for the day as a whole. */
+	deadlineTime?: string | null;
 	urgent?: boolean;
 	important?: boolean;
 };
@@ -125,6 +134,9 @@ export function TaskRenameDialog({
 				...((value.deadline ?? null) === (task?.deadline ?? null)
 					? {}
 					: { deadline: value.deadline ?? null }),
+				...(deadlineTimeOf(value) === (task?.deadlineTime ?? null)
+					? {}
+					: { deadlineTime: deadlineTimeOf(value) }),
 				...(parsed.urgent ? { urgent: true } : {}),
 				...(parsed.important ? { important: true } : {}),
 			});
@@ -239,6 +251,26 @@ export function TaskRenameDialog({
 						/>
 					)}
 				</form.Field>
+
+				{/* Only once there is a day for it to be on. */}
+				<form.Subscribe selector={(state) => state.values.deadline}>
+					{(deadline) =>
+						deadline === undefined ? null : (
+							<form.Field name="deadlineTime">
+								{(field) => (
+									<TimeInput
+										label="Due at"
+										isOptional
+										hasClear
+										description="Leave empty and it is due that whole day."
+										value={field.state.value as ISOTimeString | undefined}
+										onChange={(time) => field.handleChange(time?.slice(0, 5))}
+									/>
+								)}
+							</form.Field>
+						)
+					}
+				</form.Subscribe>
 
 				<form.Field name="notes">
 					{(field) => (

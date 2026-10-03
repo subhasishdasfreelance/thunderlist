@@ -136,10 +136,15 @@ const taskSchema = v.object({
 	subtasks: v.optional(v.array(subtaskSchema)),
 	/**
 	 * The day it is due, or absent or `null` for none. A day with no time, on
-	 * the viewer's own calendar, as a checklist's is. Written only from the edit
-	 * dialog, like the caption.
+	 * the viewer's own calendar, as a checklist's is. Written in the edit
+	 * dialog, or typed as `-deadline` as it is added; see `readDeadline`.
 	 */
 	deadline: v.optional(v.nullable(dateOnlySchema)),
+	/**
+	 * `HH:MM` on the deadline day it is due by; absent or `null` for that day as
+	 * a whole. See `Checklist.deadlineTime`.
+	 */
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 });
 
 export type Task = v.InferOutput<typeof taskSchema>;
@@ -307,6 +312,9 @@ export const createTaskInputSchema = v.object({
 	linkedChecklistId: v.optional(v.nullable(idSchema), null),
 	urgent: v.optional(v.boolean(), false),
 	important: v.optional(v.boolean(), false),
+	/** Typed as `-deadline` as it is added; see `readDeadline`. */
+	deadline: v.optional(v.nullable(dateOnlySchema)),
+	deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 	/**
 	 * The number it had, for a deleted task put back by an undo; taken only
 	 * while no other task has it. A new task is given the next one.
@@ -354,6 +362,8 @@ const taskPatchSchema = v.pipe(
 		subtasks: v.optional(v.array(subtaskSchema)),
 		/** The day it is due, or `null` to take the deadline off. */
 		deadline: v.optional(v.nullable(dateOnlySchema)),
+		/** The time on that day, or `null` for the day as a whole. */
+		deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 		/**
 		 * When it was finished, and where it sits in its list, as they were —
 		 * for an undo putting a task back. Otherwise the server stamps both

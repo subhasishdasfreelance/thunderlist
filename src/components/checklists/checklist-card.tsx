@@ -2,6 +2,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { CardLastLine } from "#/components/common/card-last-line";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	PriorityMarks,
@@ -31,6 +32,8 @@ import { SPECIAL_CHECKLIST_ICONS } from "./special-checklist-icons";
  *
  * Its urgent and important flags are the buttons a task row has, pressed to
  * turn them on and off; to someone who may not change it, they are only marks.
+ * On a phone they move to the last line, leaving the title its width, as a
+ * task row's do.
  */
 export function ChecklistCard({
 	checklist,
@@ -75,6 +78,19 @@ export function ChecklistCard({
 					progress.completed >= progress.total,
 				);
 
+	const flags = canManageContent ? (
+		<TaskFlagButtons
+			title={checklist.title}
+			urgent={checklist.urgent ?? false}
+			important={checklist.important ?? false}
+			hasShortcuts={false}
+			actions={{
+				onSetUrgent: (urgent) => setFlag({ urgent }),
+				onSetImportant: (important) => setFlag({ important }),
+			}}
+		/>
+	) : null;
+
 	return (
 		<ClickableCard
 			label={`${checklist.title}, ${progress.percent}% complete${priorityWords(checklist)}`}
@@ -85,20 +101,11 @@ export function ChecklistCard({
 				<HStack gap={2} hAlign="between" vAlign="center">
 					<HStack gap={1.5} vAlign="center" className="thunderlist-card-title">
 						{/* First, as on a task row; see `TaskFlagButtons`. */}
-						{canManageContent ? (
-							<div className="thunderlist-row-buttons flex shrink-0 items-center">
-								<TaskFlagButtons
-									title={checklist.title}
-									urgent={checklist.urgent ?? false}
-									important={checklist.important ?? false}
-									hasShortcuts={false}
-									actions={{
-										onSetUrgent: (urgent) => setFlag({ urgent }),
-										onSetImportant: (important) => setFlag({ important }),
-									}}
-								/>
+						{flags === null ? null : (
+							<div className="thunderlist-row-buttons hidden shrink-0 items-center md:flex">
+								{flags}
 							</div>
-						) : null}
+						)}
 						{/* The Inbox and the Backlog carry their marks, so they read as
 						    the two they are. */}
 						{checklist.special == null ? null : (
@@ -136,7 +143,7 @@ export function ChecklistCard({
 					footnote={formatSchedule(checklist)}
 				/>
 
-				{summary === null ? null : <Text type="supporting">{summary}</Text>}
+				<CardLastLine summary={summary} flags={flags} />
 			</VStack>
 		</ClickableCard>
 	);

@@ -40,9 +40,10 @@ import { usePickMode } from "#/lib/use-pick-mode";
 import { usePermissions } from "#/lib/use-team";
 import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
-import { arrangementsQuery } from "#/queries/space";
+import { arrangementsQuery, groupsQuery } from "#/queries/space";
 import { tagsQuery } from "#/queries/tags";
 import type { ChecklistSummary } from "#/schemas/checklist";
+import { groupedIds } from "#/schemas/group";
 
 const checklistIdOf = (checklist: ChecklistSummary) => checklist.checklistId;
 const createdAtOf = (checklist: ChecklistSummary) => checklist.createdAt;
@@ -57,6 +58,8 @@ export const Route = createFileRoute("/checklists/")({
 		return Promise.all([
 			primeQuery(context.queryClient, checklistsQuery()),
 			primeQuery(context.queryClient, arrangementsQuery()),
+			// Which are in a group, and left to it.
+			primeQuery(context.queryClient, groupsQuery()),
 		]).then(() => undefined);
 	},
 	component: ChecklistsPage,
@@ -79,8 +82,14 @@ function ChecklistsPage() {
 		checklistsQuery(),
 	);
 	const tagsResult = useQuery(tagsQuery());
+	const groups = useQuery(groupsQuery()).data;
 
-	const checklists = data ?? [];
+	const allChecklists = data ?? [];
+	// Only those in no group; one in a group is listed on its page.
+	const checklists = useMemo(() => {
+		const grouped = groupedIds(groups ?? [], "checklist");
+		return (data ?? []).filter((each) => !grouped.has(each.checklistId));
+	}, [data, groups]);
 	const tags = tagsResult.data ?? [];
 
 	/*
@@ -164,7 +173,7 @@ function ChecklistsPage() {
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			) : isPending ? (
 				<LoadingState />
-			) : checklists.length === 0 ? (
+			) : allChecklists.length === 0 ? (
 				<EmptyState
 					title="No checklists yet."
 					description="Create your first checklist to start tracking work."
@@ -189,6 +198,13 @@ function ChecklistsPage() {
 							) : null}
 						</HStack>
 					</HStack>
+					{checklists.length === 0 ? (
+						<EmptyState
+							isCompact
+							title="Nothing here."
+							description="Every checklist is in a group."
+						/>
+					) : null}
 					<ArrangedCards
 						items={arranged.ordered}
 						idOf={checklistIdOf}

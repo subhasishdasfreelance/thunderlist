@@ -479,6 +479,9 @@ export function createTask(
 		/** Typed as `-u`, `-i` or `-ui` at the end of the line. */
 		urgent?: boolean;
 		important?: boolean;
+		/** Typed as `-deadline`; see `readDeadline`. */
+		deadline?: string | null;
+		deadlineTime?: string | null;
 	},
 ): string {
 	const taskId = createId(ID_PREFIX.task);
@@ -740,7 +743,13 @@ export function updateAllAlike(
 	tasks: ReadonlyArray<
 		Pick<
 			Task,
-			"taskId" | "typeId" | "caption" | "deadline" | "urgent" | "important"
+			| "taskId"
+			| "typeId"
+			| "caption"
+			| "deadline"
+			| "deadlineTime"
+			| "urgent"
+			| "important"
 		>
 	>,
 	edit: Pick<
@@ -762,6 +771,10 @@ export function updateAllAlike(
 				edit.deadline !== (task.deadline ?? null)
 			) {
 				own.deadline = edit.deadline;
+				// A deadline taken off takes its time with it.
+				if (edit.deadline === null && task.deadlineTime) {
+					own.deadlineTime = null;
+				}
 			}
 			if (edit.urgent !== undefined && edit.urgent !== task.urgent) {
 				own.urgent = edit.urgent;

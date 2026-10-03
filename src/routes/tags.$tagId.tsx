@@ -24,7 +24,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
-import { QuickAddTask } from "#/components/checklists/quick-add-task";
+import {
+	type QuickAddLine,
+	QuickAddTask,
+} from "#/components/checklists/quick-add-task";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { BackButton } from "#/components/common/back-button";
@@ -96,7 +99,7 @@ import {
 } from "#/lib/format-date";
 import { emptyTagPage } from "#/lib/optimistic";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
-import { type ParsedTitle, withInlineTag } from "#/lib/tags/inline-tags";
+import { withInlineTag } from "#/lib/tags/inline-tags";
 import {
 	matchesFilter,
 	mergeReads,
@@ -601,7 +604,7 @@ function TagDetailPage() {
 	 * One resolver for the whole block, so a tag written on three lines is
 	 * created once rather than three times.
 	 */
-	function addTasks(lines: Array<ParsedTitle>) {
+	function addTasks(lines: Array<QuickAddLine>) {
 		if (detail === null) return;
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
@@ -625,6 +628,8 @@ function TagDetailPage() {
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
+				deadline: line.deadline,
+				deadlineTime: line.deadlineTime,
 			};
 		});
 

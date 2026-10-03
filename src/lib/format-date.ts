@@ -103,16 +103,22 @@ export function daysUntil(date: string, today: string): number | null {
 /**
  * When a task is due, as it is said: `Due today`, `Due tomorrow`, `Due in 3
  * days`, `Due yesterday`, `Overdue by 3 days`. Anything that is not a date is
- * written as it is, after `Due`.
+ * written as it is, after `Due`. A time on the day is said while the day is
+ * still to come — `Due tomorrow, 2:00 am` — and not once it has gone.
  */
-export function formatDue(deadline: string, today: string): string {
+export function formatDue(
+	deadline: string,
+	today: string,
+	time?: string | null,
+): string {
 	const days = daysUntil(deadline, today);
-	if (days === null) return `Due ${formatDate(deadline)}`;
+	if (days === null) return `Due ${formatDeadline(deadline, time)}`;
 
-	if (days === 0) return "Due today";
-	if (days === 1) return "Due tomorrow";
+	const at = time ? `, ${formatClock(time)}` : "";
+	if (days === 0) return `Due today${at}`;
+	if (days === 1) return `Due tomorrow${at}`;
 	if (days === -1) return "Due yesterday";
-	return days > 0 ? `Due in ${days} days` : `Overdue by ${-days} days`;
+	return days > 0 ? `Due in ${days} days${at}` : `Overdue by ${-days} days`;
 }
 
 /** `06:00` to `22:00` → `6:00 am – 10:00 pm`. */

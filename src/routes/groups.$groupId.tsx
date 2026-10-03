@@ -382,7 +382,11 @@ function GroupPage() {
 								items={shown.trackers}
 								idOf={(tracker) => tracker.trackerId}
 								render={(tracker) => (
-									<TrackerCard tracker={tracker} tags={tags} />
+									<TrackerCard
+										tracker={tracker}
+										tags={tags}
+										groupId={groupId}
+									/>
 								)}
 								pick={{ mode: pick, labelOf: (tracker) => tracker.title }}
 							/>

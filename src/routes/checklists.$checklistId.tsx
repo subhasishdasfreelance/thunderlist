@@ -14,7 +14,10 @@ import { Megaphone, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
-import { QuickAddTask } from "#/components/checklists/quick-add-task";
+import {
+	type QuickAddLine,
+	QuickAddTask,
+} from "#/components/checklists/quick-add-task";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
@@ -80,7 +83,6 @@ import {
 	formatSchedule,
 } from "#/lib/format-date";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
-import type { ParsedTitle } from "#/lib/tags/inline-tags";
 import { matchesFilter, orderTasks, shortTitle } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
 import { useHeld } from "#/lib/use-held";
@@ -481,7 +483,7 @@ function ChecklistDetailPage() {
 	 * One resolver for the whole block, so a tag written on three lines is
 	 * created once rather than three times.
 	 */
-	function addTasks(lines: Array<ParsedTitle>) {
+	function addTasks(lines: Array<QuickAddLine>) {
 		const resolveTag = createTagResolver(apply, tags, canManageContent);
 
 		const inputs = lines.map((line) => {
@@ -500,6 +502,8 @@ function ChecklistDetailPage() {
 				linkedChecklistId: linked?.checklistId ?? null,
 				urgent: line.urgent,
 				important: line.important,
+				deadline: line.deadline,
+				deadlineTime: line.deadlineTime,
 			};
 		});
 

@@ -2,6 +2,7 @@ import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { CardLastLine } from "#/components/common/card-last-line";
 import { FadeImage } from "#/components/common/fade-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
@@ -10,9 +11,12 @@ import {
 } from "#/components/common/priority-marks";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { TaskFlagButtons } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
+import { useApplyChange } from "#/lib/changes";
 import { computeVelocity, trackerFraction } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
+import { useItemPermissions } from "#/lib/use-team";
 import { type Tag, tagsFor } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
@@ -45,16 +49,30 @@ export function formatExpectedReading(
 	return `${Math.round(reading * 10) / 10} ${unit}`.trim();
 }
 
+/**
+ * A tracker at a glance. Its urgent and important flags are pressed to turn
+ * them on and off, and move to the last line on a phone, as on a checklist's
+ * card; see `ChecklistCard`.
+ */
 export function TrackerCard({
 	tracker,
 	tags,
+	groupId,
 }: {
 	tracker: TrackerSummary;
 	/** Every tag that exists, for drawing the ones this tracker carries. */
 	tags: ReadonlyArray<Tag>;
+	/** The group it is shown in, so its screen leads back there. */
+	groupId?: string;
 }) {
 	const { progress } = tracker;
 	const carried = tagsFor(tracker.tagIds ?? [], tags);
+	const { apply } = useApplyChange();
+	const { canManageContent } = useItemPermissions(tracker.access);
+
+	function setFlag(patch: { urgent: boolean } | { important: boolean }) {
+		apply({ kind: "tracker.update", trackerId: tracker.trackerId, patch });
+	}
 
 	const pace = usePace(
 		tracker,
@@ -83,10 +101,23 @@ export function TrackerCard({
 					tracker.deadline,
 				);
 
+	const flags = canManageContent ? (
+		<TaskFlagButtons
+			title={tracker.title}
+			urgent={tracker.urgent ?? false}
+			important={tracker.important ?? false}
+			hasShortcuts={false}
+			actions={{
+				onSetUrgent: (urgent) => setFlag({ urgent }),
+				onSetImportant: (important) => setFlag({ important }),
+			}}
+		/>
+	) : null;
+
 	return (
 		<ClickableCard
 			label={`${tracker.title}, ${progress.percent}% complete${priorityWords(tracker)}`}
-			href={`/trackers/${tracker.trackerId}`}
+			href={`/trackers/${tracker.trackerId}${groupId === undefined ? "" : `?group=${groupId}`}`}
 			padding={3}
 		>
 			<HStack gap={3} vAlign="center">
@@ -100,18 +131,25 @@ export function TrackerCard({
 
 				<VStack gap={2} width="100%">
 					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text
-							weight="medium"
-							maxLines={1}
+						<HStack
+							gap={1.5}
+							vAlign="center"
 							className="thunderlist-card-title"
 						>
-							{tracker.title}{" "}
-							<Text color="secondary" weight="normal">
-								({progress.percent}%)
+							{flags === null ? null : (
+								<div className="thunderlist-row-buttons hidden shrink-0 items-center md:flex">
+									{flags}
+								</div>
+							)}
+							<Text weight="medium" maxLines={1}>
+								{tracker.title}{" "}
+								<Text color="secondary" weight="normal">
+									({progress.percent}%)
+								</Text>
 							</Text>
-						</Text>
+						</HStack>
 						<HStack gap={2} vAlign="center">
-							<PriorityMarks {...tracker} />
+							{canManageContent ? null : <PriorityMarks {...tracker} />}
 							<Assignees emails={tracker.assignees ?? []} />
 							<PaceLabel status={pace.status} />
 						</HStack>
@@ -151,7 +189,7 @@ export function TrackerCard({
 						)}
 					/>
 
-					{summary === null ? null : <Text type="supporting">{summary}</Text>}
+					<CardLastLine summary={summary} flags={flags} />
 				</VStack>
 			</HStack>
 		</ClickableCard>

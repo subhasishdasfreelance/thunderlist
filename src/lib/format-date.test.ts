@@ -91,6 +91,13 @@ describe("formatDue", () => {
 		expect(formatDue("2026-09-29", today)).toBe("Due yesterday");
 	});
 
+	it("says the time while the day is still to come", () => {
+		expect(formatDue("2026-10-01", today, "02:00")).toBe(
+			"Due tomorrow, 2:00 am",
+		);
+		expect(formatDue("2026-09-29", today, "02:00")).toBe("Due yesterday");
+	});
+
 	it("says how long ago one passed", () => {
 		expect(formatDue("2026-09-27", today)).toBe("Overdue by 3 days");
 	});

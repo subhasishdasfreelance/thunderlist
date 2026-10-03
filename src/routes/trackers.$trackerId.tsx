@@ -67,6 +67,7 @@ import { paceAt } from "#/lib/use-pace";
 import { useTaskSelection } from "#/lib/use-task-selection";
 import { useItemPermissions, useSpace } from "#/lib/use-team";
 import { deferQuery, primeQuery } from "#/queries/prime";
+import { groupsQuery } from "#/queries/space";
 import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
 import { specialTag, tagsFor } from "#/schemas/tag";
@@ -83,20 +84,26 @@ function onToday(trackerId: string): TaskPageView {
 }
 
 export const Route = createFileRoute("/trackers/$trackerId")({
-	// The reading to bring into view, when search sent you to one; and the
-	// person the history is narrowed to, kept too; see `filterSearch`.
+	// The reading to bring into view, when search sent you to one; the group
+	// it was opened from, which Back returns to; and the person the history is
+	// narrowed to, kept too; see `filterSearch`.
 	validateSearch: (
 		search: Record<string, unknown>,
-	): { entry?: string; who?: string } => ({
+	): { entry?: string; group?: string; who?: string } => ({
 		entry: typeof search.entry === "string" ? search.entry : undefined,
+		group: typeof search.group === "string" ? search.group : undefined,
 		who: searchText(search.who),
 	}),
+	loaderDeps: ({ search }) => ({ group: search.group }),
 	/*
 	 * Only the figures are waited for. The history is the long half of the read
 	 * and nobody is blocked on it, so it is started here and not awaited — by the
 	 * time the top of the screen has painted it is usually already in.
 	 */
-	loader: ({ context, params }) => {
+	loader: ({ context, params, deps }) => {
+		// Back's label names the group, if it was opened from one.
+		if (deps.group !== undefined)
+			deferQuery(context.queryClient, groupsQuery());
 		void context.queryClient.prefetchQuery(
 			trackerEntriesQuery(params.trackerId),
 		);
@@ -121,8 +128,22 @@ type EntryDialogState =
 
 function TrackerDetailPage() {
 	const { trackerId } = Route.useParams();
-	const { entry: focusEntryId, who: person } = Route.useSearch();
+	const {
+		entry: focusEntryId,
+		group: fromGroupId,
+		who: person,
+	} = Route.useSearch();
 	const navigate = useNavigate();
+	// Opened from a group, Back goes to it; otherwise, or once it is gone, to
+	// every tracker.
+	const fromGroup = useQuery({
+		...groupsQuery(),
+		enabled: fromGroupId !== undefined,
+	}).data?.find((group) => group.groupId === fromGroupId);
+	const back =
+		fromGroup === undefined
+			? { to: "/trackers", label: "Trackers" }
+			: { to: `/groups/${fromGroup.groupId}`, label: fromGroup.name };
 	const { apply } = useApplyChange();
 
 	const [entryDialog, setEntryDialog] = useState<EntryDialogState>({
@@ -176,7 +197,7 @@ function TrackerDetailPage() {
 	if (isError && detail === null) {
 		return (
 			<VStack gap={4}>
-				<BackButton to="/trackers" label="Trackers" />
+				<BackButton {...back} />
 				<ErrorNotice error={error} onRetry={() => void refetch()} />
 			</VStack>
 		);
@@ -185,7 +206,7 @@ function TrackerDetailPage() {
 	if (isPending || !detail) {
 		return (
 			<VStack gap={4}>
-				<BackButton to="/trackers" label="Trackers" />
+				<BackButton {...back} />
 				<LoadingState />
 			</VStack>
 		);
@@ -294,7 +315,7 @@ function TrackerDetailPage() {
 	return (
 		<VStack gap={4}>
 			<HStack gap={2} hAlign="between" vAlign="center">
-				<BackButton to="/trackers" label="Trackers" />
+				<BackButton {...back} />
 				<AccessButton
 					noun="tracker"
 					access={detail.access}

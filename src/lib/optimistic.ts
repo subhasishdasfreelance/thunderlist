@@ -1476,6 +1476,9 @@ function addNewTasks(
 		tagIds: [...new Set([...each.tagIds, ...inherited])],
 		urgent: each.urgent,
 		important: each.important,
+		// Written only when typed, as the server stores it; see `createTask`.
+		...(each.deadline == null ? {} : { deadline: each.deadline }),
+		...(each.deadlineTime == null ? {} : { deadlineTime: each.deadlineTime }),
 		stageId: first,
 		// Its old number, for one an undo puts back; see `createTask`.
 		...(each.number === undefined ? {} : { number: each.number }),

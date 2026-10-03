@@ -31,7 +31,8 @@ import {
 	TodayButton,
 } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
-import { daysUntil, formatDate, formatDue } from "#/lib/format-date";
+import { daysUntil, formatDeadline, formatDue } from "#/lib/format-date";
+import { localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { useRowShortcuts } from "#/lib/use-row-shortcuts";
 import { useTaskTypes } from "#/lib/use-task-types";
@@ -260,16 +261,24 @@ export function TaskRow({
 	 */
 	const now = useNow();
 	const deadline = task.deadline ?? null;
+	const deadlineTime = deadline === null ? null : (task.deadlineTime ?? null);
 	const countedFrom =
 		now === null || task.completed ? null : todayDateOnly(new Date(now));
 	const due =
 		deadline === null
 			? null
-			: countedFrom === null
-				? { label: `Due ${formatDate(deadline)}`, isOverdue: false }
+			: countedFrom === null || now === null
+				? {
+						label: `Due ${formatDeadline(deadline, deadlineTime)}`,
+						isOverdue: false,
+					}
 				: {
-						label: formatDue(deadline, countedFrom),
-						isOverdue: (daysUntil(deadline, countedFrom) ?? 0) < 0,
+						label: formatDue(deadline, countedFrom, deadlineTime),
+						// Past its time on the day, or once the day is over.
+						isOverdue:
+							deadlineTime === null
+								? (daysUntil(deadline, countedFrom) ?? 0) < 0
+								: now > (localMoment(deadline, deadlineTime) ?? now),
 					};
 	const hasMeta =
 		crumb !== null || type !== null || subtasks.length > 0 || due !== null;
@@ -390,7 +399,11 @@ export function TaskRow({
 									<span
 										className="thunderlist-due"
 										data-overdue={due.isOverdue}
-										title={formatDate(deadline)}
+										title={
+											deadline === null
+												? undefined
+												: formatDeadline(deadline, deadlineTime)
+										}
 									>
 										<CalendarClock aria-hidden size={12} />
 										{due.label}

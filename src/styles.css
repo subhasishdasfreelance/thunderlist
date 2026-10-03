@@ -2552,18 +2552,19 @@ input[type="search"]::-webkit-search-cancel-button {
 /*
  * A finger is wider than a pointer. The buttons on a task row are drawn at the
  * size they are with a mouse — so a flag that is on, or a button being
- * pressed, lights the same small square — but each takes 44px of the screen
- * to be pressed in, an invisible area around it, spaced so no two overlap.
+ * pressed, lights the same small square — and sit close together, but each
+ * takes 44px of height to be pressed in, an invisible area around it, and
+ * half the gap on either side, so no two overlap.
  * The checkbox's hit area grows the same way around the box.
  */
 @media (pointer: coarse) {
 	.thunderlist-row-buttons {
-		gap: calc(44px - var(--size-element-sm, 2rem));
+		gap: 0.25rem;
 	}
 
 	/* Urgent and important share a group of their own; see `TaskFlagButtons`. */
 	.thunderlist-row-buttons .thunderlist-flag + .thunderlist-flag {
-		margin-inline-start: calc(44px - var(--size-element-sm, 2rem));
+		margin-inline-start: 0.25rem;
 	}
 
 	.thunderlist-row-buttons button {
@@ -2575,7 +2576,7 @@ input[type="search"]::-webkit-search-cancel-button {
 		position: absolute;
 		top: 50%;
 		left: 50%;
-		width: 44px;
+		width: calc(100% + 0.25rem);
 		height: 44px;
 		transform: translate(-50%, -50%);
 	}

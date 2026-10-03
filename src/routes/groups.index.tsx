@@ -118,6 +118,7 @@ function GroupsPage() {
 							page={paging.page}
 							total={paging.total}
 							onChange={paging.setPage}
+							hasDivider={false}
 						/>
 					</VStack>
 				</VStack>
