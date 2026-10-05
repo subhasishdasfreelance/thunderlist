@@ -24,6 +24,7 @@ import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
+import { CoverImage } from "#/components/common/cover-image";
 import { DayStats } from "#/components/common/day-stats";
 import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
@@ -612,17 +613,23 @@ function ChecklistDetailPage() {
 			</HStack>
 
 			<HStack gap={2} hAlign="between" vAlign="start">
-				<VStack gap={0.5}>
-					<HStack gap={2} vAlign="center">
-						{special === null ? null : (
-							<Icon icon={SPECIAL_CHECKLIST_ICONS[special]} color="secondary" />
+				<HStack gap={3} vAlign="center">
+					<CoverImage images={detail.images} size="page" />
+					<VStack gap={0.5}>
+						<HStack gap={2} vAlign="center">
+							{special === null ? null : (
+								<Icon
+									icon={SPECIAL_CHECKLIST_ICONS[special]}
+									color="secondary"
+								/>
+							)}
+							<Heading level={1}>{detail.title}</Heading>
+						</HStack>
+						{detail.description === "" ? null : (
+							<Text color="secondary">{detail.description}</Text>
 						)}
-						<Heading level={1}>{detail.title}</Heading>
-					</HStack>
-					{detail.description === "" ? null : (
-						<Text color="secondary">{detail.description}</Text>
-					)}
-				</VStack>
+					</VStack>
+				</HStack>
 
 				{canManageContent ? (
 					<DropdownMenu

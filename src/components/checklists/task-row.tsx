@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
+import { CoverImage } from "#/components/common/cover-image";
 import { numberTitle } from "#/components/common/item-number";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
 import { TaggedTitle } from "#/components/tags/tagged-title";
@@ -385,6 +386,7 @@ export function TaskRow({
 						onChange={check}
 					/>
 				</span>
+				<CoverImage images={task.images} size="row" />
 				{!hasMeta && !task.caption ? (
 					title
 				) : (

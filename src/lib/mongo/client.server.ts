@@ -98,6 +98,17 @@ export type PreferencesDoc = {
 	updatedAt: string;
 };
 
+/**
+ * The newest release announced to everyone, the one document there is; see
+ * `announceRelease`.
+ */
+export type ReleaseDoc = {
+	_id: "latest";
+	buildId: string;
+	builtAt: number;
+	announcedAt: string;
+};
+
 /** A device someone turned notifications on for. */
 export type PushSubscriptionDoc = {
 	endpoint: string;
@@ -234,6 +245,7 @@ export type Collections = {
 	preferences: Collection<PreferencesDoc>;
 	counters: Collection<CounterDoc>;
 	pushSubscriptions: Collection<PushSubscriptionDoc>;
+	releases: Collection<ReleaseDoc>;
 	notificationCodes: Collection<NotificationCodeDoc>;
 	aiTokens: Collection<AiTokenDoc>;
 	teams: Collection<TeamDoc>;
@@ -286,6 +298,7 @@ function collectionsOf(database: Db): Collections {
 		counters: database.collection<CounterDoc>("counters"),
 		pushSubscriptions:
 			database.collection<PushSubscriptionDoc>("pushSubscriptions"),
+		releases: database.collection<ReleaseDoc>("releases"),
 		notificationCodes:
 			database.collection<NotificationCodeDoc>("notificationCodes"),
 		aiTokens: database.collection<AiTokenDoc>("aiTokens"),

@@ -27,6 +27,7 @@ import {
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
 import type { TrackerValues } from "#/lib/changes";
+import { useImageDraft } from "#/lib/uploads";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
 import { todayDateOnly } from "#/schemas/common";
@@ -86,6 +87,12 @@ export function TrackerFormDialog({
 	 * `AccessField`.
 	 */
 	const ownAlone = useOwnAlone();
+	const imageDraft = useImageDraft(
+		"trackers",
+		tracker?.trackerId ?? null,
+		tracker?.images,
+		isOpen,
+	);
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const team = useTeam();
 
@@ -149,6 +156,7 @@ export function TrackerFormDialog({
 	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
+		const images = imageDraft.commit();
 		onSubmit({
 			title: trimmedTitle,
 			caption: caption.trim(),
@@ -165,6 +173,7 @@ export function TrackerFormDialog({
 			tagIds: draftTagIds(tagDraft, resolveTags),
 			assignees,
 			access,
+			...(images === undefined ? {} : { images }),
 		});
 	}
 
@@ -277,9 +286,7 @@ export function TrackerFormDialog({
 					placeholder="https://…"
 				/>
 
-				{tracker ? (
-					<ImagesField kind="trackers" itemId={tracker.trackerId} />
-				) : null}
+				{tracker ? <ImagesField draft={imageDraft} /> : null}
 
 				<ScheduleFields
 					startDate={startDate}

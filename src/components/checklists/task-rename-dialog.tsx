@@ -14,8 +14,9 @@ import { DependsField } from "#/components/tasks/depends-field";
 import { SubtasksField } from "#/components/tasks/subtasks-field";
 import { formatDate } from "#/lib/format-date";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
+import { useImageDraft } from "#/lib/uploads";
 import { useTaskTypes } from "#/lib/use-task-types";
-import type { ItemRef } from "#/schemas/common";
+import type { ImageRef, ItemRef } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import type { Subtask, Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -65,6 +66,8 @@ export type TaskDetails = {
 	dependsOn?: Array<ItemRef>;
 	/** Only when they changed; see `Task.subtasks`. */
 	subtasks?: Array<Subtask>;
+	/** Only when they changed; see `useImageDraft`. */
+	images?: Array<ImageRef>;
 	/** Only when it changed; `null` takes it off. See `Task.deadline`. */
 	deadline?: string | null;
 	/** Only when it changed; `null` for the day as a whole. */
@@ -102,6 +105,12 @@ export function TaskRenameDialog({
 	onSubmit: (parsed: ParsedTitle, details: TaskDetails) => void;
 }) {
 	const [notesView, setNotesView] = useState<NotesView>("write");
+	const imageDraft = useImageDraft(
+		"tasks",
+		task?.taskId ?? null,
+		task?.images,
+		isOpen,
+	);
 	const types = useTaskTypes();
 
 	/*
@@ -115,12 +124,14 @@ export function TaskRenameDialog({
 		onSubmit: ({ value }) => {
 			const parsed = parseTitle(value.title);
 			if (parsed.title === "") return;
+			const images = imageDraft.commit();
 			// A row left with no title is dropped; see `SubtasksField`.
 			const subtasks = value.subtasks.flatMap((subtask) => {
 				const title = subtask.title.trim();
 				return title === "" ? [] : [{ ...subtask, title }];
 			});
 			onSubmit(parsed, {
+				...(images === undefined ? {} : { images }),
 				// One line, however it was typed or pasted; see the field below.
 				caption: value.caption.replace(/\s*\n\s*/g, " ").trim(),
 				notes: value.notes.trim(),
@@ -293,9 +304,7 @@ export function TaskRenameDialog({
 					)}
 				</form.Field>
 
-				{task === null ? null : (
-					<ImagesField kind="tasks" itemId={task.taskId} />
-				)}
+				{task === null ? null : <ImagesField draft={imageDraft} />}
 
 				{task === null ? null : (
 					<form.Field name="dependsOn">

@@ -90,10 +90,14 @@ export const DEFAULT_DAILY_WINDOW: DailyWindow = { from: "06:00", to: "22:00" };
  * A picture on a task, a checklist, a tracker or a tag, as UploadThing keeps
  * it: `id` is where it is filed there — `{owner}/{kind}/{item}/{random}` —
  * and `url` is where it is read from. See `images.server.ts`.
+ *
+ * `isCover` marks the one that stands for the thing — on its card, at the
+ * head of its page, at the start of its row; see `coverOf`.
  */
 const imageSchema = v.object({
 	id: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
 	url: v.pipe(v.string(), v.url(), v.startsWith("https://")),
+	isCover: v.optional(v.boolean()),
 });
 
 export type ImageRef = v.InferOutput<typeof imageSchema>;
@@ -105,7 +109,18 @@ export const MAX_IMAGES = 20;
 export const imagesSchema = v.pipe(
 	v.array(imageSchema),
 	v.maxLength(MAX_IMAGES, `At most ${MAX_IMAGES} images can be added`),
+	v.check(
+		(images) => images.filter((image) => image.isCover).length <= 1,
+		"Only one image can be the cover",
+	),
 );
+
+/** The picture chosen to stand for a thing, or `null` for none. */
+export function coverOf(
+	images: ReadonlyArray<ImageRef> | undefined,
+): ImageRef | null {
+	return images?.find((image) => image.isCover) ?? null;
+}
 
 /** Empty string is treated as "no url" so a cleared form field round-trips. */
 export const optionalUrlSchema = v.pipe(

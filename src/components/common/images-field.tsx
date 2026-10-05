@@ -1,56 +1,27 @@
 import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { Lightbox } from "@astryxdesign/core/Lightbox";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Thumbnail } from "@astryxdesign/core/Thumbnail";
-import { useQueryClient } from "@tanstack/react-query";
-import { ImagePlus } from "lucide-react";
-import { memo, useRef, useState } from "react";
-import type { ImageKind } from "#/data/images.server";
-import { useApplyChange } from "#/lib/changes";
-import { errorMessage } from "#/lib/errors";
-import { useToast } from "#/lib/toasts";
-import {
-	addImage,
-	type PendingImage,
-	removeImage,
-	useImages,
-	usePendingImages,
-} from "#/lib/uploads";
-import { MAX_IMAGES } from "#/schemas/common";
+import { ImagePlus, Star } from "lucide-react";
+import { useRef, useState } from "react";
+import type { ImageDraft, Upload } from "#/lib/uploads";
 
 /**
  * The pictures on a task, a checklist, a tracker or a tag: added, looked at
- * full size and removed here.
+ * full size, made the cover and taken off here, and saved with the rest of
+ * the dialog; see `useImageDraft`.
  *
- * Each is saved on its own as it happens, not with the dialog's other fields;
- * see `addImage`. A picture picked is drawn at once, with a bar for how far it
- * has got, and closing the dialog does not stop it.
+ * A picture picked is sent at once and drawn at once, with a bar filling as it
+ * goes. The cover is the one that stands for the thing — on its card, at the
+ * head of its page, at the start of its row.
  */
-export const ImagesField = memo(function ImagesField({
-	kind,
-	itemId,
-}: {
-	kind: ImageKind;
-	itemId: string;
-}) {
-	const client = useQueryClient();
-	const { apply } = useApplyChange();
-	const toast = useToast();
+export function ImagesField({ draft }: { draft: ImageDraft }) {
 	const input = useRef<HTMLInputElement>(null);
-	const images = useImages(kind, itemId);
-	const pending = usePendingImages(kind, itemId);
 	const [shown, setShown] = useState<number | null>(null);
-	const room = MAX_IMAGES - images.length - pending.length;
-
-	function add(files: ReadonlyArray<File>) {
-		for (const file of files.slice(0, Math.max(room, 0))) {
-			addImage(client, apply, kind, itemId, file).catch((error) =>
-				toast({ body: errorMessage(error), type: "error", uniqueID: "image" }),
-			);
-		}
-	}
+	const { images, uploading } = draft;
 
 	return (
 		<VStack gap={2}>
@@ -60,7 +31,8 @@ export const ImagesField = memo(function ImagesField({
 						Images
 					</Text>
 					<Text type="supporting">
-						Made smaller as they are uploaded, without losing quality.
+						Star one to make it the cover. Made smaller as they upload, without
+						losing quality.
 					</Text>
 				</VStack>
 				<Button
@@ -68,7 +40,7 @@ export const ImagesField = memo(function ImagesField({
 					icon={<ImagePlus aria-hidden />}
 					variant="ghost"
 					size="sm"
-					isDisabled={room <= 0}
+					isDisabled={draft.room <= 0}
 					onClick={() => input.current?.click()}
 				/>
 			</HStack>
@@ -80,27 +52,43 @@ export const ImagesField = memo(function ImagesField({
 				multiple
 				hidden
 				onChange={(event) => {
-					add([...(event.target.files ?? [])]);
+					draft.add([...(event.target.files ?? [])]);
 					// Picking the same picture again is a new pick.
 					event.target.value = "";
 				}}
 			/>
 
-			{images.length === 0 && pending.length === 0 ? null : (
+			{images.length === 0 && uploading.length === 0 ? null : (
 				<div className="flex flex-wrap gap-2">
 					{images.map((image, index) => (
-						<Thumbnail
-							key={image.id}
-							src={image.url}
-							alt={`Image ${index + 1}`}
-							onClick={() => setShown(index)}
-							onRemove={() =>
-								removeImage(client, apply, kind, itemId, image.id)
-							}
-						/>
+						<VStack key={image.id} gap={1} hAlign="center">
+							<Thumbnail
+								src={image.url}
+								alt={`Image ${index + 1}`}
+								onClick={() => setShown(index)}
+								onRemove={() => draft.remove(image.id)}
+							/>
+							<IconButton
+								label={
+									image.isCover
+										? `Image ${index + 1} is the cover`
+										: `Make image ${index + 1} the cover`
+								}
+								tooltip={image.isCover ? "Cover" : "Make cover"}
+								icon={
+									<Star
+										aria-hidden
+										fill={image.isCover ? "currentColor" : "none"}
+									/>
+								}
+								variant="ghost"
+								size="sm"
+								onClick={() => draft.toggleCover(image.id)}
+							/>
+						</VStack>
 					))}
-					{pending.map((each) => (
-						<Uploading key={each.key} image={each} />
+					{uploading.map((upload) => (
+						<Uploading key={upload.key} upload={upload} />
 					))}
 				</div>
 			)}
@@ -122,24 +110,21 @@ export const ImagesField = memo(function ImagesField({
 			)}
 		</VStack>
 	);
-});
+}
 
 /**
- * A picture on its way: drawn from the device, with a thin bar across its foot
- * filling as it is sent, then moving on its own while it is made smaller.
+ * A picture on its way: drawn from the device, with a bar across its foot
+ * filling from 0 to 100 as it goes; see `SENDING_SHARE`.
  */
-function Uploading({ image }: { image: PendingImage }) {
-	const isSent = image.progress >= 100;
-
+function Uploading({ upload }: { upload: Upload }) {
 	return (
 		<div className="relative">
-			<Thumbnail src={image.preview} alt="Uploading image" isDisabled />
+			<Thumbnail src={upload.preview} alt="Uploading image" isDisabled />
 			<div className="absolute inset-x-1 bottom-1">
 				<ProgressBar
-					label={isSent ? "Making it smaller" : "Uploading"}
+					label="Uploading"
 					isLabelHidden
-					value={image.progress}
-					isIndeterminate={isSent}
+					value={Math.round(upload.progress)}
 				/>
 			</div>
 		</div>

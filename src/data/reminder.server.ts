@@ -60,8 +60,17 @@ export async function removePushSubscription(
 	await current.pushSubscriptions.deleteOne({ email, endpoint });
 }
 
-/** What the service worker shows; `image` is a picture shown large. */
-type Message = { title: string; body: string; url: string; image?: string };
+/**
+ * What the service worker shows; `image` is a picture shown large. A
+ * `release` is a new version, offered with a Refresh button; see `public/sw.js`.
+ */
+type Message = {
+	title: string;
+	body: string;
+	url: string;
+	image?: string;
+	kind?: "release";
+};
 
 /**
  * Send one message to every device a person has — or just the one `endpoint`
@@ -106,6 +115,18 @@ export async function sendToEach(
 		people: new Set(took.map((device) => device.email)).size,
 		devices: took.length,
 	};
+}
+
+/** Send one message to every device anyone has turned notifications on for. */
+export async function sendToEveryone(
+	message: Message,
+	ttl = 60 * 60,
+): Promise<number> {
+	if (pushKeys() === null) return 0;
+
+	const current = await collections();
+	const found = await current.pushSubscriptions.find({}).toArray();
+	return (await pushTo(found, message, ttl)).length;
 }
 
 /**

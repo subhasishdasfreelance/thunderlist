@@ -15,6 +15,7 @@ import { StageDot } from "#/components/common/stage-dot";
 import { AccessField } from "#/components/teams/access-field";
 import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
+import { useImageDraft } from "#/lib/uploads";
 import type { AccessEntry } from "#/schemas/access";
 import type { DailyWindow } from "#/schemas/common";
 import {
@@ -96,6 +97,7 @@ export function TagFormDialog({
 	// Who it is for; see `AccessField`.
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stageColors, setStageColors] = useState<Record<string, TagColor>>({});
+	const imageDraft = useImageDraft("tags", tag.tagId, tag.images, isOpen);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -128,6 +130,7 @@ export function TagFormDialog({
 
 	function save() {
 		if (!isValid) return;
+		const images = imageDraft.commit();
 		onSubmit({
 			name: trimmed,
 			color,
@@ -142,6 +145,7 @@ export function TagFormDialog({
 			dailyWindow,
 			access,
 			stageColors,
+			...(images === undefined ? {} : { images }),
 		});
 	}
 
@@ -224,7 +228,7 @@ export function TagFormDialog({
 					placeholder="What this tag gathers"
 				/>
 
-				<ImagesField kind="tags" itemId={tag.tagId} />
+				<ImagesField draft={imageDraft} />
 
 				<ScheduleFields
 					startDate={startDate}

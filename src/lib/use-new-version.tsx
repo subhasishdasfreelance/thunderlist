@@ -33,17 +33,39 @@ async function fetchNewFiles(): Promise<void> {
 	const files = new Set(
 		Array.from(html.matchAll(/["'](\/assets\/[^"'?#\s]+)/g), (m) => m[1]),
 	);
-	await Promise.allSettled([...files].map((file) => fetch(file)));
+	await Promise.allSettled([
+		...[...files].map((file) => fetch(file)),
+		refreshStartPages(),
+	]);
+}
+
+/**
+ * Have the service worker fetch its kept copy of the start page afresh, so
+ * refreshing there brings the new version and not the copy kept before it;
+ * see `refreshStartPages` in `public/sw.js`. Not waited on for long.
+ */
+function refreshStartPages(): Promise<void> {
+	const worker = navigator.serviceWorker?.controller;
+	if (!worker) return Promise.resolve();
+
+	return new Promise((resolve) => {
+		const channel = new MessageChannel();
+		channel.port1.onmessage = () => resolve();
+		worker.postMessage({ type: "refresh-start-pages" }, [channel.port2]);
+		window.setTimeout(resolve, 15_000);
+	});
 }
 
 /**
  * Notice a new deploy while the page is open, and offer to load it.
  *
- * Every few minutes, as the page comes back into view, as the connection
- * returns, and as a new service worker takes over, the server is asked which
- * build it runs. A different one has its files fetched in the background, and
- * only then is the refresh offered, so taking it up is quick. Nothing reloads
- * by itself: a reload in the middle of typing would lose it.
+ * As the app opens — a launch can open on a copy kept from before a deploy —
+ * every few minutes after, as the page comes back into view, as the connection
+ * returns, as a new service worker takes over, and as a release notification
+ * arrives (see `announceRelease`), the server is asked which build it runs. A
+ * different one has its files fetched in the background, and only then is the
+ * refresh offered, so taking it up is quick. Nothing reloads by itself: a
+ * reload in the middle of typing would lose it.
  *
  * Production only: in development Vite swaps code in by itself.
  */
@@ -102,16 +124,24 @@ export function useNewVersionPrompt(): void {
 			if (hadWorker) void check(true);
 		};
 
+		// Told by the service worker that a release notification came.
+		const onWorkerMessage = (event: MessageEvent) => {
+			if (event.data?.type === "release") void check(true);
+		};
+
+		void check(true);
 		const timer = window.setInterval(() => void check(), CHECK_EVERY_MS);
 		document.addEventListener("visibilitychange", onVisible);
 		window.addEventListener("online", onOnline);
 		serviceWorker?.addEventListener("controllerchange", onNewWorker);
+		serviceWorker?.addEventListener("message", onWorkerMessage);
 
 		return () => {
 			window.clearInterval(timer);
 			document.removeEventListener("visibilitychange", onVisible);
 			window.removeEventListener("online", onOnline);
 			serviceWorker?.removeEventListener("controllerchange", onNewWorker);
+			serviceWorker?.removeEventListener("message", onWorkerMessage);
 		};
 	}, [toast]);
 }

@@ -3,6 +3,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { CardLastLine } from "#/components/common/card-last-line";
+import { CoverImage } from "#/components/common/cover-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	PriorityMarks,
@@ -106,54 +107,61 @@ export function ChecklistCard({
 			href={`/checklists/${checklist.checklistId}${groupId === undefined ? "" : `?group=${groupId}`}`}
 			padding={3}
 		>
-			<VStack gap={2}>
-				<HStack gap={2} hAlign="between" vAlign="center">
-					<HStack gap={1.5} vAlign="center" className="thunderlist-card-title">
-						{/* First, as on a task row; see `TaskFlagButtons`. */}
-						{flags === null ? null : (
-							<div className="thunderlist-row-buttons hidden shrink-0 items-center md:flex">
-								{flags}
-							</div>
-						)}
-						{/* The Inbox and the Backlog carry their marks, so they read as
+			<HStack gap={3} vAlign="center">
+				<CoverImage images={checklist.images} size="card" />
+				<VStack gap={2} width="100%">
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<HStack
+							gap={1.5}
+							vAlign="center"
+							className="thunderlist-card-title"
+						>
+							{/* First, as on a task row; see `TaskFlagButtons`. */}
+							{flags === null ? null : (
+								<div className="thunderlist-row-buttons hidden shrink-0 items-center md:flex">
+									{flags}
+								</div>
+							)}
+							{/* The Inbox and the Backlog carry their marks, so they read as
 						    the two they are. */}
-						{checklist.special == null ? null : (
-							<Icon
-								icon={SPECIAL_CHECKLIST_ICONS[checklist.special]}
-								size="sm"
-								color="secondary"
-							/>
-						)}
-						<Text weight="medium" maxLines={1}>
-							{checklist.title}{" "}
-							<Text color="secondary" weight="normal">
-								({progress.percent}%)
+							{checklist.special == null ? null : (
+								<Icon
+									icon={SPECIAL_CHECKLIST_ICONS[checklist.special]}
+									size="sm"
+									color="secondary"
+								/>
+							)}
+							<Text weight="medium" maxLines={1}>
+								{checklist.title}{" "}
+								<Text color="secondary" weight="normal">
+									({progress.percent}%)
+								</Text>
 							</Text>
-						</Text>
-						{canManageContent ? null : <PriorityMarks {...checklist} />}
+							{canManageContent ? null : <PriorityMarks {...checklist} />}
+						</HStack>
+						<PaceLabel status={pace.status} />
 					</HStack>
-					<PaceLabel status={pace.status} />
-				</HStack>
 
-				<ProgressMeter
-					label={`${checklist.title} progress`}
-					percent={progress.percent}
-					stages={{
-						parts: stageParts(checklistStages(checklist), progress.byStage),
-						total: progress.total,
-						firstName: checklistStages(checklist)[0].name,
-					}}
-					elapsed={pace.elapsed}
-					expectedReading={
-						pace.elapsed == null
-							? undefined
-							: formatExpectedTasks(pace.elapsed, progress.total)
-					}
-					footnote={formatSchedule(checklist)}
-				/>
+					<ProgressMeter
+						label={`${checklist.title} progress`}
+						percent={progress.percent}
+						stages={{
+							parts: stageParts(checklistStages(checklist), progress.byStage),
+							total: progress.total,
+							firstName: checklistStages(checklist)[0].name,
+						}}
+						elapsed={pace.elapsed}
+						expectedReading={
+							pace.elapsed == null
+								? undefined
+								: formatExpectedTasks(pace.elapsed, progress.total)
+						}
+						footnote={formatSchedule(checklist)}
+					/>
 
-				<CardLastLine summary={summary} flags={flags} />
-			</VStack>
+					<CardLastLine summary={summary} flags={flags} />
+				</VStack>
+			</HStack>
 		</ClickableCard>
 	);
 }

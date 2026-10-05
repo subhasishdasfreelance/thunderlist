@@ -33,6 +33,7 @@ import { TaskRow } from "#/components/checklists/task-row";
 import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
+import { CoverImage } from "#/components/common/cover-image";
 import { DayStats } from "#/components/common/day-stats";
 import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
@@ -803,18 +804,21 @@ function TagDetailPage() {
 			</HStack>
 
 			<HStack gap={2} hAlign="between" vAlign="start">
-				<VStack gap={0.5}>
-					<HStack gap={2} vAlign="center">
-						{Mark === null ? null : <Icon icon={Mark} color="secondary" />}
-						<Heading level={1}>{detail.name}</Heading>
-					</HStack>
-					{subtitle === "" ? null : (
-						// Formatted in the viewer's locale, so server and client can differ.
-						<span suppressHydrationWarning>
-							<Text color="secondary">{subtitle}</Text>
-						</span>
-					)}
-				</VStack>
+				<HStack gap={3} vAlign="center">
+					<CoverImage images={detail.images} size="page" />
+					<VStack gap={0.5}>
+						<HStack gap={2} vAlign="center">
+							{Mark === null ? null : <Icon icon={Mark} color="secondary" />}
+							<Heading level={1}>{detail.name}</Heading>
+						</HStack>
+						{subtitle === "" ? null : (
+							// Formatted in the viewer's locale, so server and client can differ.
+							<span suppressHydrationWarning>
+								<Text color="secondary">{subtitle}</Text>
+							</span>
+						)}
+					</VStack>
+				</HStack>
 
 				{canManageContent ? (
 					<DropdownMenu

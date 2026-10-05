@@ -17,6 +17,7 @@ import { useApplyChange } from "#/lib/changes";
 import { computeVelocity, trackerFraction } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
 import { useItemPermissions } from "#/lib/use-team";
+import { coverOf } from "#/schemas/common";
 import { type Tag, tagsFor } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
@@ -67,6 +68,8 @@ export function TrackerCard({
 }) {
 	const { progress } = tracker;
 	const carried = tagsFor(tracker.tagIds ?? [], tags);
+	// The cover picked from its pictures, else the one linked to; see `coverOf`.
+	const cover = coverOf(tracker.images)?.url ?? tracker.coverUrl;
 	const { apply } = useApplyChange();
 	const { canManageContent } = useItemPermissions(tracker.access);
 
@@ -130,9 +133,9 @@ export function TrackerCard({
 			padding={3}
 		>
 			<HStack gap={3} vAlign="center">
-				{tracker.coverUrl ? (
+				{cover ? (
 					<FadeImage
-						src={tracker.coverUrl}
+						src={cover}
 						alt=""
 						className="h-16 w-12 shrink-0 rounded-sm border border-border object-cover"
 					/>

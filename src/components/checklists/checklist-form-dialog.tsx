@@ -23,6 +23,7 @@ import {
 } from "#/components/tags/tags-field";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { ChecklistValues } from "#/lib/changes";
+import { useImageDraft } from "#/lib/uploads";
 import type { AccessEntry } from "#/schemas/access";
 import {
 	type Checklist,
@@ -109,6 +110,12 @@ export function ChecklistFormDialog({
 	 * `AccessField`.
 	 */
 	const ownAlone = useOwnAlone();
+	const imageDraft = useImageDraft(
+		"checklists",
+		checklist?.checklistId ?? null,
+		checklist?.images,
+		isOpen,
+	);
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stages, setStages] = useState<Array<Stage>>([...DEFAULT_STAGES]);
 
@@ -151,6 +158,7 @@ export function ChecklistFormDialog({
 			name: stage.name.trim(),
 		}));
 
+		const images = imageDraft.commit();
 		onSubmit({
 			title: trimmedTitle,
 			description: description.trim(),
@@ -165,6 +173,7 @@ export function ChecklistFormDialog({
 			tagIds: draftTagIds(tagDraft, resolveTags),
 			access,
 			...(sameStages(named, original) ? {} : { stages: named }),
+			...(images === undefined ? {} : { images }),
 		});
 	}
 
@@ -239,9 +248,7 @@ export function ChecklistFormDialog({
 					onDeadlineTimeChange={setDeadlineTime}
 					onDailyWindowChange={setDailyWindow}
 				/>
-				{checklist ? (
-					<ImagesField kind="checklists" itemId={checklist.checklistId} />
-				) : null}
+				{checklist ? <ImagesField draft={imageDraft} /> : null}
 				<StagesField value={stages} onChange={setStages} />
 				<TagsField
 					label="Tags"

@@ -2,26 +2,37 @@
  * Pictures on tasks, checklists, trackers and tags, as the browser handles
  * them.
  *
- * Adding or removing one is saved on its own, the moment it happens, not with
- * the dialog it is done in. A picture picked is drawn at once from the device,
- * with a bar for how far it has got, and once it has been sent and made smaller
- * — see `imageRouter` — it goes on its item as any edit does: drawn first,
- * saved after. Removing one is an edit the same way, and the server deletes the
- * file once nothing shows it; see `imagesAtRisk`.
+ * A dialog edits a thing's pictures as it edits the rest of it: a picture
+ * picked is sent at once — drawn from the device, with a bar for how far it
+ * has got — but goes on the thing only when the dialog is saved, and a picture
+ * taken off, or made the cover, is only that once it is saved too. Cancelled,
+ * the pictures sent meanwhile are thrown away; see `useImageDraft`.
  *
- * What is on its way is kept here rather than in the dialog, so it carries on
- * when the dialog is closed, and is shown again when it is opened.
+ * Saved while a picture is still on its way, the picture carries on after the
+ * dialog has closed and goes on the thing once it arrives, as any edit does:
+ * drawn first, saved after. What is on its way is kept here rather than in the
+ * dialog for that reason, and so a dialog opened again shows it.
  */
 
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { generateReactHelpers } from "@uploadthing/react";
-import { useCallback, useRef, useSyncExternalStore } from "react";
+import {
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import type { ImageKind, ImageRouter } from "#/data/images.server";
+import { discardImagesFn } from "#/functions/images.functions";
+import { type ApplyChange, useApplyChange } from "#/lib/changes";
+import { errorMessage } from "#/lib/errors";
 import { findCachedTask } from "#/lib/optimistic";
+import { useToast } from "#/lib/toasts";
 import { queryKeys } from "#/queries/keys";
 import type { Change } from "#/schemas/change";
 import type { ChecklistSummary } from "#/schemas/checklist";
-import type { ImageRef } from "#/schemas/common";
+import { type ImageRef, MAX_IMAGES } from "#/schemas/common";
 import type { Tag, TagDetail } from "#/schemas/tag";
 import type { TrackerDetail, TrackerSummary } from "#/schemas/tracker";
 
@@ -30,51 +41,89 @@ const { uploadFiles } = generateReactHelpers<ImageRouter>({
 });
 
 /**
- * A picture on its way, drawn from the device. `progress` is how much of it
- * has been sent, out of 100; at 100 it is being made smaller.
+ * What becomes of a picture once it arrives: back to the dialog it was picked
+ * in, onto its thing — the dialog was saved — or thrown away, the dialog was
+ * cancelled.
  */
-export type PendingImage = { key: string; preview: string; progress: number };
+type Fate = "draft" | "attach" | "discard";
 
-const NO_PENDING: Array<PendingImage> = [];
+/**
+ * A picture on its way, drawn from the device. `progress` runs from 0 to 100
+ * and only ever forward; `image` is where it is kept, once it is.
+ */
+export type Upload = {
+	key: string;
+	item: string;
+	preview: string;
+	progress: number;
+	fate: Fate;
+	image: ImageRef | null;
+};
+
+/**
+ * How much of the bar is the picture being sent, measured in bytes. The rest
+ * is the server making it smaller, which says nothing until it is done, so
+ * that part moves on an estimate from its size, slowing as it nears the end,
+ * and fills once it is.
+ */
+const SENDING_SHARE = 85;
+
+function makingSmallerMs(bytes: number): number {
+	return 1500 + (bytes / 1_000_000) * 700;
+}
+
+const NO_UPLOADS: ReadonlyArray<Upload> = [];
 const NO_IMAGES: Array<ImageRef> = [];
 
-/** What is on its way, by item; see `itemKey`. */
-const pending = new Map<string, Array<PendingImage>>();
+const uploads = new Map<string, Upload>();
+let everyUpload: ReadonlyArray<Upload> = NO_UPLOADS;
 const listeners = new Set<() => void>();
+
+function changed(): void {
+	everyUpload = [...uploads.values()];
+	for (const listener of listeners) listener();
+}
+
+function update(key: string, patch: Partial<Upload>): void {
+	const upload = uploads.get(key);
+	if (upload === undefined) return;
+	uploads.set(key, { ...upload, ...patch });
+	changed();
+}
+
+function drop(key: string): void {
+	const upload = uploads.get(key);
+	if (upload === undefined) return;
+	URL.revokeObjectURL(upload.preview);
+	uploads.delete(key);
+	changed();
+}
+
+function subscribe(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+}
+
+function useUploads(): ReadonlyArray<Upload> {
+	return useSyncExternalStore(
+		subscribe,
+		() => everyUpload,
+		() => NO_UPLOADS,
+	);
+}
 
 function itemKey(kind: ImageKind, itemId: string): string {
 	return `${kind}/${itemId}`;
 }
 
-function setPending(
-	key: string,
-	update: (all: Array<PendingImage>) => Array<PendingImage>,
-): void {
-	const next = update(pending.get(key) ?? NO_PENDING);
-	if (next.length === 0) pending.delete(key);
-	else pending.set(key, next);
-	for (const listener of listeners) listener();
+function discard(ids: ReadonlyArray<string>): void {
+	if (ids.length === 0) return;
+	discardImagesFn({ data: { ids: [...ids] } }).catch(() => {
+		// Left in storage; nothing shows it.
+	});
 }
 
-function subscribePending(listener: () => void): () => void {
-	listeners.add(listener);
-	return () => listeners.delete(listener);
-}
-
-/** The pictures on their way to this item. */
-export function usePendingImages(
-	kind: ImageKind,
-	itemId: string,
-): ReadonlyArray<PendingImage> {
-	const key = itemKey(kind, itemId);
-	return useSyncExternalStore(
-		subscribePending,
-		() => pending.get(key) ?? NO_PENDING,
-		() => NO_PENDING,
-	);
-}
-
-/** The pictures on an item as this browser draws it, or none if it has none. */
+/** The pictures on a thing as this browser draws it, or none. */
 function currentImages(
 	client: QueryClient,
 	kind: ImageKind,
@@ -113,30 +162,7 @@ function currentImages(
 	}
 }
 
-/** The pictures on an item, followed as they change. */
-export function useImages(
-	kind: ImageKind,
-	itemId: string,
-): ReadonlyArray<ImageRef> {
-	const client = useQueryClient();
-	const last = useRef(NO_IMAGES);
-	const subscribe = useCallback(
-		(listener: () => void) => client.getQueryCache().subscribe(listener),
-		[client],
-	);
-	// The same list for the same pictures, so nothing is drawn again for a
-	// cache change that did not touch them.
-	const read = () => {
-		const now = currentImages(client, kind, itemId);
-		if (JSON.stringify(now) !== JSON.stringify(last.current)) {
-			last.current = now;
-		}
-		return last.current;
-	};
-	return useSyncExternalStore(subscribe, read, () => last.current);
-}
-
-/** The edit that gives an item this list of pictures. */
+/** The edit that gives a thing this list of pictures. */
 function withImages(
 	kind: ImageKind,
 	itemId: string,
@@ -159,63 +185,250 @@ function withImages(
 }
 
 /**
- * Send one picture to be made smaller and kept, then put it on its item.
- * Resolves once it is on, or rejects saying why it is not.
+ * Send one picture to be made smaller and kept; see `imageRouter`. Its bar is
+ * the bytes sent, then the estimate described at `SENDING_SHARE`.
  */
-export async function addImage(
-	client: QueryClient,
-	apply: (change: Change) => void,
+async function send(
+	key: string,
 	kind: ImageKind,
 	itemId: string,
 	file: File,
-): Promise<void> {
-	const key = itemKey(kind, itemId);
-	const mine = crypto.randomUUID();
-	const preview = URL.createObjectURL(file);
-	const track = (progress: number) =>
-		setPending(key, (all) =>
-			all.map((each) => (each.key === mine ? { ...each, progress } : each)),
-		);
-	setPending(key, (all) => [...all, { key: mine, preview, progress: 0 }]);
-
+): Promise<ImageRef> {
+	let creeping: number | undefined;
 	try {
 		const [uploaded] = await uploadFiles("image", {
 			files: [file],
 			input: { kind, itemId },
-			onUploadProgress: ({ progress }) => track(Math.round(progress)),
+			onUploadProgress: ({ progress }) => {
+				if (creeping !== undefined) return;
+				update(key, { progress: (progress / 100) * SENDING_SHARE });
+				if (progress < 100) return;
+
+				const began = Date.now();
+				const expected = makingSmallerMs(file.size);
+				creeping = window.setInterval(() => {
+					const share = 1 - Math.exp(-(Date.now() - began) / expected);
+					update(key, {
+						progress: SENDING_SHARE + (99 - SENDING_SHARE) * share,
+					});
+				}, 100);
+			},
 		});
 		const answer = uploaded?.serverData;
 		if (!answer) throw new Error("That picture could not be saved.");
 		if ("error" in answer) throw new Error(answer.error);
-
-		// Onto the list as it is now: others may have arrived since this began.
-		apply(
-			withImages(kind, itemId, [
-				...currentImages(client, kind, itemId),
-				answer,
-			]),
-		);
+		return answer;
 	} finally {
-		setPending(key, (all) => all.filter((each) => each.key !== mine));
-		URL.revokeObjectURL(preview);
+		window.clearInterval(creeping);
 	}
 }
 
-/** Take a picture off its item; the server deletes the file after. */
-export function removeImage(
-	client: QueryClient,
-	apply: (change: Change) => void,
+/** Start sending a picture for a dialog; returns what it is known by here. */
+function startUpload(
 	kind: ImageKind,
 	itemId: string,
-	imageId: string,
-): void {
-	apply(
-		withImages(
-			kind,
-			itemId,
-			currentImages(client, kind, itemId).filter(
-				(image) => image.id !== imageId,
-			),
-		),
+	file: File,
+	client: QueryClient,
+	apply: ApplyChange,
+	tell: (message: string) => void,
+): string {
+	const key = crypto.randomUUID();
+	uploads.set(key, {
+		key,
+		item: itemKey(kind, itemId),
+		preview: URL.createObjectURL(file),
+		progress: 0,
+		fate: "draft",
+		image: null,
+	});
+	changed();
+
+	send(key, kind, itemId, file).then(
+		(image) => {
+			const fate = uploads.get(key)?.fate;
+			if (fate === "attach") {
+				// Onto the list as it is now: others may have arrived since.
+				apply(
+					withImages(kind, itemId, [
+						...currentImages(client, kind, itemId),
+						image,
+					]),
+				);
+				drop(key);
+			} else if (fate === "discard") {
+				discard([image.id]);
+				drop(key);
+			} else {
+				update(key, { progress: 100, image });
+			}
+		},
+		(error) => {
+			if (uploads.get(key)?.fate !== "discard") tell(errorMessage(error));
+			drop(key);
+		},
 	);
+	return key;
+}
+
+/** Whether two lists of pictures are the same pictures, in order, alike. */
+function sameImages(
+	a: ReadonlyArray<ImageRef>,
+	b: ReadonlyArray<ImageRef>,
+): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export type ImageDraft = ReturnType<typeof useImageDraft>;
+
+/**
+ * A dialog's pictures for one thing — `itemId` is `null` while it has none
+ * yet, and then there is nothing to edit. Started afresh from `saved` each time
+ * the dialog opens; `commit` is called as it is saved, and closing it any
+ * other way throws away what was sent meanwhile.
+ */
+export function useImageDraft(
+	kind: ImageKind,
+	itemId: string | null,
+	saved: ReadonlyArray<ImageRef> | undefined,
+	isOpen: boolean,
+) {
+	const client = useQueryClient();
+	const { apply } = useApplyChange();
+	const toast = useToast();
+	const every = useUploads();
+
+	const [images, setImages] = useState<Array<ImageRef>>(NO_IMAGES);
+	/** This dialog's pictures still on their way, by key. */
+	const [sending, setSending] = useState<Array<string>>([]);
+	/** As the dialog opened, so what arrived since is not lost by saving. */
+	const opened = useRef<ReadonlyArray<ImageRef>>(NO_IMAGES);
+	/** Sent from this dialog, so on nothing yet. */
+	const fresh = useRef(new Set<string>());
+	const isSaved = useRef(false);
+
+	const latest = useRef({ images, sending });
+	useLayoutEffect(() => {
+		latest.current = { images, sending };
+	});
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: read as the dialog opens and not followed after, as its other fields are.
+	useEffect(() => {
+		if (!isOpen) return;
+		opened.current = saved ?? NO_IMAGES;
+		fresh.current = new Set();
+		isSaved.current = false;
+		setImages([...(saved ?? NO_IMAGES)]);
+		setSending([]);
+
+		// Closed without saving: nothing sent meanwhile is kept.
+		return () => {
+			if (isSaved.current) return;
+			for (const key of latest.current.sending) {
+				const upload = uploads.get(key);
+				if (upload?.image) {
+					discard([upload.image.id]);
+					drop(key);
+				} else {
+					update(key, { fate: "discard" });
+				}
+			}
+			discard([...fresh.current]);
+		};
+	}, [isOpen]);
+
+	// Arrived: onto the dialog's list, at the end.
+	useEffect(() => {
+		const arrived = every.filter(
+			(upload) =>
+				upload.image !== null &&
+				upload.fate === "draft" &&
+				sending.includes(upload.key),
+		);
+		if (arrived.length === 0) return;
+		const keys = new Set(arrived.map((upload) => upload.key));
+		for (const upload of arrived) {
+			if (upload.image) fresh.current.add(upload.image.id);
+		}
+		setImages((now) => [
+			...now,
+			...arrived.flatMap((upload) => (upload.image ? [upload.image] : [])),
+		]);
+		setSending((now) => now.filter((key) => !keys.has(key)));
+		for (const key of keys) drop(key);
+	}, [every, sending]);
+
+	const item = itemId === null ? null : itemKey(kind, itemId);
+	/** On their way: this dialog's, and any a saved dialog left going. */
+	const uploading = every.filter(
+		(upload) =>
+			upload.item === item &&
+			(sending.includes(upload.key) || upload.fate === "attach"),
+	);
+	const room = MAX_IMAGES - images.length - uploading.length;
+
+	function add(files: ReadonlyArray<File>) {
+		if (itemId === null) return;
+		const keys = files
+			.slice(0, Math.max(room, 0))
+			.map((file) =>
+				startUpload(kind, itemId, file, client, apply, (message) =>
+					toast({ body: message, type: "error", uniqueID: "image" }),
+				),
+			);
+		setSending((now) => [...now, ...keys]);
+	}
+
+	function remove(imageId: string) {
+		setImages((now) => now.filter((image) => image.id !== imageId));
+	}
+
+	/** Make this the cover, or, if it is already, have none. */
+	function toggleCover(imageId: string) {
+		setImages((now) =>
+			now.map(({ isCover, ...image }) =>
+				image.id === imageId && !isCover ? { ...image, isCover: true } : image,
+			),
+		);
+	}
+
+	/**
+	 * Called as the dialog is saved. Pictures still on their way go on once
+	 * they arrive; the list to save is returned, or `undefined` when it is as
+	 * it was.
+	 */
+	function commit(): Array<ImageRef> | undefined {
+		if (itemId === null) return undefined;
+		isSaved.current = true;
+
+		const final = [...images];
+		for (const key of sending) {
+			const upload = uploads.get(key);
+			if (upload?.image) {
+				final.push(upload.image);
+				drop(key);
+			} else {
+				update(key, { fate: "attach" });
+			}
+		}
+
+		// Anything that went on since the dialog opened — a picture an earlier
+		// save left going — stays on, as no cover if this list has one.
+		const current = currentImages(client, kind, itemId);
+		const hasCover = final.some((image) => image.isCover);
+		for (const image of current) {
+			const isNew = !opened.current.some((each) => each.id === image.id);
+			if (isNew && !final.some((each) => each.id === image.id)) {
+				const { isCover, ...rest } = image;
+				final.push(hasCover || !isCover ? rest : image);
+			}
+		}
+
+		// Sent and then taken off again before saving: on nothing, ever.
+		discard(
+			[...fresh.current].filter((id) => !final.some((each) => each.id === id)),
+		);
+		return sameImages(final, current) ? undefined : final;
+	}
+
+	return { images, uploading, room, add, remove, toggleCover, commit };
 }

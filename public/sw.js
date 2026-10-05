@@ -266,16 +266,63 @@ self.addEventListener("push", (event) => {
 		// Not ours to read; the default says enough.
 	}
 
+	const isRelease = message.kind === "release";
+
 	event.waitUntil(
-		self.registration.showNotification(message.title, {
-			body: message.body,
-			icon: "/icons/icon-192.png",
-			// The status bar draws a badge from its shape alone, so it is the
-			// bolt in white on nothing; the full-colour icon came out a blob.
-			badge: "/icons/badge-96.png",
-			image: message.image,
-			data: { url: message.url },
+		Promise.all([
+			self.registration.showNotification(message.title, {
+				body: message.body,
+				icon: "/icons/icon-192.png",
+				// The status bar draws a badge from its shape alone, so it is the
+				// bolt in white on nothing; the full-colour icon came out a blob.
+				badge: "/icons/badge-96.png",
+				image: message.image,
+				data: { url: message.url, isRelease },
+				// A new version: refreshing is the thing to do with it.
+				actions: isRelease ? [{ action: "refresh", title: "Refresh" }] : [],
+			}),
+			// A window already open asks at once, and offers it there too.
+			isRelease ? tellWindows({ type: "release" }) : null,
+		]),
+	);
+});
+
+/** Post a message to every window of the app. */
+async function tellWindows(message) {
+	const windows = await self.clients.matchAll({ type: "window" });
+	for (const client of windows) client.postMessage(message);
+}
+
+/*
+ * 6. A new version. The kept copy of the start page — see 3 — is fetched
+ *    afresh, with its files, so refreshing onto it brings the new version
+ *    rather than the copy kept before the deploy. Asked for by a page that has
+ *    found a new version (`useNewVersionPrompt`), and done before a tap on a
+ *    release notification refreshes anything.
+ */
+async function refreshStartPages() {
+	await Promise.all(
+		[...OFFLINE_PAGES].map(async (path) => {
+			const url = new URL(path, self.location.origin).href;
+			try {
+				// A redirect — signed out — is kept as no copy at all; see `savePage`.
+				const response = await fetch(url, {
+					credentials: "include",
+					redirect: "manual",
+					headers: { accept: "text/html" },
+				});
+				await savePage(url, response);
+			} catch {
+				// The old copy stays; the network answers next time.
+			}
 		}),
+	);
+}
+
+self.addEventListener("message", (event) => {
+	if (event.data?.type !== "refresh-start-pages") return;
+	event.waitUntil(
+		refreshStartPages().then(() => event.ports[0]?.postMessage("done")),
 	);
 });
 
@@ -286,9 +333,22 @@ self.addEventListener("notificationclick", (event) => {
 		self.location.origin,
 	);
 	const url = link.href;
+	const isRelease = event.notification.data?.isRelease === true;
 
 	event.waitUntil(
 		(async () => {
+			// A new version: every open window is loaded again, onto it.
+			if (isRelease) {
+				await refreshStartPages();
+				const windows = await self.clients.matchAll({ type: "window" });
+				if (windows.length === 0) {
+					await self.clients.openWindow(url);
+					return;
+				}
+				await Promise.all(windows.map((client) => client.navigate(client.url)));
+				await windows[0].focus();
+				return;
+			}
 			if (link.origin !== self.location.origin) {
 				await self.clients.openWindow(url);
 				return;

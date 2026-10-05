@@ -3,6 +3,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { CoverImage } from "#/components/common/cover-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	PriorityMarks,
@@ -72,59 +73,64 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 			href={`/tags/${tagParam(tag)}`}
 			padding={3}
 		>
-			<VStack gap={2}>
-				<HStack gap={2} hAlign="between" vAlign="center">
-					<HStack gap={1.5} vAlign="center">
-						<Token
-							size="sm"
-							color={tag.color}
-							label={tag.name}
-							icon={Mark === null ? undefined : <Icon icon={Mark} size="xsm" />}
-						/>
-						<Text color="secondary">({progress.percent}%)</Text>
-						<PriorityMarks
-							urgent={tag.urgent}
-							important={tag.important}
-							focused={canFocus ? false : tag.focused}
-						/>
-						{canFocus ? (
-							<div className="thunderlist-row-buttons flex shrink-0 items-center">
-								<FocusButton
-									title={tag.name}
-									isOn={tag.focused ?? false}
-									onToggle={(focused) =>
-										apply({
-											kind: "tag.update",
-											tagId: tag.tagId,
-											patch: { focused },
-										})
-									}
-								/>
-							</div>
-						) : null}
+			<HStack gap={3} vAlign="center">
+				<CoverImage images={tag.images} size="card" />
+				<VStack gap={2} width="100%">
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<HStack gap={1.5} vAlign="center">
+							<Token
+								size="sm"
+								color={tag.color}
+								label={tag.name}
+								icon={
+									Mark === null ? undefined : <Icon icon={Mark} size="xsm" />
+								}
+							/>
+							<Text color="secondary">({progress.percent}%)</Text>
+							<PriorityMarks
+								urgent={tag.urgent}
+								important={tag.important}
+								focused={canFocus ? false : tag.focused}
+							/>
+							{canFocus ? (
+								<div className="thunderlist-row-buttons flex shrink-0 items-center">
+									<FocusButton
+										title={tag.name}
+										isOn={tag.focused ?? false}
+										onToggle={(focused) =>
+											apply({
+												kind: "tag.update",
+												tagId: tag.tagId,
+												patch: { focused },
+											})
+										}
+									/>
+								</div>
+							) : null}
+						</HStack>
+						<PaceLabel status={pace.status} />
 					</HStack>
-					<PaceLabel status={pace.status} />
-				</HStack>
 
-				<ProgressMeter
-					label={`${tag.name} progress`}
-					percent={progress.percent}
-					stages={{
-						parts: tagStageParts(progress, tag.stageColors),
-						total: progress.total,
-						firstName: "To do",
-					}}
-					elapsed={pace.elapsed}
-					expectedReading={
-						pace.elapsed == null
-							? undefined
-							: formatExpectedTasks(pace.elapsed, progress.total)
-					}
-					footnote={formatSchedule(tag)}
-				/>
+					<ProgressMeter
+						label={`${tag.name} progress`}
+						percent={progress.percent}
+						stages={{
+							parts: tagStageParts(progress, tag.stageColors),
+							total: progress.total,
+							firstName: "To do",
+						}}
+						elapsed={pace.elapsed}
+						expectedReading={
+							pace.elapsed == null
+								? undefined
+								: formatExpectedTasks(pace.elapsed, progress.total)
+						}
+						footnote={formatSchedule(tag)}
+					/>
 
-				{summary === null ? null : <Text type="supporting">{summary}</Text>}
-			</VStack>
+					{summary === null ? null : <Text type="supporting">{summary}</Text>}
+				</VStack>
+			</HStack>
 		</ClickableCard>
 	);
 }

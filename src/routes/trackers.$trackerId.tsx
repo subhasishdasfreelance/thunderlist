@@ -71,6 +71,7 @@ import { deferQuery, primeQuery } from "#/queries/prime";
 import { groupsQuery } from "#/queries/space";
 import { tagOpenQuery, tagQuery, tagsQuery } from "#/queries/tags";
 import { trackerEntriesQuery, trackerQuery } from "#/queries/trackers";
+import { coverOf } from "#/schemas/common";
 import { specialTag, tagsFor } from "#/schemas/tag";
 import type { TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
@@ -329,9 +330,9 @@ function TrackerDetailPage() {
 
 			<HStack gap={3} hAlign="between" vAlign="start">
 				<HStack gap={3} vAlign="center">
-					{detail.coverUrl ? (
+					{(coverOf(detail.images)?.url ?? detail.coverUrl) ? (
 						<FadeImage
-							src={detail.coverUrl}
+							src={coverOf(detail.images)?.url ?? detail.coverUrl ?? undefined}
 							alt=""
 							className="h-20 w-14 shrink-0 rounded-sm border border-border object-cover"
 						/>
