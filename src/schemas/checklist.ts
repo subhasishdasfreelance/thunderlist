@@ -5,6 +5,7 @@ import {
 	dateOnlySchema,
 	descriptionSchema,
 	idSchema,
+	imagesSchema,
 	tagIdsSchema,
 	timeOfDaySchema,
 	titleSchema,
@@ -477,6 +478,8 @@ const checklistSchema = v.object({
 	access: v.optional(accessSchema),
 	/** The steps its tasks go through; absent for `DEFAULT_STAGES`. */
 	stages: v.optional(v.array(stageSchema)),
+	/** Pictures on it, in the order they were added; absent for none. See `ImageRef`. */
+	images: v.optional(imagesSchema),
 	/**
 	 * Flagged urgent, important or both, as a task is; absent for neither.
 	 * A group can be ordered by it; see `priorityRank`.
@@ -555,6 +558,8 @@ export const updateChecklistInputSchema = v.object({
 			tagIds: v.optional(tagIdsSchema),
 			access: v.optional(accessSchema),
 			stages: v.optional(stagesSchema),
+			/** Every one of them, in order: the whole list is written each time. */
+			images: v.optional(imagesSchema),
 			urgent: v.optional(v.boolean()),
 			important: v.optional(v.boolean()),
 			focused: v.optional(v.boolean()),

@@ -86,6 +86,27 @@ export type DailyWindow = v.InferOutput<typeof dailyWindowSchema>;
 /** The window a daily schedule starts with: morning to night. */
 export const DEFAULT_DAILY_WINDOW: DailyWindow = { from: "06:00", to: "22:00" };
 
+/**
+ * A picture on a task, a checklist, a tracker or a tag, as UploadThing keeps
+ * it: `id` is where it is filed there — `{owner}/{kind}/{item}/{random}` —
+ * and `url` is where it is read from. See `images.server.ts`.
+ */
+const imageSchema = v.object({
+	id: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+	url: v.pipe(v.string(), v.url(), v.startsWith("https://")),
+});
+
+export type ImageRef = v.InferOutput<typeof imageSchema>;
+
+/** The most pictures one thing can carry. */
+export const MAX_IMAGES = 20;
+
+/** Every picture a thing carries, in the order they were added. */
+export const imagesSchema = v.pipe(
+	v.array(imageSchema),
+	v.maxLength(MAX_IMAGES, `At most ${MAX_IMAGES} images can be added`),
+);
+
 /** Empty string is treated as "no url" so a cleared form field round-trips. */
 export const optionalUrlSchema = v.pipe(
 	v.nullable(

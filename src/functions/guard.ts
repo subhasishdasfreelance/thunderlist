@@ -1,3 +1,4 @@
+import { reportError } from "#/data/error-report.server";
 import { AppError } from "#/lib/errors";
 
 /**
@@ -6,6 +7,7 @@ import { AppError } from "#/lib/errors";
  * `AppError` messages are written for users and pass through. Anything else -
  * a driver error, a parse failure, a stack trace - is logged on the server and
  * replaced, so the connection string and internals never leave the process.
+ * It is reported too; see `reportError`.
  */
 export async function guard<T>(
 	label: string,
@@ -20,6 +22,7 @@ export async function guard<T>(
 		}
 
 		console.error(`[thunderlist] ${label} failed:`, error);
+		await reportError(label, error);
 		throw new Error(
 			"Something went wrong while talking to the database. Please try again.",
 		);

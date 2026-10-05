@@ -4,6 +4,7 @@ import {
 	dateOnlySchema,
 	emailSchema,
 	idSchema,
+	imagesSchema,
 	itemRefSchema,
 	tagIdsSchema,
 	timeOfDaySchema,
@@ -134,6 +135,8 @@ const taskSchema = v.object({
 	 * open; finishing all of them does not complete it.
 	 */
 	subtasks: v.optional(v.array(subtaskSchema)),
+	/** Pictures on it, in the order they were added; absent for none. See `ImageRef`. */
+	images: v.optional(imagesSchema),
 	/**
 	 * The day it is due, or absent or `null` for none. A day with no time, on
 	 * the viewer's own calendar, as a checklist's is. Written in the edit
@@ -361,6 +364,8 @@ const taskPatchSchema = v.pipe(
 		dependsOn: v.optional(dependsOnSchema),
 		/** Every one of them, in order: the whole list is written each time. */
 		subtasks: v.optional(v.array(subtaskSchema)),
+		/** Every one of them, in order: the whole list is written each time. */
+		images: v.optional(imagesSchema),
 		/** The day it is due, or `null` to take the deadline off. */
 		deadline: v.optional(v.nullable(dateOnlySchema)),
 		/** The time on that day, or `null` for the day as a whole. */

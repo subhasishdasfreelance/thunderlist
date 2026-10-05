@@ -27,6 +27,8 @@ export const ID_PREFIX = {
 	plan: "pln",
 	/** A day counted down to; see `Countdown`. */
 	countdown: "cdn",
+	/** A picture, as UploadThing files it; minted on the server. See `ImageRef`. */
+	image: "img",
 	/** Names an AI access token; see `AiToken`. Not the secret itself. */
 	aiToken: "ait",
 	/** Minted on the server, which is the only place a team is made. */

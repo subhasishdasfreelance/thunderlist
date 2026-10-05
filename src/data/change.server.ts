@@ -46,6 +46,7 @@ import {
 	deleteCountdowns,
 	updateCountdown,
 } from "./countdown.server";
+import { reportError } from "./error-report.server";
 import { shareItems, updateItems } from "./items.server";
 import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
 import { sendAssigned, sendAssignedMany } from "./reminder.server";
@@ -938,6 +939,7 @@ export async function applyChange(scope: Scope, change: Change): Promise<void> {
 		}
 
 		console.error(`[thunderlist] ${change.kind} failed:`, error);
+		await reportError(change.kind, error);
 		throw new AppError(
 			"upstream_failed",
 			"Something went wrong while saving. Please try again.",

@@ -19,6 +19,7 @@ import { Route as StagesRouteImport } from './routes/stages'
 import { Route as TodayRouteImport } from './routes/today'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as ApiNotifyRouteImport } from './routes/api/notify'
+import { Route as ApiUploadthingRouteImport } from './routes/api/uploadthing'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
 import { Route as GroupsIndexRouteImport } from './routes/groups.index'
@@ -80,6 +81,11 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
 const ApiNotifyRoute = ApiNotifyRouteImport.update({
   id: '/api/notify',
   path: '/api/notify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadthingRoute = ApiUploadthingRouteImport.update({
+  id: '/api/uploadthing',
+  path: '/api/uploadthing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChecklistsIndexRoute = ChecklistsIndexRouteImport.update({
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/today': typeof TodayRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/today': typeof TodayRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/today': typeof TodayRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/api/mcp'
     | '/api/notify'
+    | '/api/uploadthing'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -253,6 +263,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/api/mcp'
     | '/api/notify'
+    | '/api/uploadthing'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -277,6 +288,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/api/mcp'
     | '/api/notify'
+    | '/api/uploadthing'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -302,6 +314,7 @@ export interface RootRouteChildren {
   TodayRoute: typeof TodayRoute
   ApiMcpRoute: typeof ApiMcpRoute
   ApiNotifyRoute: typeof ApiNotifyRoute
+  ApiUploadthingRoute: typeof ApiUploadthingRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   GroupsGroupIdRoute: typeof GroupsGroupIdRoute
   PlansPlanIdRoute: typeof PlansPlanIdRoute
@@ -386,6 +399,13 @@ declare module '@tanstack/react-router' {
       path: '/api/notify'
       fullPath: '/api/notify'
       preLoaderRoute: typeof ApiNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/uploadthing': {
+      id: '/api/uploadthing'
+      path: '/api/uploadthing'
+      fullPath: '/api/uploadthing'
+      preLoaderRoute: typeof ApiUploadthingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checklists/': {
@@ -486,6 +506,7 @@ const rootRouteChildren: RootRouteChildren = {
   TodayRoute: TodayRoute,
   ApiMcpRoute: ApiMcpRoute,
   ApiNotifyRoute: ApiNotifyRoute,
+  ApiUploadthingRoute: ApiUploadthingRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   GroupsGroupIdRoute: GroupsGroupIdRoute,
   PlansPlanIdRoute: PlansPlanIdRoute,

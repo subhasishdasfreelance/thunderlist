@@ -9,13 +9,14 @@ import { Token } from "@astryxdesign/core/Token";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { ImagesField } from "#/components/common/images-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { StageDot } from "#/components/common/stage-dot";
 import { AccessField } from "#/components/teams/access-field";
 import type { TagValues } from "#/lib/changes";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { AccessEntry } from "#/schemas/access";
-import type { DailyWindow } from "#/schemas/common";
+import type { DailyWindow, ImageRef } from "#/schemas/common";
 import {
 	DONE_STAGE_KEY,
 	PICKABLE_COLORS,
@@ -95,6 +96,9 @@ export function TagFormDialog({
 	// Who it is for; see `AccessField`.
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stageColors, setStageColors] = useState<Record<string, TagColor>>({});
+	const [images, setImages] = useState<Array<ImageRef>>([]);
+	/** Pictures still on their way; it saves once they have arrived. */
+	const [uploading, setUploading] = useState(0);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -107,6 +111,7 @@ export function TagFormDialog({
 		setDailyWindow(tag.dailyWindow ?? null);
 		setStageColors(tag.stageColors ?? {});
 		setAccess((tag.access ?? null) as Array<AccessEntry> | null);
+		setImages(tag.images ?? []);
 	}, [isOpen, tag]);
 
 	const trimmed = name.trim();
@@ -123,7 +128,8 @@ export function TagFormDialog({
 		trimmed !== "" &&
 		!isDuplicate &&
 		!isUnwritable &&
-		(dailyWindow === null || dailyWindow.to > dailyWindow.from);
+		(dailyWindow === null || dailyWindow.to > dailyWindow.from) &&
+		uploading === 0;
 
 	function save() {
 		if (!isValid) return;
@@ -141,6 +147,9 @@ export function TagFormDialog({
 			dailyWindow,
 			access,
 			stageColors,
+			...(JSON.stringify(images) === JSON.stringify(tag.images ?? [])
+				? {}
+				: { images }),
 		});
 	}
 
@@ -221,6 +230,14 @@ export function TagFormDialog({
 					value={description}
 					onChange={setDescription}
 					placeholder="What this tag gathers"
+				/>
+
+				<ImagesField
+					kind="tags"
+					itemId={tag.tagId}
+					value={images}
+					onChange={setImages}
+					onPendingChange={setUploading}
 				/>
 
 				<ScheduleFields

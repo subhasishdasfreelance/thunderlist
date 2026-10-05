@@ -20,6 +20,7 @@ import {
 	withDeltas,
 } from "#/lib/progress";
 import type { AccessEntry } from "#/schemas/access";
+import type { ImageRef } from "#/schemas/common";
 import type { ImportGroupInput } from "#/schemas/group";
 import type {
 	ProgressEntry,
@@ -300,6 +301,7 @@ export async function updateTracker(
 		deadlineTime?: string | null;
 		description?: string;
 		coverUrl?: string | null;
+		images?: Array<ImageRef>;
 		author?: string;
 		tagIds?: Array<string>;
 		assignees?: Array<string>;

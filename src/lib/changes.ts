@@ -35,7 +35,11 @@ import { queryKeys } from "#/queries/keys";
 import type { AccessEntry } from "#/schemas/access";
 import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
 import { type Stage, stageOf } from "#/schemas/checklist";
-import { type DailyWindow, todayDateOnly } from "#/schemas/common";
+import {
+	type DailyWindow,
+	type ImageRef,
+	todayDateOnly,
+} from "#/schemas/common";
 import {
 	PICKABLE_COLORS,
 	type SpecialTag,
@@ -441,6 +445,8 @@ export type ChecklistValues = {
 	 * change, so saving anything else never moves a task.
 	 */
 	stages?: Array<Stage>;
+	/** Editing only: its pictures, when they changed; see `ImageRef`. */
+	images?: Array<ImageRef>;
 };
 
 /**
@@ -1025,6 +1031,8 @@ export type TrackerValues = {
 	 * their role allows; see `accessSchema`.
 	 */
 	access: Array<AccessEntry> | null;
+	/** Editing only: its pictures, when they changed; see `ImageRef`. */
+	images?: Array<ImageRef>;
 };
 
 export type EntryValues = { value: number; recordedAt: string; note: string };
@@ -1054,6 +1062,8 @@ export type TagValues = {
 	access: Array<AccessEntry> | null;
 	/** Editing only: each stage's colour on its bar; see `Tag.stageColors`. */
 	stageColors?: Record<string, TagColor>;
+	/** Editing only: its pictures, when they changed; see `ImageRef`. */
+	images?: Array<ImageRef>;
 };
 
 export function createTag(apply: ApplyChange, values: TagValues): string {

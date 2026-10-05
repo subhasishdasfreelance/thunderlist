@@ -68,6 +68,7 @@ function previousPatch(
 	if ("typeId" in patch) previous.typeId = task.typeId ?? null;
 	if ("dependsOn" in patch) previous.dependsOn = [...(task.dependsOn ?? [])];
 	if ("subtasks" in patch) previous.subtasks = [...(task.subtasks ?? [])];
+	if ("images" in patch) previous.images = [...(task.images ?? [])];
 	if ("deadline" in patch) previous.deadline = task.deadline ?? null;
 	if ("deadlineTime" in patch)
 		previous.deadlineTime = task.deadlineTime ?? null;
@@ -94,6 +95,7 @@ function restOfTask(
 	if (task.typeId) rest.typeId = task.typeId;
 	if (task.dependsOn?.length) rest.dependsOn = [...task.dependsOn];
 	if (task.subtasks?.length) rest.subtasks = [...task.subtasks];
+	if (task.images?.length) rest.images = [...task.images];
 	if (task.deadline) rest.deadline = task.deadline;
 	if (task.deadlineTime) rest.deadlineTime = task.deadlineTime;
 	// A task comes back at the stage it was taken from, which says whether it

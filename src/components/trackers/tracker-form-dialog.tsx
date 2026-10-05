@@ -15,6 +15,7 @@ import {
 } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
+import { ImagesField } from "#/components/common/images-field";
 import { NumberField } from "#/components/common/number-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import {
@@ -28,7 +29,7 @@ import { PeopleField } from "#/components/teams/people-field";
 import type { TrackerValues } from "#/lib/changes";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
-import { todayDateOnly } from "#/schemas/common";
+import { type ImageRef, todayDateOnly } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import { TRACKER_TYPE_DEFAULT_UNITS, type Tracker } from "#/schemas/tracker";
 
@@ -86,6 +87,9 @@ export function TrackerFormDialog({
 	 */
 	const ownAlone = useOwnAlone();
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
+	const [images, setImages] = useState<Array<ImageRef>>([]);
+	/** Pictures still on their way; it saves once they have arrived. */
+	const [uploading, setUploading] = useState(0);
 	const team = useTeam();
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
@@ -105,6 +109,7 @@ export function TrackerFormDialog({
 		setDescription(tracker?.description ?? "");
 		setCoverUrl(tracker?.coverUrl ?? "");
 		setAuthor(tracker?.author ?? "");
+		setImages(tracker?.images ?? []);
 		setTagDraft(tagsDraft(tracker?.tagIds ?? [], tags));
 		setAssignees(tracker?.assignees ?? []);
 		setAccess(
@@ -142,7 +147,9 @@ export function TrackerFormDialog({
 						? "The target has to be past where it starts."
 						: startDate === undefined
 							? "Set a start date."
-							: null;
+							: uploading > 0
+								? "Waiting for the images to upload."
+								: null;
 	const isValid = problem === null;
 
 	function save() {
@@ -164,6 +171,10 @@ export function TrackerFormDialog({
 			tagIds: draftTagIds(tagDraft, resolveTags),
 			assignees,
 			access,
+			...(tracker === undefined ||
+			JSON.stringify(images) === JSON.stringify(tracker.images ?? [])
+				? {}
+				: { images }),
 		});
 	}
 
@@ -275,6 +286,16 @@ export function TrackerFormDialog({
 					onChange={setCoverUrl}
 					placeholder="https://…"
 				/>
+
+				{tracker === undefined ? null : (
+					<ImagesField
+						kind="trackers"
+						itemId={tracker.trackerId}
+						value={images}
+						onChange={setImages}
+						onPendingChange={setUploading}
+					/>
+				)}
 
 				<ScheduleFields
 					startDate={startDate}

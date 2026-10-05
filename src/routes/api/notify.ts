@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
+import { reportError } from "#/data/error-report.server";
 import { notifyWithCode } from "#/data/notification-code.server";
 import { AppError, type AppErrorCode } from "#/lib/errors";
 import { notifyInputSchema } from "#/schemas/notification-code";
@@ -54,6 +55,7 @@ async function notify(request: Request): Promise<Response> {
 			return failure(error.message, STATUS[error.code]);
 		}
 		console.error("[thunderlist] notify failed:", error);
+		await reportError("notify", error);
 		return failure("The notification could not be sent.", 500);
 	}
 }

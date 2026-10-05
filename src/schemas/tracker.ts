@@ -5,6 +5,7 @@ import {
 	dateOnlySchema,
 	descriptionSchema,
 	idSchema,
+	imagesSchema,
 	noteSchema,
 	optionalUrlSchema,
 	tagIdsSchema,
@@ -102,6 +103,8 @@ const trackerSchema = v.object({
 	/** Denormalised from the latest progress entry; see `deriveCurrentValue`. */
 	currentValue: v.number(),
 	coverUrl: v.nullable(v.string()),
+	/** Pictures on it, in the order they were added; absent for none. See `ImageRef`. */
+	images: v.optional(imagesSchema),
 	/** Book-specific but stored generically; blank for other types. */
 	author: v.nullable(v.string()),
 	/** The day tracking started. Every pace figure is measured from here. */
@@ -227,6 +230,8 @@ export const updateTrackerInputSchema = v.object({
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			description: v.optional(descriptionSchema),
 			coverUrl: v.optional(optionalUrlSchema),
+			/** Every one of them, in order: the whole list is written each time. */
+			images: v.optional(imagesSchema),
 			author: v.optional(authorSchema),
 			tagIds: v.optional(tagIdsSchema),
 			assignees: v.optional(assigneesSchema),
