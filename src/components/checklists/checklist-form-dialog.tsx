@@ -31,11 +31,7 @@ import {
 	type Stage,
 	stageColor,
 } from "#/schemas/checklist";
-import {
-	type DailyWindow,
-	type ImageRef,
-	todayDateOnly,
-} from "#/schemas/common";
+import { type DailyWindow, todayDateOnly } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import { StagesField, stagesProblem } from "./stages-field";
 
@@ -115,9 +111,6 @@ export function ChecklistFormDialog({
 	const ownAlone = useOwnAlone();
 	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 	const [stages, setStages] = useState<Array<Stage>>([...DEFAULT_STAGES]);
-	const [images, setImages] = useState<Array<ImageRef>>([]);
-	/** Pictures still on their way; it saves once they have arrived. */
-	const [uploading, setUploading] = useState(0);
 
 	// Reset to the current values every time the dialog opens.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
@@ -139,7 +132,6 @@ export function ChecklistFormDialog({
 				: ((checklist.access ?? null) as Array<AccessEntry> | null),
 		);
 		setStages(withColors(checklistStages(checklist ?? {})));
-		setImages(checklist?.images ?? []);
 	}, [isOpen, checklist, ownAlone]);
 
 	const trimmedTitle = title.trim();
@@ -147,8 +139,7 @@ export function ChecklistFormDialog({
 		trimmedTitle !== "" &&
 		startDate !== undefined &&
 		(dailyWindow === null || dailyWindow.to > dailyWindow.from) &&
-		stagesProblem(stages) === null &&
-		uploading === 0;
+		stagesProblem(stages) === null;
 
 	function save() {
 		if (!isValid || startDate === undefined) return;
@@ -174,10 +165,6 @@ export function ChecklistFormDialog({
 			tagIds: draftTagIds(tagDraft, resolveTags),
 			access,
 			...(sameStages(named, original) ? {} : { stages: named }),
-			...(checklist === undefined ||
-			JSON.stringify(images) === JSON.stringify(checklist.images ?? [])
-				? {}
-				: { images }),
 		});
 	}
 
@@ -252,15 +239,9 @@ export function ChecklistFormDialog({
 					onDeadlineTimeChange={setDeadlineTime}
 					onDailyWindowChange={setDailyWindow}
 				/>
-				{checklist === undefined ? null : (
-					<ImagesField
-						kind="checklists"
-						itemId={checklist.checklistId}
-						value={images}
-						onChange={setImages}
-						onPendingChange={setUploading}
-					/>
-				)}
+				{checklist ? (
+					<ImagesField kind="checklists" itemId={checklist.checklistId} />
+				) : null}
 				<StagesField value={stages} onChange={setStages} />
 				<TagsField
 					label="Tags"

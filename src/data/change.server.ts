@@ -47,6 +47,7 @@ import {
 	updateCountdown,
 } from "./countdown.server";
 import { reportError } from "./error-report.server";
+import { deleteUnusedImages, imagesAtRisk } from "./image-cleanup.server";
 import { shareItems, updateItems } from "./items.server";
 import { createPlan, deletePlan, deletePlans, updatePlan } from "./plan.server";
 import { sendAssigned, sendAssignedMany } from "./reminder.server";
@@ -920,6 +921,7 @@ async function tagsAtRisk(
 export async function applyChange(scope: Scope, change: Change): Promise<void> {
 	try {
 		const atRisk = await tagsAtRisk(scope.ownerId, change);
+		const imagesGoing = await imagesAtRisk(scope.ownerId, change, atRisk);
 		try {
 			if (change.kind === "task.batch") {
 				await applyBatch(scope, change.changes);
@@ -929,6 +931,8 @@ export async function applyChange(scope: Scope, change: Change): Promise<void> {
 		} finally {
 			// Even after a refusal: a batch refused part way made the rest.
 			await deleteUnusedTags(scope.ownerId, atRisk);
+			// And the pictures of whatever that left on nothing; see `imagesAtRisk`.
+			await deleteUnusedImages(scope.ownerId, imagesGoing);
 		}
 	} catch (error) {
 		if (error instanceof AppError) {

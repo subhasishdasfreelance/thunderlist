@@ -1,73 +1,54 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Lightbox } from "@astryxdesign/core/Lightbox";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Thumbnail } from "@astryxdesign/core/Thumbnail";
+import { useQueryClient } from "@tanstack/react-query";
 import { ImagePlus } from "lucide-react";
-import {
-	type Dispatch,
-	memo,
-	type SetStateAction,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import { memo, useRef, useState } from "react";
 import type { ImageKind } from "#/data/images.server";
+import { useApplyChange } from "#/lib/changes";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";
-import { uploadImage } from "#/lib/uploads";
-import { type ImageRef, MAX_IMAGES } from "#/schemas/common";
-
-/** A picture on its way: shown from the device while it is sent. */
-type Pending = { key: string; preview: string };
+import {
+	addImage,
+	type PendingImage,
+	removeImage,
+	useImages,
+	usePendingImages,
+} from "#/lib/uploads";
+import { MAX_IMAGES } from "#/schemas/common";
 
 /**
  * The pictures on a task, a checklist, a tracker or a tag: added, looked at
- * full size and removed here, and saved with the rest of the dialog.
+ * full size and removed here.
  *
- * A picture is drawn the moment it is picked, from the device, and sent at
- * once to be made smaller and kept; see `imageRouter`. `onPendingChange` says
- * how many are still on their way, so the dialog waits for them before it
- * saves.
+ * Each is saved on its own as it happens, not with the dialog's other fields;
+ * see `addImage`. A picture picked is drawn at once, with a bar for how far it
+ * has got, and closing the dialog does not stop it.
  */
 export const ImagesField = memo(function ImagesField({
 	kind,
 	itemId,
-	value,
-	onChange,
-	onPendingChange,
 }: {
 	kind: ImageKind;
 	itemId: string;
-	value: ReadonlyArray<ImageRef>;
-	onChange: Dispatch<SetStateAction<Array<ImageRef>>>;
-	onPendingChange: (count: number) => void;
 }) {
+	const client = useQueryClient();
+	const { apply } = useApplyChange();
 	const toast = useToast();
 	const input = useRef<HTMLInputElement>(null);
-	const [pending, setPending] = useState<Array<Pending>>([]);
+	const images = useImages(kind, itemId);
+	const pending = usePendingImages(kind, itemId);
 	const [shown, setShown] = useState<number | null>(null);
-	const room = MAX_IMAGES - value.length - pending.length;
-
-	useEffect(() => {
-		onPendingChange(pending.length);
-	}, [pending.length, onPendingChange]);
+	const room = MAX_IMAGES - images.length - pending.length;
 
 	function add(files: ReadonlyArray<File>) {
 		for (const file of files.slice(0, Math.max(room, 0))) {
-			const key = crypto.randomUUID();
-			const preview = URL.createObjectURL(file);
-			setPending((all) => [...all, { key, preview }]);
-
-			uploadImage(kind, itemId, file)
-				.then((image) => onChange((images) => [...images, image]))
-				.catch((error) =>
-					toast({ body: errorMessage(error), type: "error", uniqueID: key }),
-				)
-				.finally(() => {
-					setPending((all) => all.filter((each) => each.key !== key));
-					URL.revokeObjectURL(preview);
-				});
+			addImage(client, apply, kind, itemId, file).catch((error) =>
+				toast({ body: errorMessage(error), type: "error", uniqueID: "image" }),
+			);
 		}
 	}
 
@@ -79,9 +60,7 @@ export const ImagesField = memo(function ImagesField({
 						Images
 					</Text>
 					<Text type="supporting">
-						{pending.length > 0
-							? `Uploading ${pending.length}…`
-							: "Made smaller as they are uploaded, without losing quality."}
+						Made smaller as they are uploaded, without losing quality.
 					</Text>
 				</VStack>
 				<Button
@@ -107,39 +86,32 @@ export const ImagesField = memo(function ImagesField({
 				}}
 			/>
 
-			{value.length === 0 && pending.length === 0 ? null : (
+			{images.length === 0 && pending.length === 0 ? null : (
 				<div className="flex flex-wrap gap-2">
-					{value.map((image, index) => (
+					{images.map((image, index) => (
 						<Thumbnail
 							key={image.id}
 							src={image.url}
 							alt={`Image ${index + 1}`}
 							onClick={() => setShown(index)}
 							onRemove={() =>
-								onChange((images) =>
-									images.filter((each) => each.id !== image.id),
-								)
+								removeImage(client, apply, kind, itemId, image.id)
 							}
 						/>
 					))}
 					{pending.map((each) => (
-						<Thumbnail
-							key={each.key}
-							src={each.preview}
-							alt="Uploading image"
-							isDisabled
-						/>
+						<Uploading key={each.key} image={each} />
 					))}
 				</div>
 			)}
 
-			{value.length === 0 ? null : (
+			{images.length === 0 ? null : (
 				<Lightbox
 					isOpen={shown !== null}
 					onOpenChange={(isOpen) => {
 						if (!isOpen) setShown(null);
 					}}
-					media={value.map((image, index) => ({
+					media={images.map((image, index) => ({
 						src: image.url,
 						alt: `Image ${index + 1}`,
 					}))}
@@ -151,3 +123,25 @@ export const ImagesField = memo(function ImagesField({
 		</VStack>
 	);
 });
+
+/**
+ * A picture on its way: drawn from the device, with a thin bar across its foot
+ * filling as it is sent, then moving on its own while it is made smaller.
+ */
+function Uploading({ image }: { image: PendingImage }) {
+	const isSent = image.progress >= 100;
+
+	return (
+		<div className="relative">
+			<Thumbnail src={image.preview} alt="Uploading image" isDisabled />
+			<div className="absolute inset-x-1 bottom-1">
+				<ProgressBar
+					label={isSent ? "Making it smaller" : "Uploading"}
+					isLabelHidden
+					value={image.progress}
+					isIndeterminate={isSent}
+				/>
+			</div>
+		</div>
+	);
+}

@@ -15,7 +15,7 @@ import { SubtasksField } from "#/components/tasks/subtasks-field";
 import { formatDate } from "#/lib/format-date";
 import { type ParsedTitle, parseInlineTags } from "#/lib/tags/inline-tags";
 import { useTaskTypes } from "#/lib/use-task-types";
-import type { ImageRef, ItemRef } from "#/schemas/common";
+import type { ItemRef } from "#/schemas/common";
 import type { Tag } from "#/schemas/tag";
 import type { Subtask, Task } from "#/schemas/task";
 import type { TaskType } from "#/schemas/task-type";
@@ -35,7 +35,6 @@ function fieldsOf(task: Task | null) {
 		typeId: task?.typeId ?? NO_TYPE,
 		dependsOn: task?.dependsOn ?? ([] as Array<ItemRef>),
 		subtasks: task?.subtasks ?? ([] as Array<Subtask>),
-		images: task?.images ?? ([] as Array<ImageRef>),
 		deadline: (task?.deadline ?? undefined) as ISODateString | undefined,
 		deadlineTime: task?.deadlineTime ?? undefined,
 	};
@@ -66,8 +65,6 @@ export type TaskDetails = {
 	dependsOn?: Array<ItemRef>;
 	/** Only when they changed; see `Task.subtasks`. */
 	subtasks?: Array<Subtask>;
-	/** Only when they changed; see `Task.images`. */
-	images?: Array<ImageRef>;
 	/** Only when it changed; `null` takes it off. See `Task.deadline`. */
 	deadline?: string | null;
 	/** Only when it changed; `null` for the day as a whole. */
@@ -105,8 +102,6 @@ export function TaskRenameDialog({
 	onSubmit: (parsed: ParsedTitle, details: TaskDetails) => void;
 }) {
 	const [notesView, setNotesView] = useState<NotesView>("write");
-	/** Pictures still on their way; it saves once they have arrived. */
-	const [uploading, setUploading] = useState(0);
 	const types = useTaskTypes();
 
 	/*
@@ -137,9 +132,6 @@ export function TaskRenameDialog({
 				...(JSON.stringify(subtasks) === JSON.stringify(task?.subtasks ?? [])
 					? {}
 					: { subtasks }),
-				...(JSON.stringify(value.images) === JSON.stringify(task?.images ?? [])
-					? {}
-					: { images: value.images }),
 				...((value.deadline ?? null) === (task?.deadline ?? null)
 					? {}
 					: { deadline: value.deadline ?? null }),
@@ -187,7 +179,7 @@ export function TaskRenameDialog({
 								label="Save"
 								icon={<Check aria-hidden />}
 								variant="primary"
-								isDisabled={isEmpty || uploading > 0}
+								isDisabled={isEmpty}
 								onClick={save}
 							/>
 						)}
@@ -302,17 +294,7 @@ export function TaskRenameDialog({
 				</form.Field>
 
 				{task === null ? null : (
-					<form.Field name="images">
-						{(field) => (
-							<ImagesField
-								kind="tasks"
-								itemId={task.taskId}
-								value={field.state.value}
-								onChange={field.handleChange}
-								onPendingChange={setUploading}
-							/>
-						)}
-					</form.Field>
+					<ImagesField kind="tasks" itemId={task.taskId} />
 				)}
 
 				{task === null ? null : (
