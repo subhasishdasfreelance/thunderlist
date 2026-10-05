@@ -201,6 +201,7 @@ export const SORT_ORDERS = [
 	"deadline",
 	"stage",
 	"type",
+	"name",
 ] as const;
 
 /**

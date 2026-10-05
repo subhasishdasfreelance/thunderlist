@@ -1,4 +1,5 @@
 import { checklistsBehind, tagsBehind, trackersBehind } from "#/lib/behind";
+import { compareNames } from "#/lib/tasks/tasks";
 import { type ListOrder, manualOrder } from "#/schemas/arrangement";
 import type { Group } from "#/schemas/group";
 import { PRIORITY_RANKS, priorityRank } from "#/schemas/task";
@@ -23,7 +24,7 @@ function rankOf(item: Flags): number {
  * is the newest put into the group, read from `items`, which keep the order
  * they were added in. Most behind is judged at `now`, the viewer's clock, and
  * waits for it; priority ranks as a task's does. Both keep the group's own
- * order among cards they rank alike.
+ * order among cards they rank alike. A to Z is by title, a tag's by name.
  */
 export function orderContents(
 	group: Group,
@@ -36,6 +37,7 @@ export function orderContents(
 	function arrange<T extends Flags>(
 		items: Array<T>,
 		idOf: (item: T) => string,
+		nameOf: (item: T) => string,
 		behind: (now: number) => (a: T, b: T) => number,
 	): Array<T> {
 		if (order === "newest") {
@@ -48,6 +50,9 @@ export function orderContents(
 		if (order === "priority") {
 			return byHand.sort((a, b) => rankOf(a) - rankOf(b));
 		}
+		if (order === "name") {
+			return byHand.sort((a, b) => compareNames(nameOf(a), nameOf(b)));
+		}
 		return byHand;
 	}
 
@@ -56,14 +61,21 @@ export function orderContents(
 		checklists: arrange(
 			contents.checklists,
 			(checklist) => checklist.checklistId,
+			(checklist) => checklist.title,
 			checklistsBehind,
 		),
 		trackers: arrange(
 			contents.trackers,
 			(tracker) => tracker.trackerId,
+			(tracker) => tracker.title,
 			trackersBehind,
 		),
-		tags: arrange(contents.tags, (tag) => tag.tagId, tagsBehind),
+		tags: arrange(
+			contents.tags,
+			(tag) => tag.tagId,
+			(tag) => tag.name,
+			tagsBehind,
+		),
 	};
 }
 

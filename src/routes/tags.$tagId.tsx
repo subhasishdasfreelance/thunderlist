@@ -30,6 +30,7 @@ import {
 } from "#/components/checklists/quick-add-task";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
 import { DayStats } from "#/components/common/day-stats";
@@ -46,6 +47,7 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
+import { FocusedItems, useFocusedItems } from "#/components/tags/focused-items";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { StageFilter } from "#/components/tags/stage-filter";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
@@ -424,7 +426,11 @@ function TagDetailPage() {
 	useFocusTask(focusTaskId);
 	const now = useNow();
 	// The rows a text selection runs across, to be moved on together.
-	const { picked, clear } = useTaskSelection();
+	const { picked, clear, pickAll } = useTaskSelection();
+	// On Current focus, the checklists, trackers and tags marked so too.
+	const focused = useFocusedItems(data?.special === "focus");
+	const focusedCount =
+		focused.checklists.length + focused.trackers.length + focused.tags.length;
 
 	if (detail === null) {
 		return (
@@ -918,6 +924,8 @@ function TagDetailPage() {
 				/>
 			)}
 
+			{special === "focus" ? <FocusedItems items={focused} /> : null}
+
 			{/* Each counts in the figures above as one thing to finish, as a task does. */}
 			{figures.trackers.length === 0 ? null : (
 				<VStack gap={2}>
@@ -994,6 +1002,7 @@ function TagDetailPage() {
 							value={stageName}
 							onChange={(next) => filterBy({ stage: next })}
 						/>
+						{canUpdateTasks ? <SelectAllButton onClick={pickAll} /> : null}
 						<SortMenu
 							order={sort}
 							hasStageOrder
@@ -1005,7 +1014,7 @@ function TagDetailPage() {
 
 			{/* Its progress counts its trackers too; this is no task carrying it. */}
 			{detail.progress.total === detail.trackers.length ? (
-				detail.trackers.length === 0 ? (
+				detail.trackers.length === 0 && focusedCount === 0 ? (
 					<EmptyState
 						title="Nothing carries this tag yet."
 						description={
@@ -1013,7 +1022,9 @@ function TagDetailPage() {
 								? "Nothing has been tagged with it yet."
 								: special === "today"
 									? "Type a task above, or press the bolt on any task."
-									: `Type a task above, or write #${detail.name} in one.`
+									: special === "focus"
+										? "Type a task above, or press the focus button on any task, checklist, tracker or tag."
+										: `Type a task above, or write #${detail.name} in one.`
 						}
 					/>
 				) : null

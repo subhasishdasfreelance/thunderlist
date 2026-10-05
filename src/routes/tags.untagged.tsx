@@ -1,14 +1,17 @@
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Heading } from "@astryxdesign/core/Heading";
-import { VStack } from "@astryxdesign/core/Stack";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { IndexTaskList } from "#/components/tasks/index-task-list";
 import { usePages } from "#/lib/use-pages";
+import { useTaskSelection } from "#/lib/use-task-selection";
+import { usePermissions } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { searchIndexQuery } from "#/queries/system";
@@ -43,11 +46,19 @@ function UntaggedPage() {
 		[index.data],
 	);
 	const paging = usePages(untagged);
+	const { canUpdateTasks } = usePermissions();
+	// The rows picked out; see `IndexTaskList`.
+	const selection = useTaskSelection();
 
 	return (
 		<VStack gap={4}>
 			<BackButton to="/tags" label="Tags" />
-			<Heading level={1}>Untagged</Heading>
+			<HStack gap={2} hAlign="between" vAlign="center">
+				<Heading level={1}>Untagged</Heading>
+				{canUpdateTasks && untagged.length > 0 ? (
+					<SelectAllButton onClick={selection.pickAll} />
+				) : null}
+			</HStack>
 
 			{index.isError ? (
 				<ErrorNotice error={index.error} onRetry={() => void index.refetch()} />
@@ -64,6 +75,7 @@ function UntaggedPage() {
 					page={paging.page}
 					total={paging.total}
 					onPageChange={paging.setPage}
+					selection={selection}
 				/>
 			)}
 		</VStack>

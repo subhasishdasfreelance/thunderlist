@@ -8,14 +8,18 @@ import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
-import { type OutlineChecklist, parseOutline } from "#/lib/outline";
+import {
+	type OutlineChecklist,
+	type OutlineTracker,
+	parseOutline,
+} from "#/lib/outline";
 import type { Group } from "#/schemas/group";
 import { pickableColor, type TagColor } from "#/schemas/tag";
 import { MAX_TASKS_AT_ONCE } from "#/schemas/task";
 import { GroupBadge } from "./group-card";
 
 /** Mirrors the most a group holds; see `importGroupInputSchema`. */
-const MAX_CHECKLISTS = 500;
+const MAX_ITEMS = 500;
 
 const PLACEHOLDER = `# Python
 ## Async, typing, FastAPI
@@ -24,18 +28,27 @@ fastapi middleware and error handling
 
 # TypeScript
 ## Language depth, Node runtime
-javascript closures and hoisting -i`;
+javascript closures and hoisting -i
+
+# &Clean Code -i
+target: 464 pages
+start: 40
+type: book
+deadline: 2026-12-01
+## One chapter a day`;
 
 export type GroupImportValues = {
 	name: string;
 	color: TagColor;
 	checklists: Array<OutlineChecklist>;
+	trackers: Array<OutlineTracker>;
 };
 
 /**
  * Make a group from a pasted Markdown outline: each `#` heading a checklist,
- * the `##` line under it its description, and every other line a task in it.
- * See `parseOutline`.
+ * the `##` line under it its description, and every other line a task in it;
+ * each `# &` heading a tracker, with its target and other settings on the
+ * lines under it. See `parseOutline`.
  *
  * Given a `group`, the outline's checklists go into that one instead, so only
  * the outline is asked for.
@@ -63,30 +76,40 @@ export function GroupImportDialog({
 	}, [isOpen]);
 
 	const trimmed = name.trim();
-	const { checklists, skipped } = parseOutline(text);
+	const { checklists, trackers, skipped, untargeted } = parseOutline(text);
 	const taskCount = checklists.reduce(
 		(sum, each) => sum + each.tasks.length,
 		0,
 	);
-	const room = MAX_CHECKLISTS - (group?.items.length ?? 0);
+	const itemCount = checklists.length + trackers.length;
+	const room = MAX_ITEMS - (group?.items.length ?? 0);
 	const tooMany =
-		checklists.length > room
+		itemCount > room
 			? group === undefined
-				? `At most ${MAX_CHECKLISTS} checklists in a group.`
-				: `At most ${MAX_CHECKLISTS} things in a group; this one has room for ${room.toLocaleString()} more.`
+				? `At most ${MAX_ITEMS} things in a group.`
+				: `At most ${MAX_ITEMS} things in a group; this one has room for ${room.toLocaleString()} more.`
 			: taskCount > MAX_TASKS_AT_ONCE
 				? `At most ${MAX_TASKS_AT_ONCE.toLocaleString()} tasks at once.`
 				: null;
 	const canImport =
 		(group !== undefined || trimmed !== "") &&
-		checklists.length > 0 &&
+		itemCount > 0 &&
 		tooMany === null;
 
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		if (!canImport) return;
-		onSubmit({ name: trimmed, color, checklists });
+		onSubmit({ name: trimmed, color, checklists, trackers });
 	}
+
+	const made = [
+		...(checklists.length === 0
+			? []
+			: [
+					`${count(checklists.length, "checklist")} with ${count(taskCount, "task")}`,
+				]),
+		...(trackers.length === 0 ? [] : [count(trackers.length, "tracker")]),
+	].join(" and ");
 
 	return (
 		<FormDialog
@@ -146,7 +169,7 @@ export function GroupImportDialog({
 						autoComplete="off"
 						label="Outline"
 						isRequired
-						description="Each # heading becomes a checklist and the ## line under it its description. Every other line is a task — end one with -u, -i or -ui to flag it."
+						description="Each # heading becomes a checklist and the ## line under it its description. Every other line is a task — end one with -u, -i or -ui to flag it. A # &heading becomes a tracker: give it a target: line (a number and its unit), and start:, type: (book, course, project, fitness, custom) or deadline: if wanted."
 						rows={10}
 						value={text}
 						onChange={setText}
@@ -158,11 +181,14 @@ export function GroupImportDialog({
 						}
 					/>
 					<Text type="supporting">
-						{checklists.length === 0
+						{itemCount === 0
 							? "Paste an outline to see what it makes."
-							: `${count(checklists.length, "checklist")} with ${count(taskCount, "task")}.`}
+							: `${made}.`}
 						{skipped > 0
-							? ` ${count(skipped, "line")} above the first # heading will be left out.`
+							? ` ${count(skipped, "line")} will be left out: above the first # heading, or not a setting under a tracker.`
+							: ""}
+						{untargeted > 0
+							? ` ${count(untargeted, "tracker")} with no target: line will be left out.`
 							: ""}
 					</Text>
 				</VStack>

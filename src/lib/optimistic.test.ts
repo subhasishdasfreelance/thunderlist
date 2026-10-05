@@ -1307,6 +1307,7 @@ describe("applyOptimistically, on the rest", () => {
 			name: "Prep",
 			color: "blue",
 			startDate: "2026-10-02",
+			trackers: [],
 			checklists: [
 				{
 					checklistId: "chk_py",
@@ -1360,6 +1361,7 @@ describe("applyOptimistically, on the rest", () => {
 
 	it("draws an outline imported into a group, after what it holds", () => {
 		const queryClient = client();
+		queryClient.setQueryData<Array<TrackerSummary>>(queryKeys.trackers, []);
 		queryClient.setQueryData<Array<Group>>(queryKeys.groups, [
 			{
 				groupId: "grp_1",
@@ -1392,22 +1394,37 @@ describe("applyOptimistically, on the rest", () => {
 					],
 				},
 			],
+			trackers: [
+				{
+					trackerId: "trk_book",
+					title: "Clean Code",
+					description: "",
+					type: "book",
+					unit: "pages",
+					targetValue: 464,
+					startValue: 40,
+					important: true,
+				},
+			],
 		});
 
 		expect(
-			checklists(queryClient)?.map((each) => [
-				each.title,
-				each.progress.total,
-			]),
+			checklists(queryClient)?.map((each) => [each.title, each.progress.total]),
 		).toEqual([
 			["chk_1", 1],
 			["Python", 1],
 		]);
 		expect(
+			queryClient
+				.getQueryData<Array<TrackerSummary>>(queryKeys.trackers)
+				?.map((each) => [each.title, each.currentValue, each.important]),
+		).toEqual([["Clean Code", 40, true]]);
+		expect(
 			queryClient.getQueryData<Array<Group>>(queryKeys.groups)?.[0].items,
 		).toEqual([
 			{ kind: "tracker", id: "trk_1" },
 			{ kind: "checklist", id: "chk_py" },
+			{ kind: "tracker", id: "trk_book" },
 		]);
 	});
 });

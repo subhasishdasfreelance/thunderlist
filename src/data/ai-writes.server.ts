@@ -904,6 +904,7 @@ export const WRITE_TOOLS: AiHandlers<
 			name: input.name,
 			color: input.color ?? randomColor(),
 			startDate: context.today,
+			trackers: [],
 			checklists: outline.checklists.map((list) => ({
 				checklistId: createId(ID_PREFIX.checklist),
 				title: list.title,

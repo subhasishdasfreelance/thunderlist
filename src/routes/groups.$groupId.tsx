@@ -23,7 +23,7 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
-	SelectButton,
+	SelectButtons,
 	useListOrder,
 } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
@@ -59,7 +59,7 @@ import {
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
-import type { OutlineChecklist } from "#/lib/outline";
+import type { Outline } from "#/lib/outline";
 import { computeVelocity, localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
@@ -148,7 +148,7 @@ function GroupPage() {
 	const [order, setOrder] = useListOrder(`group:${groupId}`);
 	const [isArranging, setIsArranging] = useState(false);
 	// Several picked out, to change together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 
 	if (group === undefined) {
 		return (
@@ -189,16 +189,19 @@ function GroupPage() {
 				});
 
 	/**
-	 * A checklist for each heading, put in this group, in one change. The tags
-	 * its lines write are read first, so a tag that exists is not made again.
+	 * A checklist or tracker for each heading, put in this group, in one
+	 * change. The tags its lines write are read first, so a tag that exists is
+	 * not made again.
 	 */
-	async function importOutline(checklists: Array<OutlineChecklist>) {
+	async function importOutline(
+		outline: Pick<Outline, "checklists" | "trackers">,
+	) {
 		setIsImporting(false);
 		const allTags = await queryClient.ensureQueryData(tagsQuery());
 		importIntoGroup(
 			apply,
 			groupId,
-			checklists,
+			outline,
 			createTagResolver(apply, allTags, canManageContent),
 		);
 	}
@@ -353,7 +356,7 @@ function GroupPage() {
 						/>
 						{canManageContent ? (
 							<>
-								<SelectButton onClick={pick.start} />
+								<SelectButtons mode={pick} />
 								<ArrangeButton onClick={() => setIsArranging(true)} />
 							</>
 						) : null}
@@ -441,7 +444,7 @@ function GroupPage() {
 				isOpen={isImporting}
 				onOpenChange={setIsImporting}
 				group={group}
-				onSubmit={(values) => void importOutline(values.checklists)}
+				onSubmit={(values) => void importOutline(values)}
 			/>
 
 			<GroupFormDialog

@@ -16,7 +16,11 @@ import { whyBlocked } from "#/lib/depends";
 import { errorMessage } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
-import { type OutlineChecklist, parseChecklistTitle } from "#/lib/outline";
+import {
+	type OutlineChecklist,
+	type OutlineTracker,
+	parseChecklistTitle,
+} from "#/lib/outline";
 import { playChangeSound } from "#/lib/sounds";
 import {
 	sameTagName,
@@ -539,8 +543,9 @@ export function createTasks(
 
 /**
  * Make a group from a pasted outline: a checklist for each heading, each with
- * its tasks, and the group holding them — one change, so a hundred checklists
- * are drawn at once and saved in one request; see `parseOutline`.
+ * its tasks, a tracker for each `&` heading, and the group holding them — one
+ * change, so a hundred checklists are drawn at once and saved in one request;
+ * see `parseOutline`.
  */
 export function importGroup(
 	apply: ApplyChange,
@@ -548,6 +553,7 @@ export function importGroup(
 		name: string;
 		color: TagColor;
 		checklists: ReadonlyArray<OutlineChecklist>;
+		trackers: ReadonlyArray<OutlineTracker>;
 	},
 	resolveTag: (name: string) => string | null,
 ): void {
@@ -558,26 +564,39 @@ export function importGroup(
 		color: values.color,
 		startDate: todayDateOnly(),
 		checklists: outlineChecklists(values.checklists, resolveTag),
+		trackers: outlineTrackers(values.trackers),
 	});
 }
 
 /**
  * Add a pasted outline to a group that exists: a checklist for each heading,
- * each with its tasks, put after what the group holds — one change, as
- * `importGroup` makes a new group.
+ * each with its tasks, and a tracker for each `&` heading, put after what the
+ * group holds — one change, as `importGroup` makes a new group.
  */
 export function importIntoGroup(
 	apply: ApplyChange,
 	groupId: string,
-	checklists: ReadonlyArray<OutlineChecklist>,
+	outline: {
+		checklists: ReadonlyArray<OutlineChecklist>;
+		trackers: ReadonlyArray<OutlineTracker>;
+	},
 	resolveTag: (name: string) => string | null,
 ): void {
 	apply({
 		kind: "group.importInto",
 		groupId,
 		startDate: todayDateOnly(),
-		checklists: outlineChecklists(checklists, resolveTag),
+		checklists: outlineChecklists(outline.checklists, resolveTag),
+		trackers: outlineTrackers(outline.trackers),
 	});
+}
+
+/** An outline's trackers with the ids a change carries. */
+function outlineTrackers(trackers: ReadonlyArray<OutlineTracker>) {
+	return trackers.map((tracker) => ({
+		...tracker,
+		trackerId: createId(ID_PREFIX.tracker),
+	}));
 }
 
 /** An outline's checklists with the ids, stamps and tags a change carries. */

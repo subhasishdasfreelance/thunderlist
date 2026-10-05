@@ -17,6 +17,7 @@ import {
 	Zap,
 } from "lucide-react";
 import { useState } from "react";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
 import { numberTitle } from "#/components/common/item-number";
@@ -152,7 +153,7 @@ function TrackerDetailPage() {
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [pendingEntry, setPendingEntry] = useState<ProgressEntry | null>(null);
 	// Readings picked out to delete together, asked about first; see `PickBar`.
-	const { picked, clear } = useTaskSelection("entry");
+	const { picked, clear, pickAll } = useTaskSelection("entry");
 	const [deletingPicked, setDeletingPicked] =
 		useState<ReadonlyArray<string> | null>(null);
 	const shownDeletingPicked = useHeld(deletingPicked);
@@ -481,6 +482,9 @@ function TrackerDetailPage() {
 						Progress History
 					</Text>
 					<HStack gap={1} vAlign="center">
+						{canManageContent && view === "list" ? (
+							<SelectAllButton onClick={pickAll} />
+						) : null}
 						<MemberFilter value={person} onChange={setPerson} />
 						<ViewToggle
 							view={view}

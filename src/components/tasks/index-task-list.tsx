@@ -34,7 +34,7 @@ import {
 } from "#/lib/changes";
 import { shortTitle } from "#/lib/tasks/tasks";
 import { useHeld } from "#/lib/use-held";
-import { useTaskSelection } from "#/lib/use-task-selection";
+import type { useTaskSelection } from "#/lib/use-task-selection";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import type { TaggedTask } from "#/queries/system";
@@ -62,6 +62,7 @@ export function IndexTaskList({
 	total,
 	onPageChange,
 	isStageShown = true,
+	selection,
 }: {
 	/** The page of tasks on show. */
 	tasks: ReadonlyArray<TaggedTask>;
@@ -71,6 +72,11 @@ export function IndexTaskList({
 	onPageChange: (page: number) => void;
 	/** Each row names the stage it is at; see `TaskRow`. */
 	isStageShown?: boolean;
+	/**
+	 * The rows picked out, kept by the screen so its Select all can reach
+	 * them; see `useTaskSelection`.
+	 */
+	selection: ReturnType<typeof useTaskSelection>;
 }) {
 	const navigate = useNavigate();
 	const { apply, applyAsync } = useApplyChange();
@@ -103,7 +109,7 @@ export function IndexTaskList({
 		null,
 	);
 	const shownDeleting = useHeld(deleting);
-	const { picked, clear } = useTaskSelection();
+	const { picked, clear } = selection;
 
 	const tags = tagsResult.data ?? [];
 	const checklists = checklistsResult.data ?? [];

@@ -13,9 +13,12 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { FocusButton } from "#/components/tasks/task-actions";
+import { useApplyChange } from "#/lib/changes";
 import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
 import { usePace } from "#/lib/use-pace";
+import { useItemPermissions } from "#/lib/use-team";
 import {
 	type TagSummary,
 	tagParam,
@@ -28,10 +31,16 @@ import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
  * A tag at a glance, the way a checklist card shows a checklist: its share of
  * tasks done, its pace, and a bar carrying the point it should have reached by
  * now. The name is drawn as the tag itself, in its own colour.
+ *
+ * Its focus button marks it as current focus, as a checklist's card does;
+ * not on Current focus itself, which would only be listing itself.
  */
 export function TagCard({ tag }: { tag: TagSummary }) {
 	const { progress } = tag;
 	const startDate = tagStartDate(tag);
+	const { apply } = useApplyChange();
+	const { canManageContent } = useItemPermissions(tag.access);
+	const canFocus = canManageContent && tag.special !== "focus";
 
 	const pace = usePace(
 		{ ...tag, startDate },
@@ -54,7 +63,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 					progress.completed >= progress.total,
 				);
 
-	// Today carries its mark, so it reads as what it is.
+	// Today and Current focus carry their marks, so they read as what they are.
 	const Mark = tag.special === null ? null : SPECIAL_TAG_ICONS[tag.special];
 
 	return (
@@ -73,7 +82,26 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 							icon={Mark === null ? undefined : <Icon icon={Mark} size="xsm" />}
 						/>
 						<Text color="secondary">({progress.percent}%)</Text>
-						<PriorityMarks {...tag} />
+						<PriorityMarks
+							urgent={tag.urgent}
+							important={tag.important}
+							focused={canFocus ? false : tag.focused}
+						/>
+						{canFocus ? (
+							<div className="thunderlist-row-buttons flex shrink-0 items-center">
+								<FocusButton
+									title={tag.name}
+									isOn={tag.focused ?? false}
+									onToggle={(focused) =>
+										apply({
+											kind: "tag.update",
+											tagId: tag.tagId,
+											patch: { focused },
+										})
+									}
+								/>
+							</div>
+						) : null}
 					</HStack>
 					<PaceLabel status={pace.status} />
 				</HStack>

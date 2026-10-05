@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { idsOnScreen, useDragPick } from "#/lib/use-drag-pick";
 import { isTyping } from "#/lib/use-row-shortcuts";
 
 /**
@@ -31,7 +32,8 @@ function firstInView(rows: ReadonlyArray<HTMLElement>): number {
  * get picked out of a list, so the rows a selection touches — even one word of
  * one — are taken as picked: drawn with a wash, and moved on together from the
  * bar that comes up; see `SelectionBar`. On a phone, the same comes from
- * pressing and holding on a title.
+ * resting a finger on a row and dragging over the others; see `useDragPick`.
+ * `pickAll` picks every row on screen.
  *
  * From the keyboard, Down and Up pick the next or previous row — starting at
  * the row under the pointer, or the first on screen — and with Shift held they
@@ -41,22 +43,53 @@ function firstInView(rows: ReadonlyArray<HTMLElement>): number {
  * The pick outlives the text selection it came from: pressing a button in the
  * bar can clear the selection, and the rows must still be picked when the
  * press lands. It ends with a press on a row, a selection made somewhere else,
- * Escape, or `clear`.
+ * Escape, or `clear` — which lets go of the text selection over the rows too,
+ * so nothing is left highlighted as if still picked.
  */
 export function useTaskSelection(kind: PickedRow = "task"): {
 	picked: ReadonlySet<string>;
 	clear: () => void;
+	pickAll: () => void;
 } {
 	const [picked, setPicked] = useState(NONE);
 	// Where a keyboard pick started, and the row it has reached.
 	const anchor = useRef<string | null>(null);
 	const cursor = useRef<string | null>(null);
 
+	/** These rows picked, the arrow keys carrying on from them. */
+	const pickRows = useCallback((ids: Array<string>) => {
+		anchor.current = ids[0] ?? null;
+		cursor.current = ids.at(-1) ?? null;
+		setPicked((current) =>
+			ids.length === 0
+				? NONE
+				: current.size === ids.length && ids.every((id) => current.has(id))
+					? current
+					: new Set(ids),
+		);
+	}, []);
+
 	const clear = useCallback(() => {
 		anchor.current = null;
 		cursor.current = null;
 		setPicked(NONE);
-	}, []);
+
+		const selection = document.getSelection();
+		if (selection === null || selection.isCollapsed) return;
+		if (selection.rangeCount === 0) return;
+		const range = selection.getRangeAt(0);
+		const rows = document.querySelectorAll(`[data-${kind}-id]`);
+		if ([...rows].some((row) => range.intersectsNode(row))) {
+			selection.removeAllRanges();
+		}
+	}, [kind]);
+
+	const pickAll = useCallback(
+		() => pickRows(idsOnScreen(kind)),
+		[kind, pickRows],
+	);
+
+	useDragPick({ kind, onPick: pickRows });
 
 	useEffect(() => {
 		const ROW = `[data-${kind}-id]`;
@@ -68,19 +101,10 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			if (selection.rangeCount === 0) return;
 
 			const range = selection.getRangeAt(0);
-			const ids = [...document.querySelectorAll<HTMLElement>(ROW)]
-				.filter((row) => range.intersectsNode(row))
-				.flatMap((row) => idOf(row) ?? []);
-
-			// The arrow keys carry on from a pick made with the pointer.
-			anchor.current = ids[0] ?? null;
-			cursor.current = ids.at(-1) ?? null;
-			setPicked((current) =>
-				ids.length === 0
-					? NONE
-					: current.size === ids.length && ids.every((id) => current.has(id))
-						? current
-						: new Set(ids),
+			pickRows(
+				[...document.querySelectorAll<HTMLElement>(ROW)]
+					.filter((row) => range.intersectsNode(row))
+					.flatMap((row) => idOf(row) ?? []),
 			);
 		}
 
@@ -143,7 +167,7 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			document.removeEventListener("pointerdown", onPointerDown);
 			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [clear, kind]);
+	}, [clear, kind, pickRows]);
 
-	return { picked, clear };
+	return { picked, clear, pickAll };
 }

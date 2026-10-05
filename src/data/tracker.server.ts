@@ -20,6 +20,7 @@ import {
 	withDeltas,
 } from "#/lib/progress";
 import type { AccessEntry } from "#/schemas/access";
+import type { ImportGroupInput } from "#/schemas/group";
 import type {
 	ProgressEntry,
 	Tracker,
@@ -28,8 +29,12 @@ import type {
 	TrackerType,
 } from "#/schemas/tracker";
 import { allowsOvershoot } from "#/schemas/tracker";
-import { clearDependencies, releaseFollowers } from "./checklist.server";
-import { nextNumber } from "./numbers.server";
+import {
+	clearDependencies,
+	isOnlyDuplicates,
+	releaseFollowers,
+} from "./checklist.server";
+import { nextNumber, nextNumbers } from "./numbers.server";
 import { type Hidden, withAccess } from "./visibility.server";
 
 /** An entry document holds the link to its tracker; a reading does not. */
@@ -214,6 +219,70 @@ export async function createTracker(
 	await current.trackers.insertOne({ ...tracker, userId });
 
 	return tracker;
+}
+
+/**
+ * Make many trackers at once — the `&` headings of an outline pasted into a
+ * group — in one write rather than a request each; see `parseOutline`.
+ *
+ * Asked again after a dropped connection, what is already written is left as
+ * it is and only the rest is added, as `importChecklists` does.
+ */
+export async function importTrackers(
+	userId: string,
+	input: Pick<ImportGroupInput, "startDate" | "trackers">,
+): Promise<void> {
+	if (input.trackers.length === 0) return;
+	const current = await collections();
+
+	const written = await current.trackers
+		.find(
+			{
+				userId,
+				trackerId: { $in: input.trackers.map((each) => each.trackerId) },
+			},
+			{ projection: { _id: 0, trackerId: 1 } },
+		)
+		.toArray();
+	const isWritten = new Set(written.map((each) => each.trackerId));
+	const fresh = input.trackers.filter((each) => !isWritten.has(each.trackerId));
+	if (fresh.length === 0) return;
+
+	const now = new Date().toISOString();
+	let next = await nextNumbers(current, userId, "tracker", fresh.length);
+	try {
+		await current.trackers.insertMany(
+			fresh.map((each) => ({
+				trackerId: each.trackerId,
+				number: next++,
+				title: each.title,
+				caption: "",
+				type: each.type,
+				description: each.description,
+				unit: each.unit,
+				targetValue: each.targetValue,
+				startValue: each.startValue,
+				// Nothing has been recorded yet, so it stands where it started.
+				currentValue: each.startValue,
+				coverUrl: null,
+				author: null,
+				startDate: input.startDate,
+				deadline: each.deadline ?? null,
+				deadlineTime: each.deadlineTime ?? null,
+				tagIds: [],
+				assignees: [],
+				access: null,
+				...(each.urgent ? { urgent: true } : {}),
+				...(each.important ? { important: true } : {}),
+				createdAt: now,
+				updatedAt: now,
+				userId,
+			})),
+			{ ordered: false },
+		);
+	} catch (error) {
+		if (!isOnlyDuplicates(error)) throw error;
+	}
 }
 
 export async function updateTracker(

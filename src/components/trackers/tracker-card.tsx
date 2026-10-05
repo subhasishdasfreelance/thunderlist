@@ -11,7 +11,7 @@ import {
 } from "#/components/common/priority-marks";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { TaskFlagButtons } from "#/components/tasks/task-actions";
+import { FocusButton, TaskFlagButtons } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
 import { useApplyChange } from "#/lib/changes";
 import { computeVelocity, trackerFraction } from "#/lib/progress";
@@ -70,7 +70,9 @@ export function TrackerCard({
 	const { apply } = useApplyChange();
 	const { canManageContent } = useItemPermissions(tracker.access);
 
-	function setFlag(patch: { urgent: boolean } | { important: boolean }) {
+	function setFlag(
+		patch: { urgent: boolean } | { important: boolean } | { focused: boolean },
+	) {
 		apply({ kind: "tracker.update", trackerId: tracker.trackerId, patch });
 	}
 
@@ -102,16 +104,23 @@ export function TrackerCard({
 				);
 
 	const flags = canManageContent ? (
-		<TaskFlagButtons
-			title={tracker.title}
-			urgent={tracker.urgent ?? false}
-			important={tracker.important ?? false}
-			hasShortcuts={false}
-			actions={{
-				onSetUrgent: (urgent) => setFlag({ urgent }),
-				onSetImportant: (important) => setFlag({ important }),
-			}}
-		/>
+		<>
+			<TaskFlagButtons
+				title={tracker.title}
+				urgent={tracker.urgent ?? false}
+				important={tracker.important ?? false}
+				hasShortcuts={false}
+				actions={{
+					onSetUrgent: (urgent) => setFlag({ urgent }),
+					onSetImportant: (important) => setFlag({ important }),
+				}}
+			/>
+			<FocusButton
+				title={tracker.title}
+				isOn={tracker.focused ?? false}
+				onToggle={(focused) => setFlag({ focused })}
+			/>
+		</>
 	) : null;
 
 	return (

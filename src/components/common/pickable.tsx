@@ -9,8 +9,13 @@ import type { ReactNode } from "react";
  * One that cannot be picked — the Inbox, the Backlog, Today, which are
  * everyone's and cannot be deleted — is drawn faint, and pressing it does
  * nothing, rather than opening it and leaving the pick behind.
+ *
+ * A pickable one carries `id` as `data-item-id`, picking or not, so dragging
+ * over cards can start a pick and Select all can find them; see
+ * `useDragPick`. Not picking, the mark draws no box of its own.
  */
 export function Pickable({
+	id,
 	isPicking,
 	isPicked,
 	isPickable = true,
@@ -18,6 +23,8 @@ export function Pickable({
 	onToggle,
 	children,
 }: {
+	/** Left out where nothing can be picked; see `usePickMode`. */
+	id?: string;
 	isPicking: boolean;
 	isPicked: boolean;
 	isPickable?: boolean;
@@ -26,10 +33,20 @@ export function Pickable({
 	onToggle: () => void;
 	children: ReactNode;
 }) {
-	if (!isPicking) return children;
+	const itemId = isPickable ? id : undefined;
+	if (!isPicking) {
+		return itemId === undefined ? (
+			children
+		) : (
+			<div data-item-id={itemId} className="thunderlist-pick-mark">
+				{children}
+			</div>
+		);
+	}
 
 	return (
 		<div
+			data-item-id={itemId}
 			className="thunderlist-pickable"
 			data-picked={isPicked}
 			data-pickable={isPickable}

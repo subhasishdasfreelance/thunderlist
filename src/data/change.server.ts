@@ -73,6 +73,7 @@ import {
 	deleteProgressEntry,
 	deleteTracker,
 	deleteTrackers,
+	importTrackers,
 	updateProgressEntry,
 	updateTracker,
 } from "./tracker.server";
@@ -187,26 +188,28 @@ async function run(
 			await deleteGroup(userId, change.groupId);
 			return;
 
-		// The checklists first, so the group never holds one not yet written.
+		// What it holds first, so the group never holds one not yet written.
 		case "group.import":
 			await importChecklists(userId, change);
+			await importTrackers(userId, change);
 			await createGroup(userId, {
 				groupId: change.groupId,
 				name: change.name,
 				color: change.color,
-				items: importedItems(change.checklists),
+				items: importedItems(change.checklists, change.trackers),
 				startDate: change.startDate,
 				deadline: null,
 				deadlineTime: null,
 			});
 			return;
 
-		// Room checked first, so a full group is not left with checklists
-		// made for it and never put in it.
+		// Room checked first, so a full group is not left with checklists and
+		// trackers made for it and never put in it.
 		case "group.importInto": {
-			const items = importedItems(change.checklists);
+			const items = importedItems(change.checklists, change.trackers);
 			await assertGroupHasRoom(userId, change.groupId, items);
 			await importChecklists(userId, change);
+			await importTrackers(userId, change);
 			await addToGroup(userId, change.groupId, items);
 			return;
 		}

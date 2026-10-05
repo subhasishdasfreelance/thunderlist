@@ -1,6 +1,7 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import {
+	ArrowDownAZ,
 	ArrowDownWideNarrow,
 	CalendarClock,
 	ChartNoAxesGantt,
@@ -19,14 +20,16 @@ const ORDER_ICONS: Record<SortOrder, LucideIcon> = {
 	deadline: CalendarClock,
 	stage: ChartNoAxesGantt,
 	type: Shapes,
+	name: ArrowDownAZ,
 };
 
 /**
  * How a task list is ordered: newest first, the urgent and important first,
- * the soonest deadline first, the earliest stage first, or by kind of work.
+ * the soonest deadline first, the earliest stage first, by kind of work, or
+ * A to Z.
  *
- * A menu rather than a row of switches. There are five orders now and a switch
- * each would be four buttons competing to say which one is in force; a menu is
+ * A menu rather than a row of switches. There are six orders now and a switch
+ * each would be five buttons competing to say which one is in force; a menu is
  * one button that always says it, and has room to say what each order means.
  *
  * The choice lives on the screen rather than in the database. It is a way of
@@ -52,6 +55,7 @@ export function SortMenu({
 		"deadline",
 		...(hasStageOrder ? (["stage"] as const) : []),
 		"type",
+		"name",
 	];
 
 	return (

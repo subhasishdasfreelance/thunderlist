@@ -10,7 +10,7 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
-	SelectButton,
+	SelectButtons,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
@@ -35,6 +35,7 @@ import type { TagSummary } from "#/schemas/tag";
 
 const tagIdOf = (tag: TagSummary) => tag.tagId;
 const createdAtOf = (tag: TagSummary) => tag.createdAt;
+const nameOf = (tag: TagSummary) => tag.name;
 
 export const Route = createFileRoute("/tags/")({
 	loader: ({ context }) => {
@@ -60,7 +61,7 @@ function TagsPage() {
 	const [isArranging, setIsArranging] = useState(false);
 	const { canManageContent } = usePermissions();
 	// Several picked out, to change together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		tagSummariesQuery(),
@@ -91,6 +92,7 @@ function TagsPage() {
 		items: tags,
 		idOf: tagIdOf,
 		createdAt: createdAtOf,
+		nameOf: nameOf,
 		compareBehind: behind,
 	});
 
@@ -123,7 +125,7 @@ function TagsPage() {
 									/>
 									{canManageContent ? (
 										<>
-											<SelectButton onClick={pick.start} />
+											<SelectButtons mode={pick} />
 											<ArrangeButton onClick={() => setIsArranging(true)} />
 										</>
 									) : null}

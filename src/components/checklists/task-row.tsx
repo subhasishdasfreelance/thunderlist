@@ -25,10 +25,10 @@ import { TaggedTitle } from "#/components/tags/tagged-title";
 import {
 	backlogMenuItem,
 	ShortcutKey,
+	SpecialTagButton,
 	TASK_SHORTCUTS,
 	TaskFlagButtons,
 	type TaskQuickActions,
-	TodayButton,
 } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
 import { daysUntil, formatDeadline, formatDue } from "#/lib/format-date";
@@ -141,6 +141,8 @@ export function TaskRow({
 
 	const today = specialTag(tags, "today");
 	const isOnToday = today !== null && task.tagIds.includes(today.tagId);
+	const focus = specialTag(tags, "focus");
+	const isInFocus = focus !== null && task.tagIds.includes(focus.tagId);
 	// Parking it is moving it to another checklist, a project manager's to do;
 	// see `Capability`.
 	const park = canManageContent ? backlog : undefined;
@@ -465,11 +467,22 @@ export function TaskRow({
 				<Assignees emails={task.assignees ?? []} />
 
 				{today === null || !canUpdateTasks ? null : (
-					<TodayButton
+					<SpecialTagButton
+						kind="today"
 						title={task.title}
-						today={today}
+						tag={today}
 						isOn={isOnToday}
 						onToggle={shortcuts[TASK_SHORTCUTS.today]}
+					/>
+				)}
+
+				{focus === null || !canUpdateTasks ? null : (
+					<SpecialTagButton
+						kind="focus"
+						title={task.title}
+						tag={focus}
+						isOn={isInFocus}
+						onToggle={() => actions.onSetSpecial("focus", !isInFocus)}
 					/>
 				)}
 

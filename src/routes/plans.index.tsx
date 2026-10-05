@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
-	SelectButton,
+	SelectButtons,
 	saveArrangement,
 } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
@@ -65,7 +65,7 @@ function PlansPage() {
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	// Several picked out, to change together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 	const [isCreating, setIsCreating] = useState(false);
 	const [isArranging, setIsArranging] = useState(false);
 
@@ -112,7 +112,7 @@ function PlansPage() {
 						</Text>
 						{canManageContent ? (
 							<HStack gap={1} vAlign="center">
-								<SelectButton onClick={pick.start} />
+								<SelectButtons mode={pick} />
 								<ArrangeButton onClick={() => setIsArranging(true)} />
 							</HStack>
 						) : null}
@@ -121,6 +121,7 @@ function PlansPage() {
 						{plans.map((plan) => (
 							<Pickable
 								key={plan.planId}
+								id={plan.planId}
 								isPicking={pick.isPicking}
 								isPicked={pick.picked.has(plan.planId)}
 								label={plan.title}

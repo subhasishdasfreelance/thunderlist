@@ -13,6 +13,7 @@ import {
 	QuickAddTask,
 } from "#/components/checklists/quick-add-task";
 import { StageTabs } from "#/components/checklists/stage-tabs";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
@@ -37,6 +38,7 @@ import {
 	sortParam,
 } from "#/lib/filter-search";
 import { PAGE_SIZE } from "#/lib/use-pages";
+import { useTaskSelection } from "#/lib/use-task-selection";
 import { usePermissions } from "#/lib/use-team";
 import { acrossQuery } from "#/queries/across";
 import { checklistsQuery } from "#/queries/checklists";
@@ -137,7 +139,9 @@ function StagesPage() {
 		});
 	}
 	const setPage = (next: number | undefined) => show({ page: next });
-	const { canManageContent } = usePermissions();
+	const { canManageContent, canUpdateTasks } = usePermissions();
+	// The rows picked out; see `IndexTaskList`.
+	const selection = useTaskSelection();
 
 	// Cut by type, the tabs are already the type filter, so only the other two
 	// narrow the rows then.
@@ -277,7 +281,7 @@ function StagesPage() {
 			{/* Adding a task is shaping the work; see `Capability`. */}
 			{canManageContent ? (
 				<QuickAddTask
-					placeholder="Add a task to the Inbox — #tag it, &track it, or paste a list"
+					placeholder="Add a task to the Inbox — #tag it, &track it, -deadline tomorrow, or paste a list"
 					tags={tags}
 					trackers={trackers}
 					checklists={checklists}
@@ -326,13 +330,18 @@ function StagesPage() {
 								/>
 							) : null}
 						</HStack>
-						<SortMenu
-							order={sort}
-							// One stage at a time when that is the cut; by type a group
-							// gathers tasks from every stage there is.
-							hasStageOrder={groupBy === "type"}
-							onChange={(next) => filterBy({ sort: sortParam(next) })}
-						/>
+						<HStack gap={1} vAlign="center">
+							{canUpdateTasks ? (
+								<SelectAllButton onClick={selection.pickAll} />
+							) : null}
+							<SortMenu
+								order={sort}
+								// One stage at a time when that is the cut; by type a group
+								// gathers tasks from every stage there is.
+								hasStageOrder={groupBy === "type"}
+								onChange={(next) => filterBy({ sort: sortParam(next) })}
+							/>
+						</HStack>
 					</HStack>
 
 					{canClearDone ? (
@@ -383,6 +392,7 @@ function StagesPage() {
 								total={data.total}
 								onPageChange={setPage}
 								isStageShown={false}
+								selection={selection}
 							/>
 						)}
 					</ListLoading>

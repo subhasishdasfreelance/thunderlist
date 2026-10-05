@@ -18,7 +18,7 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
-	SelectButton,
+	SelectButtons,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
@@ -47,6 +47,7 @@ import { groupedIds } from "#/schemas/group";
 
 const checklistIdOf = (checklist: ChecklistSummary) => checklist.checklistId;
 const createdAtOf = (checklist: ChecklistSummary) => checklist.createdAt;
+const titleOf = (checklist: ChecklistSummary) => checklist.title;
 
 export const Route = createFileRoute("/checklists/")({
 	loader: ({ context }) => {
@@ -76,7 +77,7 @@ function ChecklistsPage() {
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	// Several picked out, to delete, group or share together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		checklistsQuery(),
@@ -108,6 +109,7 @@ function ChecklistsPage() {
 		items: checklists,
 		idOf: checklistIdOf,
 		createdAt: createdAtOf,
+		nameOf: titleOf,
 		compareBehind: useMemo(
 			() => (now === null ? null : checklistsBehind(now)),
 			[now],
@@ -192,7 +194,7 @@ function ChecklistsPage() {
 							/>
 							{canManageContent ? (
 								<>
-									<SelectButton onClick={pick.start} />
+									<SelectButtons mode={pick} />
 									<ArrangeButton onClick={() => setIsArranging(true)} />
 								</>
 							) : null}

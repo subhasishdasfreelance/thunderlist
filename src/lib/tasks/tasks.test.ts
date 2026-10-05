@@ -411,6 +411,37 @@ describe("orderTasks by deadline", () => {
 	});
 });
 
+describe("orderTasks by name", () => {
+	it("orders A to Z, ignoring case and reading numbers as numbers", () => {
+		const tasks = [
+			task({ taskId: "b", title: "banana" }),
+			task({ taskId: "day10", title: "Day 10" }),
+			task({ taskId: "a", title: "Apple" }),
+			task({ taskId: "day2", title: "day 2" }),
+		];
+
+		expect(orderTasks(tasks, "name").map((row) => row.taskId)).toEqual([
+			"a",
+			"b",
+			"day2",
+			"day10",
+		]);
+	});
+
+	it("orders rows that carry a task the same way", () => {
+		const rows = [
+			{ task: task({ taskId: "z", title: "zebra" }) },
+			{ task: task({ taskId: "a", title: "ant" }) },
+		];
+
+		expect(
+			orderByTask(rows, "name", (row) => row.task).map(
+				(row) => row.task.taskId,
+			),
+		).toEqual(["a", "z"]);
+	});
+});
+
 describe("mergeReads", () => {
 	const id = (row: { id: string }) => row.id;
 

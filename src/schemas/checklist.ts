@@ -484,6 +484,11 @@ const checklistSchema = v.object({
 	urgent: v.optional(v.boolean()),
 	important: v.optional(v.boolean()),
 	/**
+	 * Marked as current focus: listed itself, as a card, on the Current focus
+	 * tag's page; see `SPECIAL_TAGS`. Absent for not.
+	 */
+	focused: v.optional(v.boolean()),
+	/**
 	 * Which special checklist this is, or `null` or absent for any other; see
 	 * `SPECIAL_CHECKLISTS`. `"inbox"` holds the tasks that belong to no other —
 	 * typed straight onto Today, say — and `"backlog"` the parked ones. Both
@@ -552,6 +557,7 @@ export const updateChecklistInputSchema = v.object({
 			stages: v.optional(stagesSchema),
 			urgent: v.optional(v.boolean()),
 			important: v.optional(v.boolean()),
+			focused: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

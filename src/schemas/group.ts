@@ -10,6 +10,7 @@ import {
 } from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
 import { createTaskInputSchema, MAX_TASKS_AT_ONCE } from "./task";
+import { createTrackerInputSchema } from "./tracker";
 
 /**
  * A group: a named collection of checklists, trackers and tags, mixed freely —
@@ -167,7 +168,6 @@ const outlineChecklistsSchema = v.pipe(
 			),
 		}),
 	),
-	v.minLength(1, "Start a checklist with a # heading"),
 	v.maxLength(MAX_GROUP_ITEMS, "At most 500 checklists in a group"),
 	v.check(
 		(checklists) =>
@@ -177,39 +177,75 @@ const outlineChecklistsSchema = v.pipe(
 	),
 );
 
+/** The trackers a pasted outline makes; see `parseOutline`. */
+const outlineTrackersSchema = v.pipe(
+	v.array(
+		v.object({
+			...v.pick(createTrackerInputSchema, [
+				"trackerId",
+				"title",
+				"description",
+				"type",
+				"unit",
+				"targetValue",
+				"startValue",
+			]).entries,
+			deadline: v.optional(dateOnlySchema),
+			deadlineTime: v.optional(timeOfDaySchema),
+			/** Read off its heading, as a checklist's are. */
+			urgent: v.optional(v.boolean()),
+			important: v.optional(v.boolean()),
+		}),
+	),
+	v.maxLength(MAX_GROUP_ITEMS, "At most 500 trackers in a group"),
+);
+
 /**
  * A group made from a pasted outline: a new checklist for each heading, each
- * with its tasks, and the group holding them all — written in one request.
- * See `parseOutline`.
+ * with its tasks, a new tracker for each `&` heading, and the group holding
+ * them all — written in one request. See `parseOutline`.
  */
 export const importGroupInputSchema = v.object({
 	groupId: idSchema,
 	name: groupNameSchema,
 	color: v.picklist(TAG_COLORS),
-	/** Every checklist starts on this day; see `Checklist.startDate`. */
+	/** Everything starts on this day; see `Checklist.startDate`. */
 	startDate: dateOnlySchema,
 	checklists: outlineChecklistsSchema,
+	trackers: v.optional(outlineTrackersSchema, []),
 });
 
 /**
- * A pasted outline added to a group that exists: its checklists made, as
- * `importGroupInputSchema` makes them, and put after what the group holds.
+ * A pasted outline added to a group that exists: its checklists and trackers
+ * made, as `importGroupInputSchema` makes them, and put after what the group
+ * holds.
  */
 export const importIntoGroupInputSchema = v.object({
 	groupId: idSchema,
-	/** Every checklist starts on this day; see `Checklist.startDate`. */
+	/** Everything starts on this day; see `Checklist.startDate`. */
 	startDate: dateOnlySchema,
 	checklists: outlineChecklistsSchema,
+	trackers: v.optional(outlineTrackersSchema, []),
 });
 
 export type ImportGroupInput = v.InferOutput<typeof importGroupInputSchema>;
 
-/** What a group made from an outline holds: the checklists it made. */
+/**
+ * What a group made from an outline holds: the checklists it made, then the
+ * trackers.
+ */
 export function importedItems(
 	checklists: ReadonlyArray<{ checklistId: string }>,
+	trackers: ReadonlyArray<{ trackerId: string }> = [],
 ): Array<GroupItem> {
-	return checklists.map((each) => ({
-		kind: "checklist",
-		id: each.checklistId,
-	}));
+	return [
+		...checklists.map((each) => ({
+			kind: "checklist" as const,
+			id: each.checklistId,
+		})),
+		...trackers.map((each) => ({
+			kind: "tracker" as const,
+			id: each.trackerId,
+		})),
+	];
 }

@@ -22,6 +22,7 @@ import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checkli
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { DayStats } from "#/components/common/day-stats";
 import { numberTitle } from "#/components/common/item-number";
@@ -354,7 +355,7 @@ function ChecklistDetailPage() {
 	useFocusTask(focusTaskId);
 	const now = useNow();
 	// The rows a text selection runs across, to be moved on together.
-	const { picked, clear } = useTaskSelection();
+	const { picked, clear, pickAll } = useTaskSelection();
 
 	if (detail === null) {
 		return (
@@ -785,6 +786,9 @@ function ChecklistDetailPage() {
 									icon={<Trash2 aria-hidden />}
 									onClick={() => setIsClearingCompleted(true)}
 								/>
+							) : null}
+							{canUpdateTasks && rows.length > 0 ? (
+								<SelectAllButton onClick={pickAll} />
 							) : null}
 							<SortMenu
 								order={sort}

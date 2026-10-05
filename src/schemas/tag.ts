@@ -105,16 +105,20 @@ export function pickableColor(color: TagColor): TagColor {
 const tagColorSchema = v.picklist(TAG_COLORS);
 
 /**
- * The tag every account has and cannot lose: what you are doing today.
+ * The tags every account has and cannot lose: what you are doing today, and
+ * what you are focused on for now.
  *
- * It is a tag in every other way — a name and a colour, both changeable on the
- * Tags screen — but the row's bolt writes it into a task's title, so it has to
- * exist and cannot be deleted. It is known by its kind rather than its name,
- * because the name is the user's to change.
+ * Each is a tag in every other way — a name and a colour, both changeable on
+ * the Tags screen — but a button on the row writes it into a task's title, so
+ * it has to exist and cannot be deleted. It is known by its kind rather than
+ * its name, because the name is the user's to change.
  *
- * The Backlog was the other, and is a checklist now; see `ensureBacklog`.
+ * Current focus also gathers checklists, trackers and tags marked `focused`,
+ * each shown as itself rather than as the tasks it holds.
+ *
+ * The Backlog was another, and is a checklist now; see `ensureBacklog`.
  */
-export const SPECIAL_TAGS = ["today"] as const;
+export const SPECIAL_TAGS = ["today", "focus"] as const;
 
 export type SpecialTag = (typeof SPECIAL_TAGS)[number];
 
@@ -179,6 +183,11 @@ const tagSchema = v.object({
 	 */
 	urgent: v.optional(v.boolean()),
 	important: v.optional(v.boolean()),
+	/**
+	 * Marked as current focus: listed itself, as a card, on the Current focus
+	 * tag's page; see `SPECIAL_TAGS`. Absent for not.
+	 */
+	focused: v.optional(v.boolean()),
 	createdAt: v.string(),
 	updatedAt: v.string(),
 });
@@ -389,6 +398,7 @@ export const updateTagInputSchema = v.object({
 			stageColors: v.optional(stageColorsSchema),
 			urgent: v.optional(v.boolean()),
 			important: v.optional(v.boolean()),
+			focused: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

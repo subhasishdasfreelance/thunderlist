@@ -157,7 +157,16 @@ export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
 	deadline: "Deadline first",
 	stage: "Earliest stage first",
 	type: "By type",
+	name: "A to Z",
 };
+
+/**
+ * Alphabetical, the way a person reads a list: case and accents aside, and
+ * "Day 2" before "Day 10".
+ */
+export function compareNames(a: string, b: string): number {
+	return a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+}
 
 /**
  * The earlier day first, and no deadline after any. Days are `YYYY-MM-DD`, so
@@ -177,12 +186,14 @@ function compareDeadlines(
  * stages between in order of how far along they are; see `stageProgress`; or
  * by type, in the order the space keeps its types in, the untyped last; or by
  * deadline, the soonest due first and the tasks with none after every one
- * that has one.
+ * that has one; or by name, A to Z.
  *
  * Within a band the newest is still first, so sorting reorders the list rather
  * than replacing one arbitrary order with another.
  */
-function sortTasksBy<T extends Pick<Task, "urgent" | "important" | "deadline">>(
+function sortTasksBy<
+	T extends Pick<Task, "urgent" | "important" | "deadline" | "title">,
+>(
 	tasks: ReadonlyArray<T>,
 	order: SortOrder,
 	compare: (a: T, b: T) => number,
@@ -194,6 +205,11 @@ function sortTasksBy<T extends Pick<Task, "urgent" | "important" | "deadline">>(
 	if (order === "deadline") {
 		return [...tasks].sort(
 			(a, b) => compareDeadlines(a.deadline, b.deadline) || compare(a, b),
+		);
+	}
+	if (order === "name") {
+		return [...tasks].sort(
+			(a, b) => compareNames(a.title, b.title) || compare(a, b),
 		);
 	}
 
@@ -255,6 +271,7 @@ export function orderByTask<T>(
 			urgent: taskOf(item).urgent,
 			important: taskOf(item).important,
 			deadline: taskOf(item).deadline,
+			title: taskOf(item).title,
 		})),
 		order,
 		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),

@@ -1902,7 +1902,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				groupId: change.groupId,
 				name: change.name,
 				color: change.color,
-				items: importedItems(change.checklists),
+				items: importedItems(change.checklists, change.trackers),
 				startDate: change.startDate,
 				deadline: null,
 				deadlineTime: null,
@@ -1912,7 +1912,7 @@ function patchFor(client: QueryClient, change: Change): void {
 		// The same, then put after what the group holds; see `importIntoGroup`.
 		case "group.importInto": {
 			drawOutline(client, change);
-			const added = importedItems(change.checklists);
+			const added = importedItems(change.checklists, change.trackers);
 			const updatedAt = new Date().toISOString();
 			client.setQueryData<Array<Group>>(queryKeys.groups, (list) =>
 				list?.map((each) =>
@@ -2664,6 +2664,38 @@ function drawOutline(
 					trackerId: null,
 					linkedChecklistId: null,
 				})),
+			});
+		}
+	}
+
+	for (const tracker of change.trackers) {
+		patchFor(client, {
+			kind: "tracker.create",
+			trackerId: tracker.trackerId,
+			title: tracker.title,
+			caption: "",
+			type: tracker.type,
+			unit: tracker.unit,
+			targetValue: tracker.targetValue,
+			startValue: tracker.startValue,
+			startDate: change.startDate,
+			deadline: tracker.deadline ?? null,
+			deadlineTime: tracker.deadlineTime ?? null,
+			description: tracker.description,
+			coverUrl: null,
+			author: "",
+			tagIds: [],
+			assignees: [],
+			access: null,
+		});
+		if (tracker.urgent || tracker.important) {
+			patchFor(client, {
+				kind: "tracker.update",
+				trackerId: tracker.trackerId,
+				patch: {
+					...(tracker.urgent ? { urgent: true } : {}),
+					...(tracker.important ? { important: true } : {}),
+				},
 			});
 		}
 	}

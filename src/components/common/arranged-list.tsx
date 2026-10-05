@@ -4,20 +4,24 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { VStack } from "@astryxdesign/core/Stack";
 import { useQuery } from "@tanstack/react-query";
 import {
+	ArrowDownAZ,
 	ArrowDownWideNarrow,
 	ArrowUpDown,
 	Check,
+	CheckCheck,
 	CircleAlert,
 	Clock,
 	GripVertical,
 	ListChecks,
 	type LucideIcon,
 	TriangleAlert,
+	X,
 } from "lucide-react";
 import { type ReactNode, useMemo, useSyncExternalStore } from "react";
 import { ListPagination } from "#/components/common/list-pagination";
 import { Pickable } from "#/components/common/pickable";
 import type { ApplyChange } from "#/lib/changes";
+import { compareNames } from "#/lib/tasks/tasks";
 import { usePages } from "#/lib/use-pages";
 import type { usePickMode } from "#/lib/use-pick-mode";
 import { arrangementsQuery } from "#/queries/space";
@@ -34,6 +38,7 @@ const ORDERS: Array<{ order: ListOrder; label: string; icon: LucideIcon }> = [
 	{ order: "newest", label: "Newest first", icon: Clock },
 	{ order: "behind", label: "Most behind first", icon: TriangleAlert },
 	{ order: "priority", label: "Priority first", icon: CircleAlert },
+	{ order: "name", label: "A to Z", icon: ArrowDownAZ },
 ];
 
 /**
@@ -53,8 +58,8 @@ function subscribeToOrders(listener: () => void): () => void {
 }
 
 /**
- * How one list of cards is ordered — by hand, newest first, or most behind
- * first.
+ * How one list of cards is ordered — by hand, newest first, most behind
+ * first, or A to Z.
  *
  * Remembered while the app is open rather than saved: it is a way of looking
  * at the list, and someone else in the team may want to look at it another
@@ -90,12 +95,14 @@ export function useArrangedList<T>({
 	items,
 	idOf,
 	createdAt,
+	nameOf,
 	compareBehind,
 }: {
 	list: ArrangedList;
 	items: ReadonlyArray<T>;
 	idOf: (item: T) => string;
 	createdAt: (item: T) => string;
+	nameOf: (item: T) => string;
 	compareBehind: ((a: T, b: T) => number) | null;
 }): {
 	arrangement: Arrangement;
@@ -124,8 +131,11 @@ export function useArrangedList<T>({
 		if (order === "behind" && compareBehind !== null) {
 			return [...byHand].sort(compareBehind);
 		}
+		if (order === "name") {
+			return [...byHand].sort((a, b) => compareNames(nameOf(a), nameOf(b)));
+		}
 		return byHand;
-	}, [order, items, byHand, createdAt, compareBehind]);
+	}, [order, items, byHand, createdAt, nameOf, compareBehind]);
 
 	return { arrangement, order, setOrder, byHand, ordered };
 }
@@ -221,6 +231,7 @@ export function ArrangedCards<T>({
 								render(item)
 							) : (
 								<Pickable
+									id={id}
 									isPicking={pick.mode.isPicking}
 									isPicked={pick.mode.picked.has(id)}
 									isPickable={pick.isPickable?.(item) ?? true}
@@ -245,17 +256,49 @@ export function ArrangedCards<T>({
 }
 
 /**
- * Starts picking cards, to delete or change several at once; see
- * `usePickMode`.
+ * Starts picking cards, to delete or change several at once, and stops it
+ * again; then Select all, for every card on screen. See `usePickMode`.
  */
-export function SelectButton({ onClick }: { onClick: () => void }) {
+export function SelectButtons({
+	mode,
+}: {
+	mode: ReturnType<typeof usePickMode>;
+}) {
+	return (
+		<>
+			{mode.isPicking ? (
+				<IconButton
+					label="Stop selecting"
+					tooltip="Stop selecting (Esc)"
+					variant="secondary"
+					size="sm"
+					icon={<X aria-hidden />}
+					onClick={mode.stop}
+				/>
+			) : (
+				<IconButton
+					label="Select"
+					tooltip="Select several"
+					variant="ghost"
+					size="sm"
+					icon={<ListChecks aria-hidden />}
+					onClick={mode.start}
+				/>
+			)}
+			<SelectAllButton onClick={mode.pickAll} />
+		</>
+	);
+}
+
+/** Picks everything on screen: every card, or every row of a list. */
+export function SelectAllButton({ onClick }: { onClick: () => void }) {
 	return (
 		<IconButton
-			label="Select"
-			tooltip="Select several"
+			label="Select all"
+			tooltip="Select all on this page"
 			variant="ghost"
 			size="sm"
-			icon={<ListChecks aria-hidden />}
+			icon={<CheckCheck aria-hidden />}
 			onClick={onClick}
 		/>
 	);

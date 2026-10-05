@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { SelectButton } from "#/components/common/arranged-list";
+import { SelectButtons } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
 import { Pickable } from "#/components/common/pickable";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
@@ -207,7 +207,7 @@ function CountdownsPage() {
 	const { apply } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	// Several picked out, to change together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 	const [isCreating, setIsCreating] = useState(false);
 	const [editing, setEditing] = useState<Countdown | null>(null);
 
@@ -236,9 +236,7 @@ function CountdownsPage() {
 				</VStack>
 				{canManageContent ? (
 					<HStack gap={1} vAlign="center">
-						{(data ?? []).length === 0 ? null : (
-							<SelectButton onClick={pick.start} />
-						)}
+						{(data ?? []).length === 0 ? null : <SelectButtons mode={pick} />}
 						<Button
 							label="New countdown"
 							variant="primary"
@@ -265,6 +263,7 @@ function CountdownsPage() {
 							{upcoming.map((countdown) => (
 								<Pickable
 									key={countdown.countdownId}
+									id={countdown.countdownId}
 									isPicking={pick.isPicking}
 									isPicked={pick.picked.has(countdown.countdownId)}
 									label={countdown.title}
@@ -289,6 +288,7 @@ function CountdownsPage() {
 								{past.map((countdown) => (
 									<Pickable
 										key={countdown.countdownId}
+										id={countdown.countdownId}
 										isPicking={pick.isPicking}
 										isPicked={pick.picked.has(countdown.countdownId)}
 										label={countdown.title}

@@ -7,6 +7,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { CircleAlert, CircleDashed, Flame, Star } from "lucide-react";
 import { useState } from "react";
+import { SelectAllButton } from "#/components/common/arranged-list";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
@@ -21,6 +22,8 @@ import {
 	sortParam,
 } from "#/lib/filter-search";
 import { PAGE_SIZE } from "#/lib/use-pages";
+import { useTaskSelection } from "#/lib/use-task-selection";
+import { usePermissions } from "#/lib/use-team";
 import { acrossQuery } from "#/queries/across";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
@@ -105,6 +108,9 @@ function PriorityPage() {
 	} = Route.useSearch();
 	const [selected, setSelected] = useState<PriorityRank>("urgent-important");
 	const [page, setPage] = useState<number | undefined>(undefined);
+	const { canUpdateTasks } = usePermissions();
+	// The rows picked out; see `IndexTaskList`.
+	const selection = useTaskSelection();
 
 	/**
 	 * Another order or filter. It replaces the address rather than adding to
@@ -219,11 +225,16 @@ function PriorityPage() {
 									onChange={(next) => filterBy({ type: next })}
 								/>
 							</HStack>
-							<SortMenu
-								order={sort}
-								hasStageOrder
-								onChange={(next) => filterBy({ sort: sortParam(next) })}
-							/>
+							<HStack gap={1} vAlign="center">
+								{canUpdateTasks ? (
+									<SelectAllButton onClick={selection.pickAll} />
+								) : null}
+								<SortMenu
+									order={sort}
+									hasStageOrder
+									onChange={(next) => filterBy({ sort: sortParam(next) })}
+								/>
+							</HStack>
 						</HStack>
 
 						<Text type="supporting">{BAND_HINTS[selected]}</Text>
@@ -244,6 +255,7 @@ function PriorityPage() {
 									page={data.page}
 									total={data.total}
 									onPageChange={setPage}
+									selection={selection}
 								/>
 							)}
 						</ListLoading>

@@ -13,7 +13,7 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { TaskFlagButtons } from "#/components/tasks/task-actions";
+import { FocusButton, TaskFlagButtons } from "#/components/tasks/task-actions";
 import { useApplyChange } from "#/lib/changes";
 import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
@@ -47,7 +47,9 @@ export function ChecklistCard({
 	const { apply } = useApplyChange();
 	const { canManageContent } = useItemPermissions(checklist.access);
 
-	function setFlag(patch: { urgent: boolean } | { important: boolean }) {
+	function setFlag(
+		patch: { urgent: boolean } | { important: boolean } | { focused: boolean },
+	) {
 		apply({
 			kind: "checklist.update",
 			checklistId: checklist.checklistId,
@@ -79,16 +81,23 @@ export function ChecklistCard({
 				);
 
 	const flags = canManageContent ? (
-		<TaskFlagButtons
-			title={checklist.title}
-			urgent={checklist.urgent ?? false}
-			important={checklist.important ?? false}
-			hasShortcuts={false}
-			actions={{
-				onSetUrgent: (urgent) => setFlag({ urgent }),
-				onSetImportant: (important) => setFlag({ important }),
-			}}
-		/>
+		<>
+			<TaskFlagButtons
+				title={checklist.title}
+				urgent={checklist.urgent ?? false}
+				important={checklist.important ?? false}
+				hasShortcuts={false}
+				actions={{
+					onSetUrgent: (urgent) => setFlag({ urgent }),
+					onSetImportant: (important) => setFlag({ important }),
+				}}
+			/>
+			<FocusButton
+				title={checklist.title}
+				isOn={checklist.focused ?? false}
+				onToggle={(focused) => setFlag({ focused })}
+			/>
+		</>
 	) : null;
 
 	return (

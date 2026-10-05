@@ -774,6 +774,15 @@ body {
 		color: var(--color-icon-yellow);
 	}
 
+	/* Current focus, in the teal its tag starts in. */
+	.thunderlist-flag[data-flag="focus"][data-on="true"] button {
+		background-color: var(--color-background-teal);
+		color: var(--color-text-teal);
+	}
+	.thunderlist-flag[data-flag="focus"][data-on="true"] svg {
+		color: var(--color-icon-teal);
+	}
+
 	/* Switching a flag on is confirmed with the same small bump as a tick. */
 	.thunderlist-flag[data-on="true"] svg {
 		animation: thunderlist-check var(--duration-fast-max) var(--ease-standard);
@@ -919,6 +928,26 @@ body {
 	 */
 	.thunderlist-pickable {
 		position: relative;
+	}
+
+	/* A card's id, for dragging over cards, drawing no box of its own. */
+	.thunderlist-pick-mark {
+		display: contents;
+	}
+
+	/*
+	 * On a touch screen, resting a finger on a row or a card starts a pick by
+	 * dragging (see `useDragPick`), not the phone's text selection or its
+	 * long-press menu.
+	 */
+	@media (pointer: coarse) {
+		.thunderlist-task-row,
+		.thunderlist-entry-row,
+		[data-item-id] {
+			-webkit-user-select: none;
+			user-select: none;
+			-webkit-touch-callout: none;
+		}
 	}
 
 	.thunderlist-pickable-cover {

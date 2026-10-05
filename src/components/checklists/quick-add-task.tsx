@@ -50,7 +50,7 @@ function parseLines(value: string, now: Date): Array<QuickAddLine> {
  * field back and puts the caret in it, keyboard and all.
  */
 export function QuickAddTask({
-	placeholder = "Add a task — #tag it, &track it, or paste a list",
+	placeholder = "Add a task — #tag it, &track it, -deadline tomorrow, or paste a list",
 	tags,
 	trackers = [],
 	checklists = [],

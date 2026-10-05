@@ -16,7 +16,7 @@ import {
 	ArrangeButton,
 	ArrangedCards,
 	ListOrderMenu,
-	SelectButton,
+	SelectButtons,
 	saveArrangement,
 	useArrangedList,
 } from "#/components/common/arranged-list";
@@ -50,6 +50,7 @@ import type { TrackerSummary } from "#/schemas/tracker";
 
 const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
 const createdAtOf = (tracker: TrackerSummary) => tracker.createdAt;
+const titleOf = (tracker: TrackerSummary) => tracker.title;
 
 export const Route = createFileRoute("/trackers/")({
 	// The person the list is narrowed to, kept in the address; see
@@ -93,7 +94,7 @@ function TrackersPage() {
 	const { apply, applyAsync } = useApplyChange();
 	const { canManageContent } = usePermissions();
 	// Several picked out, to change together; see `usePickMode`.
-	const pick = usePickMode();
+	const pick = usePickMode(canManageContent);
 
 	const { data, isPending, isError, error, refetch } = useQuery(
 		trackersQuery(),
@@ -133,6 +134,7 @@ function TrackersPage() {
 		items: trackers,
 		idOf: trackerIdOf,
 		createdAt: createdAtOf,
+		nameOf: titleOf,
 		compareBehind: behind,
 	});
 
@@ -209,7 +211,7 @@ function TrackersPage() {
 							/>
 							{canManageContent ? (
 								<>
-									<SelectButton onClick={pick.start} />
+									<SelectButtons mode={pick} />
 									<ArrangeButton onClick={() => setIsArranging(true)} />
 								</>
 							) : null}

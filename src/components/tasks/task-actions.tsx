@@ -1,9 +1,12 @@
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack } from "@astryxdesign/core/Stack";
-import { CircleAlert, Star, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CircleAlert, Star } from "lucide-react";
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
+import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { shortTitle } from "#/lib/tasks/tasks";
-import type { SpecialTag, Tag } from "#/schemas/tag";
+import { tagsQuery } from "#/queries/tags";
+import { type SpecialTag, specialTag, type Tag } from "#/schemas/tag";
 
 /**
  * What can be done to a task from its row, and the key that does it.
@@ -39,7 +42,10 @@ export const TASK_SHORTCUTS = {
 export const STAGE_SHORTCUTS = { next: ">", previous: "<" } as const;
 
 export type TaskQuickActions = {
-	/** Put the task on Today, or take it off; see `setSpecialTag`. */
+	/**
+	 * Put the task on Today or Current focus, or take it off; see
+	 * `setSpecialTag`.
+	 */
 	onSetSpecial: (kind: SpecialTag, isOn: boolean) => void;
 	onSetUrgent: (urgent: boolean) => void;
 	onSetImportant: (important: boolean) => void;
@@ -108,41 +114,77 @@ export function TaskFlagButtons({
 }
 
 /**
- * Putting a task on Today, at the end of the row.
+ * Putting a task on Today, or on Current focus beside it, at the end of the
+ * row.
  *
- * Today is a tag, and this is the quick way to write it: the bolt adds it to the
- * end of the title, and pressing it again takes it out wherever it was
- * written. It is the app's own bolt, lit in the bolt's gold while the task is
- * on Today. The tag's name is the user's to change — `#doing`, say — and the
- * button writes whatever it is called.
+ * Each is a tag, and this is the quick way to write it: the button adds it to
+ * the end of the title, and pressing it again takes it out wherever it was
+ * written. Today's is the app's own bolt, lit in the bolt's gold while the
+ * task is on Today; Current focus's lights in teal. The tag's name is the
+ * user's to change — `#doing`, say — and the button writes whatever it is
+ * called.
  *
  * Parking something in the Backlog is a decision made far less often, so it is
  * in the menu rather than spending a button's width on every row forever.
  */
-export function TodayButton({
+export function SpecialTagButton({
+	kind,
 	title,
-	today,
+	tag,
+	isOn,
+	onToggle,
+}: {
+	kind: SpecialTag;
+	title: string;
+	tag: Tag;
+	isOn: boolean;
+	onToggle: () => void;
+}) {
+	const name = `#${tag.name}`;
+	const Mark = SPECIAL_TAG_ICONS[kind];
+	// Only Today has a key: the row's other letters were taken long before.
+	const key = kind === "today" ? ` (${TASK_SHORTCUTS.today})` : "";
+
+	return (
+		<span className="thunderlist-flag" data-flag={kind} data-on={isOn}>
+			<IconButton
+				label={isOn ? `Take ${title} off ${name}` : `Add ${title} to ${name}`}
+				tooltip={`${isOn ? `On ${name} — press to take off` : `Add to ${name}`}${key}`}
+				variant="ghost"
+				size="sm"
+				icon={<Mark aria-hidden />}
+				onClick={onToggle}
+			/>
+		</span>
+	);
+}
+
+/**
+ * Marking a checklist, tracker or tag as current focus, beside its urgent and
+ * important flags: it is then listed, as itself, on the Current focus tag's
+ * page; see `SPECIAL_TAGS`. Named as that tag is named, so nothing until the
+ * tags have loaded.
+ */
+export function FocusButton({
+	title,
 	isOn,
 	onToggle,
 }: {
 	title: string;
-	today: Tag;
 	isOn: boolean;
-	onToggle: () => void;
+	onToggle: (isOn: boolean) => void;
 }) {
-	const name = `#${today.name}`;
+	const focus = specialTag(useQuery(tagsQuery()).data ?? [], "focus");
+	if (focus === null) return null;
 
 	return (
-		<span className="thunderlist-flag" data-flag="today" data-on={isOn}>
-			<IconButton
-				label={isOn ? `Take ${title} off ${name}` : `Add ${title} to ${name}`}
-				tooltip={`${isOn ? `On ${name} — press to take off` : `Add to ${name}`} (${TASK_SHORTCUTS.today})`}
-				variant="ghost"
-				size="sm"
-				icon={<Zap aria-hidden />}
-				onClick={onToggle}
-			/>
-		</span>
+		<SpecialTagButton
+			kind="focus"
+			title={title}
+			tag={focus}
+			isOn={isOn}
+			onToggle={() => onToggle(!isOn)}
+		/>
 	);
 }
 

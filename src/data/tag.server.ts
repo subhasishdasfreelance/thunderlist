@@ -180,10 +180,18 @@ async function withUnderway<
 
 /**
  * The colour each special tag starts in. Today takes the gold of the app's
- * bolt, which is the mark that puts a task on it.
+ * bolt, which is the mark that puts a task on it; Current focus the teal its
+ * own button lights in.
  */
 const SPECIAL_TAG_COLORS: Record<SpecialTag, TagColor> = {
 	today: "yellow",
+	focus: "teal",
+};
+
+/** The name each special tag starts with: one word, as `#name` needs. */
+const SPECIAL_TAG_NAMES: Record<SpecialTag, string> = {
+	today: "today",
+	focus: "current-focus",
 };
 
 /** Accounts whose special tags this server has already seen to. */
@@ -222,7 +230,10 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 				{
 					userId,
 					special: null,
-					name: { $regex: `^${escapeRegex(kind)}$`, $options: "i" },
+					name: {
+						$regex: `^${escapeRegex(SPECIAL_TAG_NAMES[kind])}$`,
+						$options: "i",
+					},
 				},
 				{ $set: { special: kind } },
 			);
@@ -232,7 +243,7 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 			await current.tags.insertOne({
 				tagId: createId(ID_PREFIX.tag),
 				number: await nextNumber(current, userId, "tag"),
-				name: kind,
+				name: SPECIAL_TAG_NAMES[kind],
 				color: SPECIAL_TAG_COLORS[kind],
 				special: kind,
 				description: "",

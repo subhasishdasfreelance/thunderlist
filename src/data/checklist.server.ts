@@ -1386,7 +1386,7 @@ export async function createTasks(
 }
 
 /** A bulk write that failed only on things a first try already wrote. */
-function isOnlyDuplicates(error: unknown): boolean {
+export function isOnlyDuplicates(error: unknown): boolean {
 	if (!(error instanceof MongoBulkWriteError)) return false;
 	const failures = [error.writeErrors].flat();
 	return failures.length > 0 && failures.every((each) => each.code === 11000);

@@ -220,3 +220,69 @@ describe("parseOutline, on settings under a heading", () => {
 		]);
 	});
 });
+
+describe("parseOutline, on trackers", () => {
+	it("makes a tracker of each # & heading, with its settings", () => {
+		const outline = parseOutline(
+			[
+				"# &Clean Code -i",
+				"target: 464 pages",
+				"start: 40",
+				"type: book",
+				"deadline: 2026-12-01 18:30",
+				"## One chapter a day",
+				"# Python",
+				"asyncio gather",
+			].join("\n"),
+		);
+
+		expect(outline.trackers).toEqual([
+			{
+				title: "Clean Code",
+				urgent: false,
+				important: true,
+				description: "One chapter a day",
+				type: "book",
+				unit: "pages",
+				targetValue: 464,
+				startValue: 40,
+				deadline: "2026-12-01",
+				deadlineTime: "18:30",
+			},
+		]);
+		expect(outline.checklists.map((each) => each.title)).toEqual(["Python"]);
+		expect(outline.checklists[0].tasks.map((task) => task.title)).toEqual([
+			"asyncio gather",
+		]);
+	});
+
+	it("gives a tracker its type's unit when the target names none", () => {
+		const [tracker] = parseOutline(
+			["# & Running", "type: fitness", "target: 100"].join("\n"),
+		).trackers;
+
+		expect(tracker).toMatchObject({
+			title: "Running",
+			type: "fitness",
+			unit: "km",
+			targetValue: 100,
+			startValue: 0,
+		});
+	});
+
+	it("leaves out a tracker with no target, and lines that are not settings", () => {
+		const outline = parseOutline(
+			[
+				"# &No target",
+				"start: 3",
+				"# &Course",
+				"target: 12 lessons",
+				"a stray line",
+			].join("\n"),
+		);
+
+		expect(outline.trackers.map((each) => each.title)).toEqual(["Course"]);
+		expect(outline.untargeted).toBe(1);
+		expect(outline.skipped).toBe(1);
+	});
+});
