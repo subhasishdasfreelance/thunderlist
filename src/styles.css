@@ -782,6 +782,10 @@ body {
 	.thunderlist-flag[data-flag="focus"][data-on="true"] svg {
 		color: var(--color-icon-teal);
 	}
+	/* The bullseye's centre, filled: on target. */
+	.thunderlist-flag[data-flag="focus"][data-on="true"] svg circle:last-child {
+		fill: currentColor;
+	}
 
 	/* Switching a flag on is confirmed with the same small bump as a tick. */
 	.thunderlist-flag[data-on="true"] svg {
