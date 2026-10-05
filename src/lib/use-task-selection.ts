@@ -13,6 +13,10 @@ export type PickedRow = "task" | "entry" | "item";
 const OWN_ARROWS =
 	'dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="tablist"], [role="radiogroup"], [role="slider"]';
 
+/** The parts of a row that do something of their own when clicked. */
+const OWN_CLICKS =
+	'a, button, input, label, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"]';
+
 /** No task picked. One set, so clearing twice draws nothing again. */
 const NONE: ReadonlySet<string> = new Set();
 
@@ -42,7 +46,9 @@ function firstInView(rows: ReadonlyArray<HTMLElement>): number {
  *
  * The pick outlives the text selection it came from, and each new drag adds
  * to it: select a few rows, then drag over more further down, and all of them
- * are picked. Clicking a row or selecting text elsewhere leaves it be. It ends
+ * are picked. While anything is picked, clicking or tapping a row — not one of
+ * its buttons — picks it or lets it go, one at a time, as the cards' picking
+ * does; see `usePickMode`. Selecting text elsewhere leaves it be. It ends
  * only with `clear` — the bar's close button, or Escape — which lets go of the
  * text selection over the rows too, so nothing is left highlighted as if
  * still picked.
@@ -119,6 +125,29 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			before.current = pickedNow.current;
 		}
 
+		// While anything is picked, a click on a row picks it or lets it go. The
+		// click that ends a drag over text, or a double click, is left alone.
+		function onClick(event: MouseEvent) {
+			if (pickedNow.current.size === 0) return;
+			if (event.defaultPrevented || event.button !== 0 || event.detail > 1) {
+				return;
+			}
+			if (!(event.target instanceof Element)) return;
+			if (event.target.closest(OWN_CLICKS)) return;
+			const row = event.target.closest<HTMLElement>(ROW);
+			const id = row === null ? undefined : idOf(row);
+			if (id === undefined) return;
+			const selection = document.getSelection();
+			if (selection !== null && !selection.isCollapsed) return;
+
+			setPicked((current) => {
+				const next = new Set(current);
+				if (next.has(id)) next.delete(id);
+				else next.add(id);
+				return next;
+			});
+		}
+
 		function walk(event: KeyboardEvent) {
 			const by = event.key === "ArrowDown" ? 1 : -1;
 			if (event.defaultPrevented) return;
@@ -165,10 +194,12 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 
 		document.addEventListener("selectionchange", onSelectionChange);
 		document.addEventListener("pointerdown", onPointerDown);
+		document.addEventListener("click", onClick);
 		document.addEventListener("keydown", onKeyDown);
 		return () => {
 			document.removeEventListener("selectionchange", onSelectionChange);
 			document.removeEventListener("pointerdown", onPointerDown);
+			document.removeEventListener("click", onClick);
 			document.removeEventListener("keydown", onKeyDown);
 		};
 	}, [clear, kind, pickRows]);
