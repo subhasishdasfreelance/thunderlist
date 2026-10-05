@@ -19,7 +19,18 @@ const PUBLIC_FILE_CACHE = {
   },
 }
 
+/*
+ * Which build this is, the same in the browser's code and the server's; see
+ * `useNewVersionPrompt`. The commit on Vercel, so redeploying the same code
+ * prompts nobody; the moment of the build anywhere else.
+ */
+const BUILD_ID =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  Date.now().toString(36)
+
 const config = defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   resolve: { tsconfigPaths: true },
   // Astryx declares every colour with CSS `light-dark()`, and the theme toggle
   // switches them by setting `color-scheme` on the root element at runtime.

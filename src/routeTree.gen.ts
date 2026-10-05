@@ -20,6 +20,7 @@ import { Route as TodayRouteImport } from './routes/today'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as ApiNotifyRouteImport } from './routes/api/notify'
 import { Route as ApiUploadthingRouteImport } from './routes/api/uploadthing'
+import { Route as ApiVersionRouteImport } from './routes/api/version'
 import { Route as ChecklistsIndexRouteImport } from './routes/checklists.index'
 import { Route as ChecklistsChecklistIdRouteImport } from './routes/checklists.$checklistId'
 import { Route as GroupsIndexRouteImport } from './routes/groups.index'
@@ -86,6 +87,11 @@ const ApiNotifyRoute = ApiNotifyRouteImport.update({
 const ApiUploadthingRoute = ApiUploadthingRouteImport.update({
   id: '/api/uploadthing',
   path: '/api/uploadthing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVersionRoute = ApiVersionRouteImport.update({
+  id: '/api/version',
+  path: '/api/version',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChecklistsIndexRoute = ChecklistsIndexRouteImport.update({
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/version': typeof ApiVersionRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/version': typeof ApiVersionRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/api/mcp': typeof ApiMcpRoute
   '/api/notify': typeof ApiNotifyRoute
   '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/version': typeof ApiVersionRoute
   '/checklists/$checklistId': typeof ChecklistsChecklistIdRoute
   '/groups/$groupId': typeof GroupsGroupIdRoute
   '/plans/$planId': typeof PlansPlanIdRoute
@@ -239,6 +248,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/notify'
     | '/api/uploadthing'
+    | '/api/version'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/notify'
     | '/api/uploadthing'
+    | '/api/version'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/api/mcp'
     | '/api/notify'
     | '/api/uploadthing'
+    | '/api/version'
     | '/checklists/$checklistId'
     | '/groups/$groupId'
     | '/plans/$planId'
@@ -315,6 +327,7 @@ export interface RootRouteChildren {
   ApiMcpRoute: typeof ApiMcpRoute
   ApiNotifyRoute: typeof ApiNotifyRoute
   ApiUploadthingRoute: typeof ApiUploadthingRoute
+  ApiVersionRoute: typeof ApiVersionRoute
   ChecklistsChecklistIdRoute: typeof ChecklistsChecklistIdRoute
   GroupsGroupIdRoute: typeof GroupsGroupIdRoute
   PlansPlanIdRoute: typeof PlansPlanIdRoute
@@ -406,6 +419,13 @@ declare module '@tanstack/react-router' {
       path: '/api/uploadthing'
       fullPath: '/api/uploadthing'
       preLoaderRoute: typeof ApiUploadthingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/version': {
+      id: '/api/version'
+      path: '/api/version'
+      fullPath: '/api/version'
+      preLoaderRoute: typeof ApiVersionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checklists/': {
@@ -507,6 +527,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMcpRoute: ApiMcpRoute,
   ApiNotifyRoute: ApiNotifyRoute,
   ApiUploadthingRoute: ApiUploadthingRoute,
+  ApiVersionRoute: ApiVersionRoute,
   ChecklistsChecklistIdRoute: ChecklistsChecklistIdRoute,
   GroupsGroupIdRoute: GroupsGroupIdRoute,
   PlansPlanIdRoute: PlansPlanIdRoute,

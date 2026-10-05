@@ -15,6 +15,7 @@ import { UndoProvider } from "#/components/shell/undo-provider";
 import { isChunkLoadError, reloadForCurrentVersion } from "#/lib/chunk-reload";
 import { FIRST_OPEN_SCRIPT } from "#/lib/first-open";
 import { drawnColorScheme, THEME_INIT_SCRIPT } from "#/lib/theme";
+import { useNewVersionPrompt } from "#/lib/use-new-version";
 import { useIsOnline } from "#/lib/use-online";
 import { backdropsQuery } from "#/queries/preferences";
 import { primeQuery } from "#/queries/prime";
@@ -137,21 +138,13 @@ function RootComponent() {
 		if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
 		const { serviceWorker } = navigator;
 		// Not registering only costs the cache; the app works the same without it.
+		// A new worker taking over is a new version, offered like any other;
+		// see `useNewVersionPrompt`.
 		serviceWorker.register("/sw.js").catch(() => {});
-
-		// A new worker taking over during a visit is a new version of the app,
-		// so it is loaded there and then rather than on the next open. Not on a
-		// first visit, where there was no worker before this one.
-		const hadWorker = serviceWorker.controller !== null;
-		const onNewWorker = () => {
-			if (hadWorker) window.location.reload();
-		};
-		serviceWorker.addEventListener("controllerchange", onNewWorker);
-
-		return () => {
-			serviceWorker.removeEventListener("controllerchange", onNewWorker);
-		};
 	}, []);
+
+	// A deploy made while the page is open is fetched, then offered.
+	useNewVersionPrompt();
 
 	/*
 	 * A page left open across a deploy can ask for a chunk the server no longer
