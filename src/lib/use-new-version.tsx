@@ -67,6 +67,10 @@ function refreshStartPages(): Promise<void> {
  * refresh offered, so taking it up is quick. Nothing reloads by itself: a
  * reload in the middle of typing would lose it.
  *
+ * Taking it up — here or from the notification — closes the offer at once:
+ * the new page can take a moment to arrive, and an offer still up after the
+ * tap reads as a tap that did nothing.
+ *
  * Production only: in development Vite swaps code in by itself.
  */
 export function useNewVersionPrompt(): void {
@@ -79,6 +83,16 @@ export function useNewVersionPrompt(): void {
 		let isChecking = false;
 		/** The build already offered, so it is not offered again. */
 		let offered: string | null = null;
+		/** Closes the offer on screen; `null` while there is none. */
+		let dismissOffer: (() => void) | null = null;
+		/** Already reloading onto the new version, so there is nothing to offer. */
+		let isRefreshing = false;
+
+		function refreshNow() {
+			isRefreshing = true;
+			dismissOffer?.();
+			dismissOffer = null;
+		}
 
 		async function check(isForced = false) {
 			if (isChecking || !navigator.onLine) return;
@@ -90,8 +104,9 @@ export function useNewVersionPrompt(): void {
 				const build = await newerBuild();
 				if (build === null || build === offered) return;
 				await fetchNewFiles();
+				if (isRefreshing) return;
 				offered = build;
-				toast({
+				dismissOffer = toast({
 					body: "A new version of Thunderlist is ready.",
 					type: "info",
 					isAutoHide: false,
@@ -101,7 +116,10 @@ export function useNewVersionPrompt(): void {
 							label="Refresh"
 							icon={<RotateCw aria-hidden />}
 							size="sm"
-							onClick={() => window.location.reload()}
+							onClick={() => {
+								refreshNow();
+								window.location.reload();
+							}}
 						/>
 					),
 				});
@@ -124,9 +142,11 @@ export function useNewVersionPrompt(): void {
 			if (hadWorker) void check(true);
 		};
 
-		// Told by the service worker that a release notification came.
+		// Told by the service worker that a release notification came, or that
+		// it was tapped and this window is about to be reloaded.
 		const onWorkerMessage = (event: MessageEvent) => {
 			if (event.data?.type === "release") void check(true);
+			if (event.data?.type === "refreshing") refreshNow();
 		};
 
 		void check(true);

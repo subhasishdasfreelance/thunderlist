@@ -38,7 +38,7 @@ import { TASK_SHORTCUTS } from "./task-actions";
  * reach; on a phone it sits above the bottom bar.
  *
  * Every key a row answers to does for the pick what it does for one row — the
- * tick key each on to its next stage, or done where none has one; T, U and I
+ * tick key each on to its next stage, or done where none has one; T, C, U and I
  * on for all of them, or off where all have it — and is saved as one change
  * for them all; see `applyBatched`. With the rows picked from the keyboard
  * (see `useTaskSelection`), a run of tasks is dealt with without the pointer.
@@ -58,6 +58,7 @@ export function SelectionBar({
 	onAddTag,
 	onDelete,
 	onToggleToday,
+	onToggleFocus,
 	onBacklog,
 	onToggleUrgent,
 	onToggleImportant,
@@ -93,6 +94,8 @@ export function SelectionBar({
 	onDelete?: () => void;
 	/** Today on for all of them, or off. Left out until the tags are known. */
 	onToggleToday?: () => void;
+	/** Current focus on for all of them, or off. Left out until the tags are known. */
+	onToggleFocus?: () => void;
 	/** Park them all in the Backlog. Left out where there is none to go to. */
 	onBacklog?: () => void;
 	onToggleUrgent: () => void;
@@ -111,6 +114,7 @@ export function SelectionBar({
 		// Opening what is picked, as Enter does anywhere.
 		enter: onEdit,
 		[TASK_SHORTCUTS.today]: onToggleToday,
+		[TASK_SHORTCUTS.focus]: onToggleFocus,
 		[TASK_SHORTCUTS.backlog]: onBacklog,
 		[TASK_SHORTCUTS.move]: onMoveToChecklist,
 		[TASK_SHORTCUTS.urgent]: onToggleUrgent,

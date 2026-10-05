@@ -18,6 +18,8 @@ import { type SpecialTag, specialTag, type Tag } from "#/schemas/tag";
  */
 export const TASK_SHORTCUTS = {
 	today: "t",
+	/** Current focus: the one letter of the name nothing else took. */
+	focus: "c",
 	backlog: "b",
 	/** Move it to another checklist, picked from the list. */
 	move: "m",
@@ -133,17 +135,19 @@ export function SpecialTagButton({
 	tag,
 	isOn,
 	onToggle,
+	hasShortcut = true,
 }: {
 	kind: SpecialTag;
 	title: string;
 	tag: Tag;
 	isOn: boolean;
 	onToggle: () => void;
+	/** False where no key fires it, as on a checklist's card. */
+	hasShortcut?: boolean;
 }) {
 	const name = `#${tag.name}`;
 	const Mark = SPECIAL_TAG_ICONS[kind];
-	// Only Today has a key: the row's other letters were taken long before.
-	const key = kind === "today" ? ` (${TASK_SHORTCUTS.today})` : "";
+	const key = hasShortcut ? ` (${TASK_SHORTCUTS[kind]})` : "";
 
 	return (
 		<span className="thunderlist-flag" data-flag={kind} data-on={isOn}>
@@ -184,6 +188,7 @@ export function FocusButton({
 			tag={focus}
 			isOn={isOn}
 			onToggle={() => onToggle(!isOn)}
+			hasShortcut={false}
 		/>
 	);
 }

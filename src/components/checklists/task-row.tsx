@@ -200,6 +200,9 @@ export function TaskRow({
 			[TASK_SHORTCUTS.today]: () => {
 				if (today !== null) actions.onSetSpecial("today", !isOnToday);
 			},
+			[TASK_SHORTCUTS.focus]: () => {
+				if (focus !== null) actions.onSetSpecial("focus", !isInFocus);
+			},
 			...(park === undefined ? {} : { [TASK_SHORTCUTS.backlog]: park.onMove }),
 			[TASK_SHORTCUTS.urgent]: () => actions.onSetUrgent(!task.urgent),
 			[TASK_SHORTCUTS.important]: () => actions.onSetImportant(!task.important),
@@ -231,6 +234,8 @@ export function TaskRow({
 			canManageContent,
 			today,
 			isOnToday,
+			focus,
+			isInFocus,
 			park,
 			task.urgent,
 			task.important,
@@ -484,7 +489,7 @@ export function TaskRow({
 						title={task.title}
 						tag={focus}
 						isOn={isInFocus}
-						onToggle={() => actions.onSetSpecial("focus", !isInFocus)}
+						onToggle={shortcuts[TASK_SHORTCUTS.focus]}
 					/>
 				)}
 

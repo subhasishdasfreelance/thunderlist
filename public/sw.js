@@ -365,6 +365,9 @@ self.addEventListener("notificationclick", (event) => {
 					await self.clients.openWindow(url);
 					return;
 				}
+				// The offer in each window closed first, as the new page can take a
+				// moment to arrive.
+				for (const client of windows) client.postMessage({ type: "refreshing" });
 				await windows[0].focus();
 				await Promise.all(
 					windows.map((client) => client.navigate(client.url).catch(() => null)),

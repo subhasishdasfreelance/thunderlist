@@ -24,6 +24,7 @@ const GROUPS: Array<Group> = [
 		title: "On a task you point at, pick with ↑ ↓, or tab to",
 		rows: [
 			{ keys: [TASK_SHORTCUTS.today], what: "Today, on or off" },
+			{ keys: [TASK_SHORTCUTS.focus], what: "Current focus, on or off" },
 			{ keys: [TASK_SHORTCUTS.backlog], what: "Move to the Backlog" },
 			{ keys: [TASK_SHORTCUTS.move], what: "Move to a checklist" },
 			{ keys: [TASK_SHORTCUTS.urgent], what: "Urgent" },

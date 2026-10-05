@@ -900,6 +900,9 @@ function ChecklistDetailPage() {
 					onToggleToday={() =>
 						toggleSpecialTagOnAll(apply, pickedTasks, "today", tags)
 					}
+					onToggleFocus={() =>
+						toggleSpecialTagOnAll(apply, pickedTasks, "focus", tags)
+					}
 					onBacklog={
 						backlog === null || !canManageContent
 							? undefined
