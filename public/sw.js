@@ -44,6 +44,13 @@ const OFFLINE_PAGES = new Set(["/tags/today"]);
  * bumped before it reaches anyone.
  */
 const FALLBACK = "thunderlist-fallback-v1";
+
+/*
+ * Until when the start page comes from the network rather than its kept copy:
+ * just after a release notification is tapped, so every window it opens or
+ * reloads lands on the new version, not the copy kept before it; see 6.
+ */
+let freshPagesUntil = 0;
 const FALLBACK_PAGE = "/offline.html";
 
 /*
@@ -97,10 +104,12 @@ self.addEventListener("fetch", (event) => {
 	const url = new URL(request.url);
 
 	if (request.mode === "navigate") {
-		const page =
-			OFFLINE_PAGES.has(url.pathname) && url.search === ""
-				? fromCacheRefreshing(event)
-				: fromNetwork(event);
+		const isStartPage = OFFLINE_PAGES.has(url.pathname) && url.search === "";
+		const page = !isStartPage
+			? fromNetwork(event)
+			: Date.now() < freshPagesUntil
+				? fromNetworkKeepingCopy(event)
+				: fromCacheRefreshing(event);
 		event.respondWith(page.catch(fallbackPage));
 		return;
 	}
@@ -337,16 +346,29 @@ self.addEventListener("notificationclick", (event) => {
 
 	event.waitUntil(
 		(async () => {
-			// A new version: every open window is loaded again, onto it.
+			/*
+			 * A new version: the app opened if it is not, and every window of it
+			 * loaded again, onto the new version. Opened or brought forward first,
+			 * as the browser only allows it just after the tap. A window this
+			 * worker does not control cannot be reloaded from here; it offers the
+			 * refresh itself; see `useNewVersionPrompt`.
+			 */
 			if (isRelease) {
-				await refreshStartPages();
-				const windows = await self.clients.matchAll({ type: "window" });
+				freshPagesUntil = Date.now() + 30_000;
+				const windows = (
+					await self.clients.matchAll({
+						type: "window",
+						includeUncontrolled: true,
+					})
+				).filter((client) => new URL(client.url).origin === self.location.origin);
 				if (windows.length === 0) {
 					await self.clients.openWindow(url);
 					return;
 				}
-				await Promise.all(windows.map((client) => client.navigate(client.url)));
 				await windows[0].focus();
+				await Promise.all(
+					windows.map((client) => client.navigate(client.url).catch(() => null)),
+				);
 				return;
 			}
 			if (link.origin !== self.location.origin) {

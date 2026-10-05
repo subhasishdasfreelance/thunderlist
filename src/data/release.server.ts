@@ -55,7 +55,7 @@ export async function announceRelease(): Promise<void> {
 		}
 		if (!isClaimed) return;
 
-		await sendToEveryone(
+		const devices = await sendToEveryone(
 			{
 				title: "Thunderlist has been updated",
 				body: "A new version is ready. Refresh to start using it.",
@@ -64,6 +64,7 @@ export async function announceRelease(): Promise<void> {
 			},
 			RELEASE_TTL,
 		);
+		console.log(`[thunderlist] release ${BUILD_ID} sent to ${devices} devices`);
 	} catch (error) {
 		// Asked again on the next request.
 		isAnnounced = false;

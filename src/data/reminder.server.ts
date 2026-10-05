@@ -156,7 +156,12 @@ async function pushTo(
 				await webpush.sendNotification(
 					{ endpoint: device.endpoint, keys: device.keys },
 					JSON.stringify(message),
-					{ TTL: ttl },
+					// A new version is delivered at once, even to a sleeping phone,
+					// which may otherwise hold an ordinary one back.
+					{
+						TTL: ttl,
+						...(message.kind === "release" ? { urgency: "high" } : {}),
+					},
 				);
 				return device;
 			} catch (error) {
