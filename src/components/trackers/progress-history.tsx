@@ -5,7 +5,7 @@ import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
@@ -69,17 +69,6 @@ export function ProgressHistory({
 	);
 	useFocusRow("data-entry-id", focusEntryId);
 	const team = useTeam();
-	// The reading under the pointer answers to the keys a task does: E edits
-	// it, D deletes it.
-	const [hovered, setHovered] = useState<ProgressEntry | null>(null);
-	const shortcuts = useMemo(() => {
-		const keys: RowShortcuts = {};
-		if (hovered === null) return keys;
-		if (canEdit) keys[TASK_SHORTCUTS.edit] = () => onEdit(hovered);
-		if (canDelete) keys[TASK_SHORTCUTS.delete] = () => onDelete(hovered);
-		return keys;
-	}, [hovered, canEdit, canDelete, onEdit, onDelete]);
-	useRowShortcuts(hovered !== null, shortcuts);
 
 	/** In a team, who logged it: their name, or their address until they have one. */
 	const loggedBy = (email: string | null | undefined) => {
@@ -104,99 +93,19 @@ export function ProgressHistory({
 				<Card padding={0}>
 					<VStack gap={0} paddingBlock={2}>
 						{paging.shown.map((entry, index) => (
-							// biome-ignore lint/a11y/noStaticElementInteractions: resting the pointer here only arms the keyboard shortcuts; every action is also in the menu.
-							<div
+							<EntryRow
 								key={entry.entryId}
-								className="thunderlist-row thunderlist-entry-row"
-								data-entry-id={entry.entryId}
-								data-focused={entry.entryId === focusEntryId}
-								data-picked={picked?.has(entry.entryId) === true}
-								onMouseEnter={() => setHovered(entry)}
-								onMouseLeave={() => setHovered(null)}
-							>
-								{index === 0 ? null : <Divider />}
-								<div className="flex items-center gap-2 py-1.5">
-									<VStack gap={0} className="min-w-0 flex-1">
-										<Text>{`${entry.value} ${unit}`}</Text>
-										<Text type="supporting">
-											{[
-												formatDate(entry.recordedAt),
-												loggedBy(entry.recordedBy),
-											]
-												.filter((part) => part !== null)
-												.join(" · ")}
-										</Text>
-										{/* On lines of its own, as it was written. */}
-										{entry.note === "" ? null : (
-											<Text type="supporting" className="thunderlist-multiline">
-												{entry.note}
-											</Text>
-										)}
-									</VStack>
-									<HStack gap={2} vAlign="center">
-										<Text type="supporting" color="secondary">
-											{entry.delta >= 0 ? `+${entry.delta}` : entry.delta}
-										</Text>
-										{/* No menu at all rather than one with nothing in it. */}
-										{canEdit || canDelete ? (
-											<DropdownMenu
-												hasChevron={false}
-												placement="below"
-												alignment="end"
-												button={{
-													label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
-													variant: "ghost",
-													size: "sm",
-													isIconOnly: true,
-													icon: <MoreHorizontal aria-hidden />,
-												}}
-												items={[
-													// Headed by its number; see `numberTitle`.
-													...(canEdit
-														? [
-																{
-																	type: "section" as const,
-																	title: numberTitle("entry", entry.number),
-																	items: [
-																		{
-																			label: "Edit entry",
-																			icon: Pencil,
-																			endContent: (
-																				<ShortcutKey
-																					label={TASK_SHORTCUTS.edit}
-																				/>
-																			),
-																			onClick: () => onEdit(entry),
-																		},
-																	],
-																},
-															]
-														: []),
-													// Apart from editing, when there is both.
-													...(canEdit && canDelete
-														? [{ type: "divider" as const }]
-														: []),
-													...(canDelete
-														? [
-																{
-																	label: "Delete entry",
-																	icon: <Trash2 aria-hidden />,
-																	endContent: (
-																		<ShortcutKey
-																			label={TASK_SHORTCUTS.delete}
-																		/>
-																	),
-																	variant: "destructive" as const,
-																	onClick: () => onDelete(entry),
-																},
-															]
-														: []),
-												]}
-											/>
-										) : null}
-									</HStack>
-								</div>
-							</div>
+								entry={entry}
+								unit={unit}
+								isFirst={index === 0}
+								isFocused={entry.entryId === focusEntryId}
+								isPicked={picked?.has(entry.entryId) === true}
+								loggedBy={loggedBy(entry.recordedBy)}
+								canEdit={canEdit}
+								canDelete={canDelete}
+								onEdit={onEdit}
+								onDelete={onDelete}
+							/>
 						))}
 						<ListPagination
 							page={paging.page}
@@ -207,5 +116,129 @@ export function ProgressHistory({
 				</Card>
 			)}
 		</VStack>
+	);
+}
+
+/**
+ * One reading. The one under the pointer answers to the keys a task does: E
+ * edits it, D deletes it — asked at the keypress, so a row a dialog has just
+ * closed over answers without the pointer having to move; see
+ * `useRowShortcuts`.
+ */
+function EntryRow({
+	entry,
+	unit,
+	isFirst,
+	isFocused,
+	isPicked,
+	loggedBy,
+	canEdit,
+	canDelete,
+	onEdit,
+	onDelete,
+}: {
+	entry: ProgressEntry;
+	unit: string;
+	isFirst: boolean;
+	isFocused: boolean;
+	isPicked: boolean;
+	/** Who logged it, in a team; see `ProgressHistory`. */
+	loggedBy: string | null;
+	canEdit: boolean;
+	canDelete: boolean;
+	onEdit: (entry: ProgressEntry) => void;
+	onDelete: (entry: ProgressEntry) => void;
+}) {
+	const rowRef = useRef<HTMLDivElement>(null);
+	const shortcuts = useMemo(() => {
+		const keys: RowShortcuts = {};
+		if (canEdit) keys[TASK_SHORTCUTS.edit] = () => onEdit(entry);
+		if (canDelete) keys[TASK_SHORTCUTS.delete] = () => onDelete(entry);
+		return keys;
+	}, [entry, canEdit, canDelete, onEdit, onDelete]);
+	useRowShortcuts(canEdit || canDelete, shortcuts, rowRef);
+
+	return (
+		<div
+			ref={rowRef}
+			className="thunderlist-row thunderlist-entry-row"
+			data-entry-id={entry.entryId}
+			data-focused={isFocused}
+			data-picked={isPicked}
+		>
+			{isFirst ? null : <Divider />}
+			<div className="flex items-center gap-2 py-1.5">
+				<VStack gap={0} className="min-w-0 flex-1">
+					<Text>{`${entry.value} ${unit}`}</Text>
+					<Text type="supporting">
+						{[formatDate(entry.recordedAt), loggedBy]
+							.filter((part) => part !== null)
+							.join(" · ")}
+					</Text>
+					{/* On lines of its own, as it was written. */}
+					{entry.note === "" ? null : (
+						<Text type="supporting" className="thunderlist-multiline">
+							{entry.note}
+						</Text>
+					)}
+				</VStack>
+				<HStack gap={2} vAlign="center">
+					<Text type="supporting" color="secondary">
+						{entry.delta >= 0 ? `+${entry.delta}` : entry.delta}
+					</Text>
+					{/* No menu at all rather than one with nothing in it. */}
+					{canEdit || canDelete ? (
+						<DropdownMenu
+							hasChevron={false}
+							placement="below"
+							alignment="end"
+							button={{
+								label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
+								variant: "ghost",
+								size: "sm",
+								isIconOnly: true,
+								icon: <MoreHorizontal aria-hidden />,
+							}}
+							items={[
+								// Headed by its number; see `numberTitle`.
+								...(canEdit
+									? [
+											{
+												type: "section" as const,
+												title: numberTitle("entry", entry.number),
+												items: [
+													{
+														label: "Edit entry",
+														icon: Pencil,
+														endContent: (
+															<ShortcutKey label={TASK_SHORTCUTS.edit} />
+														),
+														onClick: () => onEdit(entry),
+													},
+												],
+											},
+										]
+									: []),
+								// Apart from editing, when there is both.
+								...(canEdit && canDelete ? [{ type: "divider" as const }] : []),
+								...(canDelete
+									? [
+											{
+												label: "Delete entry",
+												icon: <Trash2 aria-hidden />,
+												endContent: (
+													<ShortcutKey label={TASK_SHORTCUTS.delete} />
+												),
+												variant: "destructive" as const,
+												onClick: () => onDelete(entry),
+											},
+										]
+									: []),
+							]}
+						/>
+					) : null}
+				</HStack>
+			</div>
+		</div>
 	);
 }
