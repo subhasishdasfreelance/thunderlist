@@ -3,7 +3,6 @@ import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import {
 	type Dispatch,
@@ -12,6 +11,7 @@ import {
 	useCallback,
 	useState,
 } from "react";
+import { TextInput } from "#/components/common/text-fields";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import type { Subtask } from "#/schemas/task";
 

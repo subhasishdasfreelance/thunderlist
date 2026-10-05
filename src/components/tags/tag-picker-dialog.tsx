@@ -4,11 +4,11 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { Check, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { isInlineTagName } from "#/lib/tags/inline-tags";
 import type { Tag } from "#/schemas/tag";
 

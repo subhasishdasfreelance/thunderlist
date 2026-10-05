@@ -7,7 +7,6 @@ import { List, ListItem } from "@astryxdesign/core/List";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	Check,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import {
 	addMemberFn,
 	deleteTeamFn,

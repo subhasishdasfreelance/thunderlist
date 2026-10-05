@@ -122,11 +122,16 @@ export function ProgressHistory({
 											{[
 												formatDate(entry.recordedAt),
 												loggedBy(entry.recordedBy),
-												entry.note === "" ? null : entry.note,
 											]
 												.filter((part) => part !== null)
 												.join(" · ")}
 										</Text>
+										{/* On lines of its own, as it was written. */}
+										{entry.note === "" ? null : (
+											<Text type="supporting" className="thunderlist-multiline">
+												{entry.note}
+											</Text>
+										)}
 									</VStack>
 									<HStack gap={2} vAlign="center">
 										<Text type="supporting" color="secondary">

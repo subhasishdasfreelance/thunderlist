@@ -3,10 +3,10 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { STAGE_COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { formatDate } from "#/lib/format-date";
 import {

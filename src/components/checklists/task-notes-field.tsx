@@ -6,9 +6,9 @@ import {
 } from "@astryxdesign/core/SegmentedControl";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextArea } from "@astryxdesign/core/TextArea";
 import { memo, useId } from "react";
 import { FadeImage } from "#/components/common/fade-image";
+import { TextArea } from "#/components/common/text-fields";
 
 export type NotesView = "write" | "preview";
 
@@ -78,20 +78,23 @@ export const TaskNotesField = memo(function TaskNotesField({
 			) : value.trim() === "" ? (
 				<Text type="supporting">No notes yet.</Text>
 			) : (
-				<Markdown
-					density="compact"
-					headingLevelStart={3}
-					// Images in notes load as they near the screen, and fade in.
-					components={MARKDOWN_COMPONENTS}
-					// A link opens beside the app, not in place of it: following one
-					// here would otherwise throw away whatever else was being edited.
-					onLinkClick={(href) => {
-						window.open(href, "_blank", "noopener,noreferrer");
-						return false;
-					}}
-				>
-					{value}
-				</Markdown>
+				// Each line kept as it was written; see `.thunderlist-notes`.
+				<div className="thunderlist-notes">
+					<Markdown
+						density="compact"
+						headingLevelStart={3}
+						// Images in notes load as they near the screen, and fade in.
+						components={MARKDOWN_COMPONENTS}
+						// A link opens beside the app, not in place of it: following one
+						// here would otherwise throw away whatever else was being edited.
+						onLinkClick={(href) => {
+							window.open(href, "_blank", "noopener,noreferrer");
+							return false;
+						}}
+					>
+						{value}
+					</Markdown>
+				</div>
 			)}
 		</VStack>
 	);

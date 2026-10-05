@@ -1,12 +1,11 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { TextArea } from "@astryxdesign/core/TextArea";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { useQuery } from "@tanstack/react-query";
 import { Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextArea, TextInput } from "#/components/common/text-fields";
 import { sendTeamMessageFn } from "#/functions/reminder.functions";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";

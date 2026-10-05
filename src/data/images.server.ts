@@ -53,7 +53,7 @@ const ORIGINAL_SUFFIX = "-original";
  * `ImageRef` — or why it could not be. Never thrown: UploadThing drops an error
  * thrown here, and the browser waits for an answer that never comes.
  */
-export type ImageUploaded = { id: string; url: string } | { error: string };
+type ImageUploaded = { id: string; url: string } | { error: string };
 
 const upload = createUploadthing();
 const utapi = new UTApi();

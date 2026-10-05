@@ -25,7 +25,7 @@ export const SECTIONS = [
 
 export type Section = (typeof SECTIONS)[number];
 
-export const SECTION_LABELS: Record<Section, string> = {
+const SECTION_LABELS: Record<Section, string> = {
 	today: "Today",
 	checklists: "Checklists",
 	priority: "Priority",

@@ -6,10 +6,10 @@ import { List, ListItem } from "@astryxdesign/core/List";
 import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { useSpace } from "#/lib/use-team";
 import { memberName, ROLE_LABELS, type TeamMember } from "#/schemas/team";
 

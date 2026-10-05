@@ -1,13 +1,13 @@
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { StageDot, stageColorStyle } from "#/components/common/stage-dot";
+import { TextInput } from "#/components/common/text-fields";
 import { countdownsQuery } from "#/queries/countdowns";
 import { plansQuery } from "#/queries/plans";
 import { groupsQuery } from "#/queries/space";

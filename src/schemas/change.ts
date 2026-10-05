@@ -66,7 +66,7 @@ const taskMoveSchema = v.object({
 });
 
 /** What can be picked out on its screen and deleted together; see `PickBar`. */
-export const PICKABLE_KINDS = [
+const PICKABLE_KINDS = [
 	"checklist",
 	"tracker",
 	"tag",
@@ -77,7 +77,7 @@ export const PICKABLE_KINDS = [
 export type PickableKind = (typeof PICKABLE_KINDS)[number];
 
 /** Of those, what has an access list, to be shared together. */
-export const SHAREABLE_KINDS = ["checklist", "tracker", "tag"] as const;
+const SHAREABLE_KINDS = ["checklist", "tracker", "tag"] as const;
 
 export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
 

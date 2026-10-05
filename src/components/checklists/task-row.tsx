@@ -399,7 +399,9 @@ export function TaskRow({
 						{title}
 						{task.caption ? (
 							<Text type="supporting">
-								<span data-task-caption>{task.caption}</span>
+								<span data-task-caption className="thunderlist-multiline">
+									{task.caption}
+								</span>
 							</Text>
 						) : null}
 						{!hasMeta ? null : (

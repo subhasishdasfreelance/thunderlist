@@ -5,7 +5,6 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, Plus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
@@ -15,6 +14,7 @@ import {
 	useItemDirectory,
 } from "#/components/common/item-picker-dialog";
 import { ScheduleFields } from "#/components/common/schedule-fields";
+import { TextInput } from "#/components/common/text-fields";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { todayDateOnly } from "#/schemas/common";
 import {

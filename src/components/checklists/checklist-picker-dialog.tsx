@@ -1,9 +1,9 @@
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { VStack } from "@astryxdesign/core/Stack";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import type { Checklist } from "#/schemas/checklist";
 
 /**

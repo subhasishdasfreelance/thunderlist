@@ -21,6 +21,7 @@ import {
 	sameTagName,
 	sameTrackerName,
 } from "#/lib/tags/inline-tags";
+import { useLatest, useTypedValue } from "#/lib/use-typed-value";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
@@ -141,8 +142,8 @@ function linkSuggestions(
 export function TagTextField({
 	label,
 	placeholder,
-	value,
-	onChange,
+	value: given,
+	onChange: report,
 	onSubmit,
 	tags,
 	trackers = [],
@@ -177,6 +178,12 @@ export function TagTextField({
 	const fieldRef = useRef<(HTMLTextAreaElement & HTMLInputElement) | null>(
 		null,
 	);
+	// What is typed draws here, and in the layer behind, at once; the form
+	// around hears of it a moment later. See `useTypedValue`.
+	const typing = useTypedValue(given, report);
+	const value = typing.draft;
+	const onChange = (next: string) => typing.type(next, undefined);
+	const submit = useLatest(onSubmit);
 	const [active, setActive] = useState(0);
 	/**
 	 * Where the caret is, tracked rather than read from the element: during
@@ -296,7 +303,9 @@ export function TagTextField({
 				return;
 			}
 
-			onSubmit();
+			// The form is brought up to date, and so is what it does with it.
+			typing.flush();
+			submit.current();
 		}
 	}
 
@@ -439,6 +448,7 @@ export function TagTextField({
 		onChange: handleChange,
 		onKeyDown: handleKeyDown,
 		onKeyUp: syncCaret,
+		onBlur: typing.flush,
 		onClick: syncCaret,
 		hasAutoFocus,
 		// Enter adds the task, so a phone's key says so rather than "new line".

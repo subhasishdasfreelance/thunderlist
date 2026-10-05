@@ -814,7 +814,9 @@ function TagDetailPage() {
 						{subtitle === "" ? null : (
 							// Formatted in the viewer's locale, so server and client can differ.
 							<span suppressHydrationWarning>
-								<Text color="secondary">{subtitle}</Text>
+								<Text color="secondary" className="thunderlist-multiline">
+									{subtitle}
+								</Text>
 							</span>
 						)}
 					</VStack>

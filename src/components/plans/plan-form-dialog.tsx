@@ -6,12 +6,11 @@ import {
 } from "@astryxdesign/core/SegmentedControl";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextArea } from "@astryxdesign/core/TextArea";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, FileUp, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { FadeImage } from "#/components/common/fade-image";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextArea, TextInput } from "#/components/common/text-fields";
 import { type Plan, planTitleFrom } from "#/schemas/plan";
 
 export type PlanValues = { title: string; body: string };

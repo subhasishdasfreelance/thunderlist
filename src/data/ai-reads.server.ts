@@ -34,7 +34,7 @@ import { getTrackerEntries } from "./tracker.server";
 import { assertLevel } from "./visibility.server";
 
 /** `T-42`, or nothing for one made a moment ago and not yet numbered. */
-export function numbered(
+function numbered(
 	kind: NumberedKind,
 	number: number | undefined,
 ): string | undefined {

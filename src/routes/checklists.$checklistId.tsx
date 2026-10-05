@@ -626,7 +626,9 @@ function ChecklistDetailPage() {
 							<Heading level={1}>{detail.title}</Heading>
 						</HStack>
 						{detail.description === "" ? null : (
-							<Text color="secondary">{detail.description}</Text>
+							<Text color="secondary" className="thunderlist-multiline">
+								{detail.description}
+							</Text>
 						)}
 					</VStack>
 				</HStack>

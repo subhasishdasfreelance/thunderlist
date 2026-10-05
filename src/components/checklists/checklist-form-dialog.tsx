@@ -1,8 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { TextArea } from "@astryxdesign/core/TextArea";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
 import {
 	type FormEvent,
@@ -15,6 +13,7 @@ import {
 import { FormDialog } from "#/components/common/form-dialog";
 import { ImagesField } from "#/components/common/images-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
+import { TextArea, TextInput } from "#/components/common/text-fields";
 import {
 	draftTagIds,
 	EMPTY_TAGS_DRAFT,

@@ -160,7 +160,7 @@ function fieldsOf(items: ReadonlyArray<EditableItem>): Fields {
  * and is left that way unless it is changed: only what is touched is saved,
  * onto all of them, as one change; see `updateItems`.
  */
-export function ItemsEditDialog({
+function ItemsEditDialog({
 	isOpen,
 	onOpenChange,
 	items,

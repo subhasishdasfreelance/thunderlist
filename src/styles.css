@@ -1449,10 +1449,20 @@ body {
 
 	/*
 	 * Text pasted in keeps its line breaks and spacing, rather than Markdown
-	 * folding each line into the one before it.
+	 * folding each line into the one before it. A task's notes too.
 	 */
-	.thunderlist-plan-body [role="paragraph"] {
+	.thunderlist-plan-body [role="paragraph"],
+	.thunderlist-notes [role="paragraph"] {
 		white-space: pre-wrap;
+	}
+
+	/*
+	 * Plain text written in a text area — a reading's note, a caption, a
+	 * description — shown on the lines it was written on.
+	 */
+	.thunderlist-multiline {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	/*

@@ -1,11 +1,10 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { TextArea } from "@astryxdesign/core/TextArea";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Send, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as v from "valibot";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextArea, TextInput } from "#/components/common/text-fields";
 import { sentNote } from "#/components/teams/message-dialog";
 import { errorMessage } from "#/lib/errors";
 import { useToast } from "#/lib/toasts";

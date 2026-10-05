@@ -438,7 +438,9 @@ function TrackerDetailPage() {
 					)}
 
 					{detail.description === "" ? null : (
-						<Text color="secondary">{detail.description}</Text>
+						<Text color="secondary" className="thunderlist-multiline">
+							{detail.description}
+						</Text>
 					)}
 				</VStack>
 			</Card>

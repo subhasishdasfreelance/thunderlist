@@ -2,11 +2,10 @@ import { Button } from "@astryxdesign/core/Button";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextArea } from "@astryxdesign/core/TextArea";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextArea, TextInput } from "#/components/common/text-fields";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import {
 	type OutlineChecklist,

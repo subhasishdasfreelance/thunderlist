@@ -4,7 +4,6 @@ import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Icon } from "@astryxdesign/core/Icon";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Check,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { searchIndexQuery } from "#/queries/system";
 import { tagsQuery } from "#/queries/tags";
 import type { ItemKind, ItemRef } from "#/schemas/common";

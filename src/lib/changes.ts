@@ -1066,7 +1066,7 @@ export type TagValues = {
 	images?: Array<ImageRef>;
 };
 
-export function createTag(apply: ApplyChange, values: TagValues): string {
+function createTag(apply: ApplyChange, values: TagValues): string {
 	const tagId = createId(ID_PREFIX.tag);
 	apply({ kind: "tag.create", tagId, ...values });
 	return tagId;

@@ -3,10 +3,10 @@ import { Button } from "@astryxdesign/core/Button";
 import { CodeBlock } from "@astryxdesign/core/CodeBlock";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Bot, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { createAiTokenSecret, createId, ID_PREFIX } from "#/lib/ids";
 import type { AiToken, CreateAiTokenInput } from "#/schemas/ai-token";
 

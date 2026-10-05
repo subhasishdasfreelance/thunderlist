@@ -1,9 +1,9 @@
 import { Button } from "@astryxdesign/core/Button";
 import { HStack } from "@astryxdesign/core/Stack";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TextInput } from "#/components/common/text-fields";
 import { createTeamFn } from "#/functions/team.functions";
 import { errorMessage } from "#/lib/errors";
 import { playSound } from "#/lib/sounds";
