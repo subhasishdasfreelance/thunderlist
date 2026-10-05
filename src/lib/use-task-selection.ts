@@ -40,11 +40,12 @@ function firstInView(rows: ReadonlyArray<HTMLElement>): number {
  * stretch the pick from where it started. Then a key in the bar moves them
  * all on; see `SelectionBar`.
  *
- * The pick outlives the text selection it came from: pressing a button in the
- * bar can clear the selection, and the rows must still be picked when the
- * press lands. It ends with a press on a row, a selection made somewhere else,
- * Escape, or `clear` — which lets go of the text selection over the rows too,
- * so nothing is left highlighted as if still picked.
+ * The pick outlives the text selection it came from, and each new drag adds
+ * to it: select a few rows, then drag over more further down, and all of them
+ * are picked. Clicking a row or selecting text elsewhere leaves it be. It ends
+ * only with `clear` — the bar's close button, or Escape — which lets go of the
+ * text selection over the rows too, so nothing is left highlighted as if
+ * still picked.
  */
 export function useTaskSelection(kind: PickedRow = "task"): {
 	picked: ReadonlySet<string>;
@@ -52,26 +53,31 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 	pickAll: () => void;
 } {
 	const [picked, setPicked] = useState(NONE);
+	// What was picked before the current drag began; the drag adds to it.
+	const pickedNow = useRef(picked);
+	pickedNow.current = picked;
+	const before = useRef(NONE);
 	// Where a keyboard pick started, and the row it has reached.
 	const anchor = useRef<string | null>(null);
 	const cursor = useRef<string | null>(null);
 
-	/** These rows picked, the arrow keys carrying on from them. */
+	/** These rows picked as well, the arrow keys carrying on from them. */
 	const pickRows = useCallback((ids: Array<string>) => {
-		anchor.current = ids[0] ?? null;
+		if (ids.length === 0) return;
+		anchor.current = ids[0];
 		cursor.current = ids.at(-1) ?? null;
+		const next = new Set([...before.current, ...ids]);
 		setPicked((current) =>
-			ids.length === 0
-				? NONE
-				: current.size === ids.length && ids.every((id) => current.has(id))
-					? current
-					: new Set(ids),
+			current.size === next.size && [...next].every((id) => current.has(id))
+				? current
+				: next,
 		);
 	}, []);
 
 	const clear = useCallback(() => {
 		anchor.current = null;
 		cursor.current = null;
+		before.current = NONE;
 		setPicked(NONE);
 
 		const selection = document.getSelection();
@@ -108,11 +114,9 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			);
 		}
 
-		// A press on a row starts a new selection, or none at all.
-		function onPointerDown(event: PointerEvent) {
-			if (event.target instanceof Element && event.target.closest(ROW)) {
-				clear();
-			}
+		// A press may start a new drag, which adds to what is already picked.
+		function onPointerDown() {
+			before.current = pickedNow.current;
 		}
 
 		function walk(event: KeyboardEvent) {

@@ -5,7 +5,7 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Thumbnail } from "@astryxdesign/core/Thumbnail";
-import { ImagePlus, Star } from "lucide-react";
+import { Image, ImagePlus } from "lucide-react";
 import { useRef, useState } from "react";
 import type { ImageDraft, Upload } from "#/lib/uploads";
 
@@ -31,8 +31,8 @@ export function ImagesField({ draft }: { draft: ImageDraft }) {
 						Images
 					</Text>
 					<Text type="supporting">
-						Star one to make it the cover. Made smaller as they upload, without
-						losing quality.
+						Pick one as the cover. Made smaller as they upload, without losing
+						quality.
 					</Text>
 				</VStack>
 				<Button
@@ -75,13 +75,8 @@ export function ImagesField({ draft }: { draft: ImageDraft }) {
 										: `Make image ${index + 1} the cover`
 								}
 								tooltip={image.isCover ? "Cover" : "Make cover"}
-								icon={
-									<Star
-										aria-hidden
-										fill={image.isCover ? "currentColor" : "none"}
-									/>
-								}
-								variant="ghost"
+								icon={<Image aria-hidden />}
+								variant={image.isCover ? "secondary" : "ghost"}
 								size="sm"
 								onClick={() => draft.toggleCover(image.id)}
 							/>
