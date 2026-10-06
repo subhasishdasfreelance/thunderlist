@@ -8,6 +8,7 @@ import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextArea } from "#/components/common/text-fields";
+import { TimeField } from "#/components/common/time-field";
 import { formatDate } from "#/lib/format-date";
 import { useTaskTypes } from "#/lib/use-task-types";
 import type { Task, TaskPatch } from "#/schemas/task";
@@ -15,7 +16,7 @@ import type { Task, TaskPatch } from "#/schemas/task";
 /** What can be set on many tasks at once; see `TasksEditDialog`. */
 export type TasksEdit = Pick<
 	TaskPatch,
-	"typeId" | "caption" | "deadline" | "urgent" | "important"
+	"typeId" | "caption" | "deadline" | "deadlineTime" | "urgent" | "important"
 >;
 
 /** The type field's value for no type, and for leaving each its own. */
@@ -35,6 +36,8 @@ type Fields = {
 	typeId: string;
 	caption: string;
 	deadline: ISODateString | undefined;
+	/** `HH:MM`, or `undefined` for the day as a whole. */
+	deadlineTime: string | undefined;
 	urgent: boolean | "indeterminate";
 	important: boolean | "indeterminate";
 };
@@ -50,6 +53,8 @@ function fieldsOf(tasks: ReadonlyArray<Task>): Fields {
 		caption: shared(tasks, (task) => task.caption ?? "")?.value ?? "",
 		deadline: (shared(tasks, (task) => task.deadline ?? null)?.value ??
 			undefined) as ISODateString | undefined,
+		deadlineTime:
+			shared(tasks, (task) => task.deadlineTime ?? null)?.value ?? undefined,
 		urgent: urgent?.value ?? "indeterminate",
 		important: important?.value ?? "indeterminate",
 	};
@@ -97,6 +102,8 @@ export function TasksEditDialog({
 					typeId: shared(tasks, (task) => task.typeId ?? null) === null,
 					caption: shared(tasks, (task) => task.caption ?? "") === null,
 					deadline: shared(tasks, (task) => task.deadline ?? null) === null,
+					deadlineTime:
+						shared(tasks, (task) => task.deadlineTime ?? null) === null,
 				};
 
 	function change<K extends keyof Fields>(key: K, value: Fields[K]) {
@@ -118,6 +125,9 @@ export function TasksEditDialog({
 			edit.caption = fields.caption.replace(/\s*\n\s*/g, " ").trim();
 		}
 		if (touched.has("deadline")) edit.deadline = fields.deadline ?? null;
+		if (touched.has("deadlineTime")) {
+			edit.deadlineTime = fields.deadlineTime ?? null;
+		}
 		if (touched.has("urgent") && fields.urgent !== "indeterminate") {
 			edit.urgent = fields.urgent;
 		}
@@ -207,8 +217,28 @@ export function TasksEditDialog({
 						}
 						format={formatDate}
 						value={fields.deadline}
-						onChange={(value) => change("deadline", value)}
+						onChange={(value) => {
+							change("deadline", value);
+							// Clearing the day clears the hour with it.
+							if (value === undefined) change("deadlineTime", undefined);
+						}}
 					/>
+
+					{/* Only once there is a day for it to be on. */}
+					{fields.deadline === undefined ? null : (
+						<TimeField
+							label="Due at"
+							isOptional
+							hasClear
+							description={
+								differs?.deadlineTime
+									? "Each has its own. A time picked here goes on them all."
+									: "Leave empty and they are due that whole day."
+							}
+							value={fields.deadlineTime}
+							onChange={(value) => change("deadlineTime", value)}
+						/>
+					)}
 
 					<HStack gap={4}>
 						<CheckboxInput

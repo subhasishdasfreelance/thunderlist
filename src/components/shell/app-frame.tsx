@@ -21,6 +21,7 @@ import { useWarmPages } from "#/lib/use-warm-pages";
 import { useWebMcp } from "#/lib/use-webmcp";
 import { pageOf } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
+import { AppFooter } from "./app-footer";
 import { BackdropDialog } from "./backdrop-dialog";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
@@ -268,17 +269,25 @@ export function AppFrame({
 					}
 				>
 					{/*
-					 * Bottom padding clears the mobile nav bar. The key is the path
-					 * that is on screen, so the content is a new element on every
-					 * screen and plays its arrival once it has actually arrived — and
-					 * stays put when only the search params change.
+					 * At least a window tall, less the top bar, so the footer sits at
+					 * the bottom of a short page rather than halfway up it. Bottom
+					 * padding clears the mobile nav bar.
 					 */}
-					<div
-						key={renderedPathname}
-						className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4 pb-28 min-[769px]:pb-10"
-					>
-						<SetupNotice />
-						{children}
+					<div className="thunderlist-page flex flex-col pb-28 min-[769px]:pb-6">
+						{/*
+						 * The key is the path that is on screen, so the content is a new
+						 * element on every screen and plays its arrival once it has
+						 * actually arrived — and stays put when only the search params
+						 * change.
+						 */}
+						<div
+							key={renderedPathname}
+							className="thunderlist-screen thunderlist-container flex flex-col gap-4 pt-4"
+						>
+							<SetupNotice />
+							{children}
+						</div>
+						<AppFooter />
 					</div>
 				</AppShell>
 

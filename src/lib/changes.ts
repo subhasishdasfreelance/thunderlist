@@ -779,7 +779,7 @@ export function updateAllAlike(
 	>,
 	edit: Pick<
 		TaskPatch,
-		"typeId" | "caption" | "deadline" | "urgent" | "important"
+		"typeId" | "caption" | "deadline" | "deadlineTime" | "urgent" | "important"
 	>,
 ): void {
 	applyBatched(apply, (collect) => {
@@ -800,6 +800,16 @@ export function updateAllAlike(
 				if (edit.deadline === null && task.deadlineTime) {
 					own.deadlineTime = null;
 				}
+			}
+			// A time only goes on a task with a day for it to be on.
+			if (
+				edit.deadlineTime !== undefined &&
+				(edit.deadline === undefined
+					? (task.deadline ?? null)
+					: edit.deadline) !== null &&
+				edit.deadlineTime !== (task.deadlineTime ?? null)
+			) {
+				own.deadlineTime = edit.deadlineTime;
 			}
 			if (edit.urgent !== undefined && edit.urgent !== task.urgent) {
 				own.urgent = edit.urgent;

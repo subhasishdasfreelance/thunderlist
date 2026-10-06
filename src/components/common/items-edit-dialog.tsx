@@ -5,7 +5,6 @@ import { DateInput } from "@astryxdesign/core/DateInput";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
-import { type ISOTimeString, TimeInput } from "@astryxdesign/core/TimeInput";
 import { Token } from "@astryxdesign/core/Token";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Pencil, X } from "lucide-react";
@@ -18,6 +17,7 @@ import {
 } from "react";
 import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
+import { TimeField } from "#/components/common/time-field";
 import {
 	draftTagIds,
 	EMPTY_TAGS_DRAFT,
@@ -356,16 +356,13 @@ function ItemsEditDialog({
 
 					{fields.dailyWindow !== null ||
 					fields.deadline === undefined ? null : (
-						<TimeInput
-							nativePicker="never"
+						<TimeField
 							label="Due at"
 							isOptional
 							hasClear
 							description="Leave empty and they are due at the start of that day."
-							value={fields.deadlineTime as ISOTimeString | undefined}
-							onChange={(time) =>
-								change("schedule", { deadlineTime: time?.slice(0, 5) })
-							}
+							value={fields.deadlineTime}
+							onChange={(deadlineTime) => change("schedule", { deadlineTime })}
 						/>
 					)}
 
@@ -383,11 +380,10 @@ function ItemsEditDialog({
 							/>
 							{fields.dailyWindow === null ? null : (
 								<FieldRow>
-									<TimeInput
-										nativePicker="never"
+									<TimeField
 										label="From"
 										isRequired
-										value={fields.dailyWindow.from as ISOTimeString}
+										value={fields.dailyWindow.from}
 										onChange={(from) => {
 											if (from && fields.dailyWindow !== null) {
 												change("schedule", {
@@ -396,11 +392,10 @@ function ItemsEditDialog({
 											}
 										}}
 									/>
-									<TimeInput
-										nativePicker="never"
+									<TimeField
 										label="To"
 										isRequired
-										value={fields.dailyWindow.to as ISOTimeString}
+										value={fields.dailyWindow.to}
 										onChange={(to) => {
 											if (to && fields.dailyWindow !== null) {
 												change("schedule", {

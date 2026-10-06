@@ -3,13 +3,13 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { type ISOTimeString, TimeInput } from "@astryxdesign/core/TimeInput";
 import { useForm } from "@tanstack/react-form";
 import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ImagesField } from "#/components/common/images-field";
 import { TextArea } from "#/components/common/text-fields";
+import { TimeField } from "#/components/common/time-field";
 import { DependsField } from "#/components/tasks/depends-field";
 import { SubtasksField } from "#/components/tasks/subtasks-field";
 import { formatDate } from "#/lib/format-date";
@@ -270,14 +270,13 @@ export function TaskRenameDialog({
 						deadline === undefined ? null : (
 							<form.Field name="deadlineTime">
 								{(field) => (
-									<TimeInput
-										nativePicker="never"
+									<TimeField
 										label="Due at"
 										isOptional
 										hasClear
 										description="Leave empty and it is due that whole day."
-										value={field.state.value as ISOTimeString | undefined}
-										onChange={(time) => field.handleChange(time?.slice(0, 5))}
+										value={field.state.value}
+										onChange={field.handleChange}
 									/>
 								)}
 							</form.Field>

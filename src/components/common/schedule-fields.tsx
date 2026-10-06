@@ -2,9 +2,9 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { DateInput } from "@astryxdesign/core/DateInput";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Switch } from "@astryxdesign/core/Switch";
-import { type ISOTimeString, TimeInput } from "@astryxdesign/core/TimeInput";
 import { memo } from "react";
 import { FieldRow } from "#/components/common/field-row";
+import { TimeField } from "#/components/common/time-field";
 import { formatDate } from "#/lib/format-date";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
 
@@ -23,9 +23,8 @@ import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
  * combined field never did, and the same shape everywhere means the deadline is
  * filled in the way the daily hours below it already were.
  *
- * Times are typed into Astryx's own field on every screen (`nativePicker`
- * "never"), which always reads "2:30 PM": a phone's own picker shows its
- * system's clock, often 24-hour, for as long as it keeps focus.
+ * Times are picked the same way on every screen, from a list under the field
+ * or typed into it; see `TimeField`.
  *
  * The time only appears once there is a day for it to be on, since an hour with
  * no date is not an answer to anything, and clearing the day takes it with it.
@@ -109,14 +108,13 @@ export const ScheduleFields = memo(function ScheduleFields({
 			</FieldRow>
 
 			{dailyWindow !== null || deadline === undefined ? null : (
-				<TimeInput
-					nativePicker="never"
+				<TimeField
 					label="Due at"
 					isOptional
 					hasClear
 					description="Leave empty and it is due at the start of that day."
-					value={deadlineTime as ISOTimeString | undefined}
-					onChange={(time) => onDeadlineTimeChange(time?.slice(0, 5))}
+					value={deadlineTime}
+					onChange={onDeadlineTimeChange}
 				/>
 			)}
 
@@ -132,20 +130,18 @@ export const ScheduleFields = memo(function ScheduleFields({
 					/>
 					{dailyWindow === null ? null : (
 						<FieldRow>
-							<TimeInput
-								nativePicker="never"
+							<TimeField
 								label="From"
 								isRequired
-								value={dailyWindow.from as ISOTimeString}
+								value={dailyWindow.from}
 								onChange={(from) => {
 									if (from) onDailyWindowChange({ ...dailyWindow, from });
 								}}
 							/>
-							<TimeInput
-								nativePicker="never"
+							<TimeField
 								label="To"
 								isRequired
-								value={dailyWindow.to as ISOTimeString}
+								value={dailyWindow.to}
 								onChange={(to) => {
 									if (to) onDailyWindowChange({ ...dailyWindow, to });
 								}}
