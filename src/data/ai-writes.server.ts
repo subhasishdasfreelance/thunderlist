@@ -1051,6 +1051,7 @@ export const WRITE_TOOLS: AiHandlers<
 					countdownId,
 					title: input.title,
 					date: input.date,
+					time: input.time ?? null,
 					color: input.color ?? randomColor(),
 					format: input.format ?? "seconds",
 					access: input.access === undefined ? ownAlone(context) : input.access,

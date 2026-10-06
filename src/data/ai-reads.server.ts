@@ -474,6 +474,7 @@ export const READ_TOOLS: AiHandlers<
 				number: numbered("countdown", countdown.number),
 				title: countdown.title,
 				date: countdown.date,
+				time: countdown.time ?? null,
 				daysLeft: daysUntil(countdown.date, today),
 				color: countdown.color,
 				format: countdown.format ?? "seconds",

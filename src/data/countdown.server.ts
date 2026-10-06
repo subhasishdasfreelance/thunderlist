@@ -33,6 +33,7 @@ export async function createCountdown(
 		countdownId: string;
 		title: string;
 		date: string;
+		time: string | null;
 		color: TagColor;
 		format: CountdownFormat;
 		access: ReadonlyArray<AccessEntry> | null;
@@ -53,6 +54,7 @@ export async function createCountdown(
 		number: await nextNumber(current, userId, "countdown"),
 		title: input.title,
 		date: input.date,
+		time: input.time,
 		color: input.color,
 		format: input.format,
 		access: input.access === null ? null : [...input.access],
@@ -70,6 +72,7 @@ export async function updateCountdown(
 	patch: {
 		title?: string;
 		date?: string;
+		time?: string | null;
 		color?: TagColor;
 		format?: CountdownFormat;
 		access?: Array<AccessEntry> | null;

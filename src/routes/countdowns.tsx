@@ -15,7 +15,7 @@ import { stageColorStyle } from "#/components/common/stage-dot";
 import { ErrorNotice } from "#/components/common/states";
 import { CountdownFormDialog } from "#/components/countdowns/countdown-form-dialog";
 import { useApplyChange } from "#/lib/changes";
-import { formatDate } from "#/lib/format-date";
+import { formatDate, formatDeadline } from "#/lib/format-date";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { useFocusRow } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
@@ -58,7 +58,21 @@ const UNIT_NAMES: Record<CountdownUnit, [one: string, many: string]> = {
 const unitName = (part: { unit: CountdownUnit; value: number }) =>
 	UNIT_NAMES[part.unit][part.value === 1 ? 0 : 1];
 
-/** The clock's units, which read as a clock: 04:12:09. */
+/** A unit under its number in a segment, named short so four fit a row. */
+const SEGMENT_LABELS: Record<CountdownUnit, [one: string, many: string]> = {
+	years: ["yr", "yrs"],
+	months: ["mo", "mos"],
+	weeks: ["wk", "wks"],
+	days: ["day", "days"],
+	hours: ["hr", "hrs"],
+	minutes: ["min", "min"],
+	seconds: ["sec", "sec"],
+};
+
+const segmentLabel = (part: { unit: CountdownUnit; value: number }) =>
+	SEGMENT_LABELS[part.unit][part.value === 1 ? 0 : 1];
+
+/** The clock's units, two digits each, as on a clock: 05 hrs 09 min. */
 const CLOCK_UNITS = new Set<CountdownUnit>(["hours", "minutes", "seconds"]);
 
 /**
@@ -120,54 +134,60 @@ function CountdownTile({
 	const parts =
 		now === null
 			? []
-			: countdownParts(countdown.date, now, countdown.format ?? "seconds");
-	const ahead = days !== null && days > 0 ? "to go" : "ago";
-	const calendar = parts.filter((part) => !CLOCK_UNITS.has(part.unit));
-	const clock = parts
-		.filter((part) => CLOCK_UNITS.has(part.unit))
-		.map((part) => String(part.value).padStart(2, "0"))
-		.join(":");
+			: countdownParts(
+					countdown.date,
+					now,
+					countdown.format ?? "seconds",
+					countdown.time,
+				);
+	// On the day itself, only a time still to come is counted; see `countdownParts`.
+	const ahead =
+		days !== null && (days > 0 || (days === 0 && parts.length > 0))
+			? "to go"
+			: "ago";
 
 	const content = (
 		<>
 			{days === null || parts.length <= 1 ? (
 				<>
 					<span className="thunderlist-countdown-number">
-						{days === null ? "–" : days === 0 ? "Today" : parts[0].value}
+						{days === null
+							? "–"
+							: parts.length === 0
+								? "Today"
+								: parts[0].value}
 					</span>
 					<span className="thunderlist-countdown-unit">
 						{days === null
 							? ""
-							: days === 0
+							: parts.length === 0
 								? "It is the day"
 								: `${unitName(parts[0])} ${ahead}`}
 					</span>
 				</>
 			) : (
 				<>
-					{calendar.length === 0 ? null : (
-						<span className="thunderlist-countdown-parts">
-							{calendar.map((part) => (
-								<span key={part.unit} className="thunderlist-countdown-part">
-									<span className="thunderlist-countdown-number">
-										{part.value}
-									</span>
-									<span className="thunderlist-countdown-part-unit">
-										{unitName(part)}
-									</span>
+					{/* One row, each number over its unit: 1 day 05 hrs 49 min 30 sec. */}
+					<span className="thunderlist-countdown-parts">
+						{parts.map((part) => (
+							<span key={part.unit} className="thunderlist-countdown-part">
+								<span className="thunderlist-countdown-number">
+									{CLOCK_UNITS.has(part.unit)
+										? String(part.value).padStart(2, "0")
+										: part.value}
 								</span>
-							))}
-						</span>
-					)}
-					{clock === "" ? null : (
-						<span className="thunderlist-countdown-clock">{clock}</span>
-					)}
+								<span className="thunderlist-countdown-part-unit">
+									{segmentLabel(part)}
+								</span>
+							</span>
+						))}
+					</span>
 					<span className="thunderlist-countdown-unit">{ahead}</span>
 				</>
 			)}
 			<span className="thunderlist-countdown-title">{countdown.title}</span>
 			<span className="thunderlist-countdown-date">
-				{formatDate(countdown.date)}
+				{formatDeadline(countdown.date, countdown.time)}
 			</span>
 			{since === null ? null : (
 				<span className="thunderlist-countdown-date">{since}</span>

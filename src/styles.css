@@ -1314,38 +1314,43 @@ body {
 	}
 
 	/*
-	 * Years to days, read as words: "1 year 2 months 3 days", each number
-	 * followed by its unit. The hours to seconds follow as a clock. See
-	 * `countdownParts`.
+	 * The time left as segments, each number over its unit in a box tinted
+	 * with the countdown's colour — "1 day · 05 hrs · 49 min · 30 sec" — four
+	 * to a row, so longer spans wrap in step. See `countdownParts`.
 	 */
 	.thunderlist-countdown-parts {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem 0.625rem;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.375rem;
+		align-self: stretch;
+		margin-bottom: 0.375rem;
 	}
 
 	.thunderlist-countdown-part {
 		display: flex;
-		align-items: baseline;
+		flex-direction: column;
+		align-items: center;
 		gap: 0.25rem;
+		padding: 0.5rem 0.125rem 0.375rem;
+		border-radius: var(--radius-element, 0.5rem);
+		background: color-mix(
+			in srgb,
+			var(--thunderlist-stage-color) 10%,
+			var(--color-background-surface)
+		);
 	}
 
 	.thunderlist-countdown-parts .thunderlist-countdown-number {
-		font-size: 1.75rem;
+		font-size: 1.5rem;
+		letter-spacing: -0.02em;
 	}
 
 	.thunderlist-countdown-part-unit {
-		font-size: var(--font-size-md, 0.9375rem);
+		font-size: 0.6875rem;
 		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
 		color: var(--color-text-secondary);
-	}
-
-	.thunderlist-countdown-clock {
-		font-size: 1.25rem;
-		font-weight: 700;
-		line-height: 1.2;
-		font-variant-numeric: tabular-nums;
-		color: var(--thunderlist-stage-color);
 	}
 
 	.thunderlist-countdown-unit {

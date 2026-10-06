@@ -5,8 +5,10 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Check, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextInput } from "#/components/common/text-fields";
+import { TimeField } from "#/components/common/time-field";
 import { STAGE_COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { formatDate } from "#/lib/format-date";
@@ -22,6 +24,8 @@ import { pickableColor, type TagColor } from "#/schemas/tag";
 export type CountdownValues = {
 	title: string;
 	date: string;
+	/** `HH:MM`, or `null` for the start of the day. */
+	time: string | null;
 	color: TagColor;
 	format: CountdownFormat;
 	/** Who may do what with it, or `null` for the whole team. */
@@ -34,8 +38,9 @@ const FORMAT_OPTIONS = COUNTDOWN_FORMATS.map((format) => ({
 }));
 
 /**
- * Make or edit a countdown: what it is, the day, its colour and how the time
- * left is shown. Editing one, it can be deleted from here too.
+ * Make or edit a countdown: what it is, the day and time, its colour and how
+ * the time left is shown. The day and its time are two fields, as everywhere;
+ * see `ScheduleFields`. Editing one, it can be deleted from here too.
  */
 export function CountdownFormDialog({
 	isOpen,
@@ -53,6 +58,7 @@ export function CountdownFormDialog({
 }) {
 	const [title, setTitle] = useState("");
 	const [date, setDate] = useState<ISODateString | undefined>(undefined);
+	const [time, setTime] = useState<string | undefined>(undefined);
 	const [color, setColor] = useState<TagColor>("blue");
 	const [format, setFormat] = useState<CountdownFormat>("seconds");
 	// A new one starts with its author alone on it; see `AccessField`.
@@ -63,6 +69,7 @@ export function CountdownFormDialog({
 		if (!isOpen) return;
 		setTitle(countdown?.title ?? "");
 		setDate((countdown?.date as ISODateString | undefined) ?? undefined);
+		setTime(countdown?.time ?? undefined);
 		setColor(countdown?.color ?? "blue");
 		setFormat(countdown?.format ?? "seconds");
 		setAccess(countdown === undefined ? ownAlone : (countdown.access ?? null));
@@ -73,7 +80,14 @@ export function CountdownFormDialog({
 
 	function save() {
 		if (!isValid || date === undefined) return;
-		onSubmit({ title: trimmed, date, color, format, access });
+		onSubmit({
+			title: trimmed,
+			date,
+			time: time ?? null,
+			color,
+			format,
+			access,
+		});
 	}
 
 	return (
@@ -123,13 +137,23 @@ export function CountdownFormDialog({
 					onEnter={save}
 					placeholder="Product launch"
 				/>
-				<DateInput
-					label="Day"
-					isRequired
-					format={formatDate}
-					value={date}
-					onChange={setDate}
-				/>
+				<FieldRow>
+					<DateInput
+						label="Day"
+						isRequired
+						format={formatDate}
+						value={date}
+						onChange={setDate}
+					/>
+					<TimeField
+						label="Time"
+						isOptional
+						hasClear
+						description="Leave empty to count to the start of the day."
+						value={time}
+						onChange={setTime}
+					/>
+				</FieldRow>
 				<Selector
 					label="Colour"
 					options={STAGE_COLOR_OPTIONS}

@@ -1,6 +1,11 @@
 import * as v from "valibot";
 import { type AccessEntry, accessSchema } from "./access";
-import { dateOnlySchema, idSchema, titleSchema } from "./common";
+import {
+	dateOnlySchema,
+	idSchema,
+	timeOfDaySchema,
+	titleSchema,
+} from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
 
 /**
@@ -38,6 +43,8 @@ export type Countdown = {
 	title: string;
 	/** `YYYY-MM-DD`: the day it counts down to. */
 	date: string;
+	/** `HH:MM` on that day it counts down to; absent or `null` for its start. */
+	time?: string | null;
 	color: TagColor;
 	/** Absent on one made before there was a choice: `seconds`. */
 	format?: CountdownFormat;
@@ -56,6 +63,7 @@ export const createCountdownInputSchema = v.object({
 	countdownId: idSchema,
 	title: titleSchema,
 	date: dateOnlySchema,
+	time: v.optional(v.nullable(timeOfDaySchema), null),
 	color: v.picklist(TAG_COLORS),
 	format: v.picklist(COUNTDOWN_FORMATS),
 	access: v.optional(accessSchema, null),
@@ -67,6 +75,7 @@ export const updateCountdownInputSchema = v.object({
 		v.object({
 			title: v.optional(titleSchema),
 			date: v.optional(dateOnlySchema),
+			time: v.optional(v.nullable(timeOfDaySchema)),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
 			access: v.optional(accessSchema),
@@ -91,16 +100,18 @@ export function daysUntil(date: string, today: string): number {
 }
 
 /** Soonest first; the ones already past follow, the most recent first. */
-export function orderCountdowns<T extends Pick<Countdown, "date">>(
+export function orderCountdowns<T extends Pick<Countdown, "date" | "time">>(
 	countdowns: ReadonlyArray<T>,
 	today: string,
 ): { upcoming: Array<T>; past: Array<T> } {
+	// A day with no time is its start, so it comes before any time on it.
+	const when = (each: T) => `${each.date} ${each.time ?? ""}`;
 	const upcoming = countdowns
 		.filter((each) => each.date >= today)
-		.sort((a, b) => a.date.localeCompare(b.date));
+		.sort((a, b) => when(a).localeCompare(when(b)));
 	const past = countdowns
 		.filter((each) => each.date < today)
-		.sort((a, b) => b.date.localeCompare(a.date));
+		.sort((a, b) => when(b).localeCompare(when(a)));
 	return { upcoming, past };
 }
 
@@ -140,15 +151,18 @@ function monthsBetween(from: Date, to: Date): number {
  * How long there is to go — or, once the day has passed, how long ago it
  * was — broken into the units `format` shows, largest first. A leading unit
  * that is 0 is left out, so a month away does not read "0 years"; the hours,
- * minutes and seconds always show. On the day itself there is nothing.
+ * minutes and seconds always show. On the day itself there is nothing —
+ * except, to the second, the hours still left before its `time`.
  *
- * `now` is a moment; the day counted to begins at midnight on the viewer's
- * clock. Every format but `seconds` counts whole calendar days, as `daysUntil`.
+ * `now` is a moment; the moment counted to is `time` on the viewer's clock,
+ * or the day's midnight without one. Every format but `seconds` counts whole
+ * calendar days, as `daysUntil`, so a time makes no difference to them.
  */
 export function countdownParts(
 	date: string,
 	now: number,
 	format: CountdownFormat,
+	time?: string | null,
 ): Array<{ unit: CountdownUnit; value: number }> {
 	const moment = new Date(now);
 	const today = [
@@ -157,7 +171,11 @@ export function countdownParts(
 		String(moment.getDate()).padStart(2, "0"),
 	].join("-");
 	const days = daysUntil(date, today);
-	if (days === 0) return [];
+	const [year, month, day] = date.split("-").map(Number);
+	const [hours, minutes] = (time ?? "00:00").split(":").map(Number);
+	const target = new Date(year, month - 1, day, hours, minutes);
+	const isTimeAheadToday = format === "seconds" && moment < target;
+	if (days === 0 && !isTimeAheadToday) return [];
 
 	const parts: Array<{ unit: CountdownUnit; value: number }> = [];
 	const alwaysShown: CountdownUnit = format === "seconds" ? "hours" : "days";
@@ -175,16 +193,17 @@ export function countdownParts(
 		return trimmed();
 	}
 
-	const [year, month, day] = date.split("-").map(Number);
-	const target = new Date(year, month - 1, day);
 	const midnight = new Date(
 		moment.getFullYear(),
 		moment.getMonth(),
 		moment.getDate(),
 	);
-	// Calendar days are counted from today's start, seconds from this moment.
+	// Calendar days are counted from today's start to the day's, seconds from
+	// this moment to the very one.
 	const start = format === "calendar" ? midnight : moment;
-	const [from, to] = start < target ? [start, target] : [target, start];
+	const end =
+		format === "calendar" ? new Date(year, month - 1, day) : target;
+	const [from, to] = start < end ? [start, end] : [end, start];
 
 	const months = monthsBetween(from, to);
 	const rest = to.getTime() - addMonths(from, months).getTime();

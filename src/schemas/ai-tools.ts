@@ -277,7 +277,7 @@ export const AI_TOOLS = {
 	},
 	list_countdowns: {
 		title: "Countdowns",
-		description: "Every countdown and the day it counts to.",
+		description: "Every countdown and the day, and time, it counts to.",
 		input: noInput,
 		readOnly: true,
 	},
@@ -652,6 +652,9 @@ export const AI_TOOLS = {
 		input: v.object({
 			title: v.pipe(v.string(), v.trim(), v.minLength(1, "Title is required")),
 			date: date("The day to count down to, YYYY-MM-DD."),
+			time: v.optional(
+				v.nullable(time("HH:MM on that day to count down to; null for its start.")),
+			),
 			color: v.optional(color),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
 			access: v.optional(access),
@@ -659,11 +662,15 @@ export const AI_TOOLS = {
 	},
 	update_countdown: {
 		title: "Update countdown",
-		description: "Change a countdown's title, day, colour, format or people.",
+		description:
+			"Change a countdown's title, day, time, colour, format or people.",
 		input: v.object({
 			countdown: ref("countdown", "CD-2"),
 			title: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1))),
 			date: v.optional(date("YYYY-MM-DD.")),
+			time: v.optional(
+				v.nullable(time("HH:MM on the day; null for its start.")),
+			),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
 			access: v.optional(access),

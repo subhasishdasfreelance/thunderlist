@@ -1,5 +1,5 @@
 import type { SearchIndex } from "#/data/search.server";
-import { formatDate } from "#/lib/format-date";
+import { formatDate, formatDeadline } from "#/lib/format-date";
 import { checklistStages, type Stage, stageColor } from "#/schemas/checklist";
 import type { Countdown } from "#/schemas/countdown";
 import type { Group } from "#/schemas/group";
@@ -236,7 +236,7 @@ export function searchResults(query: string, sources: Sources): Array<Result> {
 		key: `cdn-${item.countdownId}`,
 		number: numbered("countdown", item.number),
 		label: item.title,
-		context: `Countdown · ${formatDate(item.date)}`,
+		context: `Countdown · ${formatDeadline(item.date, item.time)}`,
 		to: "/countdowns",
 		focus: { countdown: item.countdownId },
 	}));

@@ -44,4 +44,27 @@ describe("countdownParts", () => {
 	it("has nothing to count on the day itself", () => {
 		expect(countdownParts("2026-09-28", NOW, "seconds")).toEqual([]);
 	});
+
+	it("counts to the second to a time on the day", () => {
+		expect(read(countdownParts("2026-09-29", NOW, "seconds", "18:30"))).toBe(
+			"22 hours, 30 minutes, 0 seconds",
+		);
+		expect(read(countdownParts("2026-09-27", NOW, "seconds", "18:30"))).toBe(
+			"1 days, 1 hours, 30 minutes, 0 seconds",
+		);
+	});
+
+	it("counts the hours left on the day until its time has come", () => {
+		expect(read(countdownParts("2026-09-28", NOW, "seconds", "21:15"))).toBe(
+			"1 hours, 15 minutes, 0 seconds",
+		);
+		expect(countdownParts("2026-09-28", NOW, "seconds", "19:00")).toEqual([]);
+	});
+
+	it("counts whole days alike with a time or without", () => {
+		expect(read(countdownParts("2026-12-31", NOW, "calendar", "18:30"))).toBe(
+			"3 months, 3 days",
+		);
+		expect(countdownParts("2026-09-28", NOW, "days", "21:15")).toEqual([]);
+	});
 });
