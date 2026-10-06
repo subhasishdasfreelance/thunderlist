@@ -2,8 +2,10 @@
  * Telling everyone about a new version. Server only.
  *
  * A release — a production build from `main` — announces itself the first
- * time it is asked which build it is; see `/api/version`, which every open page
- * asks every few minutes, and as it opens. Whichever request claims the
+ * time it is asked which build it is; see `/api/version`. The deploy asks it
+ * as soon as it is live (`.github/workflows/announce-release.yml`), so the
+ * notification goes out whether or not anyone has the app open; every open
+ * page asks too, every few minutes and as it opens. Whichever request claims the
  * release in the database first sends one notification to every device anyone
  * turned notifications on for, with a Refresh button; every other request,
  * on this instance or another, finds it claimed and sends nothing.

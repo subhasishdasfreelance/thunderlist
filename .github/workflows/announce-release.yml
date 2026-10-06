@@ -1,0 +1,37 @@
+# Tell everyone about a new version as soon as it is live, whether or not
+# anyone has the app open.
+#
+# A release announces itself — one push notification to every device with
+# notifications on — the first time it is asked which build it is; see
+# `announceRelease` in src/data/release.server.ts. Left to open pages, that
+# waits for someone to open the app. Vercel reports each deployment to GitHub,
+# so once a production one succeeds this asks the live site, waiting until it
+# answers with the new build, which is what sends the notification.
+name: Announce release
+
+on: deployment_status
+
+jobs:
+  announce:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE: https://thunderlist-sun.vercel.app
+      SHA: ${{ github.event.deployment.sha }}
+    steps:
+      - name: Ask the live site until it runs this build
+        run: |
+          for attempt in $(seq 1 30); do
+            build=$(curl -fsS --max-time 30 "$SITE/api/version" | jq -r '.buildId // empty' || true)
+            if [ "$build" = "$SHA" ]; then
+              echo "Live on $SHA; the release has been announced."
+              exit 0
+            fi
+            echo "Attempt $attempt: live build is '${build:-unknown}', waiting for $SHA."
+            sleep 15
+          done
+          echo "The site never answered with $SHA."
+          exit 1
