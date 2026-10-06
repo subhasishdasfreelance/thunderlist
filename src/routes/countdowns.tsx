@@ -6,7 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { SelectButtons } from "#/components/common/arranged-list";
 import { LoadingState } from "#/components/common/loading-state";
 import { Pickable } from "#/components/common/pickable";
@@ -30,6 +30,7 @@ import {
 	countdownParts,
 	daysUntil,
 	orderCountdowns,
+	ticksEverySecond,
 } from "#/schemas/countdown";
 
 export const Route = createFileRoute("/countdowns")({
@@ -74,6 +75,27 @@ const segmentLabel = (part: { unit: CountdownUnit; value: number }) =>
 
 /** The clock's units, two digits each, as on a clock: 05 hrs 09 min. */
 const CLOCK_UNITS = new Set<CountdownUnit>(["hours", "minutes", "seconds"]);
+
+/** `14400` → `14,400`: a count of seconds or minutes runs long. */
+const formatCount = (value: number) => value.toLocaleString("en-US");
+
+/** A segment's number: grouped, and two digits on a clock. */
+const segmentNumber = (part: { unit: CountdownUnit; value: number }) =>
+	CLOCK_UNITS.has(part.unit) && part.value < 10
+		? String(part.value).padStart(2, "0")
+		: formatCount(part.value);
+
+/**
+ * How many segments to a row: four, or three in two even rows for five or
+ * six. A first number that runs long — 8,760 hours — takes the room four
+ * would have had, so there are only as many as there are segments.
+ */
+function segmentColumns(
+	parts: ReadonlyArray<{ unit: CountdownUnit; value: number }>,
+): number {
+	if (parts.length > 4) return 3;
+	return segmentNumber(parts[0]).length > 3 ? parts.length : 4;
+}
 
 /**
  * The time now, every second while `isTicking` — something on screen counts
@@ -146,16 +168,19 @@ function CountdownTile({
 			? "to go"
 			: "ago";
 
+	const single =
+		days === null ? "–" : parts.length === 0 ? "Today" : formatCount(parts[0].value);
+
 	const content = (
 		<>
 			{days === null || parts.length <= 1 ? (
 				<>
-					<span className="thunderlist-countdown-number">
-						{days === null
-							? "–"
-							: parts.length === 0
-								? "Today"
-								: parts[0].value}
+					<span
+						className="thunderlist-countdown-number"
+						// Shrinks to fit a long count; see the stylesheet.
+						style={{ "--thunderlist-chars": single.length } as CSSProperties}
+					>
+						{single}
 					</span>
 					<span className="thunderlist-countdown-unit">
 						{days === null
@@ -167,14 +192,15 @@ function CountdownTile({
 				</>
 			) : (
 				<>
-					{/* One row, each number over its unit: 1 day 05 hrs 49 min 30 sec. */}
-					<span className="thunderlist-countdown-parts">
+					{/* Each number over its unit: 1 day 05 hrs 49 min 30 sec. */}
+					<span
+						className="thunderlist-countdown-parts"
+						data-columns={segmentColumns(parts)}
+					>
 						{parts.map((part) => (
 							<span key={part.unit} className="thunderlist-countdown-part">
 								<span className="thunderlist-countdown-number">
-									{CLOCK_UNITS.has(part.unit)
-										? String(part.value).padStart(2, "0")
-										: part.value}
+									{segmentNumber(part)}
 								</span>
 								<span className="thunderlist-countdown-part-unit">
 									{segmentLabel(part)}
@@ -240,7 +266,7 @@ function CountdownsPage() {
 		countdownsQuery(),
 	);
 	const now = useTicking(
-		(data ?? []).some((each) => (each.format ?? "seconds") === "seconds"),
+		(data ?? []).some((each) => ticksEverySecond(each.format ?? "seconds")),
 	);
 	// Which have passed is a question for the viewer's clock, so the tiles wait
 	// for the browser to have it; see `useNow`.

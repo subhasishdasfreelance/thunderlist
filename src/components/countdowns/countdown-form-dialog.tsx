@@ -14,8 +14,8 @@ import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { formatDate } from "#/lib/format-date";
 import type { AccessEntry } from "#/schemas/access";
 import {
+	COUNTDOWN_FORMAT_GROUPS,
 	COUNTDOWN_FORMAT_LABELS,
-	COUNTDOWN_FORMATS,
 	type Countdown,
 	type CountdownFormat,
 } from "#/schemas/countdown";
@@ -32,9 +32,13 @@ export type CountdownValues = {
 	access: Array<AccessEntry> | null;
 };
 
-const FORMAT_OPTIONS = COUNTDOWN_FORMATS.map((format) => ({
-	value: format,
-	label: COUNTDOWN_FORMAT_LABELS[format],
+const FORMAT_OPTIONS = COUNTDOWN_FORMAT_GROUPS.map((group) => ({
+	type: "section" as const,
+	title: group.title,
+	options: group.formats.map((format) => ({
+		value: format,
+		label: COUNTDOWN_FORMAT_LABELS[format],
+	})),
 }));
 
 /**

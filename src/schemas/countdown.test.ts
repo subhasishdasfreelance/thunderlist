@@ -67,4 +67,58 @@ describe("countdownParts", () => {
 		);
 		expect(countdownParts("2026-09-28", NOW, "days", "21:15")).toEqual([]);
 	});
+
+	it("counts to the minute or the hour, the rest dropped", () => {
+		expect(read(countdownParts("2027-11-30", NOW, "minutes", "06:45"))).toBe(
+			"1 years, 2 months, 1 days, 10 hours, 45 minutes",
+		);
+		expect(read(countdownParts("2027-11-30", NOW, "hours", "06:45"))).toBe(
+			"1 years, 2 months, 1 days, 10 hours",
+		);
+	});
+
+	it("counts months with no years", () => {
+		expect(read(countdownParts("2027-11-30", NOW, "months-days"))).toBe(
+			"14 months, 2 days",
+		);
+	});
+
+	it("counts every day, not months, with a clock", () => {
+		expect(read(countdownParts("2026-12-31", NOW, "days-seconds"))).toBe(
+			"93 days, 4 hours, 0 minutes, 0 seconds",
+		);
+		expect(read(countdownParts("2026-10-01", NOW, "days-hours"))).toBe(
+			"2 days, 4 hours",
+		);
+		expect(read(countdownParts("2026-09-29", NOW, "days-minutes"))).toBe(
+			"4 hours, 0 minutes",
+		);
+	});
+
+	it("counts every hour, with no days", () => {
+		expect(read(countdownParts("2026-10-01", NOW, "hours-seconds"))).toBe(
+			"52 hours, 0 minutes, 0 seconds",
+		);
+		expect(read(countdownParts("2026-10-01", NOW, "hours-minutes", "00:30"))).toBe(
+			"52 hours, 30 minutes",
+		);
+	});
+
+	it("counts as one number", () => {
+		expect(read(countdownParts("2026-12-31", NOW, "weeks-only"))).toBe("13 weeks");
+		expect(read(countdownParts("2026-10-01", NOW, "hours-only"))).toBe("52 hours");
+		expect(read(countdownParts("2026-09-29", NOW, "minutes-only"))).toBe(
+			"240 minutes",
+		);
+		expect(read(countdownParts("2026-09-29", NOW, "seconds-only"))).toBe(
+			"14400 seconds",
+		);
+	});
+
+	it("counts the time left on the day in every format with a clock", () => {
+		expect(read(countdownParts("2026-09-28", NOW, "minutes-only", "21:15"))).toBe(
+			"75 minutes",
+		);
+		expect(countdownParts("2026-09-28", NOW, "weeks-only", "21:15")).toEqual([]);
+	});
 });

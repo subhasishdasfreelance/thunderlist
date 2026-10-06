@@ -41,6 +41,7 @@ import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
 import { TagFilter } from "#/components/tags/tag-filter";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { useTaskDialogs } from "#/components/tasks/task-dialogs";
+import { GroupLinks } from "#/components/groups/group-links";
 import { TypeFilter } from "#/components/tasks/type-filter";
 import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
@@ -137,9 +138,9 @@ export const Route = createFileRoute("/checklists/$checklistId")({
 	}),
 	loaderDeps: ({ search }) => ({ task: search.task, group: search.group }),
 	loader: async ({ context, params, deps }) => {
-		// Back's label names the group, if it was opened from one.
-		if (deps.group !== undefined)
-			deferQuery(context.queryClient, groupsQuery());
+		// The groups it is in, over its title; and Back's label, if it was
+		// opened from one.
+		deferQuery(context.queryClient, groupsQuery());
 		// Quick-add needs the tags, the trackers and the checklists, but nobody
 		// is typing on the first frame, so none of them is waited for. The tags
 		// also say which tasks are on Today, which is the bolt on a row.
@@ -584,6 +585,7 @@ function ChecklistDetailPage() {
 				<HStack gap={3} vAlign="center">
 					<CoverImage images={detail.images} size="page" />
 					<VStack gap={0.5}>
+						<GroupLinks kind="checklist" id={checklistId} />
 						<HStack gap={2} vAlign="center">
 							{special === null ? null : (
 								<Icon

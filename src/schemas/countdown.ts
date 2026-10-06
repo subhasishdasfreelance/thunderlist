@@ -8,29 +8,95 @@ import {
 } from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
 
-/**
- * How a countdown shows the time left:
- *
- * - `seconds` — years, months, days, hours, minutes and seconds, ticking.
- * - `calendar` — years, months and days.
- * - `weeks` — weeks and days.
- * - `days` — days alone.
- */
-export const COUNTDOWN_FORMATS = [
-	"seconds",
-	"calendar",
-	"weeks",
-	"days",
-] as const;
+export type CountdownUnit =
+	| "years"
+	| "months"
+	| "weeks"
+	| "days"
+	| "hours"
+	| "minutes"
+	| "seconds";
 
-export type CountdownFormat = (typeof COUNTDOWN_FORMATS)[number];
+/**
+ * How a countdown shows the time left: the units it is broken into, largest
+ * first. The first takes the whole of what it can — "Hours only" is every hour
+ * left — and the last drops what is smaller than it. The ids of the first four
+ * were all there were once, and are stored as they are.
+ */
+export const COUNTDOWN_FORMAT_UNITS = {
+	seconds: ["years", "months", "days", "hours", "minutes", "seconds"],
+	minutes: ["years", "months", "days", "hours", "minutes"],
+	hours: ["years", "months", "days", "hours"],
+	calendar: ["years", "months", "days"],
+	"months-days": ["months", "days"],
+	weeks: ["weeks", "days"],
+	"days-seconds": ["days", "hours", "minutes", "seconds"],
+	"days-minutes": ["days", "hours", "minutes"],
+	"days-hours": ["days", "hours"],
+	"hours-seconds": ["hours", "minutes", "seconds"],
+	"hours-minutes": ["hours", "minutes"],
+	"weeks-only": ["weeks"],
+	days: ["days"],
+	"hours-only": ["hours"],
+	"minutes-only": ["minutes"],
+	"seconds-only": ["seconds"],
+} as const satisfies Record<string, ReadonlyArray<CountdownUnit>>;
+
+export type CountdownFormat = keyof typeof COUNTDOWN_FORMAT_UNITS;
+
+export const COUNTDOWN_FORMATS = Object.keys(
+	COUNTDOWN_FORMAT_UNITS,
+) as Array<CountdownFormat>;
 
 export const COUNTDOWN_FORMAT_LABELS: Record<CountdownFormat, string> = {
-	seconds: "To the second",
+	seconds: "Years, months, days, hours, minutes and seconds",
+	minutes: "Years, months, days, hours and minutes",
+	hours: "Years, months, days and hours",
 	calendar: "Years, months and days",
+	"months-days": "Months and days",
 	weeks: "Weeks and days",
+	"days-seconds": "Days, hours, minutes and seconds",
+	"days-minutes": "Days, hours and minutes",
+	"days-hours": "Days and hours",
+	"hours-seconds": "Hours, minutes and seconds",
+	"hours-minutes": "Hours and minutes",
+	"weeks-only": "Weeks only",
 	days: "Days only",
+	"hours-only": "Hours only",
+	"minutes-only": "Minutes only",
+	"seconds-only": "Seconds only",
 };
+
+/** The formats, as the form offers them: in groups of a kind. */
+export const COUNTDOWN_FORMAT_GROUPS: ReadonlyArray<{
+	title: string;
+	formats: ReadonlyArray<CountdownFormat>;
+}> = [
+	{
+		title: "On the calendar",
+		formats: ["seconds", "minutes", "hours", "calendar", "months-days", "weeks"],
+	},
+	{
+		title: "In days and hours",
+		formats: [
+			"days-seconds",
+			"days-minutes",
+			"days-hours",
+			"hours-seconds",
+			"hours-minutes",
+		],
+	},
+	{
+		title: "As one number",
+		formats: ["weeks-only", "days", "hours-only", "minutes-only", "seconds-only"],
+	},
+];
+
+/** Whether a format counts to the second, so has to be drawn every second. */
+export const ticksEverySecond = (format: CountdownFormat): boolean =>
+	(COUNTDOWN_FORMAT_UNITS[format] as ReadonlyArray<CountdownUnit>).includes(
+		"seconds",
+	);
 
 /**
  * A countdown: a day to count down to — a launch, a trip, a review — and
@@ -115,15 +181,6 @@ export function orderCountdowns<T extends Pick<Countdown, "date" | "time">>(
 	return { upcoming, past };
 }
 
-export type CountdownUnit =
-	| "years"
-	| "months"
-	| "weeks"
-	| "days"
-	| "hours"
-	| "minutes"
-	| "seconds";
-
 /** A month on from `from` — or `count` of them — on the same day where there is one. */
 function addMonths(from: Date, count: number): Date {
 	const next = new Date(from);
@@ -147,16 +204,29 @@ function monthsBetween(from: Date, to: Date): number {
 	return months;
 }
 
+const CLOCK_UNITS: ReadonlyArray<CountdownUnit> = ["hours", "minutes", "seconds"];
+
+/** Seconds in each unit of a fixed length; months and years are not. */
+const UNIT_SECONDS: Partial<Record<CountdownUnit, number>> = {
+	weeks: 604_800,
+	days: 86_400,
+	hours: 3600,
+	minutes: 60,
+	seconds: 1,
+};
+
 /**
- * How long there is to go — or, once the day has passed, how long ago it
+ * How long there is to go — or, once the moment has passed, how long ago it
  * was — broken into the units `format` shows, largest first. A leading unit
- * that is 0 is left out, so a month away does not read "0 years"; the hours,
- * minutes and seconds always show. On the day itself there is nothing —
- * except, to the second, the hours still left before its `time`.
+ * that is 0 is left out, so a month away does not read "0 years"; from the
+ * first of the hours, minutes and seconds on, every unit shows, as a clock
+ * does. On the day itself there is nothing — except, in a format with a
+ * clock, the time still left before its `time`.
  *
- * `now` is a moment; the moment counted to is `time` on the viewer's clock,
- * or the day's midnight without one. Every format but `seconds` counts whole
- * calendar days, as `daysUntil`, so a time makes no difference to them.
+ * `now` is a moment. A format with a clock counts from it to `time` on the
+ * day, on the viewer's clock, or to the day's midnight without one. The rest
+ * count whole calendar days, as `daysUntil`, so a time makes no difference to
+ * them.
  */
 export function countdownParts(
 	date: string,
@@ -164,6 +234,8 @@ export function countdownParts(
 	format: CountdownFormat,
 	time?: string | null,
 ): Array<{ unit: CountdownUnit; value: number }> {
+	const units: ReadonlyArray<CountdownUnit> = COUNTDOWN_FORMAT_UNITS[format];
+	const hasClock = units.some((unit) => CLOCK_UNITS.includes(unit));
 	const moment = new Date(now);
 	const today = [
 		moment.getFullYear(),
@@ -174,59 +246,47 @@ export function countdownParts(
 	const [year, month, day] = date.split("-").map(Number);
 	const [hours, minutes] = (time ?? "00:00").split(":").map(Number);
 	const target = new Date(year, month - 1, day, hours, minutes);
-	const isTimeAheadToday = format === "seconds" && moment < target;
-	if (days === 0 && !isTimeAheadToday) return [];
+	if (days === 0 && !(hasClock && moment < target)) return [];
 
-	const parts: Array<{ unit: CountdownUnit; value: number }> = [];
-	const alwaysShown: CountdownUnit = format === "seconds" ? "hours" : "days";
-	const trimmed = () =>
-		parts.slice(
-			parts.findIndex((part) => part.value !== 0 || part.unit === alwaysShown),
-		);
-
-	if (format === "days") return [{ unit: "days", value: Math.abs(days) }];
-	if (format === "weeks") {
-		parts.push(
-			{ unit: "weeks", value: Math.floor(Math.abs(days) / 7) },
-			{ unit: "days", value: Math.abs(days) % 7 },
-		);
-		return trimmed();
-	}
-
-	const midnight = new Date(
-		moment.getFullYear(),
-		moment.getMonth(),
-		moment.getDate(),
-	);
-	// Calendar days are counted from today's start to the day's, seconds from
-	// this moment to the very one.
-	const start = format === "calendar" ? midnight : moment;
-	const end =
-		format === "calendar" ? new Date(year, month - 1, day) : target;
+	// A clock counts from this moment to the very one; calendar days from
+	// today's midnight to the day's.
+	const [start, end] = hasClock
+		? [moment, target]
+		: [
+				new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()),
+				new Date(year, month - 1, day),
+			];
 	const [from, to] = start < end ? [start, end] : [end, start];
 
-	const months = monthsBetween(from, to);
-	const rest = to.getTime() - addMonths(from, months).getTime();
-	const seconds = Math.floor(rest / 1000);
-
-	parts.push(
-		{ unit: "years", value: Math.floor(months / 12) },
-		{ unit: "months", value: months % 12 },
-		// Midnight to midnight, rounded: a clock change makes a day 23 hours.
-		{
-			unit: "days",
-			value:
-				format === "calendar"
-					? Math.round(rest / 86_400_000)
-					: Math.floor(seconds / 86_400),
-		},
-	);
-	if (format === "seconds") {
-		parts.push(
-			{ unit: "hours", value: Math.floor(seconds / 3600) % 24 },
-			{ unit: "minutes", value: Math.floor(seconds / 60) % 60 },
-			{ unit: "seconds", value: seconds % 60 },
-		);
+	const values = new Map<CountdownUnit, number>();
+	let restMs = to.getTime() - from.getTime();
+	if (units.includes("months")) {
+		const months = monthsBetween(from, to);
+		restMs = to.getTime() - addMonths(from, months).getTime();
+		if (units.includes("years")) {
+			values.set("years", Math.floor(months / 12));
+			values.set("months", months % 12);
+		} else {
+			values.set("months", months);
+		}
 	}
-	return trimmed();
+	// In whole seconds; or in whole days, rounded, since a clock change makes
+	// a day from midnight to midnight 23 hours.
+	let rest = hasClock
+		? Math.floor(restMs / 1000)
+		: Math.round(restMs / 86_400_000) * 86_400;
+	for (const unit of units) {
+		const size = UNIT_SECONDS[unit];
+		if (size === undefined) continue;
+		values.set(unit, Math.floor(rest / size));
+		rest %= size;
+	}
+
+	const parts = units.map((unit) => ({ unit, value: values.get(unit) ?? 0 }));
+	const alwaysShown = hasClock
+		? units.findIndex((unit) => CLOCK_UNITS.includes(unit))
+		: units.length - 1;
+	return parts.slice(
+		parts.findIndex((part, index) => part.value !== 0 || index >= alwaysShown),
+	);
 }

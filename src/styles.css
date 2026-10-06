@@ -1284,6 +1284,8 @@ body {
 			var(--color-background-surface) 70%
 		);
 		text-align: left;
+		/* Its width sizes a long count to fit; see the number below. */
+		container-type: inline-size;
 		transition:
 			transform var(--duration-fast) var(--ease-standard),
 			box-shadow var(--duration-fast) var(--ease-standard);
@@ -1304,8 +1306,16 @@ body {
 		opacity: 0.6;
 	}
 
+	/*
+	 * Large, but never wider than the tile: a count with many digits — every
+	 * second to a day months away — shrinks to fit it.
+	 * `--thunderlist-chars` is how many characters it has.
+	 */
 	.thunderlist-countdown-number {
-		font-size: 2.75rem;
+		font-size: min(
+			2.75rem,
+			calc(100cqi / (var(--thunderlist-chars, 2) * 0.62))
+		);
 		font-weight: 800;
 		line-height: 1;
 		letter-spacing: -0.03em;
@@ -1316,14 +1326,24 @@ body {
 	/*
 	 * The time left as segments, each number over its unit in a box tinted
 	 * with the countdown's colour — "1 day · 05 hrs · 49 min · 30 sec" — four
-	 * to a row, so longer spans wrap in step. See `countdownParts`.
+	 * to a row, or three in two even rows for five or six, so longer spans
+	 * wrap in step. Only the first unit can run past two digits — 365 days,
+	 * 8,760 hours — so its column alone widens to fit. See `countdownParts`.
 	 */
 	.thunderlist-countdown-parts {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: minmax(max-content, 1fr) repeat(3, minmax(0, 1fr));
 		gap: 0.375rem;
 		align-self: stretch;
 		margin-bottom: 0.375rem;
+	}
+
+	.thunderlist-countdown-parts[data-columns="3"] {
+		grid-template-columns: minmax(max-content, 1fr) repeat(2, minmax(0, 1fr));
+	}
+
+	.thunderlist-countdown-parts[data-columns="2"] {
+		grid-template-columns: minmax(max-content, 1fr) minmax(0, 1fr);
 	}
 
 	.thunderlist-countdown-part {
@@ -1331,7 +1351,7 @@ body {
 		flex-direction: column;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.5rem 0.125rem 0.375rem;
+		padding: 0.5rem 0.25rem 0.375rem;
 		border-radius: var(--radius-element, 0.5rem);
 		background: color-mix(
 			in srgb,
@@ -1343,6 +1363,13 @@ body {
 	.thunderlist-countdown-parts .thunderlist-countdown-number {
 		font-size: 1.5rem;
 		letter-spacing: -0.02em;
+	}
+
+	/* A narrow tile keeps four segments to a row by making them smaller. */
+	@container (max-width: 14rem) {
+		.thunderlist-countdown-parts .thunderlist-countdown-number {
+			font-size: 1.25rem;
+		}
 	}
 
 	.thunderlist-countdown-part-unit {
@@ -1374,6 +1401,52 @@ body {
 	.thunderlist-countdown-date {
 		font-size: var(--font-size-sm, 0.8125rem);
 		color: var(--color-text-secondary);
+	}
+
+	/*
+	 * A group something is in, over its title: a quiet pill tinted with the
+	 * group's colour, its folder in the colour itself. See `GroupLinks`.
+	 */
+	.thunderlist-group-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		max-width: 100%;
+		padding: 0.125rem 0.625rem;
+		border: 1px solid
+			color-mix(in srgb, var(--thunderlist-stage-color) 30%, transparent);
+		border-radius: var(--radius-full);
+		background: color-mix(
+			in srgb,
+			var(--thunderlist-stage-color) 10%,
+			var(--color-background-surface)
+		);
+		color: var(--color-text-primary);
+		font-size: var(--font-size-sm, 0.8125rem);
+		font-weight: 500;
+		line-height: 1.5;
+		transition: background-color var(--duration-fast) var(--ease-standard);
+	}
+
+	.thunderlist-group-link svg {
+		flex-shrink: 0;
+		color: var(--thunderlist-stage-color);
+	}
+
+	.thunderlist-group-link span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	@media (hover: hover) {
+		.thunderlist-group-link:hover {
+			background: color-mix(
+				in srgb,
+				var(--thunderlist-stage-color) 18%,
+				var(--color-background-surface)
+			);
+		}
 	}
 
 	/*

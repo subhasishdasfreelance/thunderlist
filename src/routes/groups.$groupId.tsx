@@ -11,13 +11,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
 	ClipboardPaste,
+	FolderInput,
+	ListChecks,
 	MoreHorizontal,
 	Pencil,
 	Plus,
 	Trash2,
+	TrendingUp,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ChecklistCard } from "#/components/checklists/checklist-card";
+import { ChecklistFormDialog } from "#/components/checklists/checklist-form-dialog";
 import { ArrangeDialog } from "#/components/common/arrange-dialog";
 import {
 	ArrangeButton,
@@ -53,9 +57,12 @@ import { GroupPickedBar } from "#/components/groups/group-picked-bar";
 import { TagCard } from "#/components/tags/tag-card";
 import { AccessButton } from "#/components/teams/access-button";
 import { TrackerCard } from "#/components/trackers/tracker-card";
+import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
+	createInGroup,
 	createTagResolver,
 	importIntoGroup,
+	resolveTags,
 	useApplyChange,
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
@@ -123,8 +130,9 @@ function Section({
 /**
  * One group: everything in it, as the cards they are on their own screens,
  * and how far along all of it is together — every task in it counted, paced
- * against its deadline and charted the way a checklist is. Adding to it opens
- * the picker; renaming it, its schedule and taking things out are in its
+ * against its deadline and charted the way a checklist is. Adding to it makes
+ * a new checklist or tracker in it, or opens the picker for ones that exist;
+ * renaming it, its schedule and taking things out are in its
  * dialog.
  */
 function GroupPage() {
@@ -135,6 +143,10 @@ function GroupPage() {
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isAdding, setIsAdding] = useState(false);
 	const [isImporting, setIsImporting] = useState(false);
+	// A new checklist or tracker, made straight into the group.
+	const [creating, setCreating] = useState<"checklist" | "tracker" | null>(
+		null,
+	);
 	const queryClient = useQueryClient();
 
 	const { data, isError, error, refetch } = useQuery(groupsQuery());
@@ -253,11 +265,32 @@ function GroupPage() {
 							variant="secondary"
 							onClick={() => setIsImporting(true)}
 						/>
-						<Button
-							label="Add"
-							icon={<Plus aria-hidden />}
-							variant="secondary"
-							onClick={() => setIsAdding(true)}
+						<DropdownMenu
+							placement="below"
+							alignment="end"
+							button={{
+								label: "Add",
+								icon: <Plus aria-hidden />,
+								variant: "secondary",
+							}}
+							items={[
+								{
+									label: "New checklist",
+									icon: ListChecks,
+									onClick: () => setCreating("checklist"),
+								},
+								{
+									label: "New tracker",
+									icon: TrendingUp,
+									onClick: () => setCreating("tracker"),
+								},
+								{ type: "divider" as const },
+								{
+									label: "Add existing…",
+									icon: FolderInput,
+									onClick: () => setIsAdding(true),
+								},
+							]}
 						/>
 						<DropdownMenu
 							hasChevron={false}
@@ -450,6 +483,32 @@ function GroupPage() {
 				kinds={GROUP_ITEM_KINDS}
 				picked={group.items}
 				onToggle={(item) => toggle(group, item as GroupItem)}
+			/>
+
+			<ChecklistFormDialog
+				isOpen={creating === "checklist"}
+				onOpenChange={(isOpen) => setCreating(isOpen ? "checklist" : null)}
+				tags={tags}
+				resolveTags={(names) =>
+					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+				}
+				onSubmit={(values) => {
+					createInGroup(apply, group, { kind: "checklist", values });
+					setCreating(null);
+				}}
+			/>
+
+			<TrackerFormDialog
+				isOpen={creating === "tracker"}
+				onOpenChange={(isOpen) => setCreating(isOpen ? "tracker" : null)}
+				tags={tags}
+				resolveTags={(names) =>
+					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+				}
+				onSubmit={(values) => {
+					createInGroup(apply, group, { kind: "tracker", values });
+					setCreating(null);
+				}}
 			/>
 
 			<GroupImportDialog

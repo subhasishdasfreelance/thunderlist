@@ -40,6 +40,7 @@ import {
 	type ImageRef,
 	todayDateOnly,
 } from "#/schemas/common";
+import type { Group } from "#/schemas/group";
 import {
 	PICKABLE_COLORS,
 	type SpecialTag,
@@ -461,10 +462,16 @@ export async function createChecklist(
 	values: ChecklistValues,
 ): Promise<string> {
 	const checklistId = createId(ID_PREFIX.checklist);
+	await applyAsync(checklistCreate(checklistId, values));
+	return checklistId;
+}
+
+/** The change that makes a checklist from its form; see `createChecklist`. */
+function checklistCreate(checklistId: string, values: ChecklistValues): Change {
 	const { title, urgent, important, stages } = parseChecklistTitle(
 		values.title,
 	);
-	await applyAsync({
+	return {
 		kind: "checklist.create",
 		checklistId,
 		...values,
@@ -472,8 +479,35 @@ export async function createChecklist(
 		urgent,
 		important,
 		...(stages === undefined ? {} : { stages }),
+	};
+}
+
+/**
+ * Make a checklist or a tracker straight into a group, drawn in it at once.
+ * The group is saved apart from it and may land first, which does no harm:
+ * nothing takes a group's items as proof they exist.
+ */
+export function createInGroup(
+	apply: ApplyChange,
+	group: Pick<Group, "groupId" | "items">,
+	values:
+		| { kind: "checklist"; values: ChecklistValues }
+		| { kind: "tracker"; values: TrackerValues },
+): void {
+	const id =
+		values.kind === "checklist"
+			? createId(ID_PREFIX.checklist)
+			: createId(ID_PREFIX.tracker);
+	apply(
+		values.kind === "checklist"
+			? checklistCreate(id, values.values)
+			: { kind: "tracker.create", trackerId: id, ...values.values },
+	);
+	apply({
+		kind: "group.update",
+		groupId: group.groupId,
+		patch: { items: [...group.items, { kind: values.kind, id }] },
 	});
-	return checklistId;
 }
 
 export function createTask(
