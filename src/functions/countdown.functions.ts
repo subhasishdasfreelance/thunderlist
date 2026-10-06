@@ -3,9 +3,10 @@ import { listCountdowns } from "#/data/countdown.server";
 import { guard } from "./guard";
 import { requireScope } from "./scope";
 
-/** Every countdown in the space; see `Countdown`. */
+/** Every countdown in the space they can see; see `Countdown`. */
 export const listCountdownsFn = createServerFn().handler(() =>
-	guard("listCountdowns", async () =>
-		listCountdowns((await requireScope()).ownerId),
-	),
+	guard("listCountdowns", async () => {
+		const scope = await requireScope();
+		return listCountdowns(scope.ownerId, scope.hidden);
+	}),
 );

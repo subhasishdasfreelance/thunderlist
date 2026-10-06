@@ -576,6 +576,7 @@ export const AI_TOOLS = {
 			color: v.optional(color),
 			items: v.optional(v.pipe(v.array(groupItemRef), v.maxLength(500))),
 			...schedule,
+			access: v.optional(access),
 		}),
 	},
 	import_group: {
@@ -607,6 +608,7 @@ export const AI_TOOLS = {
 			addItems: v.optional(v.pipe(v.array(groupItemRef), v.maxLength(500))),
 			removeItems: v.optional(v.pipe(v.array(groupItemRef), v.maxLength(500))),
 			...schedule,
+			access: v.optional(access),
 		}),
 	},
 	delete_group: {
@@ -621,6 +623,7 @@ export const AI_TOOLS = {
 		input: v.object({
 			title: v.pipe(v.string(), v.trim(), v.minLength(1, "Title is required")),
 			body: v.string(),
+			access: v.optional(access),
 		}),
 	},
 	update_plan: {
@@ -634,6 +637,7 @@ export const AI_TOOLS = {
 			append: v.optional(
 				described(v.string(), "Text to add at the end, as a new paragraph."),
 			),
+			access: v.optional(access),
 		}),
 	},
 	delete_plans: {
@@ -650,17 +654,19 @@ export const AI_TOOLS = {
 			date: date("The day to count down to, YYYY-MM-DD."),
 			color: v.optional(color),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
+			access: v.optional(access),
 		}),
 	},
 	update_countdown: {
 		title: "Update countdown",
-		description: "Change a countdown's title, day, colour or format.",
+		description: "Change a countdown's title, day, colour, format or people.",
 		input: v.object({
 			countdown: ref("countdown", "CD-2"),
 			title: v.optional(v.pipe(v.string(), v.trim(), v.minLength(1))),
 			date: v.optional(date("YYYY-MM-DD.")),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
+			access: v.optional(access),
 		}),
 	},
 	delete_countdowns: {
@@ -703,9 +709,16 @@ export const AI_TOOLS = {
 	share: {
 		title: "Share",
 		description:
-			"In a team, give checklists, trackers or tags one access list: who may read, edit or have full control of them.",
+			"In a team, give checklists, trackers, tags, plans, countdowns or groups one access list: who may read, edit or have full control of them.",
 		input: v.object({
-			kind: v.picklist(["checklist", "tracker", "tag"]),
+			kind: v.picklist([
+				"checklist",
+				"tracker",
+				"tag",
+				"plan",
+				"countdown",
+				"group",
+			]),
 			items: described(
 				v.pipe(v.array(v.string()), v.minLength(1), v.maxLength(500)),
 				"Each by id, number or exact name.",

@@ -48,9 +48,13 @@ export function createLookup(scope: Scope) {
 		tags: once(() => listTags(ownerId, hidden)),
 		checklists: once(() => listChecklists(ownerId, hidden)),
 		trackers: once(() => listTrackers(ownerId, hidden)),
-		groups: once(() => listGroups(ownerId)),
-		plans: once(() => listPlans(ownerId)),
-		countdowns: once(() => listCountdowns(ownerId)),
+		groups: once(async () =>
+			(await listGroups(ownerId)).filter(
+				(group) => !hidden.groupIds.has(group.groupId),
+			),
+		),
+		plans: once(() => listPlans(ownerId, hidden)),
+		countdowns: once(() => listCountdowns(ownerId, hidden)),
 		taskTypes: once(() => listTaskTypes(ownerId)),
 	};
 }

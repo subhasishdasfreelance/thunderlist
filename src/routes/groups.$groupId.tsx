@@ -51,6 +51,7 @@ import { GroupImportDialog } from "#/components/groups/group-import-dialog";
 import { arrangeRows, orderContents } from "#/components/groups/group-order";
 import { GroupPickedBar } from "#/components/groups/group-picked-bar";
 import { TagCard } from "#/components/tags/tag-card";
+import { AccessButton } from "#/components/teams/access-button";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import {
 	createTagResolver,
@@ -64,7 +65,7 @@ import { computeVelocity, localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
 import { paceAt } from "#/lib/use-pace";
 import { usePickMode } from "#/lib/use-pick-mode";
-import { usePermissions } from "#/lib/use-team";
+import { useItemPermissions } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { groupFinishedQuery, groupsQuery } from "#/queries/space";
@@ -130,7 +131,6 @@ function GroupPage() {
 	const { groupId } = Route.useParams();
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
-	const { canManageContent } = usePermissions();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isAdding, setIsAdding] = useState(false);
@@ -143,6 +143,8 @@ function GroupPage() {
 	const finished = useQuery(groupFinishedQuery(groupId)).data;
 	const now = useNow();
 	const group = data?.find((each) => each.groupId === groupId);
+	// Their role, narrowed by the group's access list; see `useItemPermissions`.
+	const { canManageContent } = useItemPermissions(group?.access);
 	// Your order, newest added, most behind or priority first; see
 	// `orderContents`.
 	const [order, setOrder] = useListOrder(`group:${groupId}`);
@@ -221,7 +223,17 @@ function GroupPage() {
 
 	return (
 		<VStack gap={4}>
-			<BackButton to="/groups" label="Groups" />
+			<HStack gap={2} hAlign="between" vAlign="center">
+				<BackButton to="/groups" label="Groups" />
+				<AccessButton
+					noun="group"
+					access={group.access}
+					canChange={canManageContent}
+					onChange={(access) =>
+						apply({ kind: "group.update", groupId, patch: { access } })
+					}
+				/>
+			</HStack>
 
 			{/* Wraps: the title and three buttons are wider than a phone. */}
 			<HStack gap={2} hAlign="between" vAlign="start" wrap="wrap">
@@ -467,6 +479,10 @@ function GroupPage() {
 						...(JSON.stringify(values.items) === JSON.stringify(group.items)
 							? {}
 							: { items: values.items }),
+						...(JSON.stringify(values.access) ===
+						JSON.stringify(group.access ?? null)
+							? {}
+							: { access: values.access }),
 					};
 					// Saved unchanged is nothing to send.
 					if (Object.keys(patch).length > 0) {

@@ -116,6 +116,8 @@ export function QuickAddTask({
 			<HStack gap={2} vAlign="start">
 				<TaskTitleField
 					label={placeholder}
+					// The placeholder is the label: one field, at the top of a list.
+					isLabelHidden
 					placeholder={placeholder}
 					value={value}
 					onChange={setValue}

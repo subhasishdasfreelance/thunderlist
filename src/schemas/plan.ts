@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { type AccessEntry, accessSchema } from "./access";
 import { idSchema, titleSchema } from "./common";
 
 /**
@@ -28,6 +29,11 @@ export type Plan = {
 	title: string;
 	/** Markdown. */
 	body: string;
+	/**
+	 * In a team, who may do what with it; absent or `null` for everyone, each
+	 * at whatever their role allows. See `accessSchema`.
+	 */
+	access?: Array<AccessEntry> | null;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -44,6 +50,7 @@ export const createPlanInputSchema = v.object({
 	planId: idSchema,
 	title: titleSchema,
 	body: planBodySchema,
+	access: v.optional(accessSchema, null),
 });
 
 export const updatePlanInputSchema = v.object({
@@ -52,6 +59,7 @@ export const updatePlanInputSchema = v.object({
 		v.object({
 			title: v.optional(titleSchema),
 			body: v.optional(planBodySchema),
+			access: v.optional(accessSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

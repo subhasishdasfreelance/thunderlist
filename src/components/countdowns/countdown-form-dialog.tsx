@@ -8,7 +8,9 @@ import { useEffect, useState } from "react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextInput } from "#/components/common/text-fields";
 import { STAGE_COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { formatDate } from "#/lib/format-date";
+import type { AccessEntry } from "#/schemas/access";
 import {
 	COUNTDOWN_FORMAT_LABELS,
 	COUNTDOWN_FORMATS,
@@ -22,6 +24,8 @@ export type CountdownValues = {
 	date: string;
 	color: TagColor;
 	format: CountdownFormat;
+	/** Who may do what with it, or `null` for the whole team. */
+	access: Array<AccessEntry> | null;
 };
 
 const FORMAT_OPTIONS = COUNTDOWN_FORMATS.map((format) => ({
@@ -51,6 +55,9 @@ export function CountdownFormDialog({
 	const [date, setDate] = useState<ISODateString | undefined>(undefined);
 	const [color, setColor] = useState<TagColor>("blue");
 	const [format, setFormat] = useState<CountdownFormat>("seconds");
+	// A new one starts with its author alone on it; see `AccessField`.
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 
 	useEffect(() => {
 		if (!isOpen) return;
@@ -58,14 +65,15 @@ export function CountdownFormDialog({
 		setDate((countdown?.date as ISODateString | undefined) ?? undefined);
 		setColor(countdown?.color ?? "blue");
 		setFormat(countdown?.format ?? "seconds");
-	}, [isOpen, countdown]);
+		setAccess(countdown === undefined ? ownAlone : (countdown.access ?? null));
+	}, [isOpen, countdown, ownAlone]);
 
 	const trimmed = title.trim();
 	const isValid = trimmed !== "" && date !== undefined;
 
 	function save() {
 		if (!isValid || date === undefined) return;
-		onSubmit({ title: trimmed, date, color, format });
+		onSubmit({ title: trimmed, date, color, format, access });
 	}
 
 	return (
@@ -134,6 +142,7 @@ export function CountdownFormDialog({
 					value={format}
 					onChange={(next) => setFormat(next as CountdownFormat)}
 				/>
+				<AccessField noun="countdown" value={access} onChange={setAccess} />
 			</VStack>
 		</FormDialog>
 	);

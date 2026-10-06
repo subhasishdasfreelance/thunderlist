@@ -182,6 +182,7 @@ export async function createGroup(
 					startDate: input.startDate,
 					deadline: input.deadline ?? null,
 					deadlineTime: input.deadlineTime ?? null,
+					access: input.access ?? null,
 					createdAt: now,
 					updatedAt: now,
 				},
@@ -204,6 +205,7 @@ export async function updateGroup(
 			| "startDate"
 			| "deadline"
 			| "deadlineTime"
+			| "access"
 		>
 	>,
 ): Promise<void> {

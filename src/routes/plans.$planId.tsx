@@ -16,11 +16,12 @@ import { numberTitle } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
+import { AccessButton } from "#/components/teams/access-button";
 import { useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { useToast } from "#/lib/toasts";
 import { useNow } from "#/lib/use-now";
-import { usePermissions } from "#/lib/use-team";
+import { useItemPermissions } from "#/lib/use-team";
 import { planQuery } from "#/queries/plans";
 import { primeQuery } from "#/queries/prime";
 import { todayDateOnly } from "#/schemas/common";
@@ -55,12 +56,13 @@ function PlanPage() {
 	const { planId } = Route.useParams();
 	const navigate = useNavigate();
 	const { apply } = useApplyChange();
-	const { canManageContent } = usePermissions();
 	const toast = useToast();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 
 	const { data, isError, error, refetch } = useQuery(planQuery(planId));
+	// Their role, narrowed by the plan's access list; see `useItemPermissions`.
+	const { canManageContent } = useItemPermissions(data?.access);
 	// The day on the viewer's clock, once the browser has it; see `useNow`.
 	const now = useNow();
 
@@ -91,7 +93,17 @@ function PlanPage() {
 
 	return (
 		<VStack gap={4}>
-			<BackButton to="/plans" label="Plans" />
+			<HStack gap={2} hAlign="between" vAlign="center">
+				<BackButton to="/plans" label="Plans" />
+				<AccessButton
+					noun="plan"
+					access={data.access}
+					canChange={canManageContent}
+					onChange={(access) =>
+						apply({ kind: "plan.update", planId, patch: { access } })
+					}
+				/>
+			</HStack>
 
 			<HStack gap={2} hAlign="between" vAlign="start">
 				<VStack gap={0.5}>
@@ -194,6 +206,10 @@ function PlanPage() {
 					const patch = {
 						...(values.title === data.title ? {} : { title: values.title }),
 						...(values.body === data.body ? {} : { body: values.body }),
+						...(JSON.stringify(values.access) ===
+						JSON.stringify(data.access ?? null)
+							? {}
+							: { access: values.access }),
 					};
 					// Saved unchanged is nothing to send.
 					if (Object.keys(patch).length > 0) {

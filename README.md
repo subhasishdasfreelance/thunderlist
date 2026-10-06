@@ -62,8 +62,8 @@ code; where something could not be checked, the text says so.
 | **Countdowns** | A day to count down to, shown in one of four formats. | `src/routes/countdowns.tsx`, `src/schemas/countdown.ts` |
 | **Numbers** | Short, human-readable numbers (`T-42`, `C-3`, `TR-7` …) that can be searched for. | `src/schemas/number.ts`, `src/data/numbers.server.ts` |
 | **Search** | **Ctrl+K** searches checklists, tasks (titles, captions and notes), trackers, readings, tags, plans, countdowns and groups, including by number (`T-42`). | `src/components/shell/search-dialog.tsx`, `search-results.ts`, `src/data/search.server.ts` |
-| **Undo** | **Ctrl+Z** undoes the last 20 task-level actions. | `src/lib/undo.ts`, `src/components/shell/undo-provider.tsx` |
-| **Teams** | Shared spaces with four roles and an access list on each checklist, tracker and tag. | `src/schemas/team.ts`, `src/schemas/access.ts` |
+| **Undo** | **Ctrl+Z** undoes the last 20 task-level actions, after asking "Do you want to undo?". | `src/lib/undo.ts`, `src/components/shell/undo-provider.tsx` |
+| **Teams** | Shared spaces with four roles and an access list on each checklist, tracker, tag, plan, countdown and group. | `src/schemas/team.ts`, `src/schemas/access.ts` |
 | **Team messages** | Project managers can push a message to a team, a role, everyone who can see a checklist, tag or tracker, or one person. | `sendTeamMessage` in `src/data/reminder.server.ts` |
 | **Notification codes** | Secrets that let an outside script send notifications through `POST /api/notify`. | `src/schemas/notification-code.ts` |
 | **AI agents** | Everything above can be done by an AI agent: through MCP at `/api/mcp` with an AI access token (Claude Code, Claude Desktop, Cursor…), or through WebMCP in the open tab. One tool catalog serves both (see [AI agents](#104-ai-agents-mcp-and-webmcp)). | `src/schemas/ai-tools.ts`, `src/data/ai-*.server.ts` |
@@ -967,8 +967,10 @@ has taken it.
 - **Countdowns** have a title, a date, a colour and a format: `seconds`,
   `calendar`, `weeks` or `days` (`countdownParts`).
 
-Groups, plans and countdowns have no access lists: anyone in the space can see
-them, and changing them needs `manageContent`.
+Groups, plans and countdowns carry an access list too, as checklists, trackers
+and tags do: a new one starts with its maker alone on it, and one made before
+had none, so it stays the whole team's. A group's list covers the group
+itself, not what it holds; each of those keeps its own.
 
 ### 7.10 Feedback
 

@@ -16,6 +16,8 @@ import {
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { TextInput } from "#/components/common/text-fields";
 import { COLOR_OPTIONS } from "#/components/tags/tag-form-dialog";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
+import type { AccessEntry } from "#/schemas/access";
 import { todayDateOnly } from "#/schemas/common";
 import {
 	GROUP_ITEM_KINDS,
@@ -35,6 +37,8 @@ export type GroupValues = {
 	deadline: string | null;
 	/** `HH:MM` on the deadline day; see `Group.deadlineTime`. */
 	deadlineTime: string | null;
+	/** Who may do what with the group, or `null` for the whole team. */
+	access: Array<AccessEntry> | null;
 };
 
 /**
@@ -68,6 +72,9 @@ export function GroupFormDialog({
 	);
 	const [isPicking, setIsPicking] = useState(false);
 	const directory = useItemDirectory(isOpen);
+	// A new one starts with its author alone on it; see `AccessField`.
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: read as it opens, not followed while it is open.
 	useEffect(() => {
@@ -82,6 +89,7 @@ export function GroupFormDialog({
 		);
 		setDeadline((group?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(group?.deadlineTime ?? undefined);
+		setAccess(group === undefined ? ownAlone : (group.access ?? null));
 	}, [isOpen]);
 
 	const trimmed = name.trim();
@@ -111,6 +119,7 @@ export function GroupFormDialog({
 			deadline: deadline ?? null,
 			// A time only means something on a day; see `ScheduleFields`.
 			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
+			access,
 		});
 	}
 
@@ -225,6 +234,8 @@ export function GroupFormDialog({
 							</VStack>
 						)}
 					</VStack>
+
+					<AccessField noun="group" value={access} onChange={setAccess} />
 				</VStack>
 			</FormDialog>
 

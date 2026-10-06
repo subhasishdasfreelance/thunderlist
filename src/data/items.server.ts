@@ -5,13 +5,17 @@
 import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
 import type { AccessEntry } from "#/schemas/access";
-import type { ItemsPatch, ShareableKind } from "#/schemas/change";
+import type {
+	ItemsPatch,
+	SchedulableKind,
+	ShareableKind,
+} from "#/schemas/change";
 import { MAX_TAGS } from "#/schemas/common";
 import { retagManyTasks } from "./checklist.server";
 
 /**
- * Give several checklists, trackers or tags one access list — a pick of them
- * shared at once — in one write. The Inbox, the Backlog and Today keep none:
+ * Give several checklists, trackers, tags, plans, countdowns or groups one
+ * access list — a pick of them shared at once — in one write. The Inbox, the Backlog and Today keep none:
  * they are everyone's; see `updateChecklist`.
  *
  * Written with a list of its own, each stops being read from the old field;
@@ -49,6 +53,28 @@ export async function shareItems(
 				update,
 			);
 			return;
+		case "plan":
+			await current.plans.updateMany({ userId, planId: among }, update);
+			return;
+		case "countdown":
+			await current.countdowns.updateMany(
+				{ userId, countdownId: among },
+				update,
+			);
+			return;
+		// Groups are kept in the space's settings, each in a list there.
+		case "group":
+			await current.settings.updateOne(
+				{ userId },
+				{
+					$set: {
+						"groups.$[group].access": update.$set.access,
+						"groups.$[group].updatedAt": update.$set.updatedAt,
+					},
+				},
+				{ arrayFilters: [{ "group.groupId": among }] },
+			);
+			return;
 	}
 }
 
@@ -65,12 +91,12 @@ export async function shareItems(
  */
 export async function updateItems(
 	userId: string,
-	items: ReadonlyArray<{ kind: ShareableKind; id: string }>,
+	items: ReadonlyArray<{ kind: SchedulableKind; id: string }>,
 	patch: ItemsPatch,
 ): Promise<void> {
 	const current = await collections();
 	const { addTagIds = [], removeTagIds = [], dailyWindow, ...fields } = patch;
-	const idsOf = (kind: ShareableKind) =>
+	const idsOf = (kind: SchedulableKind) =>
 		items.filter((item) => item.kind === kind).map((item) => item.id);
 	const checklistIds = idsOf("checklist");
 	const trackerIds = idsOf("tracker");

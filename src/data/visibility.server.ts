@@ -1,7 +1,8 @@
 /**
  * Who may do what with what, in a team. Server only.
  *
- * A checklist, a tag or a tracker carries an access list: who may see it, and
+ * A checklist, a tag, a tracker, a plan, a countdown or a group carries an
+ * access list: who may see it, and
  * what each of them may do with it — read it, work its tasks, or run it
  * outright; see `accessSchema`. A role still caps that, so a list can never
  * hand out more than someone may do in the team at all.
@@ -35,6 +36,9 @@ export type Hidden = {
 	checklistIds: ReadonlySet<string>;
 	tagIds: ReadonlySet<string>;
 	trackerIds: ReadonlySet<string>;
+	planIds: ReadonlySet<string>;
+	countdownIds: ReadonlySet<string>;
+	groupIds: ReadonlySet<string>;
 	/**
 	 * The space's Inbox, whose tasks are seen by their tags; see the top of
 	 * this file. `null` where nothing is hidden, so it does not matter.
@@ -52,12 +56,18 @@ export type Levels = {
 	checklists: ReadonlyMap<string, AccessLevel>;
 	tags: ReadonlyMap<string, AccessLevel>;
 	trackers: ReadonlyMap<string, AccessLevel>;
+	plans: ReadonlyMap<string, AccessLevel>;
+	countdowns: ReadonlyMap<string, AccessLevel>;
+	groups: ReadonlyMap<string, AccessLevel>;
 } | null;
 
 export const NOTHING_HIDDEN: Hidden = {
 	checklistIds: new Set(),
 	tagIds: new Set(),
 	trackerIds: new Set(),
+	planIds: new Set(),
+	countdownIds: new Set(),
+	groupIds: new Set(),
 	inboxId: null,
 };
 
@@ -91,10 +101,11 @@ export function withAccess<T extends Stored>(
 }
 
 /**
- * What everyone in a team may do with each of its checklists, tags and
- * trackers, and what that leaves them unable to see at all.
+ * What everyone in a team may do with each of its checklists, tags,
+ * trackers, plans, countdowns and groups, and what that leaves them unable
+ * to see at all.
  *
- * Three small reads — a space has tens of these, not thousands — rather than a
+ * Small reads — a space has tens of these, not thousands — rather than a
  * lookup per screen, because every screen needs the whole picture: what to
  * leave out of a list, and what to refuse a change to.
  */
@@ -104,36 +115,59 @@ export async function readAccess(
 	email: string,
 	role: TeamRole,
 ): Promise<{ hidden: Hidden; levels: Levels }> {
-	const [checklists, tags, trackers] = await Promise.all([
-		current.checklists
-			.find(
-				{ userId: teamId },
-				{
-					projection: {
-						_id: 0,
-						checklistId: 1,
-						access: 1,
-						visibleTo: 1,
-						special: 1,
+	const [checklists, tags, trackers, plans, countdowns, settings] =
+		await Promise.all([
+			current.checklists
+				.find(
+					{ userId: teamId },
+					{
+						projection: {
+							_id: 0,
+							checklistId: 1,
+							access: 1,
+							visibleTo: 1,
+							special: 1,
+						},
 					},
-				},
-			)
-			.toArray(),
-		current.tags
-			.find(
+				)
+				.toArray(),
+			current.tags
+				.find(
+					{ userId: teamId },
+					{
+						projection: {
+							_id: 0,
+							tagId: 1,
+							access: 1,
+							visibleTo: 1,
+							special: 1,
+						},
+					},
+				)
+				.toArray(),
+			current.trackers
+				.find(
+					{ userId: teamId },
+					{ projection: { _id: 0, trackerId: 1, access: 1, visibleTo: 1 } },
+				)
+				.toArray(),
+			current.plans
+				.find(
+					{ userId: teamId },
+					{ projection: { _id: 0, planId: 1, access: 1 } },
+				)
+				.toArray(),
+			current.countdowns
+				.find(
+					{ userId: teamId },
+					{ projection: { _id: 0, countdownId: 1, access: 1 } },
+				)
+				.toArray(),
+			current.settings.findOne(
 				{ userId: teamId },
-				{
-					projection: { _id: 0, tagId: 1, access: 1, visibleTo: 1, special: 1 },
-				},
-			)
-			.toArray(),
-		current.trackers
-			.find(
-				{ userId: teamId },
-				{ projection: { _id: 0, trackerId: 1, access: 1, visibleTo: 1 } },
-			)
-			.toArray(),
-	]);
+				{ projection: { _id: 0, "groups.groupId": 1, "groups.access": 1 } },
+			),
+		]);
 
 	const ceiling = roleCeiling(role);
 	// The Inbox, the Backlog and Today are everyone's, whatever anyone asks for.
@@ -159,12 +193,18 @@ export async function readAccess(
 	const forChecklists = byId(checklists, (each) => each.checklistId);
 	const forTags = byId(tags, (each) => each.tagId);
 	const forTrackers = byId(trackers, (each) => each.trackerId);
+	const forPlans = byId(plans, (each) => each.planId);
+	const forCountdowns = byId(countdowns, (each) => each.countdownId);
+	const forGroups = byId(settings?.groups ?? [], (each) => each.groupId);
 
 	return {
 		hidden: {
 			checklistIds: forChecklists.hidden,
 			tagIds: forTags.hidden,
 			trackerIds: forTrackers.hidden,
+			planIds: forPlans.hidden,
+			countdownIds: forCountdowns.hidden,
+			groupIds: forGroups.hidden,
 			inboxId:
 				checklists.find((each) => each.special === "inbox")?.checklistId ??
 				null,
@@ -173,6 +213,9 @@ export async function readAccess(
 			checklists: forChecklists.levels,
 			tags: forTags.levels,
 			trackers: forTrackers.levels,
+			plans: forPlans.levels,
+			countdowns: forCountdowns.levels,
+			groups: forGroups.levels,
 		},
 	};
 }
@@ -192,13 +235,16 @@ export function isTaskVisible(
 	);
 }
 
-/** Which of the three an id names, for the messages below. */
-type Kind = "checklists" | "tags" | "trackers";
+/** Which kind of thing an id names, for the messages below. */
+type Kind = keyof NonNullable<Levels>;
 
 const NOUNS: Record<Kind, string> = {
 	checklists: "checklist",
 	tags: "tag",
 	trackers: "tracker",
+	plans: "plan",
+	countdowns: "countdown",
+	groups: "group",
 };
 
 /**

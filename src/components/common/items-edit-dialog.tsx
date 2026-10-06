@@ -28,7 +28,7 @@ import { createTagResolver, resolveTags, useApplyChange } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { usePermissions } from "#/lib/use-team";
 import { tagsQuery } from "#/queries/tags";
-import type { ItemsPatch, ShareableKind } from "#/schemas/change";
+import type { ItemsPatch, SchedulableKind } from "#/schemas/change";
 import type { Checklist } from "#/schemas/checklist";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
 import { type Tag, tagsFor } from "#/schemas/tag";
@@ -39,7 +39,7 @@ import type { Tracker } from "#/schemas/tracker";
  * `ItemsEditDialog`.
  */
 export type EditableItem = {
-	kind: ShareableKind;
+	kind: SchedulableKind;
 	id: string;
 	startDate: string | null;
 	deadline: string | null;
@@ -93,7 +93,7 @@ export function editableTag(tag: Tag): EditableItem {
 }
 
 /** What each is called, one and several. */
-const NOUNS: Record<ShareableKind, readonly [string, string]> = {
+const NOUNS: Record<SchedulableKind, readonly [string, string]> = {
 	checklist: ["checklist", "checklists"],
 	tracker: ["tracker", "trackers"],
 	tag: ["tag", "tags"],
@@ -357,6 +357,7 @@ function ItemsEditDialog({
 					{fields.dailyWindow !== null ||
 					fields.deadline === undefined ? null : (
 						<TimeInput
+							nativePicker="never"
 							label="Due at"
 							isOptional
 							hasClear
@@ -383,6 +384,7 @@ function ItemsEditDialog({
 							{fields.dailyWindow === null ? null : (
 								<FieldRow>
 									<TimeInput
+										nativePicker="never"
 										label="From"
 										isRequired
 										value={fields.dailyWindow.from as ISOTimeString}
@@ -395,6 +397,7 @@ function ItemsEditDialog({
 										}}
 									/>
 									<TimeInput
+										nativePicker="never"
 										label="To"
 										isRequired
 										value={fields.dailyWindow.to as ISOTimeString}

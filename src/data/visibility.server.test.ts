@@ -9,6 +9,9 @@ const hidden: Hidden = {
 	checklistIds: new Set(["chk_private"]),
 	tagIds: new Set(["tag_private"]),
 	trackerIds: new Set(),
+	planIds: new Set(),
+	countdownIds: new Set(),
+	groupIds: new Set(),
 	inboxId: "chk_inbox",
 };
 

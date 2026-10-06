@@ -26,6 +26,10 @@ import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
+/** Whether the browser grows a text area to fit its text by itself. */
+const SIZES_ITSELF =
+	typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
+
 /** Enough to choose from without the list covering the rows underneath. */
 const MAX_SUGGESTIONS = 6;
 
@@ -321,11 +325,17 @@ export function TagTextField({
 	 * Written straight onto the element rather than kept in state: it settles
 	 * before the browser paints, and a state round trip on every keystroke is
 	 * exactly the lag this field cannot afford.
+	 *
+	 * Where the browser can grow a text area to its text itself
+	 * (`field-sizing`), it is only told the bounds, once: measuring here lays
+	 * the whole dialog out twice on every keystroke, which a phone feels.
 	 */
+	const isSizedByBrowser = useRef(false);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the value is what changed the text being measured, even though the measuring reads the element rather than it.
 	useLayoutEffect(() => {
 		const field = fieldRef.current;
 		if (!field || !multiline || maxRows === undefined) return;
+		if (isSizedByBrowser.current) return;
 
 		// Measured from nothing, or a field that has grown can never shrink.
 		field.style.height = "auto";
@@ -343,6 +353,17 @@ export function TagTextField({
 		const wanted = field.scrollHeight + borders;
 		const least = minRows * line + padding + borders;
 		const most = maxRows * line + padding + borders;
+
+		if (SIZES_ITSELF) {
+			isSizedByBrowser.current = true;
+			field.style.height = "auto";
+			field.style.setProperty("field-sizing", "content");
+			field.style.minHeight = `${least}px`;
+			field.style.maxHeight = `${most}px`;
+			field.style.overflowY = "auto";
+			field.style.resize = "none";
+			return;
+		}
 
 		field.style.height = `${Math.min(Math.max(wanted, least), most)}px`;
 		// Only past the last row it may grow to is there anything to scroll.

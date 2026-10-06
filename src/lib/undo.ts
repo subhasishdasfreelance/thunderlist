@@ -31,11 +31,11 @@ export type UndoStep = {
 	/** Applied in order; more than one where putting a task back takes two. */
 	changes: Array<Change>;
 	/**
-	 * Asked before anything is applied, or `null` to simply do it.
+	 * What the question before the undo says, or `null` to say only what is
+	 * taken back; see `UndoQuestion`.
 	 *
-	 * Undoing a tick costs nothing to get wrong — press it again. Undoing an
-	 * add deletes a task, and undoing a delete writes one back, so those are
-	 * asked about, as every other destructive action in the app is.
+	 * Undoing an add deletes a task, and undoing a delete writes one back, so
+	 * those spell it out.
 	 */
 	question: string | null;
 };

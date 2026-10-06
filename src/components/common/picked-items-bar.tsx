@@ -40,10 +40,9 @@ export const DELETING: Record<PickableKind, string> = {
  * What can be done at once to the cards picked out on a screen; see
  * `usePickMode`. Each is one change for all of them.
  *
- * Deleting them, asked about first, for every kind. For checklists, trackers
- * and tags — what a group holds and an access list covers — editing what they
- * share, putting them all into a group, and in a team giving them all one
- * access list. A button is only there when it has something to do: no
+ * Deleting them, asked about first, and in a team giving them all one access
+ * list, for every kind. For checklists, trackers and tags — what a group
+ * holds — editing what they share, and putting them all into a group. A button is only there when it has something to do: no
  * groups, no group menu.
  */
 export function PickedItemsBar({
@@ -72,7 +71,7 @@ export function PickedItemsBar({
 
 	const noun = NOUNS[of];
 	const ids = items.map((item) => item.id);
-	// What a group holds and an access list covers; `null` for the rest.
+	// What a group holds; `null` for the rest.
 	const groupable =
 		of === "checklist" || of === "tracker" || of === "tag" ? of : null;
 
@@ -135,7 +134,7 @@ export function PickedItemsBar({
 					/>
 				)}
 
-				{groupable === null || team === null || items.length === 0 ? null : (
+				{team === null || items.length === 0 ? null : (
 					<Button
 						label="Share"
 						variant="secondary"
@@ -159,7 +158,7 @@ export function PickedItemsBar({
 				}}
 			/>
 
-			{groupable === null || team === null ? null : (
+			{team === null ? null : (
 				<AccessDialog
 					isOpen={isSharing}
 					onOpenChange={setIsSharing}
@@ -174,7 +173,7 @@ export function PickedItemsBar({
 					value={shared.access}
 					onSubmit={(access) => {
 						if (ids.length > 0) {
-							apply({ kind: "items.share", of: groupable, ids, access });
+							apply({ kind: "items.share", of, ids, access });
 						}
 						setIsSharing(false);
 						onDone();

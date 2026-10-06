@@ -23,6 +23,10 @@ import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
  * combined field never did, and the same shape everywhere means the deadline is
  * filled in the way the daily hours below it already were.
  *
+ * Times are typed into Astryx's own field on every screen (`nativePicker`
+ * "never"), which always reads "2:30 PM": a phone's own picker shows its
+ * system's clock, often 24-hour, for as long as it keeps focus.
+ *
  * The time only appears once there is a day for it to be on, since an hour with
  * no date is not an answer to anything, and clearing the day takes it with it.
  *
@@ -106,6 +110,7 @@ export const ScheduleFields = memo(function ScheduleFields({
 
 			{dailyWindow !== null || deadline === undefined ? null : (
 				<TimeInput
+					nativePicker="never"
 					label="Due at"
 					isOptional
 					hasClear
@@ -128,6 +133,7 @@ export const ScheduleFields = memo(function ScheduleFields({
 					{dailyWindow === null ? null : (
 						<FieldRow>
 							<TimeInput
+								nativePicker="never"
 								label="From"
 								isRequired
 								value={dailyWindow.from as ISOTimeString}
@@ -136,6 +142,7 @@ export const ScheduleFields = memo(function ScheduleFields({
 								}}
 							/>
 							<TimeInput
+								nativePicker="never"
 								label="To"
 								isRequired
 								value={dailyWindow.to as ISOTimeString}

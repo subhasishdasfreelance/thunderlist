@@ -20,7 +20,7 @@ import { createId, ID_PREFIX } from "#/lib/ids";
 import { useFocusRow } from "#/lib/use-focus-task";
 import { useNow } from "#/lib/use-now";
 import { usePickMode } from "#/lib/use-pick-mode";
-import { usePermissions } from "#/lib/use-team";
+import { useItemPermissions, usePermissions } from "#/lib/use-team";
 import { countdownsQuery } from "#/queries/countdowns";
 import { primeQuery } from "#/queries/prime";
 import { todayDateOnly } from "#/schemas/common";
@@ -101,7 +101,7 @@ function sinceLabel(countdown: Countdown, today: string): string | null {
 function CountdownTile({
 	countdown,
 	now,
-	onOpen,
+	onOpen: openIfAllowed,
 	isFocused = false,
 }: {
 	countdown: Countdown;
@@ -111,6 +111,9 @@ function CountdownTile({
 	/** The one search sent you to; it is scrolled to and ringed. */
 	isFocused?: boolean;
 }) {
+	// Opened to change only by whoever runs it; see `useItemPermissions`.
+	const { canManageContent } = useItemPermissions(countdown.access);
+	const onOpen = canManageContent ? openIfAllowed : undefined;
 	const today = now === null ? null : todayDateOnly(new Date(now));
 	const days = today === null ? null : daysUntil(countdown.date, today);
 	const since = today === null ? null : sinceLabel(countdown, today);
@@ -313,7 +316,7 @@ function CountdownsPage() {
 					of="countdown"
 					items={(data ?? []).flatMap((countdown) =>
 						pick.picked.has(countdown.countdownId)
-							? [{ id: countdown.countdownId }]
+							? [{ id: countdown.countdownId, access: countdown.access }]
 							: [],
 					)}
 					onDone={pick.stop}

@@ -882,6 +882,7 @@ export const WRITE_TOOLS: AiHandlers<
 					startDate: input.startDate ?? context.today,
 					deadline: input.deadline ?? null,
 					deadlineTime: input.deadlineTime ?? null,
+					access: input.access === undefined ? ownAlone(context) : input.access,
 				},
 			],
 			result: { groupId, name: input.name, path: `/groups/${groupId}` },
@@ -967,6 +968,7 @@ export const WRITE_TOOLS: AiHandlers<
 						startDate: input.startDate,
 						deadline: input.deadline,
 						deadlineTime: input.deadlineTime,
+						access: input.access,
 					}),
 				},
 			],
@@ -982,11 +984,17 @@ export const WRITE_TOOLS: AiHandlers<
 		};
 	},
 
-	create_plan: async (_context, input) => {
+	create_plan: async (context, input) => {
 		const planId = createId(ID_PREFIX.plan);
 		return {
 			changes: [
-				{ kind: "plan.create", planId, title: input.title, body: input.body },
+				{
+					kind: "plan.create",
+					planId,
+					title: input.title,
+					body: input.body,
+					access: input.access === undefined ? ownAlone(context) : input.access,
+				},
 			],
 			result: { planId, title: input.title, path: `/plans/${planId}` },
 		};
@@ -1013,7 +1021,7 @@ export const WRITE_TOOLS: AiHandlers<
 				{
 					kind: "plan.update",
 					planId: found.planId,
-					patch: given({ title: input.title, body }),
+					patch: given({ title: input.title, body, access: input.access }),
 				},
 			],
 			result: { updated: found.title },
@@ -1034,7 +1042,7 @@ export const WRITE_TOOLS: AiHandlers<
 		};
 	},
 
-	create_countdown: async (_context, input) => {
+	create_countdown: async (context, input) => {
 		const countdownId = createId(ID_PREFIX.countdown);
 		return {
 			changes: [
@@ -1045,6 +1053,7 @@ export const WRITE_TOOLS: AiHandlers<
 					date: input.date,
 					color: input.color ?? randomColor(),
 					format: input.format ?? "seconds",
+					access: input.access === undefined ? ownAlone(context) : input.access,
 				},
 			],
 			result: { countdownId, title: input.title },
@@ -1120,11 +1129,19 @@ export const WRITE_TOOLS: AiHandlers<
 	},
 
 	share: async (_context, input, look) => {
-		const ids = await Promise.all(
-			input.items.map(
-				async (ref) => (await findItem(look, { kind: input.kind, ref })).id,
-			),
-		);
+		const idOf = async (ref: string): Promise<string> => {
+			switch (input.kind) {
+				case "plan":
+					return (await findPlan(look, ref)).planId;
+				case "countdown":
+					return (await findCountdown(look, ref)).countdownId;
+				case "group":
+					return (await findGroup(look, ref)).groupId;
+				default:
+					return (await findItem(look, { kind: input.kind, ref })).id;
+			}
+		};
+		const ids = await Promise.all(input.items.map(idOf));
 		return {
 			changes: [
 				{

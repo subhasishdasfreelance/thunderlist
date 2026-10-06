@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { type AccessEntry, accessSchema } from "./access";
 import { dateOnlySchema, idSchema, titleSchema } from "./common";
 import { TAG_COLORS, type TagColor } from "./tag";
 
@@ -40,6 +41,11 @@ export type Countdown = {
 	color: TagColor;
 	/** Absent on one made before there was a choice: `seconds`. */
 	format?: CountdownFormat;
+	/**
+	 * In a team, who may do what with it; absent or `null` for everyone, each
+	 * at whatever their role allows. See `accessSchema`.
+	 */
+	access?: Array<AccessEntry> | null;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -52,6 +58,7 @@ export const createCountdownInputSchema = v.object({
 	date: dateOnlySchema,
 	color: v.picklist(TAG_COLORS),
 	format: v.picklist(COUNTDOWN_FORMATS),
+	access: v.optional(accessSchema, null),
 });
 
 export const updateCountdownInputSchema = v.object({
@@ -62,6 +69,7 @@ export const updateCountdownInputSchema = v.object({
 			date: v.optional(dateOnlySchema),
 			color: v.optional(v.picklist(TAG_COLORS)),
 			format: v.optional(v.picklist(COUNTDOWN_FORMATS)),
+			access: v.optional(accessSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),

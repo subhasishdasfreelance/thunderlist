@@ -7,16 +7,24 @@
 
 import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
+import type { AccessEntry } from "#/schemas/access";
 import type { Plan, PlanSummary } from "#/schemas/plan";
 import { nextNumber } from "./numbers.server";
+import type { Hidden } from "./visibility.server";
 
-/** Every plan, newest first, without its body; see `PlanSummary`. */
-export async function listPlans(userId: string): Promise<Array<PlanSummary>> {
+/**
+ * Every plan this person can see, newest first, without its body; see
+ * `PlanSummary`.
+ */
+export async function listPlans(
+	userId: string,
+	hidden: Hidden,
+): Promise<Array<PlanSummary>> {
 	const current = await collections();
 
 	return current.plans
 		.aggregate<PlanSummary>([
-			{ $match: { userId } },
+			{ $match: { userId, planId: { $nin: [...hidden.planIds] } } },
 			{ $sort: { updatedAt: -1 } },
 			{
 				$project: {
@@ -24,6 +32,7 @@ export async function listPlans(userId: string): Promise<Array<PlanSummary>> {
 					planId: 1,
 					number: 1,
 					title: 1,
+					access: 1,
 					createdAt: 1,
 					updatedAt: 1,
 					length: { $strLenCP: "$body" },
@@ -46,7 +55,12 @@ export async function getPlan(userId: string, planId: string): Promise<Plan> {
 
 export async function createPlan(
 	userId: string,
-	input: { planId: string; title: string; body: string },
+	input: {
+		planId: string;
+		title: string;
+		body: string;
+		access: ReadonlyArray<AccessEntry> | null;
+	},
 ): Promise<Plan> {
 	const current = await collections();
 
@@ -63,6 +77,7 @@ export async function createPlan(
 		number: await nextNumber(current, userId, "plan"),
 		title: input.title,
 		body: input.body,
+		access: input.access === null ? null : [...input.access],
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -74,7 +89,11 @@ export async function createPlan(
 export async function updatePlan(
 	userId: string,
 	planId: string,
-	patch: { title?: string; body?: string },
+	patch: {
+		title?: string;
+		body?: string;
+		access?: Array<AccessEntry> | null;
+	},
 ): Promise<void> {
 	const current = await collections();
 

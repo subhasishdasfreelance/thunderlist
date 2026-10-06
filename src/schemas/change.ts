@@ -76,10 +76,15 @@ const PICKABLE_KINDS = [
 
 export type PickableKind = (typeof PICKABLE_KINDS)[number];
 
-/** Of those, what has an access list, to be shared together. */
-const SHAREABLE_KINDS = ["checklist", "tracker", "tag"] as const;
+/** What has an access list, to be shared together; see `shareItems`. */
+const SHAREABLE_KINDS = [...PICKABLE_KINDS, "group"] as const;
 
 export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
+
+/** What carries a schedule and tags, to be given them together. */
+const SCHEDULABLE_KINDS = ["checklist", "tracker", "tag"] as const;
+
+export type SchedulableKind = (typeof SCHEDULABLE_KINDS)[number];
 
 const pickedIdsSchema = v.pipe(
 	v.array(idSchema),
@@ -275,7 +280,7 @@ const changeSchema = v.variant("kind", [
 	v.object({
 		kind: v.literal("items.update"),
 		items: v.pipe(
-			v.array(v.object({ kind: v.picklist(SHAREABLE_KINDS), id: idSchema })),
+			v.array(v.object({ kind: v.picklist(SCHEDULABLE_KINDS), id: idSchema })),
 			v.minLength(1, "Pick at least one"),
 			v.maxLength(500, "Too many at once"),
 		),

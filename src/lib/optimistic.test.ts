@@ -1243,6 +1243,7 @@ describe("applyOptimistically, on the rest", () => {
 			planId: "pln_2",
 			title: "Roadmap",
 			body: "# Roadmap",
+			access: null,
 		});
 		applyOptimistically(queryClient, {
 			kind: "plan.update",

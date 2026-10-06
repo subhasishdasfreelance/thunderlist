@@ -151,7 +151,9 @@ function PlansPage() {
 				<PickedItemsBar
 					of="plan"
 					items={plans.flatMap((plan) =>
-						pick.picked.has(plan.planId) ? [{ id: plan.planId }] : [],
+						pick.picked.has(plan.planId)
+							? [{ id: plan.planId, access: plan.access }]
+							: [],
 					)}
 					onDone={pick.stop}
 				/>

@@ -127,7 +127,6 @@ export function PeoplePickerDialog({
 				{everyoneLabel === undefined ? null : (
 					<RadioList
 						label="Who can see it"
-						isLabelHidden
 						isDisabled={isReadOnly}
 						value={chosen === null ? "everyone" : "chosen"}
 						onChange={(next) =>

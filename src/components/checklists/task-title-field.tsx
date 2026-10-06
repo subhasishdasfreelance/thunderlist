@@ -1,5 +1,7 @@
+import { FieldLabel } from "@astryxdesign/core/Field";
 import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { useId } from "react";
 import { TagTextField } from "#/components/tags/tag-text-field";
 import type { Checklist } from "#/schemas/checklist";
 import type { Tag } from "#/schemas/tag";
@@ -34,6 +36,7 @@ const MIN_ROWS = 2;
  */
 export function TaskTitleField({
 	label,
+	isLabelHidden = false,
 	placeholder,
 	value,
 	onChange,
@@ -44,8 +47,10 @@ export function TaskTitleField({
 	hasAutoFocus = false,
 	hint,
 }: {
-	/** Hidden, but the field's accessible name; see `TagTextField`. */
+	/** The field's accessible name, and its heading unless `isLabelHidden`. */
 	label: string;
+	/** Only for a field whose placeholder already says what it is for. */
+	isLabelHidden?: boolean;
 	placeholder?: string;
 	value: string;
 	onChange: (value: string) => void;
@@ -61,6 +66,7 @@ export function TaskTitleField({
 	/** A line under the field saying what can be written in it. */
 	hint?: string;
 }) {
+	const labelFor = useId();
 	const field = (
 		<TagTextField
 			label={label}
@@ -78,12 +84,14 @@ export function TaskTitleField({
 		/>
 	);
 
-	if (hint === undefined) return field;
+	if (isLabelHidden && hint === undefined) return field;
 
 	return (
 		<VStack gap={1}>
+			{/* Only the visible heading: the field carries its own hidden label. */}
+			{isLabelHidden ? null : <FieldLabel label={label} inputID={labelFor} />}
 			{field}
-			<Text type="supporting">{hint}</Text>
+			{hint === undefined ? null : <Text type="supporting">{hint}</Text>}
 		</VStack>
 	);
 }

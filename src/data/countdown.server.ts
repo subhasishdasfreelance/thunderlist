@@ -7,17 +7,23 @@
 
 import { AppError } from "#/lib/errors";
 import { collections, DOMAIN_FIELDS } from "#/lib/mongo/client.server";
+import type { AccessEntry } from "#/schemas/access";
 import type { Countdown, CountdownFormat } from "#/schemas/countdown";
 import type { TagColor } from "#/schemas/tag";
 import { nextNumber } from "./numbers.server";
+import type { Hidden } from "./visibility.server";
 
-/** Every countdown, by the day each counts down to. */
+/** Every countdown this person can see, by the day each counts down to. */
 export async function listCountdowns(
 	userId: string,
+	hidden: Hidden,
 ): Promise<Array<Countdown>> {
 	const current = await collections();
 	return current.countdowns
-		.find({ userId }, { projection: DOMAIN_FIELDS, sort: { date: 1 } })
+		.find(
+			{ userId, countdownId: { $nin: [...hidden.countdownIds] } },
+			{ projection: DOMAIN_FIELDS, sort: { date: 1 } },
+		)
 		.toArray();
 }
 
@@ -29,6 +35,7 @@ export async function createCountdown(
 		date: string;
 		color: TagColor;
 		format: CountdownFormat;
+		access: ReadonlyArray<AccessEntry> | null;
 	},
 ): Promise<Countdown> {
 	const current = await collections();
@@ -48,6 +55,7 @@ export async function createCountdown(
 		date: input.date,
 		color: input.color,
 		format: input.format,
+		access: input.access === null ? null : [...input.access],
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -64,6 +72,7 @@ export async function updateCountdown(
 		date?: string;
 		color?: TagColor;
 		format?: CountdownFormat;
+		access?: Array<AccessEntry> | null;
 	},
 ): Promise<void> {
 	const current = await collections();

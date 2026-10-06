@@ -458,18 +458,26 @@ async function assertAllowed(
 			assertLevel(scope, "tags", change.tagId, "full");
 			return;
 
-		// All or nothing: one they may not change refuses the lot. Plans and
-		// countdowns have no list of their own; the role alone says.
+		case "plan.update":
+		case "plan.delete":
+			assertLevel(scope, "plans", change.planId, "full");
+			return;
+
+		case "countdown.update":
+		case "countdown.delete":
+			assertLevel(scope, "countdowns", change.countdownId, "full");
+			return;
+
+		case "group.update":
+		case "group.delete":
+			assertLevel(scope, "groups", change.groupId, "full");
+			return;
+
+		// All or nothing: one they may not change refuses the lot.
 		case "items.delete":
 		case "items.share":
-			if (
-				change.of === "checklist" ||
-				change.of === "tracker" ||
-				change.of === "tag"
-			) {
-				for (const id of change.ids) {
-					assertLevel(scope, `${change.of}s`, id, "full");
-				}
+			for (const id of change.ids) {
+				assertLevel(scope, `${change.of}s`, id, "full");
 			}
 			return;
 
@@ -526,9 +534,15 @@ function namedPeople(change: Change): ReadonlyArray<string> {
 	switch (change.kind) {
 		case "checklist.create":
 		case "tag.create":
+		case "plan.create":
+		case "countdown.create":
+		case "group.create":
 			return listed(change.access);
 		case "checklist.update":
 		case "tag.update":
+		case "plan.update":
+		case "countdown.update":
+		case "group.update":
 			return listed(change.patch.access);
 		case "task.update":
 			return change.patch.assignees ?? [];
@@ -658,7 +672,7 @@ async function keepingHiddenTags(
 }
 
 /**
- * Whoever keeps a checklist, a tag or a tracker to a few people is one of them
+ * Whoever keeps anything to a few people is one of them
  * and runs it, so the list they choose never locks them out of what they are
  * working on — nor leaves it with nobody who can change it again.
  */
@@ -680,6 +694,9 @@ function includingActor(scope: Scope, change: Change): Change {
 			return { ...change, access: including(change.access) };
 
 		case "tracker.create":
+		case "plan.create":
+		case "countdown.create":
+		case "group.create":
 			return { ...change, access: including(change.access) };
 
 		case "checklist.update": {
@@ -697,6 +714,15 @@ function includingActor(scope: Scope, change: Change): Change {
 		}
 
 		case "tag.update": {
+			const { access } = change.patch;
+			return access === undefined
+				? change
+				: { ...change, patch: { ...change.patch, access: including(access) } };
+		}
+
+		case "plan.update":
+		case "countdown.update":
+		case "group.update": {
 			const { access } = change.patch;
 			return access === undefined
 				? change

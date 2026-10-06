@@ -47,6 +47,7 @@ import type {
 	Change,
 	ItemsPatch,
 	PickableKind,
+	SchedulableKind,
 	ShareableKind,
 } from "#/schemas/change";
 import {
@@ -1611,6 +1612,9 @@ function asStored(client: QueryClient, change: Change): Change {
 		case "checklist.create":
 		case "tag.create":
 		case "tracker.create":
+		case "plan.create":
+		case "countdown.create":
+		case "group.create":
 			return { ...change, access: including(change.access) };
 
 		case "checklist.update": {
@@ -1637,7 +1641,10 @@ function asStored(client: QueryClient, change: Change): Change {
 				: { ...change, patch: { ...change.patch, access: including(access) } };
 		}
 
-		case "tracker.update": {
+		case "tracker.update":
+		case "plan.update":
+		case "countdown.update":
+		case "group.update": {
 			const { access } = change.patch;
 			return access === undefined
 				? change
@@ -1737,6 +1744,12 @@ function sharingOne(
 			return { kind: "tracker.update", trackerId: id, patch };
 		case "tag":
 			return { kind: "tag.update", tagId: id, patch };
+		case "plan":
+			return { kind: "plan.update", planId: id, patch };
+		case "countdown":
+			return { kind: "countdown.update", countdownId: id, patch };
+		case "group":
+			return { kind: "group.update", groupId: id, patch };
 	}
 }
 
@@ -1747,7 +1760,7 @@ function sharingOne(
  */
 function updatingOne(
 	client: QueryClient,
-	item: { kind: ShareableKind; id: string },
+	item: { kind: SchedulableKind; id: string },
 	{ addTagIds = [], removeTagIds = [], dailyWindow, ...fields }: ItemsPatch,
 ): Change | null {
 	const isRetagging = addTagIds.length > 0 || removeTagIds.length > 0;
@@ -1906,6 +1919,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				startDate: change.startDate,
 				deadline: null,
 				deadlineTime: null,
+				access: null,
 			});
 			return;
 
@@ -2548,6 +2562,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				planId: change.planId,
 				title: change.title,
 				body: change.body,
+				access: change.access,
 				createdAt,
 				updatedAt: createdAt,
 			};

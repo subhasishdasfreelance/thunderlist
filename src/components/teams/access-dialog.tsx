@@ -162,7 +162,6 @@ export function AccessDialog({
 
 				<RadioList
 					label="Who it is for"
-					isLabelHidden
 					isDisabled={isReadOnly}
 					value={chosen === null ? "everyone" : "chosen"}
 					onChange={(next) =>

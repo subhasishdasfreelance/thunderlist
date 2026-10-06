@@ -271,6 +271,7 @@ export function TaskRenameDialog({
 							<form.Field name="deadlineTime">
 								{(field) => (
 									<TimeInput
+										nativePicker="never"
 										label="Due at"
 										isOptional
 										hasClear

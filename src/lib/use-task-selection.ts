@@ -17,6 +17,9 @@ const OWN_ARROWS =
 const OWN_CLICKS =
 	'a, button, input, label, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"]';
 
+/** How far a press may move and still be a click rather than a drag, in px. */
+const CLICK_SLOP = 4;
+
 /** No task picked. One set, so clearing twice draws nothing again. */
 const NONE: ReadonlySet<string> = new Set();
 
@@ -120,13 +123,20 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			);
 		}
 
+		// Where the last press started, to tell a click from a drag's end.
+		let pressedAt = { x: 0, y: 0 };
+
 		// A press may start a new drag, which adds to what is already picked.
-		function onPointerDown() {
+		function onPointerDown(event: PointerEvent) {
 			before.current = pickedNow.current;
+			pressedAt = { x: event.clientX, y: event.clientY };
 		}
 
 		// While anything is picked, a click on a row picks it or lets it go. The
 		// click that ends a drag over text, or a double click, is left alone.
+		// Told apart by how far the pointer went, not by the text selection: a
+		// click inside the selection a drag left still finds it there, as the
+		// browser only lets go of it afterwards.
 		function onClick(event: MouseEvent) {
 			if (pickedNow.current.size === 0) return;
 			if (event.defaultPrevented || event.button !== 0 || event.detail > 1) {
@@ -137,8 +147,12 @@ export function useTaskSelection(kind: PickedRow = "task"): {
 			const row = event.target.closest<HTMLElement>(ROW);
 			const id = row === null ? undefined : idOf(row);
 			if (id === undefined) return;
-			const selection = document.getSelection();
-			if (selection !== null && !selection.isCollapsed) return;
+			const moved = Math.hypot(
+				event.clientX - pressedAt.x,
+				event.clientY - pressedAt.y,
+			);
+			if (moved > CLICK_SLOP) return;
+			document.getSelection()?.removeAllRanges();
 
 			setPicked((current) => {
 				const next = new Set(current);

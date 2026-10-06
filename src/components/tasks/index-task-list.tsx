@@ -1,39 +1,25 @@
-import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Card } from "@astryxdesign/core/Card";
 import { Divider } from "@astryxdesign/core/Divider";
 import { VStack } from "@astryxdesign/core/Stack";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ChecklistPickerDialog } from "#/components/checklists/checklist-picker-dialog";
-import { TaskRenameDialog } from "#/components/checklists/task-rename-dialog";
 import { TaskRow } from "#/components/checklists/task-row";
 import { ListPagination } from "#/components/common/list-pagination";
-import { TagTasks } from "#/components/tags/tag-tasks";
 import { SelectionBar } from "#/components/tasks/selection-bar";
-import { TaskTypeDialog } from "#/components/tasks/task-type-dialog";
-import { TasksEditDialog } from "#/components/tasks/tasks-edit-dialog";
-import { AssignDialog } from "#/components/teams/assign-dialog";
+import { useTaskDialogs } from "#/components/tasks/task-dialogs";
 import {
 	applyBatched,
-	assignAlike,
-	createTagResolver,
 	moveAllToStage,
 	moveManyToBacklog,
 	moveToBacklog,
-	resolveTags,
 	setSpecialTag,
-	setTypeOnAll,
 	toggleAssignee,
 	toggleAssigneeOnAll,
 	toggleFlagOnAll,
 	toggleSpecialTagOnAll,
-	updateAllAlike,
 	updateTask,
 	useApplyChange,
 } from "#/lib/changes";
-import { shortTitle } from "#/lib/tasks/tasks";
-import { useHeld } from "#/lib/use-held";
 import type { useTaskSelection } from "#/lib/use-task-selection";
 import { usePermissions, useSpace } from "#/lib/use-team";
 import { checklistsQuery } from "#/queries/checklists";
@@ -86,33 +72,16 @@ export function IndexTaskList({
 	const team = space?.team ?? null;
 	const { canManageContent, canUpdateTasks } = usePermissions();
 
-	const [renaming, setRenaming] = useState<TaggedTask | null>(null);
-	// Every task picked out, edited together; see `TasksEditDialog`.
-	const [editingMany, setEditingMany] =
-		useState<ReadonlyArray<TaggedTask> | null>(null);
-	const [pendingDelete, setPendingDelete] = useState<TaggedTask | null>(null);
-	// Its title stays on the question while it closes; see `useHeld`.
-	const shownDelete = useHeld(pendingDelete);
-	// The tasks being given to people: the one pointed at, or every one
-	// picked out; see `AssignDialog`.
-	const [assigning, setAssigning] = useState<ReadonlyArray<TaggedTask> | null>(
-		null,
-	);
-	const [typing, setTyping] = useState<ReadonlyArray<TaggedTask> | null>(null);
-	// The tasks a tag is being put on, moved or deleted: the one pointed at,
-	// or every one picked out; see `SelectionBar`.
-	const [tagging, setTagging] = useState<ReadonlyArray<TaggedTask> | null>(
-		null,
-	);
-	const [moving, setMoving] = useState<ReadonlyArray<TaggedTask> | null>(null);
-	const [deleting, setDeleting] = useState<ReadonlyArray<TaggedTask> | null>(
-		null,
-	);
-	const shownDeleting = useHeld(deleting);
 	const { picked, clear } = selection;
 
 	const tags = tagsResult.data ?? [];
 	const checklists = checklistsResult.data ?? [];
+	// What its rows and the bar open over the list; see `useTaskDialogs`.
+	const taskDialogs = useTaskDialogs({
+		tags,
+		canManageContent,
+		onPickDone: clear,
+	});
 	// Somewhere to park a task; see `moveToBacklog`.
 	const backlog = specialChecklist(checklists, "backlog");
 
@@ -225,12 +194,13 @@ export function IndexTaskList({
 					onSetUrgent: (urgent) => updateTask(apply, task.taskId, { urgent }),
 					onSetImportant: (important) =>
 						updateTask(apply, task.taskId, { important }),
-					onSetType: () => setTyping([task]),
-					onAddTag: () => setTagging([task]),
-					onRename: () => setRenaming(task),
-					onMove: () => setMoving([task]),
-					onDelete: () => setPendingDelete(task),
-					onAssign: team === null ? undefined : () => setAssigning([task]),
+					onSetType: () => taskDialogs.setType([task]),
+					onAddTag: () => taskDialogs.tag([task]),
+					onRename: () => taskDialogs.rename(task),
+					onMove: () => taskDialogs.move([task]),
+					onDelete: () => taskDialogs.deleteOne(task),
+					onAssign:
+						team === null ? undefined : () => taskDialogs.assign([task]),
 					onToggleMine:
 						space?.team == null
 							? undefined
@@ -273,11 +243,14 @@ export function IndexTaskList({
 					onMoveTo={moveTo}
 					onDone={pickedTasks.some(isFinishable) ? finish : undefined}
 					onMoveToChecklist={
-						canManageContent ? () => setMoving(pickedTasks) : undefined
+						canManageContent ? () => taskDialogs.move(pickedTasks) : undefined
 					}
-					onAddTag={() => setTagging(pickedTasks)}
+					onAddTag={() => taskDialogs.tag(pickedTasks)}
 					onDelete={
-						canManageContent ? () => setDeleting(pickedTasks) : undefined
+						canManageContent
+							? () =>
+									taskDialogs.deleteMany(pickedTasks.map((task) => task.taskId))
+							: undefined
 					}
 					onToggleToday={() =>
 						toggleSpecialTagOnAll(apply, pickedTasks, "today", tags)
@@ -297,157 +270,25 @@ export function IndexTaskList({
 					onToggleImportant={() =>
 						toggleFlagOnAll(apply, pickedTasks, "important")
 					}
-					onSetType={() => setTyping(pickedTasks)}
+					onSetType={() => taskDialogs.setType(pickedTasks)}
 					onToggleMine={
 						space?.team == null
 							? undefined
 							: () => toggleAssigneeOnAll(apply, pickedTasks, space.email)
 					}
-					onAssign={team === null ? undefined : () => setAssigning(pickedTasks)}
+					onAssign={
+						team === null ? undefined : () => taskDialogs.assign(pickedTasks)
+					}
 					onEdit={() =>
 						pickedTasks.length === 1
-							? setRenaming(pickedTasks[0])
-							: setEditingMany(pickedTasks)
+							? taskDialogs.rename(pickedTasks[0])
+							: taskDialogs.editMany(pickedTasks)
 					}
 					onClear={clear}
 				/>
 			)}
 
-			<AssignDialog
-				isOpen={assigning !== null}
-				onOpenChange={(open) => {
-					if (!open) setAssigning(null);
-				}}
-				tasks={assigning}
-				onSubmit={(assignees) => {
-					if (assigning) assignAlike(apply, assigning, assignees);
-					setAssigning(null);
-				}}
-			/>
-
-			<TagTasks
-				tasks={tagging}
-				tags={tags}
-				canCreate={canManageContent}
-				onClose={() => setTagging(null)}
-			/>
-
-			<TasksEditDialog
-				isOpen={editingMany !== null}
-				onOpenChange={(isOpen) => {
-					if (!isOpen) setEditingMany(null);
-				}}
-				tasks={editingMany}
-				onSave={(edit) => {
-					if (editingMany) updateAllAlike(apply, editingMany, edit);
-					setEditingMany(null);
-				}}
-			/>
-
-			<TaskTypeDialog
-				isOpen={typing !== null}
-				onOpenChange={(open) => {
-					if (!open) setTyping(null);
-				}}
-				tasks={typing}
-				onPick={(typeId) => {
-					if (typing) setTypeOnAll(apply, typing, typeId);
-					setTyping(null);
-				}}
-			/>
-
-			<ChecklistPickerDialog
-				isOpen={moving !== null}
-				onOpenChange={(open) => {
-					if (!open) setMoving(null);
-				}}
-				title="Move to checklist"
-				subtitle={
-					moving === null
-						? undefined
-						: moving.length === 1
-							? moving[0].title
-							: `${moving.length} tasks`
-				}
-				// Every checklist but the one they are all already in.
-				checklists={checklists.filter(
-					(checklist) =>
-						!(moving ?? []).every(
-							(task) => task.checklistId === checklist.checklistId,
-						),
-				)}
-				isLoading={checklistsResult.isPending}
-				onPick={(target) => {
-					applyBatched(apply, (collect) => {
-						for (const task of moving ?? []) {
-							if (task.checklistId === target) continue;
-							collect({
-								kind: "task.move",
-								taskId: task.taskId,
-								checklistId: target,
-							});
-						}
-					});
-					setMoving(null);
-					clear();
-				}}
-			/>
-
-			<TaskRenameDialog
-				isOpen={renaming !== null}
-				onOpenChange={(open) => {
-					if (!open) setRenaming(null);
-				}}
-				task={renaming}
-				tags={tags}
-				onSubmit={(parsed, details) => {
-					if (renaming) {
-						const resolveTag = createTagResolver(apply, tags, canManageContent);
-						updateTask(apply, renaming.taskId, {
-							title: parsed.title,
-							tagIds: resolveTags(resolveTag, parsed.tagNames),
-							...details,
-						});
-					}
-					setRenaming(null);
-				}}
-			/>
-
-			<AlertDialog
-				isOpen={pendingDelete !== null}
-				onOpenChange={(open) => {
-					if (!open) setPendingDelete(null);
-				}}
-				title={`Delete "${shortTitle(shownDelete?.title ?? "")}"?`}
-				description="This task will be deleted."
-				actionLabel="Delete"
-				onAction={() => {
-					if (pendingDelete) {
-						apply({ kind: "task.delete", taskId: pendingDelete.taskId });
-					}
-					setPendingDelete(null);
-				}}
-			/>
-
-			<AlertDialog
-				isOpen={deleting !== null}
-				onOpenChange={(open) => {
-					if (!open) setDeleting(null);
-				}}
-				title={`Delete ${shownDeleting?.length ?? 0} tasks?`}
-				description="Every task picked out will be deleted."
-				actionLabel="Delete"
-				onAction={() => {
-					if (deleting) {
-						apply({
-							kind: "task.deleteMany",
-							taskIds: deleting.map((task) => task.taskId),
-						});
-					}
-					setDeleting(null);
-					clear();
-				}}
-			/>
+			{taskDialogs.dialogs}
 		</>
 	);
 }

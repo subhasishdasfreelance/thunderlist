@@ -188,6 +188,7 @@ describe("groups", () => {
 			color: "blue",
 			items: [{ kind: "checklist", id: "chk_1" }],
 			startDate: "2026-01-01",
+			access: null,
 			deadline: null,
 			deadlineTime: null,
 		});

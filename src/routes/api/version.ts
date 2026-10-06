@@ -4,7 +4,7 @@ import { BUILD_ID } from "#/lib/version";
 
 /**
  * Which build the server is running, for a page left open to compare with its
- * own; see `useNewVersionPrompt`. Never cached: a kept answer would hide the
+ * own; see `useNewVersionCheck`. Never cached: a kept answer would hide the
  * very deploy it is asked about.
  *
  * The first time a release is asked, it is announced to everyone; see

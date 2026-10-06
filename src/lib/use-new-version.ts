@@ -1,7 +1,4 @@
-import { Button } from "@astryxdesign/core/Button";
-import { RotateCw } from "lucide-react";
 import { useEffect } from "react";
-import { useToast } from "#/lib/toasts";
 import { BUILD_ID } from "#/lib/version";
 
 /** How often an open page asks whether there is a newer build. */
@@ -57,42 +54,27 @@ function refreshStartPages(): Promise<void> {
 }
 
 /**
- * Notice a new deploy while the page is open, and offer to load it.
+ * Notice a new deploy while the page is open, and get it ready.
  *
  * As the app opens — a launch can open on a copy kept from before a deploy —
  * every few minutes after, as the page comes back into view, as the connection
  * returns, as a new service worker takes over, and as a release notification
- * arrives (see `announceRelease`), the server is asked which build it runs. A
- * different one has its files fetched in the background, and only then is the
- * refresh offered, so taking it up is quick. Nothing reloads by itself: a
- * reload in the middle of typing would lose it.
- *
- * Taking it up — here or from the notification — closes the offer at once:
- * the new page can take a moment to arrive, and an offer still up after the
- * tap reads as a tap that did nothing.
+ * arrives, the server is asked which build it runs. Asking is also what has a
+ * release announced, by push notification, to everyone; see `announceRelease`.
+ * A different build has its files fetched in the background, so the refresh —
+ * offered by that notification, never on the page — is quick. Nothing reloads
+ * by itself: a reload in the middle of typing would lose it.
  *
  * Production only: in development Vite swaps code in by itself.
  */
-export function useNewVersionPrompt(): void {
-	const toast = useToast();
-
+export function useNewVersionCheck(): void {
 	useEffect(() => {
 		if (!import.meta.env.PROD) return;
 
 		let lastChecked = 0;
 		let isChecking = false;
-		/** The build already offered, so it is not offered again. */
-		let offered: string | null = null;
-		/** Closes the offer on screen; `null` while there is none. */
-		let dismissOffer: (() => void) | null = null;
-		/** Already reloading onto the new version, so there is nothing to offer. */
-		let isRefreshing = false;
-
-		function refreshNow() {
-			isRefreshing = true;
-			dismissOffer?.();
-			dismissOffer = null;
-		}
+		/** The build already fetched, so it is not fetched again. */
+		let fetched: string | null = null;
 
 		async function check(isForced = false) {
 			if (isChecking || !navigator.onLine) return;
@@ -102,27 +84,9 @@ export function useNewVersionPrompt(): void {
 
 			try {
 				const build = await newerBuild();
-				if (build === null || build === offered) return;
+				if (build === null || build === fetched) return;
 				await fetchNewFiles();
-				if (isRefreshing) return;
-				offered = build;
-				dismissOffer = toast({
-					body: "A new version of Thunderlist is ready.",
-					type: "info",
-					isAutoHide: false,
-					uniqueID: "new-version",
-					endContent: (
-						<Button
-							label="Refresh"
-							icon={<RotateCw aria-hidden />}
-							size="sm"
-							onClick={() => {
-								refreshNow();
-								window.location.reload();
-							}}
-						/>
-					),
-				});
+				fetched = build;
 			} catch {
 				// Asked again at the next turn.
 			} finally {
@@ -142,11 +106,9 @@ export function useNewVersionPrompt(): void {
 			if (hadWorker) void check(true);
 		};
 
-		// Told by the service worker that a release notification came, or that
-		// it was tapped and this window is about to be reloaded.
+		// Told by the service worker that a release notification came.
 		const onWorkerMessage = (event: MessageEvent) => {
 			if (event.data?.type === "release") void check(true);
-			if (event.data?.type === "refreshing") refreshNow();
 		};
 
 		void check(true);
@@ -163,5 +125,5 @@ export function useNewVersionPrompt(): void {
 			serviceWorker?.removeEventListener("controllerchange", onNewWorker);
 			serviceWorker?.removeEventListener("message", onWorkerMessage);
 		};
-	}, [toast]);
+	}, []);
 }

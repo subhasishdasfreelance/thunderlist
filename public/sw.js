@@ -290,7 +290,7 @@ self.addEventListener("push", (event) => {
 				// A new version: refreshing is the thing to do with it.
 				actions: isRelease ? [{ action: "refresh", title: "Refresh" }] : [],
 			}),
-			// A window already open asks at once, and offers it there too.
+			// A window already open asks at once, and fetches it ahead.
 			isRelease ? tellWindows({ type: "release" }) : null,
 		]),
 	);
@@ -306,7 +306,7 @@ async function tellWindows(message) {
  * 6. A new version. The kept copy of the start page — see 3 — is fetched
  *    afresh, with its files, so refreshing onto it brings the new version
  *    rather than the copy kept before the deploy. Asked for by a page that has
- *    found a new version (`useNewVersionPrompt`), and done before a tap on a
+ *    found a new version (`useNewVersionCheck`), and done before a tap on a
  *    release notification refreshes anything.
  */
 async function refreshStartPages() {
@@ -350,8 +350,7 @@ self.addEventListener("notificationclick", (event) => {
 			 * A new version: the app opened if it is not, and every window of it
 			 * loaded again, onto the new version. Opened or brought forward first,
 			 * as the browser only allows it just after the tap. A window this
-			 * worker does not control cannot be reloaded from here; it offers the
-			 * refresh itself; see `useNewVersionPrompt`.
+			 * worker does not control cannot be reloaded from here.
 			 */
 			if (isRelease) {
 				freshPagesUntil = Date.now() + 30_000;
@@ -365,9 +364,6 @@ self.addEventListener("notificationclick", (event) => {
 					await self.clients.openWindow(url);
 					return;
 				}
-				// The offer in each window closed first, as the new page can take a
-				// moment to arrive.
-				for (const client of windows) client.postMessage({ type: "refreshing" });
 				await windows[0].focus();
 				await Promise.all(
 					windows.map((client) => client.navigate(client.url).catch(() => null)),

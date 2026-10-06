@@ -28,9 +28,9 @@ const DEPTH = 20;
  * which is how a touch screen gets at it; see `UndoButton` — takes the top one
  * off and applies it. Nothing is announced as it is done: the change is on
  * screen already, and a toast on every tick is only noise.
- * Undoing something that deletes a task or writes one back asks first, as
- * pressing the same thing on screen would; that question is drawn by
- * `UndoQuestion`, inside the theme, rather than here.
+ * Every undo asks first, so a stray Ctrl+Z or tap takes nothing back; the
+ * question is drawn by `UndoQuestion`, inside the theme, rather than here.
+ * Saying no leaves the step where it was, to be undone later.
  *
  * Not while typing: a text field has an undo of its own, and taking Ctrl+Z off
  * a half-written task to reverse something else entirely is the opposite of
@@ -87,7 +87,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 		[apply, toast],
 	);
 
-	/** Take the last step back, asking first where it deletes or writes a task. */
+	/** Ask about taking the last step back; see `confirm`. */
 	const undoLast = useCallback(() => {
 		const step = steps.current[steps.current.length - 1];
 		if (step === undefined) {
@@ -95,10 +95,8 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			return;
 		}
 
-		keep(steps.current.slice(0, -1));
-		if (step.question === null) run(step);
-		else setAsking(step);
-	}, [keep, run, toast]);
+		setAsking(step);
+	}, [toast]);
 
 	const remember = useCallback(
 		(change: Change) => {
@@ -172,19 +170,22 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 			undoLast,
 			asking,
 			confirm: () => {
-				if (asking !== null) run(asking);
+				if (asking !== null) {
+					keep(steps.current.filter((step) => step !== asking));
+					run(asking);
+				}
 				setAsking(null);
 			},
 			dismiss: () => setAsking(null),
 		}),
-		[remember, forget, latest, undoLast, asking, run],
+		[remember, forget, latest, undoLast, asking, keep, run],
 	);
 
 	return <UndoContext value={value}>{children}</UndoContext>;
 }
 
 /**
- * The question asked before an undo that deletes a task or writes one back.
+ * The question asked before every undo.
  *
  * Drawn inside the frame rather than by the provider, which wraps it: the
  * theme's own styles are scoped to the element `Theme` renders, so a dialog
@@ -199,8 +200,12 @@ export function UndoQuestion() {
 			onOpenChange={(open) => {
 				if (!open) undo?.dismiss();
 			}}
-			title="Undo that?"
-			description={undo?.asking?.question ?? ""}
+			title="Do you want to undo?"
+			description={
+				undo?.asking == null
+					? ""
+					: (undo.asking.question ?? `Undo ${undo.asking.label.toLowerCase()}?`)
+			}
 			actionLabel="Undo"
 			onAction={() => undo?.confirm()}
 		/>

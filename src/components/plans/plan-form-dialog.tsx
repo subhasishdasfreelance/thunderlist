@@ -1,4 +1,5 @@
 import { Button } from "@astryxdesign/core/Button";
+import { FieldLabel } from "@astryxdesign/core/Field";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import {
 	SegmentedControl,
@@ -7,13 +8,20 @@ import {
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Check, FileUp, X } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { FadeImage } from "#/components/common/fade-image";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextArea, TextInput } from "#/components/common/text-fields";
+import { AccessField, useOwnAlone } from "#/components/teams/access-field";
+import type { AccessEntry } from "#/schemas/access";
 import { type Plan, planTitleFrom } from "#/schemas/plan";
 
-export type PlanValues = { title: string; body: string };
+export type PlanValues = {
+	title: string;
+	body: string;
+	/** Who may do what with it, or `null` for the whole team. */
+	access: Array<AccessEntry> | null;
+};
 
 /** An image in a plan, drawn as every image in the app is. */
 const MARKDOWN_COMPONENTS = {
@@ -48,8 +56,12 @@ export function PlanFormDialog({
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 	const [view, setView] = useState<"write" | "preview">("write");
+	const planLabelFor = useId();
 	const [readError, setReadError] = useState<string | null>(null);
 	const fileRef = useRef<HTMLInputElement>(null);
+	// A new one starts with its author alone on it; see `AccessField`.
+	const ownAlone = useOwnAlone();
+	const [access, setAccess] = useState<Array<AccessEntry> | null>(null);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: read as it opens, not followed while it is open.
 	useEffect(() => {
@@ -58,6 +70,7 @@ export function PlanFormDialog({
 		setBody(plan?.body ?? initial?.body ?? "");
 		setView(plan === undefined && initial !== undefined ? "preview" : "write");
 		setReadError(null);
+		setAccess(plan === undefined ? ownAlone : (plan.access ?? null));
 	}, [isOpen]);
 
 	async function importFile(file: File) {
@@ -78,7 +91,7 @@ export function PlanFormDialog({
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		if (problem !== null) return;
-		onSubmit({ title: trimmed, body });
+		onSubmit({ title: trimmed, body, access });
 	}
 
 	return (
@@ -119,6 +132,9 @@ export function PlanFormDialog({
 				/>
 
 				<VStack gap={2}>
+					{/* Only the visible heading: the text area carries its own hidden
+					    label, and in preview there is no field to point at. */}
+					<FieldLabel label="Plan" inputID={planLabelFor} />
 					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
 						<SegmentedControl
 							label="Show the plan as"
@@ -176,6 +192,8 @@ export function PlanFormDialog({
 						</div>
 					)}
 				</VStack>
+
+				<AccessField noun="plan" value={access} onChange={setAccess} />
 			</VStack>
 		</FormDialog>
 	);

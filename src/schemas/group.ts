@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { type AccessEntry, accessSchema } from "./access";
 import { stagesSchema } from "./checklist";
 import {
 	dateOnlySchema,
@@ -79,6 +80,12 @@ export type Group = {
 	deadline?: string | null;
 	/** `HH:MM` on the deadline day; absent or `null` for that day's start. */
 	deadlineTime?: string | null;
+	/**
+	 * In a team, who may do what with the group itself — not with what it
+	 * holds, which each keeps for itself; absent or `null` for everyone, each
+	 * at whatever their role allows. See `accessSchema`.
+	 */
+	access?: Array<AccessEntry> | null;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -120,6 +127,7 @@ export const createGroupInputSchema = v.object({
 	startDate: dateOnlySchema,
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
+	access: v.optional(accessSchema, null),
 });
 
 export const updateGroupInputSchema = v.object({
@@ -138,6 +146,7 @@ export const updateGroupInputSchema = v.object({
 			startDate: v.optional(dateOnlySchema),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
+			access: v.optional(accessSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
 	),
