@@ -26,6 +26,7 @@ import {
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
 import type { TrackerValues } from "#/lib/changes";
+import { createId, ID_PREFIX } from "#/lib/ids";
 import { useImageDraft } from "#/lib/uploads";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
@@ -86,9 +87,12 @@ export function TrackerFormDialog({
 	 * `AccessField`.
 	 */
 	const ownAlone = useOwnAlone();
+	// A new one is given its id as the form opens, so pictures can be sent for
+	// it before it is saved; see `TrackerValues.trackerId`.
+	const [newId, setNewId] = useState<string | null>(null);
 	const imageDraft = useImageDraft(
 		"trackers",
-		tracker?.trackerId ?? null,
+		tracker?.trackerId ?? newId,
 		tracker?.images,
 		isOpen,
 	);
@@ -98,6 +102,7 @@ export function TrackerFormDialog({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
 	useEffect(() => {
 		if (!isOpen) return;
+		setNewId(tracker ? null : createId(ID_PREFIX.tracker));
 		setTitle(tracker?.title ?? "");
 		setCaption(tracker?.caption ?? "");
 		setUnit(tracker?.unit ?? TRACKER_TYPE_DEFAULT_UNITS.book);
@@ -173,6 +178,7 @@ export function TrackerFormDialog({
 			assignees,
 			access,
 			...(images === undefined ? {} : { images }),
+			...(newId === null ? {} : { trackerId: newId }),
 		});
 	}
 
@@ -285,7 +291,7 @@ export function TrackerFormDialog({
 					placeholder="https://…"
 				/>
 
-				{tracker ? <ImagesField draft={imageDraft} /> : null}
+				<ImagesField draft={imageDraft} />
 
 				<ScheduleFields
 					startDate={startDate}

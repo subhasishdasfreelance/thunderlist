@@ -543,6 +543,8 @@ export const createChecklistInputSchema = v.object({
 	stages: v.optional(stagesSchema),
 	urgent: v.optional(v.boolean()),
 	important: v.optional(v.boolean()),
+	/** Sent from the form it was made in; see `useImageDraft`. */
+	images: v.optional(imagesSchema),
 });
 
 export const updateChecklistInputSchema = v.object({

@@ -213,6 +213,8 @@ export const createTrackerInputSchema = v.object({
 	tagIds: v.optional(tagIdsSchema, []),
 	assignees: v.optional(assigneesSchema, []),
 	access: v.optional(accessSchema, null),
+	/** Sent from the form it was made in; see `useImageDraft`. */
+	images: v.optional(imagesSchema),
 });
 
 export const updateTrackerInputSchema = v.object({

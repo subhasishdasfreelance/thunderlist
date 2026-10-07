@@ -2091,6 +2091,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				stages: change.stages,
 				urgent: change.urgent,
 				important: change.important,
+				images: change.images,
 				createdAt,
 				updatedAt: createdAt,
 				progress: { total: 0, completed: 0, percent: 0, byStage: {} },
@@ -2243,6 +2244,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				tagIds: change.tagIds,
 				assignees: change.assignees,
 				access: change.access,
+				images: change.images,
 				createdAt,
 				updatedAt: createdAt,
 			});

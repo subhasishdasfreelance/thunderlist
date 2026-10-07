@@ -22,6 +22,7 @@ import {
 } from "#/components/tags/tags-field";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { ChecklistValues } from "#/lib/changes";
+import { createId, ID_PREFIX } from "#/lib/ids";
 import { useImageDraft } from "#/lib/uploads";
 import type { AccessEntry } from "#/schemas/access";
 import {
@@ -109,9 +110,12 @@ export function ChecklistFormDialog({
 	 * `AccessField`.
 	 */
 	const ownAlone = useOwnAlone();
+	// A new one is given its id as the form opens, so pictures can be sent for
+	// it before it is saved; see `ChecklistValues.checklistId`.
+	const [newId, setNewId] = useState<string | null>(null);
 	const imageDraft = useImageDraft(
 		"checklists",
-		checklist?.checklistId ?? null,
+		checklist?.checklistId ?? newId,
 		checklist?.images,
 		isOpen,
 	);
@@ -122,6 +126,7 @@ export function ChecklistFormDialog({
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the tags are read as the dialog opens and not followed after, or a list still loading would reset what is being typed on every render. A tag they cannot name yet is kept, not lost.
 	useEffect(() => {
 		if (!isOpen) return;
+		setNewId(checklist ? null : createId(ID_PREFIX.checklist));
 		setTitle(checklist?.title ?? "");
 		setDescription(checklist?.description ?? "");
 		setStartDate(
@@ -173,6 +178,7 @@ export function ChecklistFormDialog({
 			access,
 			...(sameStages(named, original) ? {} : { stages: named }),
 			...(images === undefined ? {} : { images }),
+			...(newId === null ? {} : { checklistId: newId }),
 		});
 	}
 
@@ -247,7 +253,7 @@ export function ChecklistFormDialog({
 					onDeadlineTimeChange={setDeadlineTime}
 					onDailyWindowChange={setDailyWindow}
 				/>
-				{checklist ? <ImagesField draft={imageDraft} /> : null}
+				<ImagesField draft={imageDraft} />
 				<StagesField value={stages} onChange={setStages} />
 				<TagsField
 					label="Tags"

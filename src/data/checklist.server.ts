@@ -64,6 +64,7 @@ import {
 } from "#/schemas/checklist";
 import {
 	type DailyWindow,
+	type ImageRef,
 	type ItemKind,
 	type ItemRef,
 	todayDateOnly,
@@ -655,6 +656,7 @@ export async function createChecklist(
 		stages?: Array<Stage>;
 		urgent?: boolean;
 		important?: boolean;
+		images?: Array<ImageRef>;
 	},
 ): Promise<Checklist> {
 	const current = await collections();
@@ -683,6 +685,7 @@ export async function createChecklist(
 		...(input.stages === undefined ? {} : { stages: input.stages }),
 		...(input.urgent ? { urgent: true } : {}),
 		...(input.important ? { important: true } : {}),
+		...(input.images?.length ? { images: input.images } : {}),
 		createdAt: now,
 		updatedAt: now,
 	};

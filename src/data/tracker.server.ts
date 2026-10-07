@@ -178,6 +178,7 @@ export async function createTracker(
 		tagIds: Array<string>;
 		assignees: Array<string>;
 		access: Array<AccessEntry> | null;
+		images?: Array<ImageRef>;
 	},
 ): Promise<Tracker> {
 	const current = await collections();
@@ -212,6 +213,7 @@ export async function createTracker(
 		tagIds: input.tagIds,
 		assignees: input.assignees,
 		access: input.access,
+		...(input.images?.length ? { images: input.images } : {}),
 		createdAt: now,
 		updatedAt: now,
 	};

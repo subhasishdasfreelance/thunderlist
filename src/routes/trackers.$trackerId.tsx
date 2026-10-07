@@ -33,6 +33,7 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
+import { GroupLinks } from "#/components/groups/group-links";
 import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
 import { MessageDialog } from "#/components/teams/message-dialog";
@@ -96,16 +97,15 @@ export const Route = createFileRoute("/trackers/$trackerId")({
 		group: typeof search.group === "string" ? search.group : undefined,
 		who: searchText(search.who),
 	}),
-	loaderDeps: ({ search }) => ({ group: search.group }),
 	/*
 	 * Only the figures are waited for. The history is the long half of the read
 	 * and nobody is blocked on it, so it is started here and not awaited — by the
 	 * time the top of the screen has painted it is usually already in.
 	 */
-	loader: ({ context, params, deps }) => {
-		// Back's label names the group, if it was opened from one.
-		if (deps.group !== undefined)
-			deferQuery(context.queryClient, groupsQuery());
+	loader: ({ context, params }) => {
+		// The groups it is in, over its title; and Back's label, if it was
+		// opened from one.
+		deferQuery(context.queryClient, groupsQuery());
 		void context.queryClient.prefetchQuery(
 			trackerEntriesQuery(params.trackerId),
 		);
@@ -338,6 +338,7 @@ function TrackerDetailPage() {
 						/>
 					) : null}
 					<VStack gap={1}>
+						<GroupLinks kind="tracker" id={trackerId} />
 						<Heading level={1}>{detail.title}</Heading>
 						<HStack gap={2} vAlign="center" wrap="wrap">
 							{detail.caption ? (

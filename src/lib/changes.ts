@@ -446,8 +446,13 @@ export type ChecklistValues = {
 	 * change, so saving anything else never moves a task.
 	 */
 	stages?: Array<Stage>;
-	/** Editing only: its pictures, when they changed; see `useImageDraft`. */
+	/** Its pictures, when they changed; see `useImageDraft`. */
 	images?: Array<ImageRef>;
+	/**
+	 * Making only: the id the form gave it as it opened, which its pictures
+	 * were sent for. Made here when absent.
+	 */
+	checklistId?: string;
 };
 
 /**
@@ -461,7 +466,7 @@ export async function createChecklist(
 	applyAsync: ApplyChangeAsync,
 	values: ChecklistValues,
 ): Promise<string> {
-	const checklistId = createId(ID_PREFIX.checklist);
+	const checklistId = values.checklistId ?? createId(ID_PREFIX.checklist);
 	await applyAsync(checklistCreate(checklistId, values));
 	return checklistId;
 }
@@ -484,30 +489,34 @@ function checklistCreate(checklistId: string, values: ChecklistValues): Change {
 
 /**
  * Make a checklist or a tracker straight into a group, drawn in it at once.
+ * Resolves with its id once the server has written it, as `createChecklist`.
  * The group is saved apart from it and may land first, which does no harm:
  * nothing takes a group's items as proof they exist.
  */
-export function createInGroup(
+export async function createInGroup(
 	apply: ApplyChange,
+	applyAsync: ApplyChangeAsync,
 	group: Pick<Group, "groupId" | "items">,
 	values:
 		| { kind: "checklist"; values: ChecklistValues }
 		| { kind: "tracker"; values: TrackerValues },
-): void {
+): Promise<string> {
 	const id =
 		values.kind === "checklist"
-			? createId(ID_PREFIX.checklist)
-			: createId(ID_PREFIX.tracker);
-	apply(
+			? (values.values.checklistId ?? createId(ID_PREFIX.checklist))
+			: (values.values.trackerId ?? createId(ID_PREFIX.tracker));
+	const saved = applyAsync(
 		values.kind === "checklist"
 			? checklistCreate(id, values.values)
-			: { kind: "tracker.create", trackerId: id, ...values.values },
+			: { kind: "tracker.create", ...values.values, trackerId: id },
 	);
 	apply({
 		kind: "group.update",
 		groupId: group.groupId,
 		patch: { items: [...group.items, { kind: values.kind, id }] },
 	});
+	await saved;
+	return id;
 }
 
 export function createTask(
@@ -1046,8 +1055,8 @@ export async function createTracker(
 	applyAsync: ApplyChangeAsync,
 	values: Omit<TrackerValues, never>,
 ): Promise<string> {
-	const trackerId = createId(ID_PREFIX.tracker);
-	await applyAsync({ kind: "tracker.create", trackerId, ...values });
+	const trackerId = values.trackerId ?? createId(ID_PREFIX.tracker);
+	await applyAsync({ kind: "tracker.create", ...values, trackerId });
 	return trackerId;
 }
 
@@ -1075,8 +1084,10 @@ export type TrackerValues = {
 	 * their role allows; see `accessSchema`.
 	 */
 	access: Array<AccessEntry> | null;
-	/** Editing only: its pictures, when they changed; see `useImageDraft`. */
+	/** Its pictures, when they changed; see `useImageDraft`. */
 	images?: Array<ImageRef>;
+	/** Making only: the id the form gave it; see `ChecklistValues.checklistId`. */
+	trackerId?: string;
 };
 
 export type EntryValues = { value: number; recordedAt: string; note: string };

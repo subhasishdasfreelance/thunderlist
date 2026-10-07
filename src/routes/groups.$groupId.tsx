@@ -8,7 +8,11 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	useNavigate,
+	useRouter,
+} from "@tanstack/react-router";
 import {
 	ClipboardPaste,
 	FolderInput,
@@ -59,10 +63,12 @@ import { AccessButton } from "#/components/teams/access-button";
 import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
+	type ChecklistValues,
 	createInGroup,
 	createTagResolver,
 	importIntoGroup,
 	resolveTags,
+	type TrackerValues,
 	useApplyChange,
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
@@ -70,14 +76,15 @@ import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
 import type { Outline } from "#/lib/outline";
 import { computeVelocity, localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
+import { firstPage } from "#/lib/use-pages";
 import { paceAt } from "#/lib/use-pace";
 import { usePickMode } from "#/lib/use-pick-mode";
 import { useItemPermissions } from "#/lib/use-team";
-import { checklistsQuery } from "#/queries/checklists";
+import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
 import { deferQuery, primeQuery } from "#/queries/prime";
 import { groupFinishedQuery, groupsQuery } from "#/queries/space";
 import { tagSummariesQuery, tagsQuery } from "#/queries/tags";
-import { trackersQuery } from "#/queries/trackers";
+import { trackerQuery, trackersQuery } from "#/queries/trackers";
 import type { ItemKind } from "#/schemas/common";
 import {
 	GROUP_ITEM_KINDS,
@@ -138,7 +145,7 @@ function Section({
 function GroupPage() {
 	const { groupId } = Route.useParams();
 	const navigate = useNavigate();
-	const { apply } = useApplyChange();
+	const { apply, applyAsync } = useApplyChange();
 	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isAdding, setIsAdding] = useState(false);
@@ -147,6 +154,9 @@ function GroupPage() {
 	const [creating, setCreating] = useState<"checklist" | "tracker" | null>(
 		null,
 	);
+	// Saved, and about to be opened; see `createAndOpen`.
+	const [opening, setOpening] = useState<"checklist" | "tracker" | null>(null);
+	const router = useRouter();
 	const queryClient = useQueryClient();
 
 	const { data, isError, error, refetch } = useQuery(groupsQuery());
@@ -220,6 +230,51 @@ function GroupPage() {
 		);
 	}
 
+	/**
+	 * Make a checklist or tracker in this group and open it, as making one on
+	 * its own screen does, with Back coming here. The form closes at once and
+	 * the loading screen stands in while the server writes it.
+	 */
+	async function createAndOpen(
+		current: Group,
+		made:
+			| { kind: "checklist"; values: ChecklistValues }
+			| { kind: "tracker"; values: TrackerValues },
+	) {
+		if (opening !== null) return;
+		setCreating(null);
+		setOpening(made.kind);
+		try {
+			const id = await createInGroup(apply, applyAsync, current, made);
+			if (made.kind === "checklist") {
+				const destination = {
+					to: "/checklists/$checklistId",
+					params: { checklistId: id },
+					search: { task: undefined, group: groupId },
+				} as const;
+				await Promise.all([
+					router.preloadRoute(destination).catch(() => undefined),
+					queryClient.prefetchQuery(checklistPageQuery(id, firstPage())),
+				]);
+				void navigate(destination);
+			} else {
+				const destination = {
+					to: "/trackers/$trackerId",
+					params: { trackerId: id },
+					search: { group: groupId },
+				} as const;
+				await Promise.all([
+					router.preloadRoute(destination).catch(() => undefined),
+					queryClient.prefetchQuery(trackerQuery(id)),
+				]);
+				void navigate(destination);
+			}
+		} catch {
+			// Already reported by `useApplyChange`; back to the group.
+			setOpening(null);
+		}
+	}
+
 	/** In or out of the group, drawn at once like every change. */
 	function toggle(current: Group, item: GroupItem) {
 		apply({
@@ -231,6 +286,10 @@ function GroupPage() {
 					: [...current.items, item],
 			},
 		});
+	}
+
+	if (opening !== null) {
+		return <LoadingState label={`Opening your new ${opening}…`} />;
 	}
 
 	return (
@@ -492,10 +551,9 @@ function GroupPage() {
 				resolveTags={(names) =>
 					resolveTags(createTagResolver(apply, tags, canManageContent), names)
 				}
-				onSubmit={(values) => {
-					createInGroup(apply, group, { kind: "checklist", values });
-					setCreating(null);
-				}}
+				onSubmit={(values) =>
+					void createAndOpen(group, { kind: "checklist", values })
+				}
 			/>
 
 			<TrackerFormDialog
@@ -505,10 +563,9 @@ function GroupPage() {
 				resolveTags={(names) =>
 					resolveTags(createTagResolver(apply, tags, canManageContent), names)
 				}
-				onSubmit={(values) => {
-					createInGroup(apply, group, { kind: "tracker", values });
-					setCreating(null);
-				}}
+				onSubmit={(values) =>
+					void createAndOpen(group, { kind: "tracker", values })
+				}
 			/>
 
 			<GroupImportDialog
