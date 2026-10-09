@@ -14,7 +14,6 @@ import {
 	SelectButtons,
 	saveArrangement,
 } from "#/components/common/arranged-list";
-import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { Pickable } from "#/components/common/pickable";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
@@ -107,21 +106,17 @@ function PlansPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<ListPanel
-						controls={
-							<HStack gap={2} hAlign="between" vAlign="center">
-								<Text type="label" weight="semibold">
-									{plans.length} {plans.length === 1 ? "plan" : "plans"}
-								</Text>
-								{canManageContent ? (
-									<HStack gap={1} vAlign="center">
-										<SelectButtons mode={pick} />
-										<ArrangeButton onClick={() => setIsArranging(true)} />
-									</HStack>
-								) : null}
+					<HStack gap={2} hAlign="between" vAlign="center">
+						<Text type="label" weight="semibold">
+							{plans.length} {plans.length === 1 ? "plan" : "plans"}
+						</Text>
+						{canManageContent ? (
+							<HStack gap={1} vAlign="center">
+								<SelectButtons mode={pick} />
+								<ArrangeButton onClick={() => setIsArranging(true)} />
 							</HStack>
-						}
-					/>
+						) : null}
+					</HStack>
 					<div className="thunderlist-card-grid">
 						{plans.map((plan) => (
 							<Pickable

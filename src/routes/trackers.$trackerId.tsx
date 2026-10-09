@@ -21,7 +21,6 @@ import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { FadeImage } from "#/components/common/fade-image";
 import { numberTitle } from "#/components/common/item-number";
-import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { PickBar } from "#/components/common/pick-bar";
@@ -485,26 +484,24 @@ function TrackerDetailPage() {
 				</HStack>
 			) : null}
 
-			<ListPanel
-				controls={
-					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text type="label" weight="semibold">
-							Progress History
-						</Text>
-						<HStack gap={1} vAlign="center">
-							{canManageContent && view === "list" ? (
-								<SelectAllButton onClick={pickAll} />
-							) : null}
-							<MemberFilter value={person} onChange={setPerson} />
-							<ViewToggle
-								view={view}
-								onChange={setView}
-								label="Show progress as a list or a graph"
-							/>
-						</HStack>
+			<VStack gap={2}>
+				<HStack gap={2} hAlign="between" vAlign="center">
+					<Text type="label" weight="semibold">
+						Progress History
+					</Text>
+					<HStack gap={1} vAlign="center">
+						{canManageContent && view === "list" ? (
+							<SelectAllButton onClick={pickAll} />
+						) : null}
+						<MemberFilter value={person} onChange={setPerson} />
+						<ViewToggle
+							view={view}
+							onChange={setView}
+							label="Show progress as a list or a graph"
+						/>
 					</HStack>
-				}
-			>
+				</HStack>
+
 				{view === "chart" ? (
 					<Card padding={3}>
 						{history.isPending || now === null ? (
@@ -544,7 +541,7 @@ function TrackerDetailPage() {
 						picked={canManageContent ? picked : undefined}
 					/>
 				)}
-			</ListPanel>
+			</VStack>
 
 			{/* Deleting readings is all a pick is for, and a project manager's. */}
 			{!canManageContent || pickedEntries.length === 0 ? null : (

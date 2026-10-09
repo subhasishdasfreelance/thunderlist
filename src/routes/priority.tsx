@@ -9,7 +9,6 @@ import { CircleAlert, CircleDashed, Flame, Star } from "lucide-react";
 import { useState } from "react";
 import { SelectAllButton } from "#/components/common/arranged-list";
 import { type Facet, FacetSummary } from "#/components/common/facet-summary";
-import { ListPanel } from "#/components/common/list-panel";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
@@ -208,42 +207,38 @@ function PriorityPage() {
 						}}
 					/>
 
-					<ListPanel
-						controls={
-							<VStack gap={2}>
-								{/* The filters and the order, as every other task list has them. */}
-								<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
-									<HStack gap={1} vAlign="center" wrap="wrap">
-										<MemberFilter
-											value={assignee}
-											onChange={(next) => filterBy({ who: next })}
-										/>
-										<TagFilter
-											tags={tags}
-											value={tagId}
-											onChange={(next) => filterBy({ tag: next })}
-										/>
-										<TypeFilter
-											value={typeId}
-											onChange={(next) => filterBy({ type: next })}
-										/>
-									</HStack>
-									<HStack gap={1} vAlign="center">
-										{canUpdateTasks ? (
-											<SelectAllButton onClick={selection.pickAll} />
-										) : null}
-										<SortMenu
-											order={sort}
-											hasStageOrder
-											onChange={(next) => filterBy({ sort: sortParam(next) })}
-										/>
-									</HStack>
-								</HStack>
+					<VStack gap={2}>
+						{/* The filters and the order, as every other task list has them. */}
+						<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
+							<HStack gap={1} vAlign="center" wrap="wrap">
+								<MemberFilter
+									value={assignee}
+									onChange={(next) => filterBy({ who: next })}
+								/>
+								<TagFilter
+									tags={tags}
+									value={tagId}
+									onChange={(next) => filterBy({ tag: next })}
+								/>
+								<TypeFilter
+									value={typeId}
+									onChange={(next) => filterBy({ type: next })}
+								/>
+							</HStack>
+							<HStack gap={1} vAlign="center">
+								{canUpdateTasks ? (
+									<SelectAllButton onClick={selection.pickAll} />
+								) : null}
+								<SortMenu
+									order={sort}
+									hasStageOrder
+									onChange={(next) => filterBy({ sort: sortParam(next) })}
+								/>
+							</HStack>
+						</HStack>
 
-								<Text type="supporting">{BAND_HINTS[selected]}</Text>
-							</VStack>
-						}
-					>
+						<Text type="supporting">{BAND_HINTS[selected]}</Text>
+
 						<ListLoading
 							isLoading={result.isPlaceholderData}
 							isEmpty={data.items.length === 0}
@@ -264,7 +259,7 @@ function PriorityPage() {
 								/>
 							)}
 						</ListLoading>
-					</ListPanel>
+					</VStack>
 				</>
 			)}
 		</VStack>

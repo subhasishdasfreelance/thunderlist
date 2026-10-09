@@ -8,7 +8,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ClipboardPaste, Plus } from "lucide-react";
 import { useState } from "react";
 import { ListPagination } from "#/components/common/list-pagination";
-import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
 import { GroupCard } from "#/components/groups/group-card";
@@ -98,13 +97,9 @@ function GroupsPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<ListPanel
-						controls={
-							<Text type="label" weight="semibold">
-								{groups.length} {groups.length === 1 ? "group" : "groups"}
-							</Text>
-						}
-					/>
+					<Text type="label" weight="semibold">
+						{groups.length} {groups.length === 1 ? "group" : "groups"}
+					</Text>
 					<VStack gap={2}>
 						<div className="thunderlist-card-grid">
 							{paging.shown.map((group) => (
