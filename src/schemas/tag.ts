@@ -157,6 +157,11 @@ const tagSchema = v.object({
 	description: v.string(),
 	/** The day the work started, or `null` to count from the day it was made. */
 	startDate: v.nullable(dateOnlySchema),
+	/**
+	 * The time on the start day the work started; see `Checklist.startTime`.
+	 * Only means something with a start date of its own.
+	 */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	/** The day it should be finished by. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
 	/** The time on the deadline day it is due by; see `Checklist.deadlineTime`. */
@@ -207,6 +212,17 @@ export function tagStartDate(
 	tag: Pick<Tag, "startDate" | "createdAt">,
 ): string {
 	return tag.startDate ?? todayDateOnly(new Date(tag.createdAt));
+}
+
+/**
+ * The time on `tagStartDate`'s day its figures are measured from: its own,
+ * when it has a start date of its own, or that day's start when it is counted
+ * from the day it was made.
+ */
+export function tagStartTime(
+	tag: Pick<Tag, "startDate" | "startTime">,
+): string | null {
+	return tag.startDate === null ? null : (tag.startTime ?? null);
 }
 
 /**
@@ -380,6 +396,8 @@ export const createTagInputSchema = v.object({
 	color: tagColorSchema,
 	description: v.optional(descriptionSchema, ""),
 	startDate: v.optional(v.nullable(dateOnlySchema), null),
+	/** Absent, as the AI tools leave it, is the same as `null`. */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema), null),
@@ -394,6 +412,7 @@ export const updateTagInputSchema = v.object({
 			color: v.optional(tagColorSchema),
 			description: v.optional(descriptionSchema),
 			startDate: v.optional(v.nullable(dateOnlySchema)),
+			startTime: v.optional(v.nullable(timeOfDaySchema)),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),

@@ -49,6 +49,7 @@ export async function sendFeedback(
 		title: "thunderlist-feedback",
 		description: "Sent from Send feedback, in the account menu.",
 		startDate: todayDateOnly(),
+		startTime: null,
 		deadline: null,
 		deadlineTime: null,
 		dailyWindow: null,

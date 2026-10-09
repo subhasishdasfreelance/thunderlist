@@ -50,7 +50,7 @@ export function TagPickerDialog({
 	/** Whether a name matching nothing offers to become a tag. */
 	canCreate: boolean;
 	onPick: (tag: Tag) => void;
-	/** Make a tag of this name and put it on; see `createTagResolver`. */
+	/** Make a tag of this name and put it on; see `withNewTags`. */
 	onCreate: (name: string) => void;
 }) {
 	const [query, setQuery] = useState("");

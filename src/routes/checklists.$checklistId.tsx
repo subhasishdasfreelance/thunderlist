@@ -38,10 +38,10 @@ import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
+import { GroupLinks } from "#/components/groups/group-links";
 import { TagFilter } from "#/components/tags/tag-filter";
 import { SelectionBar } from "#/components/tasks/selection-bar";
 import { useTaskDialogs } from "#/components/tasks/task-dialogs";
-import { GroupLinks } from "#/components/groups/group-links";
 import { TypeFilter } from "#/components/tasks/type-filter";
 import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
@@ -49,7 +49,6 @@ import { MessageDialog } from "#/components/teams/message-dialog";
 import {
 	applyBatched,
 	type ChecklistValues,
-	createTagResolver,
 	createTasks,
 	moveAllToStage,
 	moveManyToBacklog,
@@ -64,6 +63,7 @@ import {
 	toggleSpecialTagOnAll,
 	updateTask,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import {
@@ -71,12 +71,7 @@ import {
 	filterSearch,
 	sortParam,
 } from "#/lib/filter-search";
-import {
-	formatClock,
-	formatDate,
-	formatDeadline,
-	formatSchedule,
-} from "#/lib/format-date";
+import { formatClock, formatDeadline, formatSchedule } from "#/lib/format-date";
 import { computeVelocity, localMoment, todayWindow } from "#/lib/progress";
 import { matchesFilter, orderTasks } from "#/lib/tasks/tasks";
 import { useArrival, useFocusTask } from "#/lib/use-focus-task";
@@ -455,28 +450,29 @@ function ChecklistDetailPage() {
 	 * created once rather than three times.
 	 */
 	function addTasks(lines: Array<QuickAddLine>) {
-		const resolveTag = createTagResolver(apply, tags, canManageContent);
+		const inputs = withNewTags(apply, tags, canManageContent, (resolveTag) =>
+			lines.map((line) => {
+				// A line naming a tracker or another checklist becomes a task that
+				// follows it, titled with its own title. A name matching nothing stays
+				// ordinary text.
+				const tracker = resolveTrackerName(trackers, line.trackerName);
+				const linked = tracker
+					? null
+					: resolveChecklistName(otherChecklists, line.trackerName);
 
-		const inputs = lines.map((line) => {
-			// A line naming a tracker or another checklist becomes a task that
-			// follows it, titled with its own title. A name matching nothing stays
-			// ordinary text.
-			const tracker = resolveTrackerName(trackers, line.trackerName);
-			const linked = tracker
-				? null
-				: resolveChecklistName(otherChecklists, line.trackerName);
-
-			return {
-				title: tracker?.title ?? linked?.title ?? line.title,
-				tagIds: tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
-				trackerId: tracker?.trackerId ?? null,
-				linkedChecklistId: linked?.checklistId ?? null,
-				urgent: line.urgent,
-				important: line.important,
-				deadline: line.deadline,
-				deadlineTime: line.deadlineTime,
-			};
-		});
+				return {
+					title: tracker?.title ?? linked?.title ?? line.title,
+					tagIds:
+						tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
+					trackerId: tracker?.trackerId ?? null,
+					linkedChecklistId: linked?.checklistId ?? null,
+					urgent: line.urgent,
+					important: line.important,
+					deadline: line.deadline,
+					deadlineTime: line.deadlineTime,
+				};
+			}),
+		);
 
 		createTasks(apply, checklistId, inputs);
 	}
@@ -498,6 +494,7 @@ function ChecklistDetailPage() {
 			? null
 			: computeVelocity({
 					startDate: detail.startDate,
+					startTime: detail.startTime,
 					deadline: detail.deadline,
 					deadlineTime: detail.deadlineTime,
 					current: progress.completed,
@@ -525,21 +522,23 @@ function ChecklistDetailPage() {
 				.join(", ")}.`
 		: null;
 
+	// Where the chart starts when it is not today's hours: when the work began,
+	// at its time if it has one, as pace is measured from.
+	const startsAt =
+		localMoment(detail.startDate, detail.startTime) ??
+		dayStart(detail.startDate);
 	const chart =
 		now === null || completedResult.data === undefined ? null : (
 			<ProgressChart
-				start={todays?.start ?? dayStart(detail.startDate)}
+				start={todays?.start ?? startsAt}
 				end={todays?.end ?? localMoment(detail.deadline, detail.deadlineTime)}
 				now={now}
 				target={progress.total}
 				current={progress.completed}
-				points={completionPoints(
-					completed,
-					todays?.start ?? dayStart(detail.startDate),
-				)}
+				points={completionPoints(completed, todays?.start ?? startsAt)}
 				startLabel={
 					daily === null
-						? formatDate(detail.startDate)
+						? formatDeadline(detail.startDate, detail.startTime)
 						: formatClock(daily.from)
 				}
 				endLabel={
@@ -551,7 +550,7 @@ function ChecklistDetailPage() {
 				}
 				summary={
 					daily === null
-						? `${progress.completed} of ${progress.total} tasks done since ${formatDate(detail.startDate)}`
+						? `${progress.completed} of ${progress.total} tasks done since ${formatDeadline(detail.startDate, detail.startTime)}`
 						: `${progress.completed} of ${progress.total} tasks done`
 				}
 			/>
@@ -691,6 +690,7 @@ function ChecklistDetailPage() {
 			{daily === null ? (
 				<VelocityStats
 					startDate={detail.startDate}
+					startTime={detail.startTime ?? null}
 					velocity={velocity}
 					unit="tasks"
 					isComplete={
@@ -923,7 +923,9 @@ function ChecklistDetailPage() {
 				checklist={detail}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				onSubmit={(values: ChecklistValues) => {
 					apply({ kind: "checklist.update", checklistId, patch: values });

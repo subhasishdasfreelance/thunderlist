@@ -25,6 +25,7 @@ import {
 	tagParam,
 	tagStageParts,
 	tagStartDate,
+	tagStartTime,
 } from "#/schemas/tag";
 import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
 
@@ -39,12 +40,13 @@ import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
 export function TagCard({ tag }: { tag: TagSummary }) {
 	const { progress } = tag;
 	const startDate = tagStartDate(tag);
+	const startTime = tagStartTime(tag);
 	const { apply } = useApplyChange();
 	const { canManageContent } = useItemPermissions(tag.access);
 	const canFocus = canManageContent && tag.special !== "focus";
 
 	const pace = usePace(
-		{ ...tag, startDate },
+		{ ...tag, startDate, startTime },
 		progress.total === 0 ? null : progress.completed / progress.total,
 	);
 
@@ -54,6 +56,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 			: velocitySummary(
 					computeVelocity({
 						startDate,
+						startTime,
 						deadline: tag.deadline,
 						deadlineTime: tag.deadlineTime,
 						current: progress.completed,

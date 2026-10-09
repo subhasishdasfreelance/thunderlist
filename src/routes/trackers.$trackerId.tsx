@@ -46,16 +46,16 @@ import {
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
 	createEntry,
-	createTagResolver,
 	createTask,
 	type EntryValues,
 	resolveTags,
 	type TrackerValues,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { dayStart } from "#/lib/chart-points";
 import { searchText } from "#/lib/filter-search";
-import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
+import { formatDeadline, formatSchedule } from "#/lib/format-date";
 import {
 	computeVelocity,
 	localMoment,
@@ -254,6 +254,7 @@ function TrackerDetailPage() {
 			? null
 			: computeVelocity({
 					startDate: detail.startDate,
+					startTime: detail.startTime,
 					deadline: detail.deadline,
 					deadlineTime: detail.deadlineTime,
 					current: progress.current,
@@ -270,9 +271,11 @@ function TrackerDetailPage() {
 		reached = theirs === null ? entry.value : reached + entry.delta;
 		chartPoints.push({
 			id: entry.entryId,
-			at: dayStart(entry.recordedAt),
+			at:
+				localMoment(entry.recordedAt, entry.recordedTime) ??
+				dayStart(entry.recordedAt),
 			value: reached,
-			label: `${reached} ${detail.unit} · ${formatDate(entry.recordedAt)}`,
+			label: `${reached} ${detail.unit} · ${formatDeadline(entry.recordedAt, entry.recordedTime)}`,
 		});
 	}
 
@@ -448,6 +451,7 @@ function TrackerDetailPage() {
 
 			<VelocityStats
 				startDate={detail.startDate}
+				startTime={detail.startTime ?? null}
 				velocity={velocity}
 				unit={detail.unit}
 				isComplete={progress.target > 0 && progress.current >= progress.target}
@@ -504,20 +508,23 @@ function TrackerDetailPage() {
 							<SectionSpinner label="Loading history…" />
 						) : (
 							<ProgressChart
-								start={dayStart(detail.startDate)}
+								start={
+									localMoment(detail.startDate, detail.startTime) ??
+									dayStart(detail.startDate)
+								}
 								end={localMoment(detail.deadline, detail.deadlineTime)}
 								now={now}
 								target={detail.targetValue}
 								base={detail.startValue}
 								current={progress.current}
 								points={chartPoints}
-								startLabel={formatDate(detail.startDate)}
+								startLabel={formatDeadline(detail.startDate, detail.startTime)}
 								endLabel={
 									detail.deadline === null
 										? "No deadline"
 										: formatDeadline(detail.deadline, detail.deadlineTime)
 								}
-								summary={`${progress.current} of ${detail.targetValue} ${detail.unit} since ${formatDate(detail.startDate)}`}
+								summary={`${progress.current} of ${detail.targetValue} ${detail.unit} since ${formatDeadline(detail.startDate, detail.startTime)}`}
 							/>
 						)}
 					</Card>
@@ -600,7 +607,9 @@ function TrackerDetailPage() {
 				tracker={detail}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				onSubmit={(values: TrackerValues) => {
 					apply({ kind: "tracker.update", trackerId, patch: values });
@@ -614,9 +623,11 @@ function TrackerDetailPage() {
 					if (!open) setPendingEntry(null);
 				}}
 				title="Delete this entry?"
-				description={`The reading of ${pendingEntry?.value ?? ""} ${detail.unit} on ${formatDate(
-					pendingEntry?.recordedAt,
-				)} will be deleted when you save your changes.`}
+				description={`The reading of ${pendingEntry?.value ?? ""} ${detail.unit} on ${
+					pendingEntry
+						? formatDeadline(pendingEntry.recordedAt, pendingEntry.recordedTime)
+						: ""
+				} will be deleted when you save your changes.`}
 				actionLabel="Delete"
 				onAction={() => {
 					if (pendingEntry) {

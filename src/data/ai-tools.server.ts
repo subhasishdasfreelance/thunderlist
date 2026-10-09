@@ -82,7 +82,7 @@ export async function runAiTool(
 
 	return {
 		...outcome,
-		changes: outcome.changes.map((change) => {
+		changes: withTagsTogether(outcome.changes).map((change) => {
 			const checked = v.safeParse(applyChangeInputSchema, { change });
 			if (!checked.success) {
 				// The change is this file's making, so its path means nothing to the agent.
@@ -91,6 +91,23 @@ export async function runAiTool(
 			return checked.output.change;
 		}),
 	};
+}
+
+/**
+ * Every tag a tool makes, in one change ahead of the rest rather than one
+ * apiece; each was made ahead of whatever uses it already.
+ */
+function withTagsTogether(changes: ReadonlyArray<Change>): Array<Change> {
+	const tags = changes.flatMap((change) => {
+		if (change.kind !== "tag.create") return [];
+		const { kind: _, ...tag } = change;
+		return [tag];
+	});
+	if (tags.length < 2) return [...changes];
+	return [
+		{ kind: "tag.createMany", tags },
+		...changes.filter((change) => change.kind !== "tag.create"),
+	];
 }
 
 /**

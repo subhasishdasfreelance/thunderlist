@@ -69,6 +69,7 @@ export function TrackerFormDialog({
 	const [startDate, setStartDate] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [startTime, setStartTime] = useState<string | undefined>(undefined);
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
@@ -112,6 +113,7 @@ export function TrackerFormDialog({
 			(tracker?.startDate as ISODateString | undefined) ??
 				(todayDateOnly() as ISODateString),
 		);
+		setStartTime(tracker?.startTime ?? undefined);
 		setDeadline((tracker?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(tracker?.deadlineTime ?? undefined);
 		setDescription(tracker?.description ?? "");
@@ -169,6 +171,7 @@ export function TrackerFormDialog({
 			targetValue,
 			startValue: from,
 			startDate,
+			startTime: startTime ?? null,
 			deadline: deadline ?? null,
 			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
 			description: description.trim(),
@@ -295,9 +298,11 @@ export function TrackerFormDialog({
 
 				<ScheduleFields
 					startDate={startDate}
+					startTime={startTime}
 					deadline={deadline}
 					deadlineTime={deadlineTime}
 					onStartDateChange={setStartDate}
+					onStartTimeChange={setStartTime}
 					onDeadlineChange={setDeadline}
 					onDeadlineTimeChange={setDeadlineTime}
 				/>

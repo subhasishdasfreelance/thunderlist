@@ -92,6 +92,7 @@ export function TrackerCard({
 			: velocitySummary(
 					computeVelocity({
 						startDate: tracker.startDate,
+						startTime: tracker.startTime,
 						deadline: tracker.deadline,
 						deadlineTime: tracker.deadlineTime,
 						current: progress.current,

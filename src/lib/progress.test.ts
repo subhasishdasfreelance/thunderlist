@@ -205,6 +205,31 @@ describe("sortEntriesOldestFirst", () => {
 
 		expect(entries[0].entryId).toBe("ent_b");
 	});
+
+	it("orders a day's readings by their time, any with none first", () => {
+		const entries = [
+			entry({
+				entryId: "ent_a",
+				recordedAt: "2026-09-05",
+				recordedTime: "18:00",
+			}),
+			entry({
+				entryId: "ent_b",
+				recordedAt: "2026-09-05",
+				recordedTime: "08:30",
+			}),
+			entry({ entryId: "ent_c", recordedAt: "2026-09-05" }),
+			entry({
+				entryId: "ent_d",
+				recordedAt: "2026-09-04",
+				recordedTime: "23:00",
+			}),
+		];
+
+		expect(sortEntriesOldestFirst(entries).map((each) => each.entryId)).toEqual(
+			["ent_d", "ent_c", "ent_b", "ent_a"],
+		);
+	});
 });
 
 describe("elapsedFraction", () => {
@@ -245,6 +270,30 @@ describe("elapsedFraction", () => {
 				now: at(6, 4, 30),
 			}),
 		).toBe(0.5);
+	});
+
+	it("starts at the start date's time when it has one", () => {
+		// Noon to noon over ten days; from midnight it would be 5.5 of 10.5.
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				startTime: "12:00",
+				deadline: "2026-07-11",
+				deadlineTime: "12:00",
+				now: at(6, 12),
+			}),
+		).toBe(0.5);
+	});
+
+	it("has nothing gone before the start date's time", () => {
+		expect(
+			elapsedFraction({
+				startDate: "2026-07-01",
+				startTime: "12:00",
+				deadline: "2026-07-11",
+				now: at(1, 6),
+			}),
+		).toBe(0);
 	});
 
 	it("runs to the deadline's time when it has one", () => {
@@ -581,6 +630,23 @@ describe("computeVelocity", () => {
 		});
 
 		expect(velocity.totalMinutes).toBe(10.5 * 1440);
+		expect(velocity.expectedPerDay).toBe(20);
+	});
+
+	it("measures from the start date's time when it has one", () => {
+		// Ten days from noon to noon for 200: twenty a day, two days in.
+		const velocity = computeVelocity({
+			startDate: "2026-09-01",
+			startTime: "12:00",
+			deadline: "2026-09-11",
+			deadlineTime: "12:00",
+			current: 0,
+			target: 200,
+			now: at(9, 3, 12),
+		});
+
+		expect(velocity.totalMinutes).toBe(10 * 1440);
+		expect(velocity.minutesElapsed).toBe(2 * 1440);
 		expect(velocity.expectedPerDay).toBe(20);
 	});
 

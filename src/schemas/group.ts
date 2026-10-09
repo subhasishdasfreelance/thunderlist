@@ -76,6 +76,8 @@ export type Group = {
 	 * `groupStartDate`.
 	 */
 	startDate?: string;
+	/** `HH:MM` on the start day; absent or `null` for that day's start. */
+	startTime?: string | null;
 	/** The day everything in it should be done by; absent or `null` for none. */
 	deadline?: string | null;
 	/** `HH:MM` on the deadline day; absent or `null` for that day's start. */
@@ -125,6 +127,8 @@ export const createGroupInputSchema = v.object({
 	color: v.picklist(TAG_COLORS),
 	items: groupItemsSchema,
 	startDate: dateOnlySchema,
+	/** Absent, as the AI tools leave it, is the same as `null`. */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	access: v.optional(accessSchema, null),
@@ -144,6 +148,7 @@ export const updateGroupInputSchema = v.object({
 				),
 			),
 			startDate: v.optional(dateOnlySchema),
+			startTime: v.optional(v.nullable(timeOfDaySchema)),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			access: v.optional(accessSchema),

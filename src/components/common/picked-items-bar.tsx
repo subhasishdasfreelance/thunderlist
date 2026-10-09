@@ -152,7 +152,12 @@ export function PickedItemsBar({
 				description={DELETING[of]}
 				actionLabel="Delete"
 				onAction={() => {
-					if (ids.length > 0) apply({ kind: "items.delete", of, ids });
+					if (ids.length > 0) {
+						apply({
+							kind: "items.delete",
+							items: ids.map((id) => ({ kind: of, id })),
+						});
+					}
 					setIsDeleting(false);
 					onDone();
 				}}

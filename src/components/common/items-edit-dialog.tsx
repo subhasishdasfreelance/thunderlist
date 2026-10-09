@@ -24,14 +24,14 @@ import {
 	type TagsDraft,
 	TagsField,
 } from "#/components/tags/tags-field";
-import { createTagResolver, resolveTags, useApplyChange } from "#/lib/changes";
+import { resolveTags, useApplyChange, withNewTags } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { usePermissions } from "#/lib/use-team";
 import { tagsQuery } from "#/queries/tags";
 import type { ItemsPatch, SchedulableKind } from "#/schemas/change";
 import type { Checklist } from "#/schemas/checklist";
 import { type DailyWindow, DEFAULT_DAILY_WINDOW } from "#/schemas/common";
-import { type Tag, tagsFor } from "#/schemas/tag";
+import { type Tag, tagStartTime, tagsFor } from "#/schemas/tag";
 import type { Tracker } from "#/schemas/tracker";
 
 /**
@@ -42,6 +42,7 @@ export type EditableItem = {
 	kind: SchedulableKind;
 	id: string;
 	startDate: string | null;
+	startTime: string | null;
 	deadline: string | null;
 	deadlineTime: string | null;
 	/** Left out where it can have none: a tracker. */
@@ -57,6 +58,7 @@ export function editableChecklist(checklist: Checklist): EditableItem {
 		kind: "checklist",
 		id: checklist.checklistId,
 		startDate: checklist.startDate,
+		startTime: checklist.startTime ?? null,
 		deadline: checklist.deadline,
 		deadlineTime: checklist.deadlineTime ?? null,
 		dailyWindow: checklist.dailyWindow ?? null,
@@ -71,6 +73,7 @@ export function editableTracker(tracker: Tracker): EditableItem {
 		kind: "tracker",
 		id: tracker.trackerId,
 		startDate: tracker.startDate,
+		startTime: tracker.startTime ?? null,
 		deadline: tracker.deadline,
 		deadlineTime: tracker.deadlineTime ?? null,
 		tagIds: tracker.tagIds ?? [],
@@ -84,6 +87,7 @@ export function editableTag(tag: Tag): EditableItem {
 		kind: "tag",
 		id: tag.tagId,
 		startDate: tag.startDate,
+		startTime: tagStartTime(tag),
 		deadline: tag.deadline,
 		deadlineTime: tag.deadlineTime ?? null,
 		dailyWindow: tag.dailyWindow ?? null,
@@ -112,6 +116,7 @@ function shared<T>(
 
 type Fields = {
 	startDate: ISODateString | undefined;
+	startTime: string | undefined;
 	deadline: ISODateString | undefined;
 	deadlineTime: string | undefined;
 	dailyWindow: DailyWindow | null;
@@ -121,7 +126,10 @@ type Fields = {
 	removing: Array<string>;
 };
 
-/** Which parts of the form have been changed; only those are saved. */
+/**
+ * Which parts of the form have been changed; only those are saved. A day and
+ * its time are one part, saved together.
+ */
 type Part = "startDate" | "schedule" | "urgent" | "important" | "tags";
 
 /** What the fields open on: what the items share, and where they differ, so. */
@@ -133,6 +141,7 @@ function fieldsOf(items: ReadonlyArray<EditableItem>): Fields {
 		startDate: (shared(items, (item) => item.startDate)?.value ?? undefined) as
 			| ISODateString
 			| undefined,
+		startTime: shared(items, (item) => item.startTime)?.value ?? undefined,
 		deadline: (shared(items, (item) => item.deadline)?.value ?? undefined) as
 			| ISODateString
 			| undefined,
@@ -194,7 +203,8 @@ function ItemsEditDialog({
 	const canTag = list.every((item) => item.tagIds !== undefined);
 	const differs = {
 		startDate:
-			list.length > 0 && shared(list, (item) => item.startDate) === null,
+			list.length > 0 &&
+			shared(list, (item) => [item.startDate, item.startTime]) === null,
 		schedule:
 			list.length > 0 &&
 			shared(list, (item) => [
@@ -223,6 +233,7 @@ function ItemsEditDialog({
 		const patch: ItemsPatch = {};
 		if (touched.has("startDate") && fields.startDate !== undefined) {
 			patch.startDate = fields.startDate;
+			patch.startTime = fields.startTime ?? null;
 		}
 		// Repeating daily takes the deadline's place; see `ScheduleFields`.
 		if (touched.has("schedule")) {
@@ -327,9 +338,28 @@ function ItemsEditDialog({
 							}
 							format={formatDate}
 							value={fields.startDate}
-							onChange={(startDate) => change("startDate", { startDate })}
+							// Clearing the day clears the hour with it.
+							onChange={(startDate) =>
+								change("startDate", {
+									startDate,
+									...(startDate === undefined ? { startTime: undefined } : {}),
+								})
+							}
 						/>
-						{fields.dailyWindow !== null ? null : (
+						<TimeField
+							label="Start time"
+							isOptional
+							hasClear
+							description="Leave empty and they start at the start of that day."
+							isDisabled={fields.startDate === undefined}
+							disabledMessage="Pick a start date first."
+							value={fields.startTime}
+							onChange={(startTime) => change("startDate", { startTime })}
+						/>
+					</FieldRow>
+
+					{fields.dailyWindow !== null ? null : (
+						<FieldRow>
 							<DateInput
 								label="Deadline"
 								isOptional
@@ -351,19 +381,19 @@ function ItemsEditDialog({
 									})
 								}
 							/>
-						)}
-					</FieldRow>
-
-					{fields.dailyWindow !== null ||
-					fields.deadline === undefined ? null : (
-						<TimeField
-							label="Due at"
-							isOptional
-							hasClear
-							description="Leave empty and they are due at the start of that day."
-							value={fields.deadlineTime}
-							onChange={(deadlineTime) => change("schedule", { deadlineTime })}
-						/>
+							<TimeField
+								label="Due at"
+								isOptional
+								hasClear
+								description="Leave empty and they are due at the start of that day."
+								isDisabled={fields.deadline === undefined}
+								disabledMessage="Pick a deadline first."
+								value={fields.deadlineTime}
+								onChange={(deadlineTime) =>
+									change("schedule", { deadlineTime })
+								}
+							/>
+						</FieldRow>
 					)}
 
 					{!canRepeat ? null : (
@@ -491,7 +521,9 @@ export function EditItemsButton({
 				items={isEditing ? items : null}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				onSave={(patch) => {
 					apply({

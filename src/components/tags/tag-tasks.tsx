@@ -1,8 +1,8 @@
 import {
 	applyBatched,
-	createTagResolver,
 	setTag,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { sharedTagIds } from "#/lib/tasks/tasks";
 import type { Tag } from "#/schemas/tag";
@@ -77,8 +77,10 @@ export function TagTasks({
 			onPick={put}
 			onCreate={(name) => {
 				// A name nobody has used yet becomes a tag, as typing `#name` into
-				// a title does; see `createTagResolver`.
-				const tagId = createTagResolver(apply, tags, canCreate)(name);
+				// a title does; see `withNewTags`.
+				const tagId = withNewTags(apply, tags, canCreate, (resolve) =>
+					resolve(name),
+				);
 				if (tagId === null) onClose();
 				else put({ tagId, name });
 			}}

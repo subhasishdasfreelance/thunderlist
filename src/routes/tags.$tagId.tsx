@@ -63,7 +63,6 @@ import {
 } from "#/functions/tag.functions";
 import {
 	applyBatched,
-	createTagResolver,
 	createTasks,
 	moveAllToStage,
 	moveManyToBacklog,
@@ -79,6 +78,7 @@ import {
 	toggleSpecialTagOnAll,
 	updateTask,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
 import {
@@ -123,7 +123,12 @@ import {
 	stageProgress,
 } from "#/schemas/checklist";
 import { todayDateOnly } from "#/schemas/common";
-import { type TagTaskEntry, tagStageParts, tagStartDate } from "#/schemas/tag";
+import {
+	type TagTaskEntry,
+	tagStageParts,
+	tagStartDate,
+	tagStartTime,
+} from "#/schemas/tag";
 import type { Task, TaskFilter, TaskPageView } from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
@@ -420,6 +425,10 @@ function TagDetailPage() {
 	const figures = isFiltered ? (filteredResult.data ?? detail) : detail;
 	const { progress } = figures;
 	const startDate = tagStartDate(detail);
+	const startTime = tagStartTime(detail);
+	// Where the chart starts when it is not today's hours: when the work began,
+	// at its time if it has one, as pace is measured from.
+	const startsAt = localMoment(startDate, startTime) ?? dayStart(startDate);
 	const daily = detail.dailyWindow ?? null;
 	// The progress counts trackers too, one each; the Completed section lists
 	// only tasks.
@@ -427,7 +436,7 @@ function TagDetailPage() {
 		({ tracker }) => tracker.progress.percent >= 100,
 	).length;
 	const pace = paceAt(
-		{ ...detail, startDate },
+		{ ...detail, startDate, startTime },
 		progress.total === 0 ? null : progress.completed / progress.total,
 		now,
 	);
@@ -455,6 +464,7 @@ function TagDetailPage() {
 			? null
 			: computeVelocity({
 					startDate,
+					startTime,
 					deadline: detail.deadline,
 					deadlineTime: detail.deadlineTime,
 					current: progress.completed,
@@ -560,32 +570,32 @@ function TagDetailPage() {
 	 */
 	function addTasks(lines: Array<QuickAddLine>) {
 		if (detail === null) return;
-		const resolveTag = createTagResolver(apply, tags, canManageContent);
+		const inputs = withNewTags(apply, tags, canManageContent, (resolveTag) =>
+			lines.map((line) => {
+				// A line naming a tracker or a checklist becomes a task that follows
+				// it, titled with its own title. A name matching nothing stays text.
+				const tracker = resolveTrackerName(trackers, line.trackerName);
+				const linked = tracker
+					? null
+					: resolveChecklistName(checklists, line.trackerName);
+				const written =
+					tracker || linked ? [] : resolveTags(resolveTag, line.tagNames);
 
-		const inputs = lines.map((line) => {
-			// A line naming a tracker or a checklist becomes a task that follows
-			// it, titled with its own title. A name matching nothing stays text.
-			const tracker = resolveTrackerName(trackers, line.trackerName);
-			const linked = tracker
-				? null
-				: resolveChecklistName(checklists, line.trackerName);
-			const written =
-				tracker || linked ? [] : resolveTags(resolveTag, line.tagNames);
-
-			return {
-				title: withInlineTag(
-					tracker?.title ?? linked?.title ?? line.title,
-					detail.name,
-				),
-				tagIds: [...new Set([...written, detail.tagId])],
-				trackerId: tracker?.trackerId ?? null,
-				linkedChecklistId: linked?.checklistId ?? null,
-				urgent: line.urgent,
-				important: line.important,
-				deadline: line.deadline,
-				deadlineTime: line.deadlineTime,
-			};
-		});
+				return {
+					title: withInlineTag(
+						tracker?.title ?? linked?.title ?? line.title,
+						detail.name,
+					),
+					tagIds: [...new Set([...written, detail.tagId])],
+					trackerId: tracker?.trackerId ?? null,
+					linkedChecklistId: linked?.checklistId ?? null,
+					urgent: line.urgent,
+					important: line.important,
+					deadline: line.deadline,
+					deadlineTime: line.deadlineTime,
+				};
+			}),
+		);
 
 		// No checklist: they go into the Inbox; see `ensureInbox`.
 		createTasks(apply, null, inputs);
@@ -859,6 +869,7 @@ function TagDetailPage() {
 			{daily === null ? (
 				<VelocityStats
 					startDate={startDate}
+					startTime={startTime}
 					velocity={velocity}
 					unit="tasks"
 					isComplete={
@@ -1063,19 +1074,18 @@ function TagDetailPage() {
 					// once the browser has both.
 					now === null || completedResult.data === undefined ? undefined : (
 						<ProgressChart
-							start={todays?.start ?? dayStart(startDate)}
+							start={todays?.start ?? startsAt}
 							end={
 								todays?.end ?? localMoment(detail.deadline, detail.deadlineTime)
 							}
 							now={now}
 							target={progress.total}
 							current={progress.completed}
-							points={completionPoints(
-								finished,
-								todays?.start ?? dayStart(startDate),
-							)}
+							points={completionPoints(finished, todays?.start ?? startsAt)}
 							startLabel={
-								daily === null ? formatDate(startDate) : formatClock(daily.from)
+								daily === null
+									? formatDeadline(startDate, startTime)
+									: formatClock(daily.from)
 							}
 							endLabel={
 								daily !== null
@@ -1086,7 +1096,7 @@ function TagDetailPage() {
 							}
 							summary={
 								daily === null
-									? `${progress.completed} of ${progress.total} tasks done since ${formatDate(startDate)}`
+									? `${progress.completed} of ${progress.total} tasks done since ${formatDeadline(startDate, startTime)}`
 									: `${progress.completed} of ${progress.total} tasks done`
 							}
 						/>

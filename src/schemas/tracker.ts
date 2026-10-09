@@ -109,6 +109,8 @@ const trackerSchema = v.object({
 	author: v.nullable(v.string()),
 	/** The day tracking started. Every pace figure is measured from here. */
 	startDate: dateOnlySchema,
+	/** The time on the start day tracking started; see `Checklist.startTime`. */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	/** The day the target should be reached. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
 	/** The time on the deadline day it is due by; see `Checklist.deadlineTime`. */
@@ -170,6 +172,11 @@ const progressEntrySchema = v.object({
 	/** `E-15`, for people; absent until the server hands it one. See `NUMBER_PREFIXES`. */
 	number: v.optional(v.number()),
 	recordedAt: dateOnlySchema,
+	/**
+	 * The time on that day it was read, `HH:MM`. Absent or `null` for none,
+	 * which is every reading logged before readings had a time.
+	 */
+	recordedTime: v.optional(v.nullable(timeOfDaySchema)),
 	value: v.number(),
 	delta: v.number(),
 	note: v.string(),
@@ -205,6 +212,8 @@ export const createTrackerInputSchema = v.object({
 	targetValue: targetValueSchema,
 	startValue: v.optional(progressValueSchema, 0),
 	startDate: dateOnlySchema,
+	/** Absent, as the AI tools leave it, is the same as `null`. */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	description: v.optional(descriptionSchema, ""),
@@ -228,6 +237,7 @@ export const updateTrackerInputSchema = v.object({
 			targetValue: v.optional(targetValueSchema),
 			startValue: v.optional(progressValueSchema),
 			startDate: v.optional(dateOnlySchema),
+			startTime: v.optional(v.nullable(timeOfDaySchema)),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			description: v.optional(descriptionSchema),
@@ -258,6 +268,8 @@ export const createProgressEntryInputSchema = v.object({
 	entryId: idSchema,
 	value: progressValueSchema,
 	recordedAt: dateOnlySchema,
+	/** Absent, as the AI tools leave it, is the same as `null`. */
+	recordedTime: v.optional(v.nullable(timeOfDaySchema)),
 	note: v.optional(noteSchema, ""),
 });
 
@@ -268,6 +280,7 @@ export const updateProgressEntryInputSchema = v.object({
 		v.object({
 			value: v.optional(progressValueSchema),
 			recordedAt: v.optional(dateOnlySchema),
+			recordedTime: v.optional(v.nullable(timeOfDaySchema)),
 			note: v.optional(noteSchema),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),

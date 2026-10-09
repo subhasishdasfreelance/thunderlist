@@ -84,9 +84,11 @@ export async function imagesAtRisk(
 			allTagIds.push(change.tagId);
 			break;
 		case "items.delete":
-			if (change.of === "checklist") goneChecklistIds.push(...change.ids);
-			if (change.of === "tracker") trackerIds.push(...change.ids);
-			if (change.of === "tag") allTagIds.push(...change.ids);
+			for (const item of change.items) {
+				if (item.kind === "checklist") goneChecklistIds.push(item.id);
+				if (item.kind === "tracker") trackerIds.push(item.id);
+				if (item.kind === "tag") allTagIds.push(item.id);
+			}
 			break;
 	}
 

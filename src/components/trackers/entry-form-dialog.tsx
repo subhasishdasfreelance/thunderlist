@@ -5,13 +5,22 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { NumberField } from "#/components/common/number-field";
 import { TextArea } from "#/components/common/text-fields";
+import { TimeField } from "#/components/common/time-field";
 import type { EntryValues } from "#/lib/changes";
 import { formatDate } from "#/lib/format-date";
 import { todayDateOnly } from "#/schemas/common";
 import type { ProgressEntry, Tracker } from "#/schemas/tracker";
+
+/** The time on this device's clock now, `HH:MM`, which a new reading starts at. */
+function timeNow(): string {
+	const now = new Date();
+	const hours = String(now.getHours()).padStart(2, "0");
+	return `${hours}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
 
 /**
  * Record where you have got to.
@@ -40,6 +49,9 @@ export function EntryFormDialog({
 	const [recordedAt, setRecordedAt] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [recordedTime, setRecordedTime] = useState<string | undefined>(
+		undefined,
+	);
 	const [note, setNote] = useState("");
 	// Save was pressed on a reading that records nothing; see `submit`.
 	const [isUnchanged, setIsUnchanged] = useState(false);
@@ -50,6 +62,10 @@ export function EntryFormDialog({
 		setRecordedAt(
 			(entry?.recordedAt as ISODateString | undefined) ??
 				(todayDateOnly() as ISODateString),
+		);
+		// A new reading is taken now; an old one keeps what it had, if anything.
+		setRecordedTime(
+			entry === undefined ? timeNow() : (entry.recordedTime ?? undefined),
 		);
 		setNote(entry?.note ?? "");
 		setIsUnchanged(false);
@@ -68,12 +84,15 @@ export function EntryFormDialog({
 	 * it and says so.
 	 *
 	 * Editing is the exception. An entry already stored at that value is a fact
-	 * about the past, and its note or its date can still be wrong — so a change
-	 * to either is worth saving even when the reading has not moved.
+	 * about the past, and its note or its date and time can still be wrong — so
+	 * a change to any of them is worth saving even when the reading has not
+	 * moved.
 	 */
 	const isCorrection =
 		entry !== undefined &&
-		(note.trim() !== entry.note || recordedAt !== entry.recordedAt);
+		(note.trim() !== entry.note ||
+			recordedAt !== entry.recordedAt ||
+			(recordedTime ?? null) !== (entry.recordedTime ?? null));
 	const hasSomethingToSave = delta !== 0 || isCorrection;
 
 	function submit(event: FormEvent) {
@@ -92,7 +111,12 @@ export function EntryFormDialog({
 			return;
 		}
 
-		onSubmit({ value, recordedAt, note: note.trim() });
+		onSubmit({
+			value,
+			recordedAt,
+			recordedTime: recordedTime ?? null,
+			note: note.trim(),
+		});
 	}
 
 	return (
@@ -165,14 +189,30 @@ export function EntryFormDialog({
 					</Text>
 				)}
 
-				<DateInput
-					label="Date"
-					isRequired
-					description="Set it back to log a day you missed."
-					format={formatDate}
-					value={recordedAt}
-					onChange={setRecordedAt}
-				/>
+				{/* The time sits beside its day, as everywhere; see `ScheduleFields`. */}
+				<FieldRow>
+					<DateInput
+						label="Date"
+						isRequired
+						description="Set it back to log a day you missed."
+						format={formatDate}
+						value={recordedAt}
+						onChange={(next) => {
+							setRecordedAt(next);
+							if (next === undefined) setRecordedTime(undefined);
+						}}
+					/>
+					<TimeField
+						label="Time"
+						isOptional
+						hasClear
+						description="Leave empty to log the day alone."
+						isDisabled={recordedAt === undefined}
+						disabledMessage="Pick a date first."
+						value={recordedTime}
+						onChange={setRecordedTime}
+					/>
+				</FieldRow>
 				{/* Dragged taller for a long entry; see `.thunderlist-resizable`. */}
 				<div className="thunderlist-resizable">
 					<TextArea

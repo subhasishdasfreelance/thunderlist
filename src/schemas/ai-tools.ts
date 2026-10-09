@@ -114,6 +114,7 @@ const taskFields = {
 	deadline: v.optional(
 		v.nullable(date("The day the task is due, YYYY-MM-DD; null for none.")),
 	),
+	deadlineTime: schedule.deadlineTime,
 	type: v.optional(
 		v.nullable(
 			described(

@@ -65,6 +65,7 @@ async function taskSummary(look: Lookup, task: IndexedTask) {
 		urgent: task.urgent || undefined,
 		important: task.important || undefined,
 		deadline: task.deadline ?? undefined,
+		deadlineTime: task.deadlineTime ?? undefined,
 		tags: tagNames(tags, task.tagIds),
 		type: types.find((type) => type.typeId === task.typeId)?.name,
 		assignees:

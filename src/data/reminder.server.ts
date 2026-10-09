@@ -19,9 +19,10 @@ import {
 	type TeamMessageInput,
 } from "#/schemas/team";
 import {
+	accessFrom,
 	type Hidden,
 	isTaskVisible,
-	readAccess,
+	readAccessLists,
 	withAccess,
 } from "./visibility.server";
 
@@ -150,6 +151,8 @@ async function pushTo(
 		keys.privateKey,
 	);
 
+	/** Unsubscribed, or the app uninstalled: nothing will ever take these. */
+	const gone: Array<string> = [];
 	const sent = await Promise.all(
 		found.map(async (device) => {
 			try {
@@ -166,11 +169,8 @@ async function pushTo(
 				return device;
 			} catch (error) {
 				const status = (error as { statusCode?: number }).statusCode;
-				// Unsubscribed, or the app uninstalled: nothing will ever take it.
 				if (status === 404 || status === 410) {
-					await current.pushSubscriptions.deleteOne({
-						endpoint: device.endpoint,
-					});
+					gone.push(device.endpoint);
 				} else {
 					console.error("[thunderlist] push failed:", status ?? error);
 				}
@@ -178,6 +178,10 @@ async function pushTo(
 			}
 		}),
 	);
+	// Removed together, in one write.
+	if (gone.length > 0) {
+		await current.pushSubscriptions.deleteMany({ endpoint: { $in: gone } });
+	}
 	return sent.filter((device) => device !== null);
 }
 
@@ -373,12 +377,13 @@ export async function sendAssignedMany(
 			.toArray(),
 	]);
 	const who = account?.name ?? actor;
+	// Read once for everyone given something, not once a person.
+	const lists = await readAccessLists(current, teamId);
 
 	await Promise.all(
 		members.map(async (member) => {
-			const { hidden } = await readAccess(
-				current,
-				teamId,
+			const { hidden } = accessFrom(
+				lists,
 				member.email,
 				storedRole(member.role),
 			);

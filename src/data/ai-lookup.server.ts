@@ -235,7 +235,7 @@ export async function todayTag(look: Lookup): Promise<Tag> {
 	return today;
 }
 
-/** An existing tag of this name, if there is one; see `createTagResolver`. */
+/** An existing tag of this name, if there is one; see `withNewTags`. */
 export function tagNamed(
 	tags: ReadonlyArray<Tag>,
 	name: string,

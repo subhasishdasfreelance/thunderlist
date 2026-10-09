@@ -147,6 +147,7 @@ function soundFor(change: Change): Sound {
 		case "task.createMany":
 		case "tracker.create":
 		case "tag.create":
+		case "tag.createMany":
 		case "group.create":
 		case "group.import":
 		case "group.importInto":

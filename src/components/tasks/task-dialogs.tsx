@@ -10,12 +10,12 @@ import { AssignDialog } from "#/components/teams/assign-dialog";
 import {
 	applyBatched,
 	assignAlike,
-	createTagResolver,
 	resolveTags,
 	setTypeOnAll,
 	updateAllAlike,
 	updateTask,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { shortTitle } from "#/lib/tasks/tasks";
 import { useHeld } from "#/lib/use-held";
@@ -176,10 +176,15 @@ export function useTaskDialogs({
 				tags={tags}
 				onSubmit={(parsed, details) => {
 					if (renaming) {
-						const resolveTag = createTagResolver(apply, tags, canManageContent);
+						const tagIds = withNewTags(
+							apply,
+							tags,
+							canManageContent,
+							(resolveTag) => resolveTags(resolveTag, parsed.tagNames),
+						);
 						updateTask(apply, renaming.taskId, {
 							title: parsed.title,
-							tagIds: resolveTags(resolveTag, parsed.tagNames),
+							tagIds,
 							...details,
 						});
 					}

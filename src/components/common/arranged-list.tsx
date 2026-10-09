@@ -204,10 +204,16 @@ export function ArrangedCards<T>({
 	idOf,
 	render,
 	pick,
+	after,
 }: {
 	items: ReadonlyArray<T>;
 	idOf: (item: T) => string;
 	render: (item: T) => ReactNode;
+	/**
+	 * A card that is not one of the items — Untagged, on the Tags screen — in
+	 * the next cell after them, on the last page.
+	 */
+	after?: ReactNode;
 	/**
 	 * Picking cards to do something to all of them, while the screen is; see
 	 * `usePickMode`. `labelOf` names a card for a screen reader.
@@ -219,6 +225,8 @@ export function ArrangedCards<T>({
 	};
 }) {
 	const paging = usePages(items);
+	const isLastPage =
+		paging.shown.length === 0 || paging.shown.at(-1) === items.at(-1);
 
 	return (
 		<VStack gap={2}>
@@ -244,6 +252,7 @@ export function ArrangedCards<T>({
 						</div>
 					);
 				})}
+				{after != null && isLastPage ? <div>{after}</div> : null}
 			</div>
 			<ListPagination
 				page={paging.page}

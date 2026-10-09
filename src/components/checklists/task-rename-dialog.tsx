@@ -6,6 +6,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { useForm } from "@tanstack/react-form";
 import { Check, X } from "lucide-react";
 import { memo, useEffect, useState } from "react";
+import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { ImagesField } from "#/components/common/images-field";
 import { TextArea } from "#/components/common/text-fields";
@@ -255,19 +256,29 @@ export function TaskRenameDialog({
 					)}
 				</form.Field>
 
-				<form.Field name="deadline">
-					{(field) => (
-						<DeadlineField
-							value={field.state.value}
-							onChange={field.handleChange}
-						/>
-					)}
-				</form.Field>
+				{/* The time beside its day, disabled until there is one. */}
+				<FieldRow>
+					<form.Field
+						name="deadline"
+						listeners={{
+							// Clearing the day clears the hour with it.
+							onChange: ({ value }) => {
+								if (value === undefined) {
+									form.setFieldValue("deadlineTime", undefined);
+								}
+							},
+						}}
+					>
+						{(field) => (
+							<DeadlineField
+								value={field.state.value}
+								onChange={field.handleChange}
+							/>
+						)}
+					</form.Field>
 
-				{/* Only once there is a day for it to be on. */}
-				<form.Subscribe selector={(state) => state.values.deadline}>
-					{(deadline) =>
-						deadline === undefined ? null : (
+					<form.Subscribe selector={(state) => state.values.deadline}>
+						{(deadline) => (
 							<form.Field name="deadlineTime">
 								{(field) => (
 									<TimeField
@@ -275,14 +286,16 @@ export function TaskRenameDialog({
 										isOptional
 										hasClear
 										description="Leave empty and it is due that whole day."
+										isDisabled={deadline === undefined}
+										disabledMessage="Pick a deadline first."
 										value={field.state.value}
 										onChange={field.handleChange}
 									/>
 								)}
 							</form.Field>
-						)
-					}
-				</form.Subscribe>
+						)}
+					</form.Subscribe>
+				</FieldRow>
 
 				<form.Field name="notes">
 					{(field) => (

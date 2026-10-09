@@ -22,7 +22,12 @@
 import { AppError } from "#/lib/errors";
 import { collections, type TaskDoc } from "#/lib/mongo/client.server";
 import { type AccessEntry, type AccessLevel, reaches } from "#/schemas/access";
-import { type BatchedChange, type Change, isBatchable } from "#/schemas/change";
+import {
+	type BatchedChange,
+	type Change,
+	isBatchable,
+	type PickableKind,
+} from "#/schemas/change";
 import { importedItems } from "#/schemas/group";
 import type { TaskPatch } from "#/schemas/task";
 import { type Capability, ROLE_LABELS, roleCan } from "#/schemas/team";
@@ -62,6 +67,7 @@ import {
 } from "./settings.server";
 import {
 	createTag,
+	createTags,
 	deleteTag,
 	deleteTags,
 	deleteUnusedTags,
@@ -161,6 +167,10 @@ async function run(
 			await createTag(userId, change);
 			return;
 
+		case "tag.createMany":
+			await createTags(userId, change.tags);
+			return;
+
 		case "tag.update":
 			await updateTag(userId, change.tagId, change.patch);
 			return;
@@ -200,6 +210,7 @@ async function run(
 				color: change.color,
 				items: importedItems(change.checklists, change.trackers),
 				startDate: change.startDate,
+				startTime: null,
 				deadline: null,
 				deadlineTime: null,
 			});
@@ -240,25 +251,25 @@ async function run(
 			await deleteCountdown(userId, change.countdownId);
 			return;
 
-		case "items.delete":
-			switch (change.of) {
-				case "checklist":
-					await deleteChecklists(userId, change.ids);
-					return;
-				case "tracker":
-					await deleteTrackers(userId, change.ids);
-					return;
-				case "tag":
-					await deleteTags(userId, change.ids);
-					return;
-				case "plan":
-					await deletePlans(userId, change.ids);
-					return;
-				case "countdown":
-					await deleteCountdowns(userId, change.ids);
-					return;
+		// A group's mix arrives together; each kind is its own collection, so
+		// one write a kind.
+		case "items.delete": {
+			const idsOf = (of: PickableKind) =>
+				change.items.filter((item) => item.kind === of).map((item) => item.id);
+			const checklistIds = idsOf("checklist");
+			const trackerIds = idsOf("tracker");
+			const tagIds = idsOf("tag");
+			const planIds = idsOf("plan");
+			const countdownIds = idsOf("countdown");
+			if (checklistIds.length > 0) await deleteChecklists(userId, checklistIds);
+			if (trackerIds.length > 0) await deleteTrackers(userId, trackerIds);
+			if (tagIds.length > 0) await deleteTags(userId, tagIds);
+			if (planIds.length > 0) await deletePlans(userId, planIds);
+			if (countdownIds.length > 0) {
+				await deleteCountdowns(userId, countdownIds);
 			}
 			return;
+		}
 
 		case "items.share":
 			await shareItems(userId, change.of, change.ids, change.access);
@@ -439,14 +450,17 @@ async function assertAllowed(
 			await assertTaskAllowed(scope, change.taskId, "full", read);
 			return;
 
-		// All or nothing: one task they may not delete refuses the lot.
-		case "task.deleteMany":
+		// All or nothing: one task they may not delete refuses the lot. Read in
+		// one go, not a read a task.
+		case "task.deleteMany": {
+			const readMany = readAll(scope, new Set(change.taskIds));
 			await Promise.all(
 				change.taskIds.map((taskId) =>
-					assertTaskAllowed(scope, taskId, "full"),
+					assertTaskAllowed(scope, taskId, "full", readMany),
 				),
 			);
 			return;
+		}
 
 		case "task.update":
 			await assertTaskAllowed(scope, change.taskId, "edit", read);
@@ -475,6 +489,11 @@ async function assertAllowed(
 
 		// All or nothing: one they may not change refuses the lot.
 		case "items.delete":
+			for (const item of change.items) {
+				assertLevel(scope, `${item.kind}s`, item.id, "full");
+			}
+			return;
+
 		case "items.share":
 			for (const id of change.ids) {
 				assertLevel(scope, `${change.of}s`, id, "full");
@@ -538,6 +557,8 @@ function namedPeople(change: Change): ReadonlyArray<string> {
 		case "countdown.create":
 		case "group.create":
 			return listed(change.access);
+		case "tag.createMany":
+			return change.tags.flatMap((tag) => listed(tag.access));
 		case "checklist.update":
 		case "tag.update":
 		case "plan.update":
@@ -692,6 +713,15 @@ function includingActor(scope: Scope, change: Change): Change {
 
 		case "tag.create":
 			return { ...change, access: including(change.access) };
+
+		case "tag.createMany":
+			return {
+				...change,
+				tags: change.tags.map((tag) => ({
+					...tag,
+					access: including(tag.access),
+				})),
+			};
 
 		case "tracker.create":
 		case "plan.create":
@@ -898,8 +928,10 @@ async function tagsAtRisk(
 			trackerIds.push(change.trackerId);
 			break;
 		case "items.delete":
-			if (change.of === "checklist") goneChecklistIds.push(...change.ids);
-			if (change.of === "tracker") trackerIds.push(...change.ids);
+			for (const item of change.items) {
+				if (item.kind === "checklist") goneChecklistIds.push(item.id);
+				if (item.kind === "tracker") trackerIds.push(item.id);
+			}
 			break;
 		// Only what it takes off can be left on nothing.
 		case "items.update":

@@ -95,6 +95,7 @@ export function ChecklistFormDialog({
 	const [startDate, setStartDate] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [startTime, setStartTime] = useState<string | undefined>(undefined);
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
@@ -133,6 +134,7 @@ export function ChecklistFormDialog({
 			(checklist?.startDate as ISODateString | undefined) ??
 				(todayDateOnly() as ISODateString),
 		);
+		setStartTime(checklist?.startTime ?? undefined);
 		setDeadline((checklist?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(checklist?.deadlineTime ?? undefined);
 		setDailyWindow(checklist?.dailyWindow ?? null);
@@ -167,6 +169,7 @@ export function ChecklistFormDialog({
 			title: trimmedTitle,
 			description: description.trim(),
 			startDate,
+			startTime: startTime ?? null,
 			// Repeating daily takes the deadline's place; see `ScheduleFields`.
 			deadline: dailyWindow === null ? (deadline ?? null) : null,
 			deadlineTime:
@@ -245,10 +248,12 @@ export function ChecklistFormDialog({
 				/>
 				<ScheduleFields
 					startDate={startDate}
+					startTime={startTime}
 					deadline={deadline}
 					deadlineTime={deadlineTime}
 					dailyWindow={dailyWindow}
 					onStartDateChange={setStartDate}
+					onStartTimeChange={setStartTime}
 					onDeadlineChange={setDeadline}
 					onDeadlineTimeChange={setDeadlineTime}
 					onDailyWindowChange={setDailyWindow}

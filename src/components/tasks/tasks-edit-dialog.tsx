@@ -6,6 +6,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Check, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { FieldRow } from "#/components/common/field-row";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextArea } from "#/components/common/text-fields";
 import { TimeField } from "#/components/common/time-field";
@@ -206,26 +207,25 @@ export function TasksEditDialog({
 						width="100%"
 					/>
 
-					<DateInput
-						label="Deadline"
-						isOptional
-						hasClear
-						description={
-							differs?.deadline
-								? "Each has its own. A day picked here goes on them all."
-								: "Shown on the task as how long is left."
-						}
-						format={formatDate}
-						value={fields.deadline}
-						onChange={(value) => {
-							change("deadline", value);
-							// Clearing the day clears the hour with it.
-							if (value === undefined) change("deadlineTime", undefined);
-						}}
-					/>
-
-					{/* Only once there is a day for it to be on. */}
-					{fields.deadline === undefined ? null : (
+					{/* The time beside its day, disabled until there is one. */}
+					<FieldRow>
+						<DateInput
+							label="Deadline"
+							isOptional
+							hasClear
+							description={
+								differs?.deadline
+									? "Each has its own. A day picked here goes on them all."
+									: "Shown on the task as how long is left."
+							}
+							format={formatDate}
+							value={fields.deadline}
+							onChange={(value) => {
+								change("deadline", value);
+								// Clearing the day clears the hour with it.
+								if (value === undefined) change("deadlineTime", undefined);
+							}}
+						/>
 						<TimeField
 							label="Due at"
 							isOptional
@@ -235,10 +235,12 @@ export function TasksEditDialog({
 									? "Each has its own. A time picked here goes on them all."
 									: "Leave empty and they are due that whole day."
 							}
+							isDisabled={fields.deadline === undefined}
+							disabledMessage="Pick a deadline first."
 							value={fields.deadlineTime}
 							onChange={(value) => change("deadlineTime", value)}
 						/>
-					)}
+					</FieldRow>
 
 					<HStack gap={4}>
 						<CheckboxInput

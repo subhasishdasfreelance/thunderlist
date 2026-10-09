@@ -1,6 +1,6 @@
 import { compareBehind, lagFraction } from "#/lib/progress";
 import type { ChecklistSummary } from "#/schemas/checklist";
-import { type TagSummary, tagStartDate } from "#/schemas/tag";
+import { type TagSummary, tagStartDate, tagStartTime } from "#/schemas/tag";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 /*
@@ -13,6 +13,7 @@ import type { TrackerSummary } from "#/schemas/tracker";
 export function checklistsBehind(now: number) {
 	const standing = (checklist: ChecklistSummary) => ({
 		startDate: checklist.startDate,
+		startTime: checklist.startTime,
 		deadline: checklist.deadline,
 		deadlineTime: checklist.deadlineTime,
 		dailyWindow: checklist.dailyWindow,
@@ -28,6 +29,7 @@ export function trackersBehind(now: number) {
 	const lag = (tracker: TrackerSummary) =>
 		lagFraction({
 			startDate: tracker.startDate,
+			startTime: tracker.startTime,
 			deadline: tracker.deadline,
 			deadlineTime: tracker.deadlineTime,
 			now,
@@ -40,6 +42,7 @@ export function trackersBehind(now: number) {
 export function tagsBehind(now: number) {
 	const standing = (tag: TagSummary) => ({
 		startDate: tagStartDate(tag),
+		startTime: tagStartTime(tag),
 		deadline: tag.deadline,
 		deadlineTime: tag.deadlineTime,
 		dailyWindow: tag.dailyWindow,

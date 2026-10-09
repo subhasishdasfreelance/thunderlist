@@ -34,6 +34,8 @@ export type GroupValues = {
 	color: TagColor;
 	items: Array<GroupItem>;
 	startDate: string;
+	/** `HH:MM` on the start day; see `Group.startTime`. */
+	startTime: string | null;
 	deadline: string | null;
 	/** `HH:MM` on the deadline day; see `Group.deadlineTime`. */
 	deadlineTime: string | null;
@@ -64,6 +66,7 @@ export function GroupFormDialog({
 	const [startDate, setStartDate] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [startTime, setStartTime] = useState<string | undefined>(undefined);
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
@@ -87,6 +90,7 @@ export function GroupFormDialog({
 				? todayDateOnly()
 				: groupStartDate(group)) as ISODateString,
 		);
+		setStartTime(group?.startTime ?? undefined);
 		setDeadline((group?.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(group?.deadlineTime ?? undefined);
 		setAccess(group === undefined ? ownAlone : (group.access ?? null));
@@ -116,6 +120,7 @@ export function GroupFormDialog({
 			color,
 			items,
 			startDate,
+			startTime: startTime ?? null,
 			deadline: deadline ?? null,
 			// A time only means something on a day; see `ScheduleFields`.
 			deadlineTime: deadline === undefined ? null : (deadlineTime ?? null),
@@ -175,9 +180,11 @@ export function GroupFormDialog({
 
 					<ScheduleFields
 						startDate={startDate}
+						startTime={startTime}
 						deadline={deadline}
 						deadlineTime={deadlineTime}
 						onStartDateChange={setStartDate}
+						onStartTimeChange={setStartTime}
 						onDeadlineChange={setDeadline}
 						onDeadlineTimeChange={setDeadlineTime}
 					/>

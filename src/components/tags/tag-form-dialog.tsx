@@ -86,6 +86,7 @@ export function TagFormDialog({
 	const [startDate, setStartDate] = useState<ISODateString | undefined>(
 		undefined,
 	);
+	const [startTime, setStartTime] = useState<string | undefined>(undefined);
 	const [deadline, setDeadline] = useState<ISODateString | undefined>(
 		undefined,
 	);
@@ -104,6 +105,7 @@ export function TagFormDialog({
 		setColor(tag.color);
 		setDescription(tag.description);
 		setStartDate((tag.startDate as ISODateString | null) ?? undefined);
+		setStartTime(tag.startTime ?? undefined);
 		setDeadline((tag.deadline as ISODateString | null) ?? undefined);
 		setDeadlineTime(tag.deadlineTime ?? undefined);
 		setDailyWindow(tag.dailyWindow ?? null);
@@ -135,6 +137,8 @@ export function TagFormDialog({
 			color,
 			description: description.trim(),
 			startDate: startDate ?? null,
+			// A time only means something on a day; see `ScheduleFields`.
+			startTime: startDate === undefined ? null : (startTime ?? null),
 			// Repeating daily takes the deadline's place; see `ScheduleFields`.
 			deadline: dailyWindow === null ? (deadline ?? null) : null,
 			deadlineTime:
@@ -231,10 +235,12 @@ export function TagFormDialog({
 
 				<ScheduleFields
 					startDate={startDate}
+					startTime={startTime}
 					deadline={deadline}
 					deadlineTime={deadlineTime}
 					dailyWindow={dailyWindow}
 					onStartDateChange={setStartDate}
+					onStartTimeChange={setStartTime}
 					onDeadlineChange={setDeadline}
 					onDeadlineTimeChange={setDeadlineTime}
 					onDailyWindowChange={setDailyWindow}

@@ -1617,6 +1617,15 @@ function asStored(client: QueryClient, change: Change): Change {
 		case "group.create":
 			return { ...change, access: including(change.access) };
 
+		case "tag.createMany":
+			return {
+				...change,
+				tags: change.tags.map((tag) => ({
+					...tag,
+					access: including(tag.access),
+				})),
+			};
+
 		case "checklist.update": {
 			const { access } = change.patch;
 			if (access === undefined) return change;
@@ -1890,7 +1899,9 @@ function patchFor(client: QueryClient, change: Change): void {
 
 		// Each drawn as deleting or sharing that one would be.
 		case "items.delete":
-			for (const id of change.ids) patchFor(client, deletingOne(change.of, id));
+			for (const item of change.items) {
+				patchFor(client, deletingOne(item.kind, item.id));
+			}
 			return;
 
 		case "items.share":
@@ -1917,6 +1928,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				color: change.color,
 				items: importedItems(change.checklists, change.trackers),
 				startDate: change.startDate,
+				startTime: null,
 				deadline: null,
 				deadlineTime: null,
 				access: null,
@@ -2083,6 +2095,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				title: change.title,
 				description: change.description,
 				startDate: change.startDate,
+				startTime: change.startTime ?? null,
 				deadline: change.deadline,
 				deadlineTime: change.deadlineTime,
 				dailyWindow: change.dailyWindow,
@@ -2239,6 +2252,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				coverUrl: change.coverUrl,
 				author: change.author,
 				startDate: change.startDate,
+				startTime: change.startTime ?? null,
 				deadline: change.deadline,
 				deadlineTime: change.deadlineTime,
 				tagIds: change.tagIds,
@@ -2344,6 +2358,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				{
 					entryId: change.entryId,
 					recordedAt: change.recordedAt,
+					recordedTime: change.recordedTime ?? null,
 					value: change.value,
 					note: change.note,
 					recordedBy,
@@ -2382,6 +2397,13 @@ function patchFor(client: QueryClient, change: Change): void {
 			return;
 		}
 
+		// Each drawn as making that one would be.
+		case "tag.createMany":
+			for (const tag of change.tags) {
+				patchFor(client, { kind: "tag.create", ...tag });
+			}
+			return;
+
 		case "tag.create": {
 			const createdAt = new Date().toISOString();
 			const tag: Tag = {
@@ -2393,6 +2415,7 @@ function patchFor(client: QueryClient, change: Change): void {
 				special: null,
 				description: change.description,
 				startDate: change.startDate,
+				startTime: change.startTime ?? null,
 				deadline: change.deadline,
 				deadlineTime: change.deadlineTime,
 				dailyWindow: change.dailyWindow,

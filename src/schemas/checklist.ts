@@ -447,6 +447,11 @@ const checklistSchema = v.object({
 	 * back so a checklist begun earlier is paced from when it really began.
 	 */
 	startDate: dateOnlySchema,
+	/**
+	 * The time on the start day the work started. Absent or `null` means the
+	 * start of that day, which is what a start date meant before it had a time.
+	 */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	/** The day it should be finished by. Without one there is no pace. */
 	deadline: v.nullable(dateOnlySchema),
 	/**
@@ -535,6 +540,8 @@ export const createChecklistInputSchema = v.object({
 	title: titleSchema,
 	description: v.optional(descriptionSchema, ""),
 	startDate: dateOnlySchema,
+	/** Absent, as the AI tools leave it, is the same as `null`. */
+	startTime: v.optional(v.nullable(timeOfDaySchema)),
 	deadline: v.optional(v.nullable(dateOnlySchema), null),
 	deadlineTime: v.optional(v.nullable(timeOfDaySchema), null),
 	dailyWindow: v.optional(v.nullable(dailyWindowSchema), null),
@@ -554,6 +561,7 @@ export const updateChecklistInputSchema = v.object({
 			title: v.optional(titleSchema),
 			description: v.optional(descriptionSchema),
 			startDate: v.optional(dateOnlySchema),
+			startTime: v.optional(v.nullable(timeOfDaySchema)),
 			deadline: v.optional(v.nullable(dateOnlySchema)),
 			deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),

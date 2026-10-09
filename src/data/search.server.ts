@@ -42,6 +42,8 @@ export type SearchIndex = {
 		number?: number;
 		trackerId: string;
 		recordedAt: string;
+		/** Absent or `null` for none; see `ProgressEntry.recordedTime`. */
+		recordedTime?: string | null;
 		value: number;
 		note: string;
 	}>;
@@ -114,6 +116,7 @@ export async function getSearchIndex(
 						number: 1,
 						trackerId: 1,
 						recordedAt: 1,
+						recordedTime: 1,
 						value: 1,
 						note: 1,
 					},

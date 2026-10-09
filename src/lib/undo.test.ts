@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import type { StagePage } from "#/lib/tasks/tasks";
 import { queryKeys } from "#/queries/keys";
-import type { ChecklistSummary } from "#/schemas/checklist";
 import type { Change } from "#/schemas/change";
+import type { ChecklistSummary } from "#/schemas/checklist";
 import type { TagSummary } from "#/schemas/tag";
 import type { Task, TaskPageView } from "#/schemas/task";
 import { invertChange } from "./undo";
@@ -64,6 +64,7 @@ const MADE_AGAIN: Change = {
 	color: "blue",
 	description: "",
 	startDate: null,
+	startTime: null,
 	deadline: null,
 	deadlineTime: null,
 	dailyWindow: null,
@@ -202,6 +203,28 @@ describe("invertChange", () => {
 			},
 		]);
 		expect(step?.changes).toHaveLength(3);
+	});
+
+	it("makes every tag deleted tasks were last to carry in one change", () => {
+		const queryClient = client([
+			task({ taskId: "tsk_1", tagIds: ["tag_1"] }),
+			task({ taskId: "tsk_2", tagIds: ["tag_2"] }),
+		]);
+		withTags(queryClient, [tag("tag_1", 1), tag("tag_2", 1)]);
+
+		const step = invertChange(queryClient, {
+			kind: "task.deleteMany",
+			taskIds: ["tsk_1", "tsk_2"],
+		});
+
+		const { kind: _, ...madeAgain } = MADE_AGAIN;
+		expect(step?.changes[0]).toEqual({
+			kind: "tag.createMany",
+			tags: [madeAgain, { ...madeAgain, tagId: "tag_2", name: "tag_2" }],
+		});
+		expect(
+			step?.changes.filter((change) => change.kind.startsWith("tag.")),
+		).toHaveLength(1);
 	});
 
 	it("undoes a batch in one batch, last change first", () => {

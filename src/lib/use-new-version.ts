@@ -1,5 +1,10 @@
 import { useEffect } from "react";
-import { BUILD_ID } from "#/lib/version";
+import { readStored, writeStored } from "#/lib/device-data";
+import { useToast } from "#/lib/toasts";
+import { BUILD_ID, BUILT_AT } from "#/lib/version";
+
+/** When the newest build this browser has run was made; see `useUpdatedNotice`. */
+const LAST_BUILT_AT_KEY = "thunderlist-last-built-at";
 
 /** How often an open page asks whether there is a newer build. */
 const CHECK_EVERY_MS = 5 * 60 * 1000;
@@ -126,4 +131,32 @@ export function useNewVersionCheck(): void {
 			serviceWorker?.removeEventListener("message", onWorkerMessage);
 		};
 	}, []);
+}
+
+/**
+ * Say so when the app opens on a newer version than it last ran — the one
+ * `useNewVersionCheck` fetched in the background last time.
+ *
+ * Compared by when each build was made, not by name: a launch can paint a kept
+ * copy of the start page from before a deploy after a newer page has already
+ * run, and that older copy is not an update. A first visit only remembers.
+ */
+export function useUpdatedNotice(): void {
+	const toast = useToast();
+
+	useEffect(() => {
+		if (!import.meta.env.PROD) return;
+
+		const lastBuiltAt = Number(readStored(LAST_BUILT_AT_KEY) ?? Number.NaN);
+		if (Number.isFinite(lastBuiltAt) && BUILT_AT <= lastBuiltAt) return;
+
+		writeStored(LAST_BUILT_AT_KEY, String(BUILT_AT));
+		if (!Number.isFinite(lastBuiltAt)) return;
+
+		toast({
+			body: "Thunderlist has been updated to the latest version.",
+			type: "info",
+			uniqueID: "updated",
+		});
+	}, [toast]);
 }

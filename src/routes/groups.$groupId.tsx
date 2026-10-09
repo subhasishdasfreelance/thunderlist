@@ -65,19 +65,19 @@ import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import {
 	type ChecklistValues,
 	createInGroup,
-	createTagResolver,
 	importIntoGroup,
 	resolveTags,
 	type TrackerValues,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { completionPoints, dayStart } from "#/lib/chart-points";
-import { formatDate, formatDeadline, formatSchedule } from "#/lib/format-date";
+import { formatDeadline, formatSchedule } from "#/lib/format-date";
 import type { Outline } from "#/lib/outline";
 import { computeVelocity, localMoment } from "#/lib/progress";
 import { useNow } from "#/lib/use-now";
-import { firstPage } from "#/lib/use-pages";
 import { paceAt } from "#/lib/use-pace";
+import { firstPage } from "#/lib/use-pages";
 import { usePickMode } from "#/lib/use-pick-mode";
 import { useItemPermissions } from "#/lib/use-team";
 import { checklistPageQuery, checklistsQuery } from "#/queries/checklists";
@@ -196,8 +196,13 @@ function GroupPage() {
 	const shown = orderContents(group, contents, order, now);
 	const { total, completed } = contents;
 	const startDate = groupStartDate(group);
+	const startTime = group.startTime ?? null;
+	// Where the chart starts: when the work began, at its time if it has one, as
+	// pace is measured from.
+	const startsAt = localMoment(startDate, startTime) ?? dayStart(startDate);
 	const schedule = {
 		startDate,
+		startTime,
 		deadline: group.deadline ?? null,
 		deadlineTime: group.deadlineTime ?? null,
 	};
@@ -222,12 +227,7 @@ function GroupPage() {
 	) {
 		setIsImporting(false);
 		const allTags = await queryClient.ensureQueryData(tagsQuery());
-		importIntoGroup(
-			apply,
-			groupId,
-			outline,
-			createTagResolver(apply, allTags, canManageContent),
-		);
+		importIntoGroup(apply, groupId, outline, allTags, canManageContent);
 	}
 
 	/**
@@ -412,6 +412,7 @@ function GroupPage() {
 
 					<VelocityStats
 						startDate={startDate}
+						startTime={startTime}
 						velocity={velocity}
 						unit="tasks"
 						isComplete={total > 0 && completed >= total}
@@ -421,19 +422,19 @@ function GroupPage() {
 					{now === null || finished === undefined ? null : (
 						<Card padding={3}>
 							<ProgressChart
-								start={dayStart(startDate)}
+								start={startsAt}
 								end={localMoment(schedule.deadline, schedule.deadlineTime)}
 								now={now}
 								target={total}
 								current={completed}
-								points={completionPoints(finished, dayStart(startDate))}
-								startLabel={formatDate(startDate)}
+								points={completionPoints(finished, startsAt)}
+								startLabel={formatDeadline(startDate, startTime)}
 								endLabel={
 									schedule.deadline === null
 										? "No deadline"
 										: formatDeadline(schedule.deadline, schedule.deadlineTime)
 								}
-								summary={`${completed} of ${total} tasks done since ${formatDate(startDate)}`}
+								summary={`${completed} of ${total} tasks done since ${formatDeadline(startDate, startTime)}`}
 							/>
 						</Card>
 					)}
@@ -549,7 +550,9 @@ function GroupPage() {
 				onOpenChange={(isOpen) => setCreating(isOpen ? "checklist" : null)}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				onSubmit={(values) =>
 					void createAndOpen(group, { kind: "checklist", values })
@@ -561,7 +564,9 @@ function GroupPage() {
 				onOpenChange={(isOpen) => setCreating(isOpen ? "tracker" : null)}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				onSubmit={(values) =>
 					void createAndOpen(group, { kind: "tracker", values })
@@ -586,6 +591,9 @@ function GroupPage() {
 						...(values.startDate === startDate
 							? {}
 							: { startDate: values.startDate }),
+						...(values.startTime === startTime
+							? {}
+							: { startTime: values.startTime }),
 						...(values.deadline === schedule.deadline
 							? {}
 							: { deadline: values.deadline }),

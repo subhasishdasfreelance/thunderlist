@@ -17,7 +17,7 @@ import {
 	GroupImportDialog,
 	type GroupImportValues,
 } from "#/components/groups/group-import-dialog";
-import { createTagResolver, importGroup, useApplyChange } from "#/lib/changes";
+import { importGroup, useApplyChange } from "#/lib/changes";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { usePages } from "#/lib/use-pages";
 import { usePermissions } from "#/lib/use-team";
@@ -61,11 +61,7 @@ function GroupsPage() {
 	async function importOutline(values: GroupImportValues) {
 		setIsImporting(false);
 		const tags = await queryClient.ensureQueryData(tagsQuery());
-		importGroup(
-			apply,
-			values,
-			createTagResolver(apply, tags, canManageContent),
-		);
+		importGroup(apply, values, tags, canManageContent);
 	}
 
 	return (

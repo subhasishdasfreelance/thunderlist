@@ -25,12 +25,12 @@ import { MemberFilter } from "#/components/teams/member-filter";
 import type { AcrossTask } from "#/data/across.server";
 import { getAcrossTasksFn } from "#/functions/across.functions";
 import {
-	createTagResolver,
 	createTasks,
 	resolveChecklistName,
 	resolveTags,
 	resolveTrackerName,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import {
 	type FilterSearch,
@@ -243,27 +243,28 @@ function StagesPage() {
 	 * written on three lines is created once rather than three times.
 	 */
 	function addTasks(lines: Array<QuickAddLine>) {
-		const resolveTag = createTagResolver(apply, tags, canManageContent);
+		const inputs = withNewTags(apply, tags, canManageContent, (resolveTag) =>
+			lines.map((line) => {
+				// A line naming a tracker or a checklist becomes a task that follows
+				// it, titled with its own title. A name matching nothing stays text.
+				const tracker = resolveTrackerName(trackers, line.trackerName);
+				const linked = tracker
+					? null
+					: resolveChecklistName(checklists, line.trackerName);
 
-		const inputs = lines.map((line) => {
-			// A line naming a tracker or a checklist becomes a task that follows
-			// it, titled with its own title. A name matching nothing stays text.
-			const tracker = resolveTrackerName(trackers, line.trackerName);
-			const linked = tracker
-				? null
-				: resolveChecklistName(checklists, line.trackerName);
-
-			return {
-				title: tracker?.title ?? linked?.title ?? line.title,
-				tagIds: tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
-				trackerId: tracker?.trackerId ?? null,
-				linkedChecklistId: linked?.checklistId ?? null,
-				urgent: line.urgent,
-				important: line.important,
-				deadline: line.deadline,
-				deadlineTime: line.deadlineTime,
-			};
-		});
+				return {
+					title: tracker?.title ?? linked?.title ?? line.title,
+					tagIds:
+						tracker || linked ? [] : resolveTags(resolveTag, line.tagNames),
+					trackerId: tracker?.trackerId ?? null,
+					linkedChecklistId: linked?.checklistId ?? null,
+					urgent: line.urgent,
+					important: line.important,
+					deadline: line.deadline,
+					deadlineTime: line.deadlineTime,
+				};
+			}),
+		);
 
 		createTasks(apply, null, inputs);
 	}

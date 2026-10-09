@@ -54,6 +54,7 @@ export function GroupCard({
 	const { total, completed } = contents;
 	const schedule = {
 		startDate: groupStartDate(group),
+		startTime: group.startTime ?? null,
 		deadline: group.deadline ?? null,
 		deadlineTime: group.deadlineTime ?? null,
 	};

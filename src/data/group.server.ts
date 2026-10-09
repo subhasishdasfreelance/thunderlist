@@ -139,7 +139,15 @@ export async function getGroupFinished(
 				userId,
 				trackerId: { $in: shown.map((tracker) => tracker.trackerId) },
 			},
-			{ projection: { _id: 0, trackerId: 1, value: 1, recordedAt: 1 } },
+			{
+				projection: {
+					_id: 0,
+					trackerId: 1,
+					value: 1,
+					recordedAt: 1,
+					recordedTime: 1,
+				},
+			},
 		)
 		.toArray();
 

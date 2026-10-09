@@ -219,7 +219,7 @@ function tagsBack(
 	);
 	const tags = client.getQueryData<Array<Tag>>(queryKeys.tags) ?? [];
 
-	return tags.flatMap((tag) => {
+	const back = tags.flatMap((tag) => {
 		if (tag.special != null) return [];
 		const losing = tasks.filter((task) => task.tagIds.includes(tag.tagId));
 		if (losing.length === 0) return [];
@@ -229,12 +229,12 @@ function tagsBack(
 
 		return [
 			{
-				kind: "tag.create" as const,
 				tagId: tag.tagId,
 				name: tag.name,
 				color: tag.color,
 				description: tag.description ?? "",
 				startDate: tag.startDate ?? null,
+				startTime: tag.startTime ?? null,
 				deadline: tag.deadline ?? null,
 				deadlineTime: tag.deadlineTime ?? null,
 				dailyWindow: tag.dailyWindow ?? null,
@@ -242,6 +242,12 @@ function tagsBack(
 			},
 		];
 	});
+
+	// All of them in one change.
+	if (back.length === 0) return [];
+	return back.length === 1
+		? [{ kind: "tag.create", ...back[0] }]
+		: [{ kind: "tag.createMany", tags: back }];
 }
 
 /**

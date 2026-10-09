@@ -180,6 +180,7 @@ export async function createGroup(
 					color: input.color,
 					items: input.items,
 					startDate: input.startDate,
+					startTime: input.startTime ?? null,
 					deadline: input.deadline ?? null,
 					deadlineTime: input.deadlineTime ?? null,
 					access: input.access ?? null,
@@ -203,6 +204,7 @@ export async function updateGroup(
 			| "items"
 			| "order"
 			| "startDate"
+			| "startTime"
 			| "deadline"
 			| "deadlineTime"
 			| "access"

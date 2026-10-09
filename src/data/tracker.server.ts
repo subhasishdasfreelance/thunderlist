@@ -170,6 +170,8 @@ export async function createTracker(
 		targetValue: number;
 		startValue: number;
 		startDate: string;
+		/** Absent for none; see `Tracker.startTime`. */
+		startTime?: string | null;
 		deadline: string | null;
 		deadlineTime: string | null;
 		description: string;
@@ -208,6 +210,7 @@ export async function createTracker(
 		coverUrl: input.coverUrl,
 		author: input.author === "" ? null : input.author,
 		startDate: input.startDate,
+		startTime: input.startTime ?? null,
 		deadline: input.deadline,
 		deadlineTime: input.deadlineTime,
 		tagIds: input.tagIds,
@@ -299,6 +302,7 @@ export async function updateTracker(
 		targetValue?: number;
 		startValue?: number;
 		startDate?: string;
+		startTime?: string | null;
 		deadline?: string | null;
 		deadlineTime?: string | null;
 		description?: string;
@@ -468,6 +472,8 @@ export async function createProgressEntry(
 		entryId: string;
 		value: number;
 		recordedAt: string;
+		/** Absent or `null` for no time; see `ProgressEntry.recordedTime`. */
+		recordedTime?: string | null;
 		note: string;
 	},
 	/**
@@ -500,6 +506,7 @@ export async function createProgressEntry(
 		entryId: input.entryId,
 		number: await nextNumber(current, userId, "entry"),
 		recordedAt: input.recordedAt,
+		recordedTime: input.recordedTime ?? null,
 		value: input.value,
 		note: input.note,
 		recordedBy,
@@ -527,7 +534,12 @@ export async function updateProgressEntry(
 	userId: string,
 	trackerId: string,
 	entryId: string,
-	patch: { value?: number; recordedAt?: string; note?: string },
+	patch: {
+		value?: number;
+		recordedAt?: string;
+		recordedTime?: string | null;
+		note?: string;
+	},
 ): Promise<ProgressEntry> {
 	const current = await collections();
 	const tracker = await requireTracker(current, userId, trackerId);

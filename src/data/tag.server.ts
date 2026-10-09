@@ -70,7 +70,7 @@ import {
 	ensureInbox,
 	withTrackedCompletion,
 } from "./checklist.server";
-import { nextNumber } from "./numbers.server";
+import { nextNumber, nextNumbers } from "./numbers.server";
 import { listTaskTypes } from "./settings.server";
 import { summarise as summariseTracker } from "./tracker.server";
 import { type Hidden, isTaskVisible, withAccess } from "./visibility.server";
@@ -104,6 +104,7 @@ function withSchedule(tag: Tag): Tag {
 		special: tag.special ?? null,
 		description: tag.description ?? "",
 		startDate: tag.startDate ?? null,
+		startTime: tag.startTime ?? null,
 		deadline: tag.deadline ?? null,
 		deadlineTime: tag.deadlineTime ?? null,
 		dailyWindow: tag.dailyWindow ?? null,
@@ -248,6 +249,7 @@ async function ensureSpecialTags(userId: string): Promise<void> {
 				special: kind,
 				description: "",
 				startDate: null,
+				startTime: null,
 				deadline: null,
 				deadlineTime: null,
 				// Today is one day long, every day: paced from morning to night.
@@ -759,20 +761,21 @@ function escapeRegex(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export async function createTag(
-	userId: string,
-	input: {
-		tagId: string;
-		name: string;
-		color: TagColor;
-		description: string;
-		startDate: string | null;
-		deadline: string | null;
-		deadlineTime: string | null;
-		dailyWindow: DailyWindow | null;
-		access: Array<AccessEntry> | null;
-	},
-): Promise<Tag> {
+type NewTag = {
+	tagId: string;
+	name: string;
+	color: TagColor;
+	description: string;
+	startDate: string | null;
+	/** Absent for none; see `Tag.startTime`. */
+	startTime?: string | null;
+	deadline: string | null;
+	deadlineTime: string | null;
+	dailyWindow: DailyWindow | null;
+	access: Array<AccessEntry> | null;
+};
+
+export async function createTag(userId: string, input: NewTag): Promise<Tag> {
 	const current = await collections();
 
 	// Queuing the same new tag twice, or applying a batch a second time, should
@@ -785,16 +788,78 @@ export async function createTag(
 
 	await assertNameIsFree(userId, input.name);
 
+	const tag = newTag(input, new Date().toISOString());
+	tag.number = await nextNumber(current, userId, "tag");
+	await current.tags.insertOne({ ...tag, userId });
+
+	return tag;
+}
+
+/**
+ * Several new tags — the ones a pasted line names, or an undo makes again — in
+ * one read of what is there already, one of the names taken, and one write.
+ * Those made already settle, as for `createTag`; one name taken refuses the
+ * lot.
+ */
+export async function createTags(
+	userId: string,
+	inputs: ReadonlyArray<NewTag>,
+): Promise<void> {
+	const current = await collections();
+
+	const made = await current.tags
+		.find(
+			{ userId, tagId: { $in: inputs.map((input) => input.tagId) } },
+			{ projection: { tagId: 1 } },
+		)
+		.toArray();
+	const madeIds = new Set(made.map((tag) => tag.tagId));
+	const fresh = inputs.filter((input) => !madeIds.has(input.tagId));
+	if (fresh.length === 0) return;
+
+	const taken = await current.tags.findOne(
+		{
+			userId,
+			name: {
+				$in: fresh.map(
+					(input) => new RegExp(`^${escapeRegex(input.name)}$`, "i"),
+				),
+			},
+		},
+		{ projection: { name: 1 } },
+	);
+	if (taken) {
+		throw new AppError(
+			"invalid_data",
+			`There is already a "${taken.name}" tag.`,
+		);
+	}
+
+	const first = await nextNumbers(current, userId, "tag", fresh.length);
 	const now = new Date().toISOString();
-	// Listed field by field rather than spread: the caller passes the whole
-	// queued change, and spreading it would store its `kind` alongside.
-	const tag: Tag = {
+	await current.tags.insertMany(
+		fresh.map((input, at) => ({
+			...newTag(input, now),
+			number: first + at,
+			userId,
+		})),
+	);
+}
+
+/**
+ * A new tag as stored. Listed field by field rather than spread: the caller
+ * passes the whole queued change, and spreading it would store its `kind`
+ * alongside.
+ */
+function newTag(input: NewTag, now: string): Tag {
+	return {
 		tagId: input.tagId,
 		name: input.name,
 		color: input.color,
 		special: null,
 		description: input.description,
 		startDate: input.startDate,
+		startTime: input.startTime ?? null,
 		deadline: input.deadline,
 		deadlineTime: input.deadlineTime,
 		dailyWindow: input.dailyWindow,
@@ -802,11 +867,6 @@ export async function createTag(
 		createdAt: now,
 		updatedAt: now,
 	};
-
-	tag.number = await nextNumber(current, userId, "tag");
-	await current.tags.insertOne({ ...tag, userId });
-
-	return tag;
 }
 
 export async function updateTag(
@@ -817,6 +877,7 @@ export async function updateTag(
 		color?: TagColor;
 		description?: string;
 		startDate?: string | null;
+		startTime?: string | null;
 		deadline?: string | null;
 		deadlineTime?: string | null;
 		dailyWindow?: DailyWindow | null;

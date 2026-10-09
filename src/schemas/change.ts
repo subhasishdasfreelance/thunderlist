@@ -101,6 +101,7 @@ const pickedIdsSchema = v.pipe(
 const itemsPatchSchema = v.pipe(
 	v.object({
 		startDate: v.optional(dateOnlySchema),
+		startTime: v.optional(v.nullable(timeOfDaySchema)),
 		deadline: v.optional(v.nullable(dateOnlySchema)),
 		deadlineTime: v.optional(v.nullable(timeOfDaySchema)),
 		dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
@@ -208,6 +209,18 @@ const changeSchema = v.variant("kind", [
 	}),
 
 	v.object({ kind: v.literal("tag.create"), ...createTagInputSchema.entries }),
+	/**
+	 * Several new tags in one request: the ones a line typed or pasted names,
+	 * or an undo makes again; see `createTags`.
+	 */
+	v.object({
+		kind: v.literal("tag.createMany"),
+		tags: v.pipe(
+			v.array(createTagInputSchema),
+			v.minLength(1, "Add at least one tag"),
+			v.maxLength(500, "Too many at once"),
+		),
+	}),
 	v.object({ kind: v.literal("tag.update"), ...updateTagInputSchema.entries }),
 	v.object({ kind: v.literal("tag.delete"), ...tagIdInputSchema.entries }),
 
@@ -266,12 +279,15 @@ const changeSchema = v.variant("kind", [
 
 	/**
 	 * Several checklists, trackers, tags, plans or countdowns picked out on
-	 * their screen, deleted in one request; see `deleteItems`.
+	 * their screen — of one kind, or a group's mix — deleted in one request.
 	 */
 	v.object({
 		kind: v.literal("items.delete"),
-		of: v.picklist(PICKABLE_KINDS),
-		ids: pickedIdsSchema,
+		items: v.pipe(
+			v.array(v.object({ kind: v.picklist(PICKABLE_KINDS), id: idSchema })),
+			v.minLength(1, "Pick at least one"),
+			v.maxLength(500, "Too many at once"),
+		),
 	}),
 	/**
 	 * Several checklists, trackers and tags — of one kind, or a group's mix —

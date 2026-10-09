@@ -429,6 +429,8 @@ export type ChecklistValues = {
 	title: string;
 	description: string;
 	startDate: string;
+	/** `HH:MM` on the start day; see `Checklist.startTime`. */
+	startTime: string | null;
 	deadline: string | null;
 	/** `HH:MM` on the deadline day; see `Checklist.deadlineTime`. */
 	deadlineTime: string | null;
@@ -604,15 +606,19 @@ export function importGroup(
 		checklists: ReadonlyArray<OutlineChecklist>;
 		trackers: ReadonlyArray<OutlineTracker>;
 	},
-	resolveTag: (name: string) => string | null,
+	tags: ReadonlyArray<Tag>,
+	canCreateTags: boolean,
 ): void {
+	const checklists = withNewTags(apply, tags, canCreateTags, (resolveTag) =>
+		outlineChecklists(values.checklists, resolveTag),
+	);
 	apply({
 		kind: "group.import",
 		groupId: createId(ID_PREFIX.group),
 		name: values.name,
 		color: values.color,
 		startDate: todayDateOnly(),
-		checklists: outlineChecklists(values.checklists, resolveTag),
+		checklists,
 		trackers: outlineTrackers(values.trackers),
 	});
 }
@@ -629,13 +635,17 @@ export function importIntoGroup(
 		checklists: ReadonlyArray<OutlineChecklist>;
 		trackers: ReadonlyArray<OutlineTracker>;
 	},
-	resolveTag: (name: string) => string | null,
+	tags: ReadonlyArray<Tag>,
+	canCreateTags: boolean,
 ): void {
+	const checklists = withNewTags(apply, tags, canCreateTags, (resolveTag) =>
+		outlineChecklists(outline.checklists, resolveTag),
+	);
 	apply({
 		kind: "group.importInto",
 		groupId,
 		startDate: todayDateOnly(),
-		checklists: outlineChecklists(outline.checklists, resolveTag),
+		checklists,
 		trackers: outlineTrackers(outline.trackers),
 	});
 }
@@ -1011,10 +1021,9 @@ function parkingChanges(
  * The checklist it leaves is written into its notes by the move itself; see
  * `notesAfterMove`.
  *
- * Both are drawn at once. Only the sending waits: the move takes off the tags
- * the task only had from the checklist it leaves, which an update landing
- * after it would put back, so the move goes once the edit has landed; see
- * `sendingTasks`.
+ * Both go as one request, the edit before the move: the move takes off the
+ * tags the task only had from the checklist it leaves, which an update landing
+ * after it would put back.
  */
 export async function moveToBacklog(
 	applyAsync: ApplyChangeAsync,
@@ -1022,9 +1031,10 @@ export async function moveToBacklog(
 	backlogId: string,
 	tags: ReadonlyArray<Tag>,
 ): Promise<void> {
+	const changes = parkingChanges(task, backlogId, tags);
 	try {
-		await Promise.all(
-			parkingChanges(task, backlogId, tags).map((change) => applyAsync(change)),
+		await applyAsync(
+			changes.length === 1 ? changes[0] : { kind: "task.batch", changes },
 		);
 	} catch {
 		// Already reported by `useApplyChange`.
@@ -1070,6 +1080,7 @@ export type TrackerValues = {
 	/** Where the count already stood on day one; see `Tracker.startValue`. */
 	startValue: number;
 	startDate: string;
+	startTime: string | null;
 	deadline: string | null;
 	deadlineTime: string | null;
 	description: string;
@@ -1090,7 +1101,13 @@ export type TrackerValues = {
 	trackerId?: string;
 };
 
-export type EntryValues = { value: number; recordedAt: string; note: string };
+export type EntryValues = {
+	value: number;
+	recordedAt: string;
+	/** `HH:MM` on that day, or `null` for none; see `ProgressEntry.recordedTime`. */
+	recordedTime: string | null;
+	note: string;
+};
 
 export function createEntry(
 	apply: ApplyChange,
@@ -1107,6 +1124,7 @@ export type TagValues = {
 	color: TagColor;
 	description: string;
 	startDate: string | null;
+	startTime: string | null;
 	deadline: string | null;
 	deadlineTime: string | null;
 	dailyWindow: DailyWindow | null;
@@ -1121,64 +1139,73 @@ export type TagValues = {
 	images?: Array<ImageRef>;
 };
 
-function createTag(apply: ApplyChange, values: TagValues): string {
-	const tagId = createId(ID_PREFIX.tag);
-	apply({ kind: "tag.create", tagId, ...values });
-	return tagId;
-}
-
 /** The colour a tag written inline gets; recolour it on the Tags screen. */
 function randomTagColor(): TagColor {
 	return PICKABLE_COLORS[Math.floor(Math.random() * PICKABLE_COLORS.length)];
 }
+
+/** A tag as making it sends it. */
+type NewTag = Omit<Extract<Change, { kind: "tag.create" }>, "kind">;
 
 /**
  * Turn the names written as `#tags` into tag ids, creating the ones that do not
  * exist yet.
  *
  * The Tags screen is the master list, but a tag typed into a task still has to
- * become one or the task would silently lose it. A resolver rather than one
- * call per name, so a name used on three pasted lines is created once.
+ * become one or the task would silently lose it. `make` is handed a resolver
+ * and builds whatever names the tags — a task, a pasted block, an outline — so
+ * a name used on three pasted lines is created once, and every tag it creates
+ * goes in one change. That change is applied before `make`'s result is, so a
+ * task naming a new tag finds it drawn and counted.
  *
  * Someone whose role cannot make tags — a collaborator, in a team — gets
  * `null` for a name that is not a tag yet: it stays in the title as they wrote
  * it, as plain words, rather than the whole task being refused.
  */
-export function createTagResolver(
+export function withNewTags<T>(
 	apply: ApplyChange,
 	existing: ReadonlyArray<Tag>,
-	canCreate = true,
-): (name: string) => string | null {
-	const minted = new Map<string, string>();
+	canCreate: boolean,
+	make: (resolve: (name: string) => string | null) => T,
+): T {
+	const minted = new Map<string, NewTag>();
 
-	return (name) => {
-		const key = name.toLowerCase();
-
+	const made = make((name) => {
 		const known = existing.find((tag) => sameTagName(tag.name, name));
 		if (known) return known.tagId;
 
+		const key = name.toLowerCase();
 		const already = minted.get(key);
-		if (already) return already;
+		if (already) return already.tagId;
 		if (!canCreate) return null;
 
-		const tagId = createTag(apply, {
+		const tag: NewTag = {
+			tagId: createId(ID_PREFIX.tag),
 			name,
 			color: randomTagColor(),
 			description: "",
 			startDate: null,
+			startTime: null,
 			deadline: null,
 			deadlineTime: null,
 			dailyWindow: null,
 			// A tag typed into a title is shared by nature: whoever reads the
 			// task reads the tag. Narrow it from the Tags screen.
 			access: null,
-		});
-		minted.set(key, tagId);
-		return tagId;
-	};
+		};
+		minted.set(key, tag);
+		return tag.tagId;
+	});
+
+	const tags = [...minted.values()];
+	if (tags.length === 1) apply({ kind: "tag.create", ...tags[0] });
+	for (let at = 0; tags.length > 1 && at < tags.length; at += 500) {
+		apply({ kind: "tag.createMany", tags: tags.slice(at, at + 500) });
+	}
+	return made;
 }
 
-/** Every name a resolver has an id for; see `createTagResolver`. */
+/** Every name a resolver has an id for; see `withNewTags`. */
 export function resolveTags(
 	resolve: (name: string) => string | null,
 	names: ReadonlyArray<string>,

@@ -202,6 +202,7 @@ async function ensureSpecialChecklist(
 			number: await nextNumber(current, userId, "checklist"),
 			...SPECIAL_CHECKLIST_DETAILS[kind],
 			startDate: todayDateOnly(),
+			startTime: null,
 			deadline: null,
 			deadlineTime: null,
 			dailyWindow: null,
@@ -648,6 +649,8 @@ export async function createChecklist(
 		title: string;
 		description: string;
 		startDate: string;
+		/** Absent for none; see `Checklist.startTime`. */
+		startTime?: string | null;
 		deadline: string | null;
 		deadlineTime: string | null;
 		dailyWindow: DailyWindow | null;
@@ -677,6 +680,7 @@ export async function createChecklist(
 		title: input.title,
 		description: input.description,
 		startDate: input.startDate,
+		startTime: input.startTime ?? null,
 		deadline: input.deadline,
 		deadlineTime: input.deadlineTime,
 		dailyWindow: input.dailyWindow,
@@ -880,6 +884,7 @@ export async function updateChecklist(
 		title?: string;
 		description?: string;
 		startDate?: string;
+		startTime?: string | null;
 		deadline?: string | null;
 		deadlineTime?: string | null;
 		dailyWindow?: DailyWindow | null;

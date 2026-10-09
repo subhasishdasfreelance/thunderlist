@@ -1,5 +1,5 @@
 import { Spinner } from "@astryxdesign/core/Spinner";
-import { formatDate } from "#/lib/format-date";
+import { formatDate, formatDeadline } from "#/lib/format-date";
 import type { Velocity } from "#/schemas/progress";
 import { type Stat, StatGrid } from "./stat-grid";
 
@@ -68,6 +68,7 @@ function velocityStats(
 	unit: string,
 	isComplete: boolean,
 	startDate: string,
+	startTime: string | null,
 ): Array<Stat> {
 	const {
 		perDay,
@@ -85,7 +86,7 @@ function velocityStats(
 	return [
 		// When the clock started. Every other figure is measured from it, so it
 		// comes first: without it the speeds are numbers with no window.
-		{ label: "Started", value: formatDate(startDate) },
+		{ label: "Started", value: formatDeadline(startDate, startTime) },
 		// The time, then the speeds: on a wide screen that is a row of each.
 		figure("Planned time", totalMinutes, duration, noDeadline),
 		{ label: "Time passed", value: duration(minutesElapsed) },
@@ -169,6 +170,7 @@ export function VelocityStats({
 	unit,
 	isComplete,
 	startDate,
+	startTime,
 }: {
 	/**
 	 * Worked out on the viewer's own clock, so `null` until the browser has it
@@ -179,6 +181,8 @@ export function VelocityStats({
 	isComplete: boolean;
 	/** The day the work began; every other figure is measured from it. */
 	startDate: string;
+	/** `HH:MM` on that day it began, or `null` for the day's start. */
+	startTime: string | null;
 }) {
 	// The grid is held open with its labels, so nothing below it jumps when
 	// the figures arrive. The Current speed hint's line is held too.
@@ -195,6 +199,8 @@ export function VelocityStats({
 	}
 
 	return (
-		<StatGrid stats={velocityStats(velocity, unit, isComplete, startDate)} />
+		<StatGrid
+			stats={velocityStats(velocity, unit, isComplete, startDate, startTime)}
+		/>
 	);
 }

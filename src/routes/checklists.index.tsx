@@ -30,9 +30,9 @@ import { checklistsBehind } from "#/lib/behind";
 import {
 	type ChecklistValues,
 	createChecklist,
-	createTagResolver,
 	resolveTags,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { useNow } from "#/lib/use-now";
 import { firstPage } from "#/lib/use-pages";
@@ -259,7 +259,9 @@ function ChecklistsPage() {
 				onOpenChange={setIsFormOpen}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				isSaving={isCreating}
 				onSubmit={(values) => void create(values)}

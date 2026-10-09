@@ -10,7 +10,7 @@ import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
 import { SectionSpinner } from "#/components/common/section-spinner";
 import { ShortcutKey, TASK_SHORTCUTS } from "#/components/tasks/task-actions";
-import { formatDate } from "#/lib/format-date";
+import { formatDeadline } from "#/lib/format-date";
 import { useFocusRow } from "#/lib/use-focus-task";
 import { usePages } from "#/lib/use-pages";
 import { type RowShortcuts, useRowShortcuts } from "#/lib/use-row-shortcuts";
@@ -171,7 +171,7 @@ function EntryRow({
 				<VStack gap={0} className="min-w-0 flex-1">
 					<Text>{`${entry.value} ${unit}`}</Text>
 					<Text type="supporting">
-						{[formatDate(entry.recordedAt), loggedBy]
+						{[formatDeadline(entry.recordedAt, entry.recordedTime), loggedBy]
 							.filter((part) => part !== null)
 							.join(" · ")}
 					</Text>
@@ -193,7 +193,7 @@ function EntryRow({
 							placement="below"
 							alignment="end"
 							button={{
-								label: `Actions for entry on ${formatDate(entry.recordedAt)}`,
+								label: `Actions for entry on ${formatDeadline(entry.recordedAt, entry.recordedTime)}`,
 								variant: "ghost",
 								size: "sm",
 								isIconOnly: true,

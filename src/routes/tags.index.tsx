@@ -96,6 +96,21 @@ function TagsPage() {
 		compareBehind: behind,
 	});
 
+	// In the grid after the tags, the same size as theirs; not a tag, so
+	// nothing to pick.
+	const untaggedCard =
+		index.data === undefined || untagged.length === 0 ? null : (
+			<Pickable
+				isPicking={pick.isPicking}
+				isPicked={false}
+				isPickable={false}
+				label="Untagged"
+				onToggle={() => {}}
+			>
+				<UntaggedCard tasks={untagged} checklists={index.data.checklists} />
+			</Pickable>
+		);
+
 	return (
 		<VStack gap={4}>
 			<Heading level={1}>Tags</Heading>
@@ -107,10 +122,17 @@ function TagsPage() {
 			) : (
 				<VStack gap={3}>
 					{tags.length === 0 ? (
-						<EmptyState
-							title="No tags yet."
-							description="Write #name in any task to make one."
-						/>
+						<>
+							<EmptyState
+								title="No tags yet."
+								description="Write #name in any task to make one."
+							/>
+							{untaggedCard === null ? null : (
+								<div className="thunderlist-card-grid">
+									<div>{untaggedCard}</div>
+								</div>
+							)}
+						</>
 					) : (
 						<>
 							<HStack gap={2} hAlign="between" vAlign="center">
@@ -135,6 +157,7 @@ function TagsPage() {
 								items={arranged.ordered}
 								idOf={tagIdOf}
 								render={(tag) => <TagCard tag={tag} />}
+								after={untaggedCard}
 								pick={{
 									mode: pick,
 									labelOf: (tag) => `#${tag.name}`,
@@ -152,18 +175,7 @@ function TagsPage() {
 						/>
 					) : index.isPending ? (
 						<SectionSpinner label="Loading untagged tasks…" />
-					) : untagged.length === 0 ? null : (
-						// Not a tag, so nothing to pick.
-						<Pickable
-							isPicking={pick.isPicking}
-							isPicked={false}
-							isPickable={false}
-							label="Untagged"
-							onToggle={() => {}}
-						>
-							<UntaggedCard tasks={untagged} />
-						</Pickable>
-					)}
+					) : null}
 				</VStack>
 			)}
 

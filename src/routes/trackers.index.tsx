@@ -29,11 +29,11 @@ import { TrackerCard } from "#/components/trackers/tracker-card";
 import { TrackerFormDialog } from "#/components/trackers/tracker-form-dialog";
 import { trackersBehind } from "#/lib/behind";
 import {
-	createTagResolver,
 	createTracker,
 	resolveTags,
 	type TrackerValues,
 	useApplyChange,
+	withNewTags,
 } from "#/lib/changes";
 import { searchText } from "#/lib/filter-search";
 import { isAssignedTo } from "#/lib/tasks/tasks";
@@ -276,7 +276,9 @@ function TrackersPage() {
 				onOpenChange={setIsFormOpen}
 				tags={tags}
 				resolveTags={(names) =>
-					resolveTags(createTagResolver(apply, tags, canManageContent), names)
+					withNewTags(apply, tags, canManageContent, (resolve) =>
+						resolveTags(resolve, names),
+					)
 				}
 				isSaving={isCreating}
 				onSubmit={(values) => void create(values)}

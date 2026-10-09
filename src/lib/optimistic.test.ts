@@ -990,6 +990,29 @@ describe("applyOptimistically, on a tracker", () => {
 		expect(trackerOf(queryClient)?.currentValue).toBe(90);
 	});
 
+	it("draws a reading's time and puts it in its place on the day", () => {
+		const queryClient = trackerClient([
+			{ ...reading("ent_1", 60, "2026-01-02", 60), recordedTime: "18:00" },
+		]);
+
+		applyOptimistically(queryClient, {
+			kind: "entry.create",
+			trackerId: "trk_1",
+			entryId: "ent_2",
+			value: 40,
+			recordedAt: "2026-01-02",
+			recordedTime: "08:30",
+			note: "",
+		});
+
+		const history = entriesOf(queryClient);
+		// Logged second, but read earlier that day.
+		expect(history?.map((each) => each.entryId)).toEqual(["ent_2", "ent_1"]);
+		expect(history?.[0]?.recordedTime).toBe("08:30");
+		expect(history?.map((each) => each.delta)).toEqual([40, 20]);
+		expect(trackerOf(queryClient)?.currentValue).toBe(60);
+	});
+
 	it("takes a reading out and hands its step to the one after it", () => {
 		const queryClient = trackerClient([
 			reading("ent_1", 40, "2026-01-01", 40),

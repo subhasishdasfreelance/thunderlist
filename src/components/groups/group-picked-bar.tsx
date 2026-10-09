@@ -93,15 +93,11 @@ export function GroupPickedBar({
 				description={kinds.map((kind) => DELETING[kind]).join(" ")}
 				actionLabel="Delete"
 				onAction={() => {
-					for (const kind of kinds) {
-						apply({
-							kind: "items.delete",
-							of: kind,
-							ids: items
-								.filter((item) => item.kind === kind)
-								.map((item) => item.id),
-						});
-					}
+					// Every kind picked, in one request.
+					apply({
+						kind: "items.delete",
+						items: items.map((item) => ({ kind: item.kind, id: item.id })),
+					});
 					setIsDeleting(false);
 					onDone();
 				}}

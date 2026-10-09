@@ -88,7 +88,7 @@ function ownAlone(context: AiContext): Array<AccessEntry> | null {
 
 /**
  * Tags by name, making the ones that do not exist yet — once each, however
- * often named — ahead of whatever uses them; see `createTagResolver`.
+ * often named — ahead of whatever uses them; see `withNewTags`.
  *
  * Someone whose role cannot make tags gets `null` for a new name, as in the
  * app, where it stays in the title as plain words.
@@ -167,7 +167,7 @@ function deleting(
 	const unique = [...new Set(ids)];
 	return unique.length === 1
 		? [one(unique[0])]
-		: [{ kind: "items.delete", of, ids: unique }];
+		: [{ kind: "items.delete", items: unique.map((id) => ({ kind: of, id })) }];
 }
 
 async function findTasks(
@@ -324,6 +324,8 @@ async function newTasks(
 				caption: line.caption,
 				notes: line.notes,
 				deadline: line.deadline,
+				// A time is on a day; with none, there is nothing for it to be on.
+				deadlineTime: line.deadline == null ? undefined : line.deadlineTime,
 				typeId,
 				assignees: line.assignees,
 			}).filter(([, value]) => value !== undefined),
@@ -507,6 +509,15 @@ export const WRITE_TOOLS: AiHandlers<
 			if (input.caption !== undefined) patch.caption = input.caption;
 			if (input.notes !== undefined) patch.notes = input.notes;
 			if (input.deadline !== undefined) patch.deadline = input.deadline;
+			// A time is on a day: clearing the day clears it, and with no day
+			// there is nothing for one to be on.
+			if (input.deadline === null) patch.deadlineTime = null;
+			else if (
+				input.deadlineTime !== undefined &&
+				(input.deadline ?? task.deadline) != null
+			) {
+				patch.deadlineTime = input.deadlineTime;
+			}
 			if (input.urgent !== undefined) patch.urgent = input.urgent;
 			if (input.important !== undefined) patch.important = input.important;
 			if (typeId !== undefined) patch.typeId = typeId;

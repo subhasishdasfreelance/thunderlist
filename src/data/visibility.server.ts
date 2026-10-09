@@ -115,6 +115,11 @@ export async function readAccess(
 	email: string,
 	role: TeamRole,
 ): Promise<{ hidden: Hidden; levels: Levels }> {
+	return accessFrom(await readAccessLists(current, teamId), email, role);
+}
+
+/** Every access list in a team, read once for however many people; see `readAccess`. */
+export async function readAccessLists(current: Collections, teamId: string) {
 	const [checklists, tags, trackers, plans, countdowns, settings] =
 		await Promise.all([
 			current.checklists
@@ -168,7 +173,16 @@ export async function readAccess(
 				{ projection: { _id: 0, "groups.groupId": 1, "groups.access": 1 } },
 			),
 		]);
+	return { checklists, tags, trackers, plans, countdowns, settings };
+}
 
+/** What one person may do in a team, from its access lists; see `readAccess`. */
+export function accessFrom(
+	lists: Awaited<ReturnType<typeof readAccessLists>>,
+	email: string,
+	role: TeamRole,
+): { hidden: Hidden; levels: Levels } {
+	const { checklists, tags, trackers, plans, countdowns, settings } = lists;
 	const ceiling = roleCeiling(role);
 	// The Inbox, the Backlog and Today are everyone's, whatever anyone asks for.
 	const levelOfItem = (item: Stored & { special?: string | null }) =>

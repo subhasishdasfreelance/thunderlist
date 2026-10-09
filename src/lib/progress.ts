@@ -97,13 +97,18 @@ export function trackerFraction(
 export type EntryReading = Omit<ProgressEntry, "delta">;
 
 /**
- * Entries are ordered by the day they were recorded and then by id, which is
- * time-sortable. Back-dating an entry therefore drops it into the right place
- * in the history rather than onto the end.
+ * Entries are ordered by the day they were recorded, then by the time on it —
+ * one with no time first, as every reading from before readings had a time
+ * was logged earlier — and then by id, which is time-sortable. Back-dating an
+ * entry therefore drops it into the right place in the history rather than
+ * onto the end.
  */
 function compareEntries(a: EntryReading, b: EntryReading): number {
 	if (a.recordedAt !== b.recordedAt)
 		return a.recordedAt < b.recordedAt ? -1 : 1;
+	const aTime = a.recordedTime ?? "";
+	const bTime = b.recordedTime ?? "";
+	if (aTime !== bTime) return aTime < bTime ? -1 : 1;
 	return a.entryId < b.entryId ? -1 : 1;
 }
 
@@ -182,6 +187,8 @@ export function reachedTargetOn(
 export type PaceInput = {
 	/** `YYYY-MM-DD` the work began. */
 	startDate: string;
+	/** `HH:MM` on the start day it began at; without one, that day's start. */
+	startTime?: string | null;
 	/** `YYYY-MM-DD` it should be finished by, or `null` when none was set. */
 	deadline: string | null;
 	/** `HH:MM` on the deadline day it is due by; without one, that day's start. */
@@ -241,8 +248,8 @@ export function todayWindow(
  * The stretch of time something is paced across, as two moments.
  *
  * With a daily window it is today's part of it — 06:00 to 22:00 today,
- * whichever day that is. Otherwise it runs from the start of the start date to
- * the deadline: at its time if it has one, or the start of that day.
+ * whichever day that is. Otherwise it runs from the start date to the
+ * deadline, each at its time if it has one, or the start of that day.
  *
  * Both are read on the viewer's own clock, because "due at 18:00" and "from six
  * in the morning" mean the clock on the wall where the viewer is. That is also
@@ -258,7 +265,7 @@ function paceWindow(
 ): { start: number; end: number } | null {
 	if (input.dailyWindow) return todayWindow(input.dailyWindow, now);
 
-	const start = localMoment(input.startDate);
+	const start = localMoment(input.startDate, input.startTime);
 	const end = localMoment(input.deadline, input.deadlineTime);
 
 	// The deadline must be after the start for "elapsed" to mean anything.
@@ -322,7 +329,7 @@ export function paceStatus(
  * from the same code.
  *
  * Measured to the minute over the stretch the pace mark is drawn across — from
- * the start of the start date to the deadline, at its time if it has one — and
+ * the start date to the deadline, each at its time if it has one — and
  * given per day, because "18 pages a day" is what anyone plans by. Counted in
  * whole days instead, all of today was still "left" at ten at night and a
  * deadline at 23:59 lost its last day, so something marked behind could be
@@ -332,7 +339,7 @@ export function computeVelocity(
 	input: PaceInput & { current: number; target: number; start?: number },
 ): Velocity {
 	const now = input.now ?? Date.now();
-	const startsAt = localMoment(input.startDate);
+	const startsAt = localMoment(input.startDate, input.startTime);
 	const endsAt =
 		input.deadline === null
 			? null

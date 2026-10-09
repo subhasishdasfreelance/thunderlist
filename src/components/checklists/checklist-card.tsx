@@ -71,6 +71,7 @@ export function ChecklistCard({
 			: velocitySummary(
 					computeVelocity({
 						startDate: checklist.startDate,
+						startTime: checklist.startTime,
 						deadline: checklist.deadline,
 						deadlineTime: checklist.deadlineTime,
 						current: progress.completed,
