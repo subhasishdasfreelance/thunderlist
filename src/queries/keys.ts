@@ -71,4 +71,6 @@ export const queryKeys = {
 	countdowns: ["countdowns"] as const,
 	/** The illustration each page shows this person; see `Backdrops`. */
 	backdrops: ["backdrops"] as const,
+	/** This person's light or dark, kept on the account; see `useAccountColorScheme`. */
+	colorScheme: ["color-scheme"] as const,
 };

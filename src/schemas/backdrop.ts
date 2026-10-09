@@ -57,16 +57,16 @@ export const SECTION_PALETTES: Record<Section, PaletteId> = {
 
 /** And the design each starts with, so no two neighbours look alike. */
 const SECTION_DESIGNS: Record<Section, DesignId> = {
-	today: "sunrise",
-	checklists: "pebbles",
-	priority: "bauhaus",
-	stages: "stack",
-	tags: "confetti",
-	trackers: "dunes",
-	groups: "orbit",
-	plans: "horizon",
-	countdowns: "moonrise",
-	settings: "ripple",
+	today: "oceania",
+	checklists: "lagoon",
+	priority: "jazz",
+	stages: "snail",
+	tags: "bouquet",
+	trackers: "kelp",
+	groups: "aviary",
+	plans: "palmette",
+	countdowns: "constellation",
+	settings: "calm",
 };
 
 /**

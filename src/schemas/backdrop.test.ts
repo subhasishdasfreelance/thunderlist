@@ -47,7 +47,7 @@ describe("backdropOf", () => {
 		expect(
 			backdropOf(
 				{
-					checklists: { design: "orbit", palette: "ocean" },
+					checklists: { design: "reef", palette: "ocean" },
 					"checklists/chk_1": { design: null, palette: "mint" },
 				},
 				checklist,
@@ -58,15 +58,15 @@ describe("backdropOf", () => {
 	it("falls back to its list page's pick", () => {
 		expect(
 			backdropOf(
-				{ checklists: { design: "orbit", palette: "ocean" } },
+				{ checklists: { design: "reef", palette: "ocean" } },
 				checklist,
 			),
-		).toEqual({ design: "orbit", palette: "ocean" });
+		).toEqual({ design: "reef", palette: "ocean" });
 	});
 
 	it("is drawn as its section starts when nothing was picked", () => {
 		expect(backdropOf({}, checklist)).toEqual({
-			design: "pebbles",
+			design: "lagoon",
 			palette: null,
 		});
 	});

@@ -7,11 +7,12 @@ import { TopNav } from "@astryxdesign/core/TopNav";
 import { Theme } from "@astryxdesign/core/theme";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { CircleQuestionMark, Search } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
 import { useFirstOpenBack } from "#/lib/first-open";
 import { type ColorScheme, useColorScheme } from "#/lib/theme";
+import { useAccountColorScheme } from "#/lib/use-account-color-scheme";
 import { useEscape } from "#/lib/use-escape";
 import { useNoAutofill } from "#/lib/use-no-autofill";
 import { isTyping } from "#/lib/use-row-shortcuts";
@@ -22,7 +23,6 @@ import { useWebMcp } from "#/lib/use-webmcp";
 import { pageOf } from "#/schemas/backdrop";
 import { thunderlistTheme } from "#/theme/thunderlist";
 import { AppFooter } from "./app-footer";
-import { BackdropDialog } from "./backdrop-dialog";
 import { BottomNav } from "./bottom-nav";
 import { BrandMark } from "./brand-mark";
 import { HelpDialog } from "./help-dialog";
@@ -36,6 +36,13 @@ import { SetupNotice } from "./setup-notice";
 import { ThemeToggle } from "./theme-toggle";
 import { UndoButton, UndoQuestion } from "./undo-provider";
 import { UserMenu } from "./user-menu";
+
+/** Loaded apart from the app, with the outlines it draws; see `Scenery`. */
+const BackdropDialog = lazy(() =>
+	import("./backdrop-dialog").then((module) => ({
+		default: module.BackdropDialog,
+	})),
+);
 
 /** Watches for being taken out of the team; see `useSpaceWatch`. */
 function SpaceWatch() {
@@ -71,8 +78,8 @@ export function AppFrame({
 	 * Whoever is signed in, or `null` on the login page.
 	 *
 	 * Signed out the frame keeps its bar — the mark, and the theme toggle, which
-	 * is a property of the screen rather than of an account and so is the one
-	 * control that still means something. Everything that needs data goes: the
+	 * works on the device alone without an account and so is the one control
+	 * that still means something. Everything that needs data goes: the
 	 * navigation, search, the account menu and the shortcuts, none of which have
 	 * anything to act on yet.
 	 */
@@ -83,6 +90,7 @@ export function AppFrame({
 }) {
 	const navigate = useNavigate();
 	const scheme = useColorScheme(colorScheme);
+	const pickScheme = useAccountColorScheme(scheme, user !== null);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
 	const [isBackdropOpen, setIsBackdropOpen] = useState(false);
@@ -242,6 +250,7 @@ export function AppFrame({
 									   see `Scenery`. Signed out, only the theme. */}
 									<ThemeToggle
 										scheme={scheme}
+										onScheme={pickScheme}
 										onBackdrop={
 											user === null ? undefined : () => setIsBackdropOpen(true)
 										}
@@ -299,11 +308,13 @@ export function AppFrame({
 				<SearchDialog isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
 				<HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
 				{user === null ? null : (
-					<BackdropDialog
-						page={page}
-						isOpen={isBackdropOpen}
-						onOpenChange={setIsBackdropOpen}
-					/>
+					<Suspense fallback={null}>
+						<BackdropDialog
+							page={page}
+							isOpen={isBackdropOpen}
+							onOpenChange={setIsBackdropOpen}
+						/>
+					</Suspense>
 				)}
 				{/* Inside the theme, though its state lives above the frame. */}
 				<UndoQuestion />

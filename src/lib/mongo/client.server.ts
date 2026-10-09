@@ -18,6 +18,7 @@ import {
 	type ObjectId,
 } from "mongodb";
 import { AppError } from "#/lib/errors";
+import type { ColorScheme } from "#/lib/theme";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Backdrops } from "#/schemas/backdrop";
 import type { Checklist } from "#/schemas/checklist";
@@ -95,6 +96,8 @@ export type CounterDoc = {
 export type PreferencesDoc = {
 	userId: string;
 	backdrops?: Backdrops;
+	/** Light, dark or the device's own; see `useAccountColorScheme`. */
+	colorScheme?: ColorScheme;
 	updatedAt: string;
 };
 

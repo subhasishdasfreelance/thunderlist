@@ -1,9 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, lazy, Suspense, useState } from "react";
 import { backdropsQuery } from "#/queries/preferences";
 import { backdropOf, type Page, paletteColors } from "#/schemas/backdrop";
 import type { DesignId } from "#/schemas/backdrop-designs";
-import { BackdropArt } from "./backdrop-art";
+
+/**
+ * Every outline is in `backdrop-art.tsx`, so it is loaded on its own rather
+ * than with the app, and never holds up its start. The server draws the page
+ * with it already, and that drawing stays on screen until it arrives.
+ */
+const BackdropArt = lazy(() =>
+	import("./backdrop-art").then((module) => ({ default: module.BackdropArt })),
+);
 
 /** One drawing of the backdrop: a design in its colours. */
 type Art = {
@@ -17,8 +25,8 @@ type Art = {
  * screen, in the colours picked for it, or those it starts with; see
  * `BackdropDialog`. Signed out, it is how Today starts.
  *
- * The top of the page is kept clear and light, where the bar and the page's
- * heading sit, so nothing up there can be mistaken for a control.
+ * The cut-outs run the whole height of the page, softened toward the top,
+ * where the bar and the page's heading sit.
  *
  * Going to a page drawn differently, the old drawing fades out as
  * the new one fades in, and the wash beneath them eases from one colour to the
@@ -70,10 +78,12 @@ export function Scenery({
 						setShown((previous) => ({ ...previous, leaving: null }));
 					}}
 				>
-					<BackdropArt
-						designId={shown.leaving.design}
-						colors={shown.leaving.colors}
-					/>
+					<Suspense fallback={null}>
+						<BackdropArt
+							designId={shown.leaving.design}
+							colors={shown.leaving.colors}
+						/>
+					</Suspense>
 				</div>
 			)}
 			{shown.current.design === null ? null : (
@@ -82,13 +92,16 @@ export function Scenery({
 					className="thunderlist-scenery-art"
 					data-entering={shown.hasChanged || undefined}
 				>
-					<BackdropArt
-						designId={shown.current.design}
-						colors={shown.current.colors}
-					/>
+					<Suspense fallback={null}>
+						<BackdropArt
+							designId={shown.current.design}
+							colors={shown.current.colors}
+						/>
+					</Suspense>
 				</div>
 			)}
 			<span className="thunderlist-scenery-veil" />
+			<span className="thunderlist-scenery-grain" />
 		</div>
 	);
 }

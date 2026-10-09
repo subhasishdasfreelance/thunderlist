@@ -1,7 +1,7 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Check, Image, Monitor, Moon, Sun } from "lucide-react";
-import { type ColorScheme, setColorScheme } from "#/lib/theme";
+import type { ColorScheme } from "#/lib/theme";
 
 const OPTIONS: Array<{
 	scheme: ColorScheme;
@@ -36,9 +36,12 @@ const OPTIONS: Array<{
  */
 export function ThemeToggle({
 	scheme,
+	onScheme,
 	onBackdrop,
 }: {
 	scheme: ColorScheme;
+	/** Switches to one; see `useAccountColorScheme`. */
+	onScheme: (scheme: ColorScheme) => void;
 	/** Opens this page's background; absent signed out. See `BackdropDialog`. */
 	onBackdrop?: () => void;
 }) {
@@ -79,7 +82,7 @@ export function ThemeToggle({
 							option.scheme === scheme ? (
 								<Icon icon={Check} size="sm" color="accent" />
 							) : undefined,
-						onClick: () => setColorScheme(option.scheme),
+						onClick: () => onScheme(option.scheme),
 					})),
 				},
 				...(onBackdrop === undefined

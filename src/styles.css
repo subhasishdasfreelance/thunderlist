@@ -49,17 +49,17 @@ body,
 
 /*
  * The background behind every screen; see `Scenery`. One of the designs in
- * `DESIGNS` — big, flat shapes in three colours — laid over a wash of the
- * first of them.
+ * `DESIGNS` — paper cut-outs in three colours — laid over a wash of the
+ * first of them, with a fine grain over both, like paper.
  *
- * The top of the page stays clear and nearly white, where the bar and a
- * page's heading sit. Nothing small or dotted is drawn anywhere, so nothing
- * back here can be mistaken for a control. The shapes are crisp rather than
- * blurred glows, and they multiply where they cross, so each overlap makes a
- * colour of its own.
+ * The cut-outs fill the page, top to bottom, and fade a little toward the
+ * top, where the bar and a page's heading sit. Nothing small or dotted is
+ * drawn anywhere, so nothing back here can be mistaken for a control. The
+ * shapes are crisp rather than blurred glows, and they multiply where they
+ * cross, so each overlap makes a colour of its own.
  *
- * Plain elements, fixed in place: nothing to download, and scrolling never
- * repaints it.
+ * Plain elements, fixed in place: no image files, no filters on the shapes,
+ * and scrolling never repaints it.
  */
 .thunderlist-scenery {
 	--deco-shape: 0.42;
@@ -157,12 +157,29 @@ body,
 	}
 }
 
-/* What keeps the top light: the shapes fade out before they reach it. */
+/* What keeps the top light: the shapes soften as they near it. */
 .thunderlist-scenery-veil {
 	position: absolute;
 	inset: 0 0 auto;
-	height: 50vh;
-	background: linear-gradient(180deg, var(--deco-top) 40%, transparent 100%);
+	height: 30vh;
+	background: linear-gradient(
+		180deg,
+		color-mix(in srgb, var(--deco-top) 80%, transparent),
+		transparent
+	);
+}
+
+/*
+ * The paper's grain. One small tile of noise, which the browser draws once
+ * and repeats, so it costs nothing to scroll.
+ */
+.thunderlist-scenery-grain {
+	position: absolute;
+	inset: 0;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	background-size: 180px;
+	opacity: 0.1;
+	mix-blend-mode: multiply;
 }
 
 /* On a dark page the shapes are faint panes of colour; multiplied, they vanish. */

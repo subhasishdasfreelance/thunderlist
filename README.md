@@ -1005,7 +1005,7 @@ One database, `thunderlist`. Collection types are declared in
 | `pushSubscriptions` | device | `email` | web-push endpoint + keys |
 | `notificationCodes` | code | `userId` + `createdBy` | secret `ntf_…` |
 | `aiTokens` | AI access token | `userId` (always a person) | only the SHA-256 `tokenHash` of `tla_…`; `teamId` is the space it works in |
-| `preferences` | **person** (account, not space) | `userId` | `backdrops` per section |
+| `preferences` | **person** (account, not space) | `userId` | `backdrops` per section, `colorScheme` |
 | `teams` | team | — | `teamId`, `name`, `createdAt` |
 | `members` | (team, person) | — | `teamId`, lower-cased `email`, `role`, `addedAt` |
 | `taskRefs` | legacy list entry | `userId` | old Today/Backlog lists; migrated and emptied on first read (`moveListsIntoTags`) |
@@ -1134,8 +1134,8 @@ Several of these (`ensureInbox`, `ensureBacklog`, `ensureNumbered`) cache
   at least 4.5:1. The bar track is `--thunderlist-track`. Six extra colour
   names are added to Astryx's `Token` via module augmentation in
   `src/schemas/tag.ts`.
-- **Backdrops**: each section (Today, Checklists, …) draws a background of big
-  flat shapes (`src/schemas/backdrop-designs.ts`, `BackdropArt`, `Scenery`).
+- **Backdrops**: each section (Today, Checklists, …) draws a background of
+  Matisse-style paper cut-outs (`src/schemas/backdrop-designs.ts`, `BackdropArt`, `Scenery`).
   They are drawn in code, with no image files. Each person picks a design and
   palette per section; the choice is stored in `preferences`. Moving to a
   section drawn differently cross-fades the two drawings over
