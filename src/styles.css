@@ -1268,6 +1268,16 @@ body {
 		gap: 0.75rem;
 	}
 
+	/*
+	 * While picking, a tile sits in `Pickable`'s box; a grid of one keeps it
+	 * the cell's width. In a plain box the button would shrink to its
+	 * content, which its `container-type` counts as nothing.
+	 */
+	.thunderlist-countdown-grid .thunderlist-pickable {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.thunderlist-countdown {
 		display: flex;
 		flex-direction: column;
