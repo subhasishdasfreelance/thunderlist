@@ -14,6 +14,8 @@
  * Pure, apart from taking the current time as an argument.
  */
 
+import { formatClock } from "#/lib/format-date";
+
 const MS_PER_HOUR = 3_600_000;
 
 export type DayPace = {
@@ -102,10 +104,9 @@ export function formatHoursLeft(hours: number): string {
 	return `${whole}h ${minutes}m`;
 }
 
-/** A time of day in the viewer's locale, e.g. "9:40 pm". */
+/** A time of day on the viewer's clock, written as every other time is: "9:40 pm". */
 export function formatTimeOfDay(value: Date): string {
-	return value.toLocaleTimeString(undefined, {
-		hour: "numeric",
-		minute: "2-digit",
-	});
+	const hours = String(value.getHours()).padStart(2, "0");
+	const minutes = String(value.getMinutes()).padStart(2, "0");
+	return formatClock(`${hours}:${minutes}`);
 }
