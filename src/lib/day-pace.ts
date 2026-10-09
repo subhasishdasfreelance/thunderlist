@@ -110,3 +110,41 @@ export function formatTimeOfDay(value: Date): string {
 	const minutes = String(value.getMinutes()).padStart(2, "0");
 	return formatClock(`${hours}:${minutes}`);
 }
+
+/** Midnight at the start of `value`'s day, on the viewer's clock. */
+function startOfDay(value: Date): number {
+	return new Date(
+		value.getFullYear(),
+		value.getMonth(),
+		value.getDate(),
+	).getTime();
+}
+
+/**
+ * When the list will be cleared, said the way a person would say it from
+ * `now`: `9:40 pm` later today, `Tomorrow, 5:00 pm`, `Sunday, 2:00 pm` within
+ * the week, and beyond that the date alone — `Thu, Oct 22` — because a minute
+ * that far out is false precision. The year is added only when it is not this
+ * one.
+ *
+ * Written in English, as every other date is; see `format-date`.
+ */
+export function formatFinish(at: Date, now: Date): string {
+	// Rounded, so a day that a clock change makes 23 or 25 hours still counts
+	// as one.
+	const days = Math.round((startOfDay(at) - startOfDay(now)) / 86_400_000);
+	const time = formatTimeOfDay(at);
+
+	if (days <= 0) return time;
+	if (days === 1) return `Tomorrow, ${time}`;
+	if (days < 7) {
+		return `${at.toLocaleDateString("en-US", { weekday: "long" })}, ${time}`;
+	}
+
+	return at.toLocaleDateString("en-US", {
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+		year: at.getFullYear() === now.getFullYear() ? undefined : "numeric",
+	});
+}

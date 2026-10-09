@@ -1,5 +1,5 @@
 import { Spinner } from "@astryxdesign/core/Spinner";
-import { dayPace, formatHoursLeft, formatTimeOfDay } from "#/lib/day-pace";
+import { dayPace, formatFinish, formatHoursLeft } from "#/lib/day-pace";
 import { formatClock } from "#/lib/format-date";
 import { todayWindow } from "#/lib/progress";
 import type { DailyWindow } from "#/schemas/common";
@@ -101,7 +101,7 @@ export function DayStats({
 				? "Done"
 				: pace.projectedFinish === null
 					? "Not moving yet"
-					: formatTimeOfDay(pace.projectedFinish),
+					: formatFinish(pace.projectedFinish, new Date(now)),
 			hint:
 				pace.projectedFinish === null || isDone ? undefined : "at this speed",
 		},
