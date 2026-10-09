@@ -14,6 +14,7 @@ import {
 } from "#/components/checklists/quick-add-task";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { SelectAllButton } from "#/components/common/arranged-list";
+import { ListPanel } from "#/components/common/list-panel";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
@@ -299,79 +300,83 @@ function StagesPage() {
 					description="Tasks show up here once there is a checklist to put them in."
 				/>
 			) : (
-				<VStack gap={2}>
-					{/* The cut and the filters, then the order — as a checklist has it. */}
-					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
-						<HStack gap={1} vAlign="center" wrap="wrap">
-							<GroupByToggle
-								value={groupBy}
-								onChange={(next) =>
-									// The groups are named differently now, so whatever was
-									// picked under the old cut no longer means anything.
-									show({
-										by: next === "stage" ? undefined : next,
-										group: undefined,
-										page: undefined,
-									})
-								}
-							/>
-							<MemberFilter
-								value={assignee}
-								onChange={(who) => filterBy({ who })}
-							/>
-							<TagFilter
-								tags={tags}
-								value={tagId}
-								onChange={(tag) => filterBy({ tag })}
-							/>
-							{groupBy === "stage" ? (
-								<TypeFilter
-									value={typeId}
-									onChange={(type) => filterBy({ type })}
-								/>
+				<ListPanel
+					controls={
+						<VStack gap={2}>
+							{/* The cut and the filters, then the order — as a checklist has it. */}
+							<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
+								<HStack gap={1} vAlign="center" wrap="wrap">
+									<GroupByToggle
+										value={groupBy}
+										onChange={(next) =>
+											// The groups are named differently now, so whatever was
+											// picked under the old cut no longer means anything.
+											show({
+												by: next === "stage" ? undefined : next,
+												group: undefined,
+												page: undefined,
+											})
+										}
+									/>
+									<MemberFilter
+										value={assignee}
+										onChange={(who) => filterBy({ who })}
+									/>
+									<TagFilter
+										tags={tags}
+										value={tagId}
+										onChange={(tag) => filterBy({ tag })}
+									/>
+									{groupBy === "stage" ? (
+										<TypeFilter
+											value={typeId}
+											onChange={(type) => filterBy({ type })}
+										/>
+									) : null}
+								</HStack>
+								<HStack gap={1} vAlign="center">
+									{canUpdateTasks ? (
+										<SelectAllButton onClick={selection.pickAll} />
+									) : null}
+									<SortMenu
+										order={sort}
+										// One stage at a time when that is the cut; by type a group
+										// gathers tasks from every stage there is.
+										hasStageOrder={groupBy === "type"}
+										onChange={(next) => filterBy({ sort: sortParam(next) })}
+									/>
+								</HStack>
+							</HStack>
+
+							{canClearDone ? (
+								<HStack hAlign="end">
+									<Button
+										label={`Delete all ${shown.name.toLowerCase()}`}
+										icon={<Trash2 aria-hidden />}
+										variant="ghost"
+										className="thunderlist-list-action"
+										size="sm"
+										onClick={() => setIsClearingDone(true)}
+									/>
+								</HStack>
 							) : null}
-						</HStack>
-						<HStack gap={1} vAlign="center">
-							{canUpdateTasks ? (
-								<SelectAllButton onClick={selection.pickAll} />
-							) : null}
-							<SortMenu
-								order={sort}
-								// One stage at a time when that is the cut; by type a group
-								// gathers tasks from every stage there is.
-								hasStageOrder={groupBy === "type"}
-								onChange={(next) => filterBy({ sort: sortParam(next) })}
+
+							<StageTabs
+								stages={data.groups.map((each) => ({
+									stageId: each.key,
+									name: each.name,
+								}))}
+								value={data.key}
+								counts={Object.fromEntries(
+									data.groups.map((each) => [each.key, each.count]),
+								)}
+								onChange={(key) => {
+									show({ group: key, page: undefined });
+								}}
 							/>
-						</HStack>
-					</HStack>
-
-					{canClearDone ? (
-						<HStack hAlign="end">
-							<Button
-								label={`Delete all ${shown.name.toLowerCase()}`}
-								icon={<Trash2 aria-hidden />}
-								variant="ghost"
-								className="thunderlist-list-action"
-								size="sm"
-								onClick={() => setIsClearingDone(true)}
-							/>
-						</HStack>
-					) : null}
-
-					<StageTabs
-						stages={data.groups.map((each) => ({
-							stageId: each.key,
-							name: each.name,
-						}))}
-						value={data.key}
-						counts={Object.fromEntries(
-							data.groups.map((each) => [each.key, each.count]),
-						)}
-						onChange={(key) => {
-							show({ group: key, page: undefined });
-						}}
-					/>
-
+						</VStack>
+					}
+				>
 					<ListLoading
 						isLoading={result.isPlaceholderData}
 						isEmpty={data.items.length === 0}
@@ -397,7 +402,7 @@ function StagesPage() {
 							/>
 						)}
 					</ListLoading>
-				</VStack>
+				</ListPanel>
 			)}
 
 			<AlertDialog

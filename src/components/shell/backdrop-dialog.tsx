@@ -8,6 +8,7 @@ import { Check } from "lucide-react";
 import { FormDialog } from "#/components/common/form-dialog";
 import { setBackdropFn } from "#/functions/preferences.functions";
 import { errorMessage } from "#/lib/errors";
+import { paper } from "#/lib/paper";
 import { useToast } from "#/lib/toasts";
 import { queryKeys } from "#/queries/keys";
 import { backdropsQuery } from "#/queries/preferences";
@@ -110,7 +111,10 @@ export function BackdropDialog({
 								<VStack gap={1.5}>
 									<span className="thunderlist-palette-swatch">
 										{palette.colors.map((color) => (
-											<span key={color} style={{ backgroundColor: color }} />
+											<span
+												key={color}
+												style={{ backgroundColor: paper(color) }}
+											/>
 										))}
 									</span>
 									<Text type="supporting" maxLines={1}>

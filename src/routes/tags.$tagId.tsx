@@ -35,6 +35,7 @@ import { CoverImage } from "#/components/common/cover-image";
 import { DayStats } from "#/components/common/day-stats";
 import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
+import { ListPanel } from "#/components/common/list-panel";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
@@ -922,142 +923,146 @@ function TagDetailPage() {
 
 			{/* On a phone, the clear button leaves the filters no room beside it,
 			    so the count and the filters take a line each there. */}
-			{detail.progress.total === 0 ? null : (
-				<div
-					className={
-						canUpdateTasks
-							? "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
-							: "flex flex-row flex-wrap items-center justify-between gap-2"
-					}
-				>
-					<HStack gap={2} vAlign="center">
-						<Text type="label" weight="semibold" color="secondary">
-							{openTotal} yet to complete
-						</Text>
-						{canUpdateTasks ? (
-							<Button
-								label={`Clear #${detail.name}`}
-								tooltip={`Take #${detail.name} off every task on it`}
-								variant="ghost"
-								className="thunderlist-list-action"
-								size="sm"
-								icon={
-									special === "today" ? (
-										<ZapOff aria-hidden />
-									) : (
-										<TagX aria-hidden />
-									)
-								}
-								onClick={() => setIsClearingTag(true)}
-							/>
-						) : null}
-					</HStack>
-					{/* Wraps: three labelled menus are wider than a phone. */}
-					<HStack gap={1} vAlign="center" wrap="wrap">
-						<MemberFilter
-							value={assignee}
-							onChange={(next) => filterBy({ who: next })}
-						/>
-						<TypeFilter
-							value={typeId}
-							onChange={(next) => filterBy({ type: next })}
-						/>
-						<StageFilter
-							stages={(detail.progress.stages ?? []).map((stage) => ({
-								...stage,
-								color: detail.stageColors?.[stage.key] ?? stage.color,
-							}))}
-							value={stageName}
-							onChange={(next) => filterBy({ stage: next })}
-						/>
-						{canUpdateTasks ? <SelectAllButton onClick={pickAll} /> : null}
-						<SortMenu
-							order={sort}
-							hasStageOrder
-							onChange={(next) => filterBy({ sort: sortParam(next) })}
-						/>
-					</HStack>
-				</div>
-			)}
-
-			{/* Its progress counts its trackers too; this is no task carrying it. */}
-			{detail.progress.total === detail.trackers.length ? (
-				detail.trackers.length === 0 && focusedCount === 0 ? (
-					<EmptyState
-						title="Nothing carries this tag yet."
-						description={
-							!canManageContent
-								? "Nothing has been tagged with it yet."
-								: special === "today"
-									? "Type a task above, or press the bolt on any task."
-									: special === "focus"
-										? "Type a task above, or press the focus button on any task, checklist, tracker or tag."
-										: `Type a task above, or write #${detail.name} in one.`
-						}
-					/>
-				) : null
-			) : openResult.data === undefined ? (
-				openResult.isError ? (
-					<ErrorNotice
-						error={openResult.error}
-						onRetry={() => void openResult.refetch()}
-					/>
-				) : (
-					<SectionSpinner label="Loading tasks…" />
-				)
-			) : (
-				<ListLoading
-					isLoading={openResult.isPlaceholderData}
-					isEmpty={open.length === 0}
-				>
-					{open.length === 0 ? (
+			<ListPanel
+				controls={
+					detail.progress.total === 0 ? null : (
+						<div
+							className={
+								canUpdateTasks
+									? "flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+									: "flex flex-row flex-wrap items-center justify-between gap-2"
+							}
+						>
+							<HStack gap={2} vAlign="center">
+								<Text type="label" weight="semibold" color="secondary">
+									{openTotal} yet to complete
+								</Text>
+								{canUpdateTasks ? (
+									<Button
+										label={`Clear #${detail.name}`}
+										tooltip={`Take #${detail.name} off every task on it`}
+										variant="ghost"
+										className="thunderlist-list-action"
+										size="sm"
+										icon={
+											special === "today" ? (
+												<ZapOff aria-hidden />
+											) : (
+												<TagX aria-hidden />
+											)
+										}
+										onClick={() => setIsClearingTag(true)}
+									/>
+								) : null}
+							</HStack>
+							{/* Wraps: three labelled menus are wider than a phone. */}
+							<HStack gap={1} vAlign="center" wrap="wrap">
+								<MemberFilter
+									value={assignee}
+									onChange={(next) => filterBy({ who: next })}
+								/>
+								<TypeFilter
+									value={typeId}
+									onChange={(next) => filterBy({ type: next })}
+								/>
+								<StageFilter
+									stages={(detail.progress.stages ?? []).map((stage) => ({
+										...stage,
+										color: detail.stageColors?.[stage.key] ?? stage.color,
+									}))}
+									value={stageName}
+									onChange={(next) => filterBy({ stage: next })}
+								/>
+								{canUpdateTasks ? <SelectAllButton onClick={pickAll} /> : null}
+								<SortMenu
+									order={sort}
+									hasStageOrder
+									onChange={(next) => filterBy({ sort: sortParam(next) })}
+								/>
+							</HStack>
+						</div>
+					)
+				}
+			>
+				{/* Its progress counts its trackers too; this is no task carrying it. */}
+				{detail.progress.total === detail.trackers.length ? (
+					detail.trackers.length === 0 && focusedCount === 0 ? (
 						<EmptyState
-							title={
-								stageName !== undefined
-									? "Nothing at this stage."
-									: assignee === undefined
-										? "All done."
-										: "Nothing to do here."
-							}
+							title="Nothing carries this tag yet."
 							description={
-								stageName !== undefined
-									? "No open task with this tag is at it."
-									: assignee === undefined
-										? "Every task with this tag is complete."
-										: "No open task with this tag is assigned to them."
+								!canManageContent
+									? "Nothing has been tagged with it yet."
+									: special === "today"
+										? "Type a task above, or press the bolt on any task."
+										: special === "focus"
+											? "Type a task above, or press the focus button on any task, checklist, tracker or tag."
+											: `Type a task above, or write #${detail.name} in one.`
 							}
+						/>
+					) : null
+				) : openResult.data === undefined ? (
+					openResult.isError ? (
+						<ErrorNotice
+							error={openResult.error}
+							onRetry={() => void openResult.refetch()}
 						/>
 					) : (
-						<Card padding={0}>
-							<VStack gap={0} paddingBlock={2}>
-								{open.map((entry, index) => (
-									<div
-										key={entry.task.taskId}
-										className="thunderlist-row thunderlist-task-row"
-										data-task-id={entry.task.taskId}
-										data-focused={entry.task.taskId === focusTaskId}
-										data-picked={pickedEntries.includes(entry)}
-									>
-										{index === 0 ? null : <Divider />}
-										{taskRow(entry)}
-									</div>
-								))}
-								<ListPagination
-									// The page asked for, while it is on its way: the one on
-									// screen until then would pull the highlight back.
-									page={
-										openResult.isPlaceholderData
-											? (page ?? openResult.data.page)
-											: openResult.data.page
-									}
-									total={openResult.data.total}
-									onChange={setPage}
-								/>
-							</VStack>
-						</Card>
-					)}
-				</ListLoading>
-			)}
+						<SectionSpinner label="Loading tasks…" />
+					)
+				) : (
+					<ListLoading
+						isLoading={openResult.isPlaceholderData}
+						isEmpty={open.length === 0}
+					>
+						{open.length === 0 ? (
+							<EmptyState
+								title={
+									stageName !== undefined
+										? "Nothing at this stage."
+										: assignee === undefined
+											? "All done."
+											: "Nothing to do here."
+								}
+								description={
+									stageName !== undefined
+										? "No open task with this tag is at it."
+										: assignee === undefined
+											? "Every task with this tag is complete."
+											: "No open task with this tag is assigned to them."
+								}
+							/>
+						) : (
+							<Card padding={0}>
+								<VStack gap={0} paddingBlock={2}>
+									{open.map((entry, index) => (
+										<div
+											key={entry.task.taskId}
+											className="thunderlist-row thunderlist-task-row"
+											data-task-id={entry.task.taskId}
+											data-focused={entry.task.taskId === focusTaskId}
+											data-picked={pickedEntries.includes(entry)}
+										>
+											{index === 0 ? null : <Divider />}
+											{taskRow(entry)}
+										</div>
+									))}
+									<ListPagination
+										// The page asked for, while it is on its way: the one on
+										// screen until then would pull the highlight back.
+										page={
+											openResult.isPlaceholderData
+												? (page ?? openResult.data.page)
+												: openResult.data.page
+										}
+										total={openResult.data.total}
+										onChange={setPage}
+									/>
+								</VStack>
+							</Card>
+						)}
+					</ListLoading>
+				)}
+			</ListPanel>
 
 			<CompletedSection
 				count={progress.completed - finishedTrackers}

@@ -21,6 +21,7 @@ import {
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { editableTracker } from "#/components/common/items-edit-dialog";
+import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
@@ -199,24 +200,29 @@ function TrackersPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text type="label" weight="semibold">
-							{trackers.length} {trackers.length === 1 ? "tracker" : "trackers"}
-						</Text>
-						<HStack gap={1} vAlign="center">
-							<MemberFilter value={assignee} onChange={setAssignee} />
-							<ListOrderMenu
-								order={arranged.order}
-								onChange={arranged.setOrder}
-							/>
-							{canManageContent ? (
-								<>
-									<SelectButtons mode={pick} />
-									<ArrangeButton onClick={() => setIsArranging(true)} />
-								</>
-							) : null}
-						</HStack>
-					</HStack>
+					<ListPanel
+						controls={
+							<HStack gap={2} hAlign="between" vAlign="center">
+								<Text type="label" weight="semibold">
+									{trackers.length}{" "}
+									{trackers.length === 1 ? "tracker" : "trackers"}
+								</Text>
+								<HStack gap={1} vAlign="center">
+									<MemberFilter value={assignee} onChange={setAssignee} />
+									<ListOrderMenu
+										order={arranged.order}
+										onChange={arranged.setOrder}
+									/>
+									{canManageContent ? (
+										<>
+											<SelectButtons mode={pick} />
+											<ArrangeButton onClick={() => setIsArranging(true)} />
+										</>
+									) : null}
+								</HStack>
+							</HStack>
+						}
+					/>
 					{trackers.length === 0 ? (
 						<EmptyState
 							isCompact

@@ -40,6 +40,7 @@ import {
 	ITEM_KIND_ICONS,
 	ItemPickerDialog,
 } from "#/components/common/item-picker-dialog";
+import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
@@ -452,20 +453,24 @@ function GroupPage() {
 				)
 			) : (
 				<VStack gap={3}>
-					<HStack gap={1} hAlign="end" vAlign="center">
-						<ListOrderMenu
-							order={order}
-							onChange={setOrder}
-							newestLabel="Newest added first"
-							hasPriority
-						/>
-						{canManageContent ? (
-							<>
-								<SelectButtons mode={pick} />
-								<ArrangeButton onClick={() => setIsArranging(true)} />
-							</>
-						) : null}
-					</HStack>
+					<ListPanel
+						controls={
+							<HStack gap={1} hAlign="end" vAlign="center">
+								<ListOrderMenu
+									order={order}
+									onChange={setOrder}
+									newestLabel="Newest added first"
+									hasPriority
+								/>
+								{canManageContent ? (
+									<>
+										<SelectButtons mode={pick} />
+										<ArrangeButton onClick={() => setIsArranging(true)} />
+									</>
+								) : null}
+							</HStack>
+						}
+					/>
 					<VStack gap={5}>
 						<Section
 							kind="checklist"

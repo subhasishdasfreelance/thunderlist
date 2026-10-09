@@ -15,6 +15,7 @@ import {
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { editableTag } from "#/components/common/items-edit-dialog";
+import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { Pickable } from "#/components/common/pickable";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
@@ -135,24 +136,28 @@ function TagsPage() {
 						</>
 					) : (
 						<>
-							<HStack gap={2} hAlign="between" vAlign="center">
-								{/* Untagged is not a tag, so its card is not counted. */}
-								<Text type="label" weight="semibold" color="secondary">
-									{tags.length} {tags.length === 1 ? "tag" : "tags"}
-								</Text>
-								<HStack gap={1} vAlign="center">
-									<ListOrderMenu
-										order={arranged.order}
-										onChange={arranged.setOrder}
-									/>
-									{canManageContent ? (
-										<>
-											<SelectButtons mode={pick} />
-											<ArrangeButton onClick={() => setIsArranging(true)} />
-										</>
-									) : null}
-								</HStack>
-							</HStack>
+							<ListPanel
+								controls={
+									<HStack gap={2} hAlign="between" vAlign="center">
+										{/* Untagged is not a tag, so its card is not counted. */}
+										<Text type="label" weight="semibold" color="secondary">
+											{tags.length} {tags.length === 1 ? "tag" : "tags"}
+										</Text>
+										<HStack gap={1} vAlign="center">
+											<ListOrderMenu
+												order={arranged.order}
+												onChange={arranged.setOrder}
+											/>
+											{canManageContent ? (
+												<>
+													<SelectButtons mode={pick} />
+													<ArrangeButton onClick={() => setIsArranging(true)} />
+												</>
+											) : null}
+										</HStack>
+									</HStack>
+								}
+							/>
 							<ArrangedCards
 								items={arranged.ordered}
 								idOf={tagIdOf}

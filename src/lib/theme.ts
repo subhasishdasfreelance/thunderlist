@@ -8,11 +8,10 @@
  * theme's own wrapper sits inside the root, so its value wins for everything
  * drawn within, and the toggle would appear to do nothing.
  *
- * Signed in, the choice is also kept on the account, so it follows the person
- * to every device they use; see `useAccountColorScheme`. Each device still
- * keeps its own copy, so it can draw the page before anything is fetched.
+ * The choice is per browser rather than per account: it is a property of the
+ * screen you are looking at, not of the data.
  *
- * It is kept on the device twice: in local storage, which the script before the first paint
+ * It is kept twice: in local storage, which the script before the first paint
  * reads, and in a cookie, which the server reads so it can draw the page in
  * the chosen scheme. Without the cookie the server drew every page in the
  * machine's scheme, and the chosen one only arrived after hydration — a flash
@@ -24,7 +23,7 @@ import { createIsomorphicFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { useSyncExternalStore } from "react";
 
-export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
+const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 

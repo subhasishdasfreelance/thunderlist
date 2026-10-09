@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { paper } from "#/lib/paper";
 import {
 	DESIGNS,
 	type DesignId,
@@ -31,9 +32,9 @@ export function BackdropArt({
 			className="thunderlist-backdrop"
 			style={
 				{
-					"--deco-1": colors[0],
-					"--deco-2": colors[1],
-					"--deco-3": colors[2],
+					"--deco-1": paper(colors[0]),
+					"--deco-2": paper(colors[1]),
+					"--deco-3": paper(colors[2]),
 				} as CSSProperties
 			}
 		>

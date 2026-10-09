@@ -1005,7 +1005,7 @@ One database, `thunderlist`. Collection types are declared in
 | `pushSubscriptions` | device | `email` | web-push endpoint + keys |
 | `notificationCodes` | code | `userId` + `createdBy` | secret `ntf_…` |
 | `aiTokens` | AI access token | `userId` (always a person) | only the SHA-256 `tokenHash` of `tla_…`; `teamId` is the space it works in |
-| `preferences` | **person** (account, not space) | `userId` | `backdrops` per section, `colorScheme` |
+| `preferences` | **person** (account, not space) | `userId` | `backdrops` per section |
 | `teams` | team | — | `teamId`, `name`, `createdAt` |
 | `members` | (team, person) | — | `teamId`, lower-cased `email`, `role`, `addedAt` |
 | `taskRefs` | legacy list entry | `userId` | old Today/Backlog lists; migrated and emptied on first read (`moveListsIntoTags`) |

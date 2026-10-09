@@ -26,6 +26,7 @@ import { CoverImage } from "#/components/common/cover-image";
 import { DayStats } from "#/components/common/day-stats";
 import { numberTitle } from "#/components/common/item-number";
 import { ListPagination } from "#/components/common/list-pagination";
+import { ListPanel } from "#/components/common/list-panel";
 import { ListLoading, LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
 import { ProgressChart } from "#/components/common/progress-chart";
@@ -730,59 +731,63 @@ function ChecklistDetailPage() {
 					}
 				/>
 			) : (
-				<VStack gap={2}>
-					{/* The filter row: whose, and which tag's, then the order. */}
-					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
-						<HStack gap={1} vAlign="center" wrap="wrap">
-							<MemberFilter
-								value={assignee}
-								onChange={(who) => filterBy({ who })}
-							/>
-							<TagFilter
-								tags={tags}
-								value={tagId}
-								onChange={(tag) => filterBy({ tag })}
-							/>
-							<TypeFilter
-								value={typeId}
-								onChange={(type) => filterBy({ type })}
-							/>
-						</HStack>
-						<HStack gap={1} vAlign="center">
-							{isDoneStage && chart !== null ? (
-								<ViewToggle
-									view={view}
-									onChange={setView}
-									label="Show completed work as a list or a graph"
-								/>
-							) : null}
-							{isDoneStage && canManageContent && completed.length > 0 ? (
-								<Button
-									label="Delete all completed"
-									variant="ghost"
-									className="thunderlist-list-action"
-									size="sm"
-									icon={<Trash2 aria-hidden />}
-									onClick={() => setIsClearingCompleted(true)}
-								/>
-							) : null}
-							{canUpdateTasks && rows.length > 0 ? (
-								<SelectAllButton onClick={pickAll} />
-							) : null}
-							<SortMenu
-								order={sort}
-								onChange={(next) => filterBy({ sort: sortParam(next) })}
-							/>
-						</HStack>
-					</HStack>
+				<ListPanel
+					controls={
+						<VStack gap={2}>
+							{/* The filter row: whose, and which tag's, then the order. */}
+							<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
+								<HStack gap={1} vAlign="center" wrap="wrap">
+									<MemberFilter
+										value={assignee}
+										onChange={(who) => filterBy({ who })}
+									/>
+									<TagFilter
+										tags={tags}
+										value={tagId}
+										onChange={(tag) => filterBy({ tag })}
+									/>
+									<TypeFilter
+										value={typeId}
+										onChange={(type) => filterBy({ type })}
+									/>
+								</HStack>
+								<HStack gap={1} vAlign="center">
+									{isDoneStage && chart !== null ? (
+										<ViewToggle
+											view={view}
+											onChange={setView}
+											label="Show completed work as a list or a graph"
+										/>
+									) : null}
+									{isDoneStage && canManageContent && completed.length > 0 ? (
+										<Button
+											label="Delete all completed"
+											variant="ghost"
+											className="thunderlist-list-action"
+											size="sm"
+											icon={<Trash2 aria-hidden />}
+											onClick={() => setIsClearingCompleted(true)}
+										/>
+									) : null}
+									{canUpdateTasks && rows.length > 0 ? (
+										<SelectAllButton onClick={pickAll} />
+									) : null}
+									<SortMenu
+										order={sort}
+										onChange={(next) => filterBy({ sort: sortParam(next) })}
+									/>
+								</HStack>
+							</HStack>
 
-					<StageTabs
-						stages={stages}
-						value={shownStage.stageId}
-						counts={counts}
-						onChange={(next) => show({ stage: next, page: undefined })}
-					/>
-
+							<StageTabs
+								stages={stages}
+								value={shownStage.stageId}
+								counts={counts}
+								onChange={(next) => show({ stage: next, page: undefined })}
+							/>
+						</VStack>
+					}
+				>
 					{pageResult.data === undefined ? (
 						pageResult.isError ? (
 							<ErrorNotice
@@ -847,7 +852,7 @@ function ChecklistDetailPage() {
 							)}
 						</ListLoading>
 					)}
-				</VStack>
+				</ListPanel>
 			)}
 
 			{pickedTasks.length === 0 ? null : (

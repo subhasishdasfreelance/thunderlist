@@ -23,6 +23,7 @@ import {
 	useArrangedList,
 } from "#/components/common/arranged-list";
 import { editableChecklist } from "#/components/common/items-edit-dialog";
+import { ListPanel } from "#/components/common/list-panel";
 import { LoadingState } from "#/components/common/loading-state";
 import { PickedItemsBar } from "#/components/common/picked-items-bar";
 import { ErrorNotice } from "#/components/common/states";
@@ -182,24 +183,28 @@ function ChecklistsPage() {
 				/>
 			) : (
 				<VStack gap={3}>
-					<HStack gap={2} hAlign="between" vAlign="center">
-						<Text type="label" weight="semibold" color="secondary">
-							{checklists.length}{" "}
-							{checklists.length === 1 ? "checklist" : "checklists"}
-						</Text>
-						<HStack gap={1} vAlign="center">
-							<ListOrderMenu
-								order={arranged.order}
-								onChange={arranged.setOrder}
-							/>
-							{canManageContent ? (
-								<>
-									<SelectButtons mode={pick} />
-									<ArrangeButton onClick={() => setIsArranging(true)} />
-								</>
-							) : null}
-						</HStack>
-					</HStack>
+					<ListPanel
+						controls={
+							<HStack gap={2} hAlign="between" vAlign="center">
+								<Text type="label" weight="semibold" color="secondary">
+									{checklists.length}{" "}
+									{checklists.length === 1 ? "checklist" : "checklists"}
+								</Text>
+								<HStack gap={1} vAlign="center">
+									<ListOrderMenu
+										order={arranged.order}
+										onChange={arranged.setOrder}
+									/>
+									{canManageContent ? (
+										<>
+											<SelectButtons mode={pick} />
+											<ArrangeButton onClick={() => setIsArranging(true)} />
+										</>
+									) : null}
+								</HStack>
+							</HStack>
+						}
+					/>
 					{checklists.length === 0 ? (
 						<EmptyState
 							isCompact

@@ -12,7 +12,6 @@ import { ShortcutKey } from "#/components/tasks/task-actions";
 import type { SignedInUser } from "#/lib/auth.server";
 import { useFirstOpenBack } from "#/lib/first-open";
 import { type ColorScheme, useColorScheme } from "#/lib/theme";
-import { useAccountColorScheme } from "#/lib/use-account-color-scheme";
 import { useEscape } from "#/lib/use-escape";
 import { useNoAutofill } from "#/lib/use-no-autofill";
 import { isTyping } from "#/lib/use-row-shortcuts";
@@ -78,8 +77,8 @@ export function AppFrame({
 	 * Whoever is signed in, or `null` on the login page.
 	 *
 	 * Signed out the frame keeps its bar — the mark, and the theme toggle, which
-	 * works on the device alone without an account and so is the one control
-	 * that still means something. Everything that needs data goes: the
+	 * is a property of the screen rather than of an account and so is the one
+	 * control that still means something. Everything that needs data goes: the
 	 * navigation, search, the account menu and the shortcuts, none of which have
 	 * anything to act on yet.
 	 */
@@ -90,7 +89,6 @@ export function AppFrame({
 }) {
 	const navigate = useNavigate();
 	const scheme = useColorScheme(colorScheme);
-	const pickScheme = useAccountColorScheme(scheme, user !== null);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
 	const [isHelpOpen, setIsHelpOpen] = useState(false);
 	const [isBackdropOpen, setIsBackdropOpen] = useState(false);
@@ -250,7 +248,6 @@ export function AppFrame({
 									   see `Scenery`. Signed out, only the theme. */}
 									<ThemeToggle
 										scheme={scheme}
-										onScheme={pickScheme}
 										onBackdrop={
 											user === null ? undefined : () => setIsBackdropOpen(true)
 										}
