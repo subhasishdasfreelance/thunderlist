@@ -300,38 +300,40 @@ function StagesPage() {
 				/>
 			) : (
 				<VStack gap={2}>
-					{/* The cut and the filters, then the order — as a checklist has it. */}
-					<HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
-						<HStack gap={1} vAlign="center" wrap="wrap">
-							<GroupByToggle
-								value={groupBy}
-								onChange={(next) =>
-									// The groups are named differently now, so whatever was
-									// picked under the old cut no longer means anything.
-									show({
-										by: next === "stage" ? undefined : next,
-										group: undefined,
-										page: undefined,
-									})
-								}
+					{/*
+					 * The cut and the filters, then the order — as a checklist has it.
+					 * One row that wraps, so on a phone the order follows the last
+					 * filter onto its line rather than taking a line of its own.
+					 */}
+					<HStack gap={1} vAlign="center" wrap="wrap">
+						<GroupByToggle
+							value={groupBy}
+							onChange={(next) =>
+								// The groups are named differently now, so whatever was
+								// picked under the old cut no longer means anything.
+								show({
+									by: next === "stage" ? undefined : next,
+									group: undefined,
+									page: undefined,
+								})
+							}
+						/>
+						<MemberFilter
+							value={assignee}
+							onChange={(who) => filterBy({ who })}
+						/>
+						<TagFilter
+							tags={tags}
+							value={tagId}
+							onChange={(tag) => filterBy({ tag })}
+						/>
+						{groupBy === "stage" ? (
+							<TypeFilter
+								value={typeId}
+								onChange={(type) => filterBy({ type })}
 							/>
-							<MemberFilter
-								value={assignee}
-								onChange={(who) => filterBy({ who })}
-							/>
-							<TagFilter
-								tags={tags}
-								value={tagId}
-								onChange={(tag) => filterBy({ tag })}
-							/>
-							{groupBy === "stage" ? (
-								<TypeFilter
-									value={typeId}
-									onChange={(type) => filterBy({ type })}
-								/>
-							) : null}
-						</HStack>
-						<HStack gap={1} vAlign="center">
+						) : null}
+						<HStack gap={1} vAlign="center" className="ms-auto">
 							{canUpdateTasks ? (
 								<SelectAllButton onClick={selection.pickAll} />
 							) : null}
