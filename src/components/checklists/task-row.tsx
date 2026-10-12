@@ -357,6 +357,29 @@ export function TaskRow({
 						important={task.important}
 						actions={actions}
 					/>
+
+					{/* Today and Current focus, a little apart from the flags. */}
+					<div className="thunderlist-row-buttons ml-1.5 flex items-center gap-0.5">
+						{today === null ? null : (
+							<SpecialTagButton
+								kind="today"
+								title={task.title}
+								tag={today}
+								isOn={isOnToday}
+								onToggle={shortcuts[TASK_SHORTCUTS.today]}
+							/>
+						)}
+
+						{focus === null ? null : (
+							<SpecialTagButton
+								kind="focus"
+								title={task.title}
+								tag={focus}
+								isOn={isInFocus}
+								onToggle={shortcuts[TASK_SHORTCUTS.focus]}
+							/>
+						)}
+					</div>
 				</div>
 			) : null}
 
@@ -474,26 +497,6 @@ export function TaskRow({
 
 			<div className="thunderlist-row-buttons order-3 ml-auto flex shrink-0 items-center gap-0.5 md:order-none md:ml-0">
 				<Assignees emails={task.assignees ?? []} />
-
-				{today === null || !canUpdateTasks ? null : (
-					<SpecialTagButton
-						kind="today"
-						title={task.title}
-						tag={today}
-						isOn={isOnToday}
-						onToggle={shortcuts[TASK_SHORTCUTS.today]}
-					/>
-				)}
-
-				{focus === null || !canUpdateTasks ? null : (
-					<SpecialTagButton
-						kind="focus"
-						title={task.title}
-						tag={focus}
-						isOn={isInFocus}
-						onToggle={shortcuts[TASK_SHORTCUTS.focus]}
-					/>
-				)}
 
 				{canUpdateTasks ? (
 					<DropdownMenu

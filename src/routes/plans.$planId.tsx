@@ -11,10 +11,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Copy, Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { BackButton } from "#/components/common/back-button";
-import { FadeImage } from "#/components/common/fade-image";
 import { numberTitle } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { ErrorNotice } from "#/components/common/states";
+import { ZoomableImage } from "#/components/common/zoomable-image";
 import { PlanFormDialog } from "#/components/plans/plan-form-dialog";
 import { AccessButton } from "#/components/teams/access-button";
 import { useApplyChange } from "#/lib/changes";
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/plans/$planId")({
 /** An image in a plan, drawn as every image in the app is. */
 const MARKDOWN_COMPONENTS = {
 	image: ({ src, alt }: { src: string; alt: string }) => (
-		<FadeImage src={src} alt={alt} />
+		<ZoomableImage src={src} alt={alt} />
 	),
 };
 

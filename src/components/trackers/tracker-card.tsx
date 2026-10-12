@@ -3,7 +3,6 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { CardLastLine } from "#/components/common/card-last-line";
-import { FadeImage } from "#/components/common/fade-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
 	PriorityMarks,
@@ -11,6 +10,7 @@ import {
 } from "#/components/common/priority-marks";
 import { ProgressMeter } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
+import { ZoomableImage } from "#/components/common/zoomable-image";
 import { FocusButton, TaskFlagButtons } from "#/components/tasks/task-actions";
 import { Assignees } from "#/components/teams/assignees";
 import { useApplyChange } from "#/lib/changes";
@@ -135,9 +135,10 @@ export function TrackerCard({
 		>
 			<HStack gap={3} vAlign="center">
 				{cover ? (
-					<FadeImage
+					<ZoomableImage
 						src={cover}
 						alt=""
+						gallery={tracker.images?.map((image) => image.url)}
 						className="h-16 w-12 shrink-0 rounded-sm border border-border object-cover"
 					/>
 				) : null}

@@ -1,5 +1,5 @@
 import { coverOf, type ImageRef } from "#/schemas/common";
-import { FadeImage } from "./fade-image";
+import { ZoomableImage } from "./zoomable-image";
 
 /** How big the cover is drawn: at the start of a row, on a card, atop a page. */
 const SIZES = {
@@ -11,7 +11,8 @@ const SIZES = {
 /**
  * The picture chosen to stand for a task, a checklist or a tag, square — or
  * nothing, for one with no cover; see `coverOf`. A tracker draws its own, the
- * shape of a book.
+ * shape of a book. Pressed, it opens full size among the thing's other
+ * pictures.
  */
 export function CoverImage({
 	images,
@@ -24,9 +25,10 @@ export function CoverImage({
 	if (cover === null) return null;
 
 	return (
-		<FadeImage
+		<ZoomableImage
 			src={cover.url}
 			alt=""
+			gallery={images?.map((image) => image.url)}
 			className={`${SIZES[size]} shrink-0 rounded-sm border border-border object-cover`}
 		/>
 	);

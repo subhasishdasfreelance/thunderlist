@@ -19,7 +19,6 @@ import {
 import { useState } from "react";
 import { SelectAllButton } from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
-import { FadeImage } from "#/components/common/fade-image";
 import { numberTitle } from "#/components/common/item-number";
 import { LoadingState } from "#/components/common/loading-state";
 import { PaceLabel } from "#/components/common/pace-label";
@@ -33,6 +32,7 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
 import { type ProgressView, ViewToggle } from "#/components/common/view-toggle";
+import { ZoomableImage } from "#/components/common/zoomable-image";
 import { GroupLinks } from "#/components/groups/group-links";
 import { AccessButton } from "#/components/teams/access-button";
 import { MemberFilter } from "#/components/teams/member-filter";
@@ -334,9 +334,10 @@ function TrackerDetailPage() {
 			<HStack gap={3} hAlign="between" vAlign="start">
 				<HStack gap={3} vAlign="center">
 					{(coverOf(detail.images)?.url ?? detail.coverUrl) ? (
-						<FadeImage
-							src={coverOf(detail.images)?.url ?? detail.coverUrl ?? undefined}
+						<ZoomableImage
+							src={coverOf(detail.images)?.url ?? detail.coverUrl ?? ""}
 							alt=""
+							gallery={detail.images?.map((image) => image.url)}
 							className="h-20 w-14 shrink-0 rounded-sm border border-border object-cover"
 						/>
 					) : null}

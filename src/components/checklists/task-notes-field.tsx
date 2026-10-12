@@ -7,15 +7,15 @@ import {
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { memo, useId } from "react";
-import { FadeImage } from "#/components/common/fade-image";
 import { TextArea } from "#/components/common/text-fields";
+import { ZoomableImage } from "#/components/common/zoomable-image";
 
 export type NotesView = "write" | "preview";
 
 /** An image written into notes, drawn as every image in the app is. */
 const MARKDOWN_COMPONENTS = {
 	image: ({ src, alt }: { src: string; alt: string }) => (
-		<FadeImage src={src} alt={alt} />
+		<ZoomableImage src={src} alt={alt} />
 	),
 };
 

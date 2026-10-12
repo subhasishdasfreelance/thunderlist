@@ -9,9 +9,9 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Check, FileUp, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import { FadeImage } from "#/components/common/fade-image";
 import { FormDialog } from "#/components/common/form-dialog";
 import { TextArea, TextInput } from "#/components/common/text-fields";
+import { ZoomableImage } from "#/components/common/zoomable-image";
 import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import type { AccessEntry } from "#/schemas/access";
 import { type Plan, planTitleFrom } from "#/schemas/plan";
@@ -26,7 +26,7 @@ export type PlanValues = {
 /** An image in a plan, drawn as every image in the app is. */
 const MARKDOWN_COMPONENTS = {
 	image: ({ src, alt }: { src: string; alt: string }) => (
-		<FadeImage src={src} alt={alt} />
+		<ZoomableImage src={src} alt={alt} />
 	),
 };
 

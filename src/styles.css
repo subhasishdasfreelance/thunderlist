@@ -2525,6 +2525,42 @@ body {
 	}
 
 	/*
+	 * A picture pressed to see it full size; see `ZoomableImage`. It draws
+	 * nothing of its own: the picture is the button.
+	 */
+	.thunderlist-zoomable {
+		display: inline-flex;
+		flex-shrink: 0;
+		max-width: 100%;
+		padding: 0;
+		border: 0;
+		border-radius: 0.25rem;
+		background: none;
+		cursor: zoom-in;
+	}
+
+	.thunderlist-zoomable:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	/*
+	 * The full-size viewer fading in while its picture grows into place. Only
+	 * on the way in — `backwards`, so once it has landed the viewer's own zoom
+	 * and pan move the picture freely.
+	 */
+	.thunderlist-lightbox[open],
+	.thunderlist-lightbox[open]::backdrop {
+		animation: thunderlist-fade-in var(--duration-medium) var(--ease-standard)
+			backwards;
+	}
+
+	.thunderlist-lightbox[open] img {
+		animation: thunderlist-grow-in var(--duration-medium) var(--ease-standard)
+			backwards;
+	}
+
+	/*
 	 * A reading on the chart, to point at or tab to: a spot centred on its dot,
 	 * larger than the dot so a finger finds it, ringed while it is being read.
 	 */
@@ -2615,6 +2651,19 @@ body {
 	to {
 		opacity: 1;
 		transform: none;
+	}
+}
+
+@keyframes thunderlist-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes thunderlist-grow-in {
+	from {
+		opacity: 0;
+		transform: scale(0.85);
 	}
 }
 

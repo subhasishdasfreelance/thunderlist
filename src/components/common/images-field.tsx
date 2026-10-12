@@ -90,6 +90,7 @@ export function ImagesField({ draft }: { draft: ImageDraft }) {
 
 			{images.length === 0 ? null : (
 				<Lightbox
+					className="thunderlist-lightbox"
 					isOpen={shown !== null}
 					onOpenChange={(isOpen) => {
 						if (!isOpen) setShown(null);
