@@ -78,9 +78,9 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 		>
 			<HStack gap={3} vAlign="center">
 				<CoverImage images={tag.images} size="card" />
-				<VStack gap={2} width="100%">
+				<VStack gap={2} width="100%" className="min-w-0">
 					<HStack gap={2} hAlign="between" vAlign="center">
-						<HStack gap={1.5} vAlign="center">
+						<HStack gap={1.5} vAlign="center" className="min-w-0 flex-1">
 							<Token
 								size="sm"
 								color={tag.color}

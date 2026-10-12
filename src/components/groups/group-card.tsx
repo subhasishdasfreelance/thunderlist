@@ -103,7 +103,7 @@ export function GroupCard({
 		>
 			<VStack gap={2}>
 				<HStack gap={2} hAlign="between" vAlign="center">
-					<HStack gap={2} vAlign="center">
+					<HStack gap={2} vAlign="center" className="thunderlist-card-title">
 						<GroupBadge group={group} />
 						<VStack gap={0}>
 							<Text weight="medium" maxLines={1}>

@@ -143,7 +143,7 @@ export function TrackerCard({
 					/>
 				) : null}
 
-				<VStack gap={2} width="100%">
+				<VStack gap={2} width="100%" className="min-w-0">
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<HStack
 							gap={1.5}
