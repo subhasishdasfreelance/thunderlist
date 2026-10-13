@@ -39,6 +39,25 @@ const MARKDOWN_COMPONENTS = {
 	),
 };
 
+/**
+ * Letters and digits only. Plans written elsewhere link to GitHub's heading
+ * slugs (`#part-1--orientation`, `#143-…`), which keep each space and drop
+ * dots, while Astryx's heading ids fold runs of them into one hyphen
+ * (`part-1-orientation`, `14-3-…`). Compared this way, the two agree.
+ */
+function slugKey(slug: string): string {
+	return slug.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Bring the plan's heading a `#section` link names into view, if it has one. */
+function scrollToHeading(body: HTMLElement, href: string) {
+	const key = slugKey(decodeURIComponent(href.slice(1)));
+	const heading = [...body.querySelectorAll<HTMLElement>("[id]")].find(
+		(element) => slugKey(element.id) === key,
+	);
+	heading?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
 /** Hand the plan back as the `.md` file it could have come from. */
 function download(title: string, body: string) {
 	const url = URL.createObjectURL(
@@ -186,9 +205,17 @@ function PlanPage() {
 							components={MARKDOWN_COMPONENTS}
 							// The full width of the card, not Astryx's 680px default.
 							contentWidth="100%"
-							// A link opens beside the app, not in place of it.
-							onLinkClick={(href) => {
-								window.open(href, "_blank", "noopener,noreferrer");
+							// A link to a section of the plan scrolls to it; any other
+							// opens beside the app, not in place of it.
+							onLinkClick={(href, event) => {
+								if (href.startsWith("#")) {
+									const body = event.currentTarget.closest<HTMLElement>(
+										".thunderlist-plan-body",
+									);
+									if (body) scrollToHeading(body, href);
+								} else {
+									window.open(href, "_blank", "noopener,noreferrer");
+								}
 								return false;
 							}}
 						>

@@ -1569,6 +1569,11 @@ body {
 		overflow-x: auto;
 	}
 
+	/* A heading a link in the plan jumps to comes into view below the top bar. */
+	.thunderlist-plan-body [id] {
+		scroll-margin-top: 5rem;
+	}
+
 	/*
 	 * Text pasted in keeps its line breaks and spacing, rather than Markdown
 	 * folding each line into the one before it. A task's notes too.
