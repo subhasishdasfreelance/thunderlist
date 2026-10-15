@@ -735,7 +735,15 @@ body {
 	 * not about time at all. Both pairs are Astryx's own status tints, so they
 	 * carry the meaning they carry everywhere else and stay contrast-checked in
 	 * both schemes.
+	 *
+	 * Drawn a size below Astryx's smallest, 24px around the 16px icon, so the
+	 * four of them leave the title its room; a touch screen still gets a full
+	 * finger's area; see `.thunderlist-row-buttons`.
 	 */
+	.thunderlist-flag button {
+		height: 1.5rem;
+	}
+
 	.thunderlist-flag[data-on="true"] button {
 		background-color: var(--color-background-orange);
 		color: var(--color-text-orange);

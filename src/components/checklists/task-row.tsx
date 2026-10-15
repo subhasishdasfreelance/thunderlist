@@ -350,7 +350,7 @@ export function TaskRow({
 			{/* Second on a phone, first on a desktop: the flags join the other
 			    buttons on the line below rather than crowding the title. */}
 			{canUpdateTasks ? (
-				<div className="thunderlist-row-buttons order-2 flex shrink-0 items-center gap-0.5 md:order-none">
+				<div className="thunderlist-row-buttons order-2 flex shrink-0 items-center md:order-none">
 					<TaskFlagButtons
 						title={task.title}
 						urgent={task.urgent}
@@ -359,7 +359,7 @@ export function TaskRow({
 					/>
 
 					{/* Today and Current focus, a little apart from the flags. */}
-					<div className="thunderlist-row-buttons ml-1.5 flex items-center gap-0.5">
+					<div className="ml-1 flex items-center">
 						{today === null ? null : (
 							<SpecialTagButton
 								kind="today"
