@@ -1593,6 +1593,18 @@ PWAs pick up the new service worker and reload.
   implement, so v7 crashes the dev server on Bun.
 - **`/api/notify` has no rate limit**, and it allows any origin; its secret is
   the only protection.
+  This way
+  await fetch("https://your-app/api/notify", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    code: "ntf_…",                       // required
+    title: "Deploy finished",            // required, 1–100 characters
+    body: "main is live in production.", // optional, up to 500
+    image: "https://example.com/a.png",  // optional, must be http(s)://
+    url: "/tags/today",                  // optional: an app path ("/…") or an http(s) link; defaults to Today
+  }),
+});
 - **In-memory "already done" caches** (`ensureInbox`, `ensureBacklog`,
   `ensureNumbered`) are per server process. They are safe to repeat, and races
   are settled by unique indexes.
