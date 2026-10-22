@@ -32,6 +32,7 @@ import { Route as TagsTagIdRouteImport } from './routes/tags.$tagId'
 import { Route as TagsUntaggedRouteImport } from './routes/tags.untagged'
 import { Route as TrackersIndexRouteImport } from './routes/trackers.index'
 import { Route as TrackersTrackerIdRouteImport } from './routes/trackers.$trackerId'
+import { Route as ApiAdminNotifyRouteImport } from './routes/api/admin/notify'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -149,6 +150,11 @@ const TrackersTrackerIdRoute = TrackersTrackerIdRouteImport.update({
   path: '/trackers/$trackerId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminNotifyRoute = ApiAdminNotifyRouteImport.update({
+  id: '/api/admin/notify',
+  path: '/api/admin/notify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/plans/': typeof PlansIndexRoute
   '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
+  '/api/admin/notify': typeof ApiAdminNotifyRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/plans': typeof PlansIndexRoute
   '/tags': typeof TagsIndexRoute
   '/trackers': typeof TrackersIndexRoute
+  '/api/admin/notify': typeof ApiAdminNotifyRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/plans/': typeof PlansIndexRoute
   '/tags/': typeof TagsIndexRoute
   '/trackers/': typeof TrackersIndexRoute
+  '/api/admin/notify': typeof ApiAdminNotifyRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
@@ -260,6 +269,7 @@ export interface FileRouteTypes {
     | '/plans/'
     | '/tags/'
     | '/trackers/'
+    | '/api/admin/notify'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/plans'
     | '/tags'
     | '/trackers'
+    | '/api/admin/notify'
     | '/api/auth/$'
   id:
     | '__root__'
@@ -312,6 +323,7 @@ export interface FileRouteTypes {
     | '/plans/'
     | '/tags/'
     | '/trackers/'
+    | '/api/admin/notify'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -339,6 +351,7 @@ export interface RootRouteChildren {
   PlansIndexRoute: typeof PlansIndexRoute
   TagsIndexRoute: typeof TagsIndexRoute
   TrackersIndexRoute: typeof TrackersIndexRoute
+  ApiAdminNotifyRoute: typeof ApiAdminNotifyRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -505,6 +518,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackersTrackerIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/notify': {
+      id: '/api/admin/notify'
+      path: '/api/admin/notify'
+      fullPath: '/api/admin/notify'
+      preLoaderRoute: typeof ApiAdminNotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -539,17 +559,9 @@ const rootRouteChildren: RootRouteChildren = {
   PlansIndexRoute: PlansIndexRoute,
   TagsIndexRoute: TagsIndexRoute,
   TrackersIndexRoute: TrackersIndexRoute,
+  ApiAdminNotifyRoute: ApiAdminNotifyRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

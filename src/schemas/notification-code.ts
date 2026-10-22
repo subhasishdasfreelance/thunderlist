@@ -121,3 +121,14 @@ export const notifyInputSchema = v.object({
 });
 
 export type NotifyInput = v.InferOutput<typeof notifyInputSchema>;
+
+/**
+ * What `/api/admin/notify` is sent: a notification as above, for the one
+ * person `email` names rather than whoever a code reaches.
+ */
+export const adminNotifyInputSchema = v.object({
+	...v.omit(notifyInputSchema, ["code"]).entries,
+	email: emailSchema,
+});
+
+export type AdminNotifyInput = v.InferOutput<typeof adminNotifyInputSchema>;

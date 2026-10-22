@@ -100,6 +100,7 @@ generated from them; do not edit it.
 | `/settings` | `settings.tsx` | Account, where you work (spaces and teams), task types, notifications, team messages, notification codes. |
 | `/api/auth/$` | `api/auth/$.ts` | Better Auth handler (GET and POST). |
 | `/api/notify` | `api/notify.ts` | Public endpoint for notification codes. |
+| `/api/admin/notify` | `api/admin/notify.ts` | Notifies one person, with the app-wide `ADMIN_TOKEN`. |
 | `/api/mcp` | `api/mcp.ts` | MCP server for AI agents, authenticated by an AI access token. |
 
 The navigation entries and their number-key shortcuts are defined in
@@ -241,6 +242,7 @@ variables yourself if you need notifications.
 | `GOOGLE_CLIENT_SECRET` | yes | From the OAuth client. | `src/lib/auth.ts` |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | for push | Web-push key pair. Generate one with `bunx web-push generate-vapid-keys`. Without them, Settings reports that notifications are not set up and no push is sent. | `src/data/reminder.server.ts` |
 | `VAPID_SUBJECT` | no | A `mailto:` or URL for push services. Falls back to `BETTER_AUTH_URL`, then `mailto:reminders@thunderlist.app`. | `src/data/reminder.server.ts` |
+| `ADMIN_TOKEN` | no | A long random secret that turns on `POST /api/admin/notify`, for pushing a notification to one person (see [§10.5](#105-admin-notifications-and-apiadminnotify)). Unset, that endpoint is off. | `src/routes/api/admin/notify.ts` |
 
 `src/lib/auth.ts` throws on import if any of the four auth variables is
 missing. It prints the origin it is configured for:
@@ -1321,6 +1323,46 @@ connectors (which need OAuth) are not supported.
 To add a tool: add it to `AI_TOOLS`, then a handler under the same name in
 one of the three `ai-*.server.ts` files. `AiHandlers` makes the compiler
 insist on both.
+
+### 10.5 Admin notifications and `/api/admin/notify`
+
+The app's admin can push a notification to any one person, on every device
+they turned notifications on for, without a notification code. There is no
+UI for it: it is a server endpoint guarded by one app-wide secret.
+
+1. Make a long random token, for example with `openssl rand -hex 32`.
+2. Put it in the environment file (`.env.local`, or your host's environment):
+
+   ```bash
+   ADMIN_TOKEN=3f9c…
+   ```
+
+3. Restart the server. While `ADMIN_TOKEN` is unset or empty, the endpoint
+   answers 503 to everything.
+
+Then send it as a bearer token:
+
+```bash
+curl -X POST https://your-app/api/admin/notify \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "priya@example.com",
+    "title": "Deploy finished",
+    "body": "main is live in production.",
+    "url": "/tags/today"
+  }'
+```
+
+`email` (required) is the person's sign-in email. `title`, `body`, `image` and
+`url` are as for `/api/notify` (§10.3).
+
+Responses: `200 { people, devices }` (`0, 0` when that person has no device
+with notifications on); or `{ error }` with status 400 (bad input), 401
+(missing or wrong token), 503 (no `ADMIN_TOKEN`, or no push keys), or 500.
+It sends no CORS headers, so it is for servers and scripts, not browser pages.
+Keep the token out of client code; to revoke it, change or remove it and
+restart. **There is no rate limit.**
 
 ---
 

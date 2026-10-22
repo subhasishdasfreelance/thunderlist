@@ -11,6 +11,7 @@
 import { AppError } from "#/lib/errors";
 import { collections } from "#/lib/mongo/client.server";
 import type {
+	AdminNotifyInput,
 	CodeRecipients,
 	CreateNotificationCodeInput,
 	NotificationCode,
@@ -208,4 +209,32 @@ export async function notifyWithCode(
 		{ $set: { lastUsedAt: new Date().toISOString() } },
 	);
 	return { people, devices };
+}
+
+/**
+ * Notify one person, on every device they turned notifications on for, as the
+ * app's admin rather than with a code; see `/api/admin/notify`. Whoever calls
+ * this has already checked the admin token. Returns how many people and how
+ * many devices took it.
+ */
+export async function notifyAsAdmin(
+	input: AdminNotifyInput,
+): Promise<{ people: number; devices: number }> {
+	if (pushPublicKey() === null) {
+		throw new AppError(
+			"not_configured",
+			"Notifications are not set up on this server yet.",
+		);
+	}
+
+	return sendToEach(
+		[input.email],
+		{
+			title: input.title,
+			body: input.body,
+			url: input.url ?? "/tags/today",
+			image: input.image,
+		},
+		MESSAGE_TTL,
+	);
 }
