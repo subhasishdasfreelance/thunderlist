@@ -24,10 +24,9 @@ export const tagSummariesQuery = () =>
 export const tagQuery = (tagId: string) =>
 	queryOptions({
 		queryKey: queryKeys.tag(tagId),
-		queryFn: () => getTagFn({ data: { tagId } }),
 		// "That tag no longer exists" is an answer, not a hiccup; see
 		// `checklistQuery`.
-		retry: false,
+		queryFn: () => getTagFn({ data: { tagId } }),
 	});
 
 /** The figures, counting only what the screen shows; see `checklistFilteredQuery`. */
@@ -35,7 +34,6 @@ export const tagForQuery = (tagId: string, filter: TaskFilter) =>
 	queryOptions({
 		queryKey: queryKeys.tagFor(tagId, filter),
 		queryFn: () => getTagFn({ data: { tagId, ...filter } }),
-		retry: false,
 	});
 
 /** One page of the open tasks carrying a tag; see `getTagOpenTasks`. */
@@ -43,7 +41,6 @@ export const tagOpenQuery = (tagId: string, view: TaskPageView) =>
 	queryOptions({
 		queryKey: queryKeys.tagOpenPage(tagId, view),
 		queryFn: () => getTagOpenTasksFn({ data: { tagId, ...view } }),
-		retry: false,
 	});
 
 /** The finished tasks, which the screen asks for once they are opened. */
@@ -51,5 +48,4 @@ export const tagCompletedQuery = (tagId: string) =>
 	queryOptions({
 		queryKey: queryKeys.tagCompleted(tagId),
 		queryFn: () => getTagCompletedFn({ data: { tagId } }),
-		retry: false,
 	});

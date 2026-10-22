@@ -9,11 +9,12 @@
  * two — which is what makes retrying after a dropped connection safe.
  */
 
+import { Button } from "@astryxdesign/core/Button";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { createElement, useCallback } from "react";
 import { applyChangeFn } from "#/functions/change.functions";
 import { whyBlocked } from "#/lib/depends";
-import { errorMessage } from "#/lib/errors";
+import { errorMessage, isTransient } from "#/lib/errors";
 import { createId, ID_PREFIX } from "#/lib/ids";
 import { applyOptimistically, restore, snapshot } from "#/lib/optimistic";
 import {
@@ -249,9 +250,12 @@ export function useApplyChange() {
 		/*
 		 * A change that failed because the connection went is not rolled back and
 		 * reported: it is tried again, and with no connection the retry waits for
-		 * one. Every change carries its own ids, so sending one twice is safe.
+		 * one. A hiccup while online — a stale connection, a timeout — gets one
+		 * more try before it is reported; see `isTransient`. Every change carries
+		 * its own ids, so sending one twice is safe.
 		 */
-		retry: () => !navigator.onLine,
+		retry: (failureCount, error) =>
+			!navigator.onLine || (isTransient(error) && failureCount < 1),
 
 		/*
 		 * Draw it first, ask afterwards.
@@ -315,7 +319,26 @@ export function useApplyChange() {
 				});
 			}
 
-			toast({ body: errorMessage(error), type: "error", uniqueID: "change" });
+			/*
+			 * A hiccup can be sent again from the toast: the same change, ids and
+			 * all, so it lands as if the first try had. A refusal is an answer,
+			 * and asking again would only get it again; see `isTransient`.
+			 */
+			const dismiss = toast({
+				body: errorMessage(error),
+				type: "error",
+				uniqueID: "change",
+				endContent: isTransient(error)
+					? createElement(Button, {
+							label: "Try again",
+							size: "sm",
+							onClick: () => {
+								dismiss();
+								mutation.mutate(change);
+							},
+						})
+					: undefined,
+			});
 		},
 
 		/*

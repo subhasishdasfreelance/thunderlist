@@ -3,6 +3,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
+import { CardLastLine } from "#/components/common/card-last-line";
 import { CoverImage } from "#/components/common/cover-image";
 import { PaceLabel } from "#/components/common/pace-label";
 import {
@@ -14,7 +15,7 @@ import {
 	ProgressMeter,
 } from "#/components/common/progress-meter";
 import { velocitySummary } from "#/components/common/velocity-stats";
-import { FocusButton } from "#/components/tasks/task-actions";
+import { ItemFlagButtons } from "#/components/tasks/task-actions";
 import { useApplyChange } from "#/lib/changes";
 import { formatSchedule } from "#/lib/format-date";
 import { computeVelocity } from "#/lib/progress";
@@ -34,8 +35,8 @@ import { SPECIAL_TAG_ICONS } from "./special-tag-icons";
  * tasks done, its pace, and a bar carrying the point it should have reached by
  * now. The name is drawn as the tag itself, in its own colour.
  *
- * Its focus button marks it as current focus, as a checklist's card does;
- * not on Current focus itself, which would only be listing itself.
+ * Its flags are pressed to turn them on and off, as on a checklist's card;
+ * see `ItemFlagButtons`.
  */
 export function TagCard({ tag }: { tag: TagSummary }) {
 	const { progress } = tag;
@@ -43,7 +44,6 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 	const startTime = tagStartTime(tag);
 	const { apply } = useApplyChange();
 	const { canManageContent } = useItemPermissions(tag.access);
-	const canFocus = canManageContent && tag.special !== "focus";
 
 	const pace = usePace(
 		{ ...tag, startDate, startTime },
@@ -70,6 +70,15 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 	// Today and Current focus carry their marks, so they read as what they are.
 	const Mark = tag.special === null ? null : SPECIAL_TAG_ICONS[tag.special];
 
+	const flags = canManageContent ? (
+		<ItemFlagButtons
+			title={tag.name}
+			item={tag}
+			special={tag.special}
+			onSet={(patch) => apply({ kind: "tag.update", tagId: tag.tagId, patch })}
+		/>
+	) : null;
+
 	return (
 		<ClickableCard
 			label={`${tag.name}, ${progress.percent}% complete${priorityWords(tag)}`}
@@ -81,6 +90,12 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 				<VStack gap={2} width="100%" className="min-w-0">
 					<HStack gap={2} hAlign="between" vAlign="center">
 						<HStack gap={1.5} vAlign="center" className="min-w-0 flex-1">
+							{/* First, as on a checklist's card; see `ChecklistCard`. */}
+							{flags === null ? null : (
+								<div className="thunderlist-row-buttons hidden shrink-0 items-center md:flex">
+									{flags}
+								</div>
+							)}
 							<Token
 								size="sm"
 								color={tag.color}
@@ -90,26 +105,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 								}
 							/>
 							<Text color="secondary">({progress.percent}%)</Text>
-							<PriorityMarks
-								urgent={tag.urgent}
-								important={tag.important}
-								focused={canFocus ? false : tag.focused}
-							/>
-							{canFocus ? (
-								<div className="thunderlist-row-buttons flex shrink-0 items-center">
-									<FocusButton
-										title={tag.name}
-										isOn={tag.focused ?? false}
-										onToggle={(focused) =>
-											apply({
-												kind: "tag.update",
-												tagId: tag.tagId,
-												patch: { focused },
-											})
-										}
-									/>
-								</div>
-							) : null}
+							{canManageContent ? null : <PriorityMarks {...tag} />}
 						</HStack>
 						<PaceLabel status={pace.status} />
 					</HStack>
@@ -131,7 +127,7 @@ export function TagCard({ tag }: { tag: TagSummary }) {
 						footnote={formatSchedule(tag)}
 					/>
 
-					{summary === null ? null : <Text type="supporting">{summary}</Text>}
+					<CardLastLine summary={summary} flags={flags} />
 				</VStack>
 			</HStack>
 		</ClickableCard>

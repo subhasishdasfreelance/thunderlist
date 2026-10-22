@@ -6,7 +6,13 @@ import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checkli
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { shortTitle } from "#/lib/tasks/tasks";
 import { tagsQuery } from "#/queries/tags";
-import { type SpecialTag, specialTag, type Tag } from "#/schemas/tag";
+import {
+	SPECIAL_FLAGS,
+	SPECIAL_TAGS,
+	type SpecialTag,
+	specialTag,
+	type Tag,
+} from "#/schemas/tag";
 
 /**
  * What can be done to a task from its row, and the key that does it.
@@ -163,33 +169,75 @@ export function SpecialTagButton({
 	);
 }
 
+type ItemFlags = {
+	urgent?: boolean;
+	important?: boolean;
+	today?: boolean;
+	focused?: boolean;
+};
+
+export type ItemFlagPatch =
+	| { urgent: boolean }
+	| { important: boolean }
+	| { today: boolean }
+	| { focused: boolean };
+
 /**
- * Marking a checklist, tracker or tag as current focus, beside its urgent and
- * important flags: it is then listed, as itself, on the Current focus tag's
- * page; see `SPECIAL_TAGS`. Named as that tag is named, so nothing until the
- * tags have loaded.
+ * A checklist's, tracker's or tag's flags on its card, pressed to turn them on
+ * and off: urgent and important, as a task's, then Today and Current focus,
+ * which list it, as itself, on that tag's page; see `SPECIAL_FLAGS`.
+ *
+ * Today and Current focus are named as their tags are named, so they wait for
+ * the tags to load. A special tag's card leaves out its own, which would only
+ * be listing itself.
  */
-export function FocusButton({
+export function ItemFlagButtons({
 	title,
-	isOn,
-	onToggle,
+	item,
+	special = null,
+	onSet,
 }: {
 	title: string;
-	isOn: boolean;
-	onToggle: (isOn: boolean) => void;
+	item: ItemFlags;
+	/** The special tag this card is, if it is one. */
+	special?: SpecialTag | null;
+	onSet: (patch: ItemFlagPatch) => void;
 }) {
-	const focus = specialTag(useQuery(tagsQuery()).data ?? [], "focus");
-	if (focus === null) return null;
+	const tags = useQuery(tagsQuery()).data ?? [];
 
 	return (
-		<SpecialTagButton
-			kind="focus"
-			title={title}
-			tag={focus}
-			isOn={isOn}
-			onToggle={() => onToggle(!isOn)}
-			hasShortcut={false}
-		/>
+		<>
+			<TaskFlagButtons
+				title={title}
+				urgent={item.urgent ?? false}
+				important={item.important ?? false}
+				hasShortcuts={false}
+				actions={{
+					onSetUrgent: (urgent) => onSet({ urgent }),
+					onSetImportant: (important) => onSet({ important }),
+				}}
+			/>
+			{SPECIAL_TAGS.map((kind) => {
+				const tag = specialTag(tags, kind);
+				if (tag === null || kind === special) return null;
+				const field = SPECIAL_FLAGS[kind];
+				const isOn = item[field] ?? false;
+
+				return (
+					<SpecialTagButton
+						key={kind}
+						kind={kind}
+						title={title}
+						tag={tag}
+						isOn={isOn}
+						onToggle={() =>
+							onSet(field === "today" ? { today: !isOn } : { focused: !isOn })
+						}
+						hasShortcut={false}
+					/>
+				);
+			})}
+		</>
 	);
 }
 

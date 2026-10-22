@@ -1,4 +1,5 @@
 import { focusManager, QueryClient } from "@tanstack/react-query";
+import { isTransient } from "#/lib/errors";
 
 /**
  * How often a screen left open re-reads what it is showing.
@@ -39,6 +40,16 @@ if (typeof window !== "undefined") {
 	});
 }
 
+/**
+ * How many times a failed read is tried again, when it is worth trying at all;
+ * see `isTransient`.
+ *
+ * Once on the server, where every retry holds up the whole page — enough to
+ * get past a connection that has just gone stale. Three times in the browser,
+ * React Query's own default, where the screen is already up and waiting.
+ */
+const READ_RETRIES = typeof window === "undefined" ? 1 : 3;
+
 export function getContext() {
 	/*
 	 * No catching-up happens while a change is still saving — the interval
@@ -52,6 +63,8 @@ export function getContext() {
 	const queryClient: QueryClient = new QueryClient({
 		defaultOptions: {
 			queries: {
+				retry: (failureCount, error) =>
+					isTransient(error) && failureCount < READ_RETRIES,
 				refetchInterval: () =>
 					queryClient.isMutating() > 0 ? false : REFRESH_MS,
 				refetchOnWindowFocus: () => queryClient.isMutating() === 0,

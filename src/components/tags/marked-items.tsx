@@ -6,14 +6,16 @@ import { TrackerCard } from "#/components/trackers/tracker-card";
 import { checklistsQuery } from "#/queries/checklists";
 import { tagSummariesQuery, tagsQuery } from "#/queries/tags";
 import { trackersQuery } from "#/queries/trackers";
+import { SPECIAL_FLAGS, type SpecialTag } from "#/schemas/tag";
 import { TagCard } from "./tag-card";
 
 /**
- * The checklists, trackers and tags marked as current focus; see
- * `FocusButton`. Each is itself, not the tasks it holds. Read only where
- * they are shown: `isEnabled`.
+ * The checklists, trackers and tags marked for a special tag — on Today, or
+ * as current focus; see `ItemFlagButtons`. Each is itself, not the tasks it
+ * holds. Read only on a special tag's page: `null` reads nothing.
  */
-export function useFocusedItems(isEnabled: boolean) {
+export function useMarkedItems(special: SpecialTag | null) {
+	const isEnabled = special !== null;
 	const checklists =
 		useQuery({ ...checklistsQuery(), enabled: isEnabled }).data ?? [];
 	const trackers =
@@ -21,22 +23,32 @@ export function useFocusedItems(isEnabled: boolean) {
 	const tags =
 		useQuery({ ...tagSummariesQuery(), enabled: isEnabled }).data ?? [];
 
+	if (special === null) return { checklists: [], trackers: [], tags: [] };
+	const field = SPECIAL_FLAGS[special];
+
 	return {
-		checklists: checklists.filter((each) => each.focused === true),
-		trackers: trackers.filter((each) => each.focused === true),
-		tags: tags.filter((each) => each.focused === true),
+		checklists: checklists.filter((each) => each[field] === true),
+		trackers: trackers.filter((each) => each[field] === true),
+		tags: tags.filter((each) => each[field] === true),
 	};
 }
 
+/** What the cards are listed under, on each special tag's page. */
+const HEADINGS: Record<SpecialTag, string> = {
+	today: "For today",
+	focus: "In focus",
+};
+
 /**
- * The Current focus tag's page, above its tasks: the cards of everything else
- * marked as current focus, two to a row where there is room, as on their own
- * screens.
+ * A special tag's page, above its tasks: the cards of everything else marked
+ * for it, two to a row where there is room, as on their own screens.
  */
-export function FocusedItems({
+export function MarkedItems({
+	special,
 	items,
 }: {
-	items: ReturnType<typeof useFocusedItems>;
+	special: SpecialTag;
+	items: ReturnType<typeof useMarkedItems>;
 }) {
 	const allTags = useQuery(tagsQuery()).data ?? [];
 	if (
@@ -49,7 +61,7 @@ export function FocusedItems({
 	return (
 		<VStack gap={2}>
 			<Text type="label" weight="semibold" color="secondary">
-				In focus
+				{HEADINGS[special]}
 			</Text>
 			<div className="thunderlist-card-grid">
 				{items.checklists.map((checklist) => (

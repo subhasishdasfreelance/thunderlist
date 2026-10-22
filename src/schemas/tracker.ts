@@ -137,9 +137,10 @@ const trackerSchema = v.object({
 	urgent: v.optional(v.boolean()),
 	important: v.optional(v.boolean()),
 	/**
-	 * Marked as current focus: listed itself, as a card, on the Current focus
-	 * tag's page; see `SPECIAL_TAGS`. Absent for not.
+	 * Marked as Today or as current focus: listed itself, as a card, on that
+	 * tag's page; see `SPECIAL_FLAGS`. Absent for not.
 	 */
+	today: v.optional(v.boolean()),
 	focused: v.optional(v.boolean()),
 	createdAt: v.string(),
 	updatedAt: v.string(),
@@ -250,6 +251,7 @@ export const updateTrackerInputSchema = v.object({
 			access: v.optional(accessSchema),
 			urgent: v.optional(v.boolean()),
 			important: v.optional(v.boolean()),
+			today: v.optional(v.boolean()),
 			focused: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),

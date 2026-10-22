@@ -543,7 +543,7 @@ apply(change)
        - changes to the same task are serialised (sendingTasks)
        - a change naming a checklist still being created waits for it (creatingChecklists)
        - applyChangeFn({ data: { change } })
-     retry: only while navigator.onLine is false, so a dropped connection retries when it returns
+     retry: while navigator.onLine is false (waits for the connection), plus once for a hiccup (isTransient)
      onError: restore(snapshot), then re-apply later pending changes over it; forget the undo
               step; reset caches of a never-saved checklist/tracker; toast the message
      onSettled: if this was the last pending mutation → invalidateQueries() (everything)
@@ -1354,6 +1354,24 @@ curl -X POST https://your-app/api/admin/notify \
   }'
 ```
 
+Or with `fetch`, from a server-side script (never ship the token to a browser):
+
+```js
+await fetch("https://your-app/api/admin/notify", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.ADMIN_TOKEN}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    email: "priya@example.com",
+    title: "Deploy finished",
+    body: "main is live in production.",
+    url: "/tags/today",
+  }),
+});
+```
+
 `email` (required) is the person's sign-in email. `title`, `body`, `image` and
 `url` are as for `/api/notify` (§10.3).
 
@@ -1489,8 +1507,9 @@ Nothing forces all of these steps at compile time, so work through the list.
    ```
 3. A key in `src/queries/keys.ts`, nested under the parent key so broad
    invalidation reaches it.
-4. A `queryOptions` factory in `src/queries/<area>.ts`. Add `retry: false`
-   where "not found" is a real answer rather than a hiccup.
+4. A `queryOptions` factory in `src/queries/<area>.ts`. No `retry` needed:
+   only hiccups are tried again, never an `AppError` answer like "not found"
+   (`isTransient` in `src/lib/errors.ts`).
 5. If any change affects it, patch its cache in `optimistic.ts`.
 
 ### 12.3 Add a route

@@ -46,7 +46,7 @@ import { SectionSpinner } from "#/components/common/section-spinner";
 import { SortMenu } from "#/components/common/sort-menu";
 import { ErrorNotice } from "#/components/common/states";
 import { VelocityStats } from "#/components/common/velocity-stats";
-import { FocusedItems, useFocusedItems } from "#/components/tags/focused-items";
+import { MarkedItems, useMarkedItems } from "#/components/tags/marked-items";
 import { SPECIAL_TAG_ICONS } from "#/components/tags/special-tag-icons";
 import { StageFilter } from "#/components/tags/stage-filter";
 import { TagFormDialog } from "#/components/tags/tag-form-dialog";
@@ -403,10 +403,10 @@ function TagDetailPage() {
 		canManageContent,
 		onPickDone: clear,
 	});
-	// On Current focus, the checklists, trackers and tags marked so too.
-	const focused = useFocusedItems(data?.special === "focus");
-	const focusedCount =
-		focused.checklists.length + focused.trackers.length + focused.tags.length;
+	// On Today and Current focus, the checklists, trackers and tags marked so too.
+	const marked = useMarkedItems(data?.special ?? null);
+	const markedCount =
+		marked.checklists.length + marked.trackers.length + marked.tags.length;
 
 	if (detail === null) {
 		return (
@@ -892,7 +892,9 @@ function TagDetailPage() {
 				/>
 			)}
 
-			{special === "focus" ? <FocusedItems items={focused} /> : null}
+			{special === null ? null : (
+				<MarkedItems special={special} items={marked} />
+			)}
 
 			{/* Each counts in the figures above as one thing to finish, as a task does. */}
 			{figures.trackers.length === 0 ? null : (
@@ -982,7 +984,7 @@ function TagDetailPage() {
 
 			{/* Its progress counts its trackers too; this is no task carrying it. */}
 			{detail.progress.total === detail.trackers.length ? (
-				detail.trackers.length === 0 && focusedCount === 0 ? (
+				detail.trackers.length === 0 && markedCount === 0 ? (
 					<EmptyState
 						title="Nothing carries this tag yet."
 						description={

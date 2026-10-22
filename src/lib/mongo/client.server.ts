@@ -422,8 +422,22 @@ function describeConnectFailure(error: unknown): AppError {
 	return new AppError("upstream_failed", "Could not open the database.");
 }
 
+/**
+ * Settings for a server that sleeps between requests.
+ *
+ * A serverless instance is frozen while idle, and the sockets in its pool can
+ * be closed under it; `maxIdleTimeMS` drops a connection that has sat unused
+ * long enough to be suspect, rather than sending the next request down it.
+ * The driver waits 30 seconds for a server by default, longer than a request
+ * should hang; five fails fast enough for the browser to try again instead.
+ */
+const CLIENT_OPTIONS = {
+	maxIdleTimeMS: 60_000,
+	serverSelectionTimeoutMS: 5_000,
+};
+
 async function openClient(): Promise<MongoClient> {
-	const client = new MongoClient(requireConnectionString());
+	const client = new MongoClient(requireConnectionString(), CLIENT_OPTIONS);
 
 	try {
 		await client.connect();
@@ -439,7 +453,14 @@ async function connect(): Promise<Collections> {
 	const client = await openClient();
 	const current = collectionsOf(client.db(DB_NAME));
 
-	await ensureIndexes(current);
+	/*
+	 * Not waited for. The indexes already exist on every database that has
+	 * been used once, so this is a no-op that only made the first request on
+	 * every new instance wait, and fail whenever any one of them did.
+	 */
+	ensureIndexes(current).catch((error: unknown) => {
+		console.error("[thunderlist] Could not create indexes:", error);
+	});
 
 	return current;
 }

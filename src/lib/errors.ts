@@ -27,6 +27,24 @@ export class AppError extends Error {
 	}
 }
 
+/**
+ * Whether asking again might get a different answer.
+ *
+ * An `AppError`'s code survives the trip to the browser; see `guard`. Most codes
+ * are answers — that no longer exists, sign in, that is not allowed — which the
+ * same request gets every time. `upstream_failed` is a hiccup, and so is
+ * anything with no code at all: a dropped connection, a function that timed
+ * out before it could answer.
+ */
+export function isTransient(error: unknown): boolean {
+	const code =
+		typeof error === "object" && error !== null && "code" in error
+			? error.code
+			: undefined;
+	// A DOMException's `code` is a number, and says nothing about the server.
+	return typeof code !== "string" || code === "upstream_failed";
+}
+
 /** Best-effort user-facing message for anything caught in a component. */
 export function errorMessage(error: unknown): string {
 	if (error instanceof Error && error.message) return error.message;

@@ -114,14 +114,23 @@ const tagColorSchema = v.picklist(TAG_COLORS);
  * it has to exist and cannot be deleted. It is known by its kind rather than
  * its name, because the name is the user's to change.
  *
- * Current focus also gathers checklists, trackers and tags marked `focused`,
- * each shown as itself rather than as the tasks it holds.
+ * Each also gathers the checklists, trackers and tags marked for it, each
+ * shown as itself rather than as the tasks it holds; see `SPECIAL_FLAGS`.
  *
  * The Backlog was another, and is a checklist now; see `ensureBacklog`.
  */
 export const SPECIAL_TAGS = ["today", "focus"] as const;
 
 export type SpecialTag = (typeof SPECIAL_TAGS)[number];
+
+/**
+ * The field that marks a checklist, tracker or tag for each special tag: it
+ * is then listed, as itself, on that tag's page.
+ */
+export const SPECIAL_FLAGS = {
+	today: "today",
+	focus: "focused",
+} as const satisfies Record<SpecialTag, string>;
 
 const tagNameSchema = v.pipe(
 	v.string(),
@@ -192,9 +201,10 @@ const tagSchema = v.object({
 	urgent: v.optional(v.boolean()),
 	important: v.optional(v.boolean()),
 	/**
-	 * Marked as current focus: listed itself, as a card, on the Current focus
-	 * tag's page; see `SPECIAL_TAGS`. Absent for not.
+	 * Marked as Today or as current focus: listed itself, as a card, on that
+	 * tag's page; see `SPECIAL_FLAGS`. Absent for not.
 	 */
+	today: v.optional(v.boolean()),
 	focused: v.optional(v.boolean()),
 	createdAt: v.string(),
 	updatedAt: v.string(),
@@ -422,6 +432,7 @@ export const updateTagInputSchema = v.object({
 			images: v.optional(imagesSchema),
 			urgent: v.optional(v.boolean()),
 			important: v.optional(v.boolean()),
+			today: v.optional(v.boolean()),
 			focused: v.optional(v.boolean()),
 		}),
 		v.check((patch) => Object.keys(patch).length > 0, "Nothing to update"),
