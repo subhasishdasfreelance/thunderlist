@@ -581,9 +581,9 @@ function ChecklistDetailPage() {
 			</HStack>
 
 			<HStack gap={2} hAlign="between" vAlign="start">
-				<HStack gap={3} vAlign="center">
+				<HStack gap={3} vAlign="center" className="min-w-0">
 					<CoverImage images={detail.images} size="page" />
-					<VStack gap={0.5}>
+					<VStack gap={0.5} className="min-w-0">
 						<GroupLinks kind="checklist" id={checklistId} />
 						<HStack gap={2} vAlign="center">
 							{special === null ? null : (

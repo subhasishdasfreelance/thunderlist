@@ -332,7 +332,7 @@ function TrackerDetailPage() {
 			</HStack>
 
 			<HStack gap={3} hAlign="between" vAlign="start">
-				<HStack gap={3} vAlign="center">
+				<HStack gap={3} vAlign="center" className="min-w-0">
 					{(coverOf(detail.images)?.url ?? detail.coverUrl) ? (
 						<ZoomableImage
 							src={coverOf(detail.images)?.url ?? detail.coverUrl ?? ""}
@@ -341,7 +341,7 @@ function TrackerDetailPage() {
 							className="h-20 w-14 shrink-0 rounded-sm border border-border object-cover"
 						/>
 					) : null}
-					<VStack gap={1}>
+					<VStack gap={1} className="min-w-0">
 						<GroupLinks kind="tracker" id={trackerId} />
 						<Heading level={1}>{detail.title}</Heading>
 						<HStack gap={2} vAlign="center" wrap="wrap">

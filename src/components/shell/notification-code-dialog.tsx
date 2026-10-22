@@ -167,23 +167,24 @@ export function NewCodeDialog({
 	);
 }
 
-/** How to send with a code, from anywhere that can make a web request. */
-function fetchExample(code: string): string {
+/** Where to send with a code, from anywhere that can make a web request. */
+function notifyAddress(): string {
 	const origin =
 		typeof window === "undefined" ? "https://your-app" : window.location.origin;
-	return `await fetch("${origin}/api/notify", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    code: "${code}",
-    title: "Deploy finished",            // required
-    body: "main is live in production.", // optional
-    image: "https://example.com/a.png",  // optional, shown large
-    url: "/tags/today",                  // optional, opened on tap
-  }),
-});
-// 200 { people, devices } — how many took it
-// 400 / 403 / 404 { error } — why not`;
+	return `${origin}/api/notify`;
+}
+
+/** What to send: plain JSON, so it can be pasted into any tool's body field. */
+function bodyExample(code: string): string {
+	return JSON.stringify(
+		{
+			code,
+			title: "Deploy finished",
+			body: "main is live in production.",
+		},
+		null,
+		2,
+	);
 }
 
 /**
@@ -253,16 +254,32 @@ export function CodeDialog({
 						<VStack gap={1.5}>
 							<Text weight="semibold">Send with it</Text>
 							<Text type="supporting">
-								One request, from a script, a server or another site. Only the
-								code and a title are needed.
+								One request, from a script, a server or a service like
+								cron-job.org: a POST to this address, with the header
+								Content-Type: application/json.
 							</Text>
 							<CodeBlock
-								code={fetchExample(code.code)}
-								language="javascript"
+								code={notifyAddress()}
 								hasCopyButton
 								size="sm"
 								width="100%"
 							/>
+							<Text type="supporting">
+								And this as the body. Only the code and a title are needed;
+								body, image (a picture's http(s) link) and url (opened on tap)
+								are optional.
+							</Text>
+							<CodeBlock
+								code={bodyExample(code.code)}
+								language="json"
+								hasCopyButton
+								size="sm"
+								width="100%"
+							/>
+							<Text type="supporting">
+								It answers 200 with how many people and devices took it, or 400,
+								403 or 404 with an error saying why not.
+							</Text>
 						</VStack>
 					</VStack>
 				)}

@@ -2401,10 +2401,15 @@ body {
 	 * measure. These are the measures.
 	 *
 	 * A phone is the exception and stays fluid — there is no width to choose
-	 * between, only the screen minus its gutters. From `sm` up the column steps
+	 * between, only the screen minus its gutters. Past that the column steps
 	 * through fixed sizes and stops: past the last step the window keeps growing
 	 * and the column does not, because a task list a metre wide is not a better
 	 * task list.
+	 *
+	 * The steps follow the room the page has, not the window: beside the side
+	 * nav that is 260px less, and a column sized by the window ran under the
+	 * edge on a tablet. Each step is taken once it fits with the phone's 1rem
+	 * gutter either side; see `.thunderlist-page`, which is the container.
 	 */
 	.thunderlist-container {
 		width: 100%;
@@ -2412,26 +2417,26 @@ body {
 		padding-inline: 1rem;
 	}
 
-	@media (min-width: 40rem) {
+	@container (min-width: 38rem) {
 		.thunderlist-container {
 			width: 36rem;
 			padding-inline: 0;
 		}
 	}
 
-	@media (min-width: 48rem) {
+	@container (min-width: 46rem) {
 		.thunderlist-container {
 			width: 44rem;
 		}
 	}
 
-	@media (min-width: 64rem) {
+	@container (min-width: 54rem) {
 		.thunderlist-container {
 			width: 52rem;
 		}
 	}
 
-	@media (min-width: 80rem) {
+	@container (min-width: 60rem) {
 		.thunderlist-container {
 			width: 58rem;
 		}
@@ -2444,6 +2449,7 @@ body {
 	 */
 	.thunderlist-page {
 		min-height: calc(100dvh - var(--_app-shell-header-height, 3.5rem));
+		container-type: inline-size;
 	}
 
 	/*
