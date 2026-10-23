@@ -8,7 +8,12 @@
 
 import type { Filter } from "mongodb";
 import webpush from "web-push";
-import { deviceName, pushServiceName } from "#/lib/device-name";
+import {
+	type DeviceType,
+	deviceName,
+	deviceType,
+	pushServiceName,
+} from "#/lib/device-name";
 import { AppError } from "#/lib/errors";
 import {
 	collections,
@@ -40,7 +45,10 @@ export function pushPublicKey(): string | null {
 	return pushKeys()?.publicKey ?? null;
 }
 
-/** `userAgent` is the browser's, for naming the device; see `deviceName`. */
+/**
+ * `userAgent` is the browser's, for naming the device and its type; see
+ * `deviceName` and `deviceType`.
+ */
 export async function savePushSubscription(
 	email: string,
 	subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
@@ -48,6 +56,7 @@ export async function savePushSubscription(
 ): Promise<void> {
 	const current = await collections();
 	const device = deviceName(userAgent);
+	const type = deviceType(userAgent);
 	await current.pushSubscriptions.updateOne(
 		{ endpoint: subscription.endpoint },
 		{
@@ -55,6 +64,7 @@ export async function savePushSubscription(
 				email,
 				keys: subscription.keys,
 				...(device === null ? {} : { device }),
+				...(type === null ? {} : { deviceType: type }),
 			},
 			$setOnInsert: { createdAt: new Date().toISOString() },
 		},
@@ -110,6 +120,8 @@ export async function sendTo(
 export type DeviceOutcome = {
 	/** "Chrome on Windows"; see `deviceName`. */
 	device: string;
+	/** Phone, tablet or computer; `null` when not known. */
+	type: DeviceType | null;
 	/** When notifications were turned on there. */
 	turnedOnAt: string;
 	status: "sent" | "failed" | "gone";
@@ -170,6 +182,7 @@ async function sendAndReport(
 			.filter((outcome) => outcome.doc.email === email)
 			.map(({ doc, status, error }) => ({
 				device: doc.device ?? pushServiceName(doc.endpoint),
+				type: doc.deviceType ?? null,
 				turnedOnAt: doc.createdAt,
 				status,
 				...(error === undefined ? {} : { error }),

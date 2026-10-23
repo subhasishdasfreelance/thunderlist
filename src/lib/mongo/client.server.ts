@@ -17,6 +17,7 @@ import {
 	MongoServerSelectionError,
 	type ObjectId,
 } from "mongodb";
+import type { DeviceType } from "#/lib/device-name";
 import { AppError } from "#/lib/errors";
 import type { Arrangements } from "#/schemas/arrangement";
 import type { Backdrops } from "#/schemas/backdrop";
@@ -116,6 +117,8 @@ export type PushSubscriptionDoc = {
 	keys: { p256dh: string; auth: string };
 	/** "Chrome on Windows"; missing for one saved before devices were named. */
 	device?: string;
+	/** Missing when the browser did not say, or saved before it was asked. */
+	deviceType?: DeviceType;
 	createdAt: string;
 };
 

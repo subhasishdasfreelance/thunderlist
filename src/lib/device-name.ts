@@ -42,6 +42,25 @@ export function deviceName(userAgent: string): string | null {
 	return browser ?? system;
 }
 
+export type DeviceType = "mobile" | "tablet" | "desktop";
+
+/** Checked in order: an Android tablet is Android without "Mobile". */
+const TYPES: ReadonlyArray<[RegExp, DeviceType]> = [
+	[/iPad|Tablet/, "tablet"],
+	[/iPhone|iPod|Mobile/, "mobile"],
+	[/Android/, "tablet"],
+	[/CrOS|Windows|Macintosh|Linux|X11/, "desktop"],
+];
+
+/**
+ * Whether a user agent is a phone, a tablet or a computer, or `null` when it
+ * does not say. An iPad asking for desktop sites, as it does by default, says
+ * it is a Mac, so it counts as one.
+ */
+export function deviceType(userAgent: string): DeviceType | null {
+	return TYPES.find(([pattern]) => pattern.test(userAgent))?.[1] ?? null;
+}
+
 /**
  * The browser behind a push endpoint, from the push service it belongs to;
  * for a device saved before its name was. Chrome's service is shared by most

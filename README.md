@@ -1290,8 +1290,8 @@ any origin. **There is no rate limit.**
       "email": "priya@example.com",
       "name": "Priya",
       "devices": [
-        { "device": "Chrome on Windows", "turnedOnAt": "2026-09-01T…", "status": "sent" },
-        { "device": "Safari on iPhone", "turnedOnAt": "2026-09-02T…", "status": "failed",
+        { "device": "Chrome on Windows", "type": "desktop", "turnedOnAt": "2026-09-01T…", "status": "sent" },
+        { "device": "Safari on iPhone", "type": "mobile", "turnedOnAt": "2026-09-02T…", "status": "failed",
           "error": "The push service answered 500." }
       ]
     },
@@ -1308,6 +1308,7 @@ any origin. **There is no rate limit.**
 | `missedPeople` | People it was for that it reached on no device: none turned on, or every one failed |
 | `recipients` | Everyone it was for, with `name` (`null` if no one has signed in with that email) and each device |
 | `devices[].device` | Browser and system, saved when notifications are turned on; for a device turned on before that, the browser its push service belongs to |
+| `devices[].type` | `mobile`, `tablet` or `desktop`, saved alongside `device`; `null` when the browser did not say, or the device was turned on before types were saved (turning notifications off and on again fills it in). An iPad asking for desktop sites, as it does by default, counts as `desktop` |
 | `devices[].status` | `sent` (the push service took it), `failed` (turned away; `error` says why) or `gone` (unsubscribed or uninstalled, and now forgotten) |
 
 ### 10.4 AI agents: MCP and WebMCP
