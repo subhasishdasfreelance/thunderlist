@@ -8,6 +8,7 @@
 
 import type { Filter } from "mongodb";
 import webpush from "web-push";
+import { deviceName, pushServiceName } from "#/lib/device-name";
 import { AppError } from "#/lib/errors";
 import {
 	collections,
@@ -39,15 +40,22 @@ export function pushPublicKey(): string | null {
 	return pushKeys()?.publicKey ?? null;
 }
 
+/** `userAgent` is the browser's, for naming the device; see `deviceName`. */
 export async function savePushSubscription(
 	email: string,
 	subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+	userAgent: string,
 ): Promise<void> {
 	const current = await collections();
+	const device = deviceName(userAgent);
 	await current.pushSubscriptions.updateOne(
 		{ endpoint: subscription.endpoint },
 		{
-			$set: { email, keys: subscription.keys },
+			$set: {
+				email,
+				keys: subscription.keys,
+				...(device === null ? {} : { device }),
+			},
 			$setOnInsert: { createdAt: new Date().toISOString() },
 		},
 		{ upsert: true },
@@ -91,19 +99,40 @@ export async function sendTo(
 
 	const current = await collections();
 	const found = await current.pushSubscriptions.find(devices).toArray();
-	return (await pushTo(found, message, ttl)).length;
+	return countSent(await pushTo(found, message, ttl));
 }
 
-/** How a message to some people went. */
+/**
+ * What became of a message on one device: `sent` to its push service;
+ * `failed`, turned away, with why; or `gone` — unsubscribed or uninstalled,
+ * so forgotten.
+ */
+export type DeviceOutcome = {
+	/** "Chrome on Windows"; see `deviceName`. */
+	device: string;
+	/** When notifications were turned on there. */
+	turnedOnAt: string;
+	status: "sent" | "failed" | "gone";
+	error?: string;
+};
+
+/** How a message to some people went, in total and for each of them. */
 export type SendReport = {
 	/** People it reached on at least one device. */
 	people: number;
 	/** Devices that took it. */
 	devices: number;
-	/** Devices the push service turned it away from. */
+	/** Devices it did not reach: `failed` or `gone`. */
 	failedDevices: number;
 	/** People it was for that it reached on no device: none on, or every one failed. */
 	missedPeople: number;
+	/** Everyone it was for, in the order given, with each of their devices. */
+	recipients: Array<{
+		email: string;
+		/** Their name, or `null` when no one has signed in with that email. */
+		name: string | null;
+		devices: Array<DeviceOutcome>;
+	}>;
 };
 
 /**
@@ -116,20 +145,46 @@ async function sendAndReport(
 	message: Message,
 	ttl: number,
 ): Promise<SendReport> {
-	const wanted = new Set(emails).size;
-	if (pushKeys() === null || wanted === 0) {
-		return { people: 0, devices: 0, failedDevices: 0, missedPeople: wanted };
-	}
-
+	const wanted = [...new Set(emails)];
 	const current = await collections();
-	const found = await current.pushSubscriptions.find(devices).toArray();
-	const took = await pushTo(found, message, ttl);
-	const people = new Set(took.map((device) => device.email)).size;
+	const [found, users] = await Promise.all([
+		pushKeys() === null || wanted.length === 0
+			? []
+			: current.pushSubscriptions
+					.find(devices)
+					.sort({ createdAt: 1 })
+					.toArray(),
+		current.users
+			.find(
+				{ email: { $in: wanted } },
+				{ projection: { _id: 0, email: 1, name: 1 } },
+			)
+			.toArray(),
+	]);
+	const outcomes = await pushTo(found, message, ttl);
+
+	const recipients = wanted.map((email) => ({
+		email,
+		name: users.find((user) => user.email === email)?.name ?? null,
+		devices: outcomes
+			.filter((outcome) => outcome.doc.email === email)
+			.map(({ doc, status, error }) => ({
+				device: doc.device ?? pushServiceName(doc.endpoint),
+				turnedOnAt: doc.createdAt,
+				status,
+				...(error === undefined ? {} : { error }),
+			})),
+	}));
+	const people = recipients.filter((each) =>
+		each.devices.some((device) => device.status === "sent"),
+	).length;
+	const sent = countSent(outcomes);
 	return {
 		people,
-		devices: took.length,
-		failedDevices: found.length - took.length,
-		missedPeople: wanted - people,
+		devices: sent,
+		failedDevices: outcomes.length - sent,
+		missedPeople: wanted.length - people,
+		recipients,
 	};
 }
 
@@ -164,18 +219,28 @@ export async function sendToEveryone(
 
 	const current = await collections();
 	const found = await current.pushSubscriptions.find({}).toArray();
-	return (await pushTo(found, message, ttl)).length;
+	return countSent(await pushTo(found, message, ttl));
+}
+
+type PushOutcome = {
+	doc: PushSubscriptionDoc;
+	status: DeviceOutcome["status"];
+	error?: string;
+};
+
+function countSent(outcomes: ReadonlyArray<PushOutcome>): number {
+	return outcomes.filter((outcome) => outcome.status === "sent").length;
 }
 
 /**
  * Send a message to these devices, side by side, forgetting any the push
- * service says is gone. Returns the ones that took it.
+ * service says is gone. Returns what became of it on each.
  */
 async function pushTo(
 	found: ReadonlyArray<PushSubscriptionDoc>,
 	message: Message,
 	ttl: number,
-): Promise<Array<PushSubscriptionDoc>> {
+): Promise<Array<PushOutcome>> {
 	const keys = pushKeys();
 	if (keys === null || found.length === 0) return [];
 
@@ -188,13 +253,11 @@ async function pushTo(
 		keys.privateKey,
 	);
 
-	/** Unsubscribed, or the app uninstalled: nothing will ever take these. */
-	const gone: Array<string> = [];
-	const sent = await Promise.all(
-		found.map(async (device) => {
+	const outcomes = await Promise.all(
+		found.map(async (doc): Promise<PushOutcome> => {
 			try {
 				await webpush.sendNotification(
-					{ endpoint: device.endpoint, keys: device.keys },
+					{ endpoint: doc.endpoint, keys: doc.keys },
 					JSON.stringify(message),
 					// A new version is delivered at once, even to a sleeping phone,
 					// which may otherwise hold an ordinary one back.
@@ -203,23 +266,31 @@ async function pushTo(
 						...(message.kind === "release" ? { urgency: "high" } : {}),
 					},
 				);
-				return device;
+				return { doc, status: "sent" };
 			} catch (error) {
 				const status = (error as { statusCode?: number }).statusCode;
-				if (status === 404 || status === 410) {
-					gone.push(device.endpoint);
-				} else {
-					console.error("[thunderlist] push failed:", status ?? error);
-				}
-				return null;
+				// Unsubscribed, or the app uninstalled: nothing will ever take it.
+				if (status === 404 || status === 410) return { doc, status: "gone" };
+				console.error("[thunderlist] push failed:", status ?? error);
+				return {
+					doc,
+					status: "failed",
+					error:
+						status === undefined
+							? "The push service could not be reached."
+							: `The push service answered ${status}.`,
+				};
 			}
 		}),
 	);
 	// Removed together, in one write.
+	const gone = outcomes
+		.filter((outcome) => outcome.status === "gone")
+		.map((outcome) => outcome.doc.endpoint);
 	if (gone.length > 0) {
 		await current.pushSubscriptions.deleteMany({ endpoint: { $in: gone } });
 	}
-	return sent.filter((device) => device !== null);
+	return outcomes;
 }
 
 /** As long as the push services will hold a message: four weeks. */
@@ -334,11 +405,13 @@ export async function sendTeamMessage(
 		.map((member) => member.email);
 	const url = item?.url ?? "/tags/today";
 
-	return sendToEach(
+	// Only the counts: the sender's page has no need of everyone's devices.
+	const { people, devices } = await sendToEach(
 		recipients,
 		{ title: input.title, body: input.body, url },
 		MESSAGE_TTL,
 	);
+	return { people, devices };
 }
 
 /**

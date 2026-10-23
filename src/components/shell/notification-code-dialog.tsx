@@ -277,8 +277,8 @@ export function CodeDialog({
 								width="100%"
 							/>
 							<Text type="supporting">
-								It answers 200 with how many people and devices took it and how
-								many did not, or 400, 403 or 404 with an error saying why not.
+								It answers 200 with who it reached, on which devices, and who it
+								missed, or 400, 403 or 404 with an error saying why not.
 							</Text>
 						</VStack>
 					</VStack>

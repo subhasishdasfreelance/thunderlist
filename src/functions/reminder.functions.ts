@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import {
 	pushPublicKey,
 	removePushSubscription,
@@ -33,7 +34,11 @@ export const savePushSubscriptionFn = createServerFn({ method: "POST" })
 	.handler(({ data }) =>
 		guard("savePushSubscription", async () => {
 			const scope = await requireScope();
-			await savePushSubscription(scope.email, data);
+			await savePushSubscription(
+				scope.email,
+				data,
+				getRequest().headers.get("user-agent") ?? "",
+			);
 		}),
 	);
 

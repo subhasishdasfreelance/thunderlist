@@ -114,6 +114,8 @@ export type PushSubscriptionDoc = {
 	endpoint: string;
 	email: string;
 	keys: { p256dh: string; auth: string };
+	/** "Chrome on Windows"; missing for one saved before devices were named. */
+	device?: string;
 	createdAt: string;
 };
 

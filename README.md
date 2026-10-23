@@ -1273,18 +1273,42 @@ await fetch("https://your-app/api/notify", {
 });
 ```
 
-Responses: `200 { people, devices, failedDevices, missedPeople }` (see
-below); or `{ error }` with status 400 (bad
+Responses: `200` with who it reached and on which devices (see below); or
+`{ error }` with status 400 (bad
 input), 403 (the team code's maker can no longer message the team), 404 (no
 such code), 503 (push keys missing), 502 or 500 (send failure). CORS allows
 any origin. **There is no rate limit.**
+
+```json
+{
+  "people": 1,
+  "devices": 1,
+  "failedDevices": 1,
+  "missedPeople": 1,
+  "recipients": [
+    {
+      "email": "priya@example.com",
+      "name": "Priya",
+      "devices": [
+        { "device": "Chrome on Windows", "turnedOnAt": "2026-09-01T…", "status": "sent" },
+        { "device": "Safari on iPhone", "turnedOnAt": "2026-09-02T…", "status": "failed",
+          "error": "The push service answered 500." }
+      ]
+    },
+    { "email": "sam@example.com", "name": "Sam", "devices": [] }
+  ]
+}
+```
 
 | Field | Means |
 |---|---|
 | `people` | People it reached on at least one device |
 | `devices` | Devices that took it |
-| `failedDevices` | Devices the push service turned it away from (one it says is gone is forgotten) |
+| `failedDevices` | Devices it did not reach (`failed` or `gone`) |
 | `missedPeople` | People it was for that it reached on no device: none turned on, or every one failed |
+| `recipients` | Everyone it was for, with `name` (`null` if no one has signed in with that email) and each device |
+| `devices[].device` | Browser and system, saved when notifications are turned on; for a device turned on before that, the browser its push service belongs to |
+| `devices[].status` | `sent` (the push service took it), `failed` (turned away; `error` says why) or `gone` (unsubscribed or uninstalled, and now forgotten) |
 
 ### 10.4 AI agents: MCP and WebMCP
 
@@ -1383,9 +1407,9 @@ await fetch("https://your-app/api/admin/notify", {
 `email` (required) is the person's sign-in email. `title`, `body`, `image` and
 `url` are as for `/api/notify` (§10.3).
 
-Responses: `200 { people, devices, failedDevices, missedPeople }`, as for
-`/api/notify` (`people` is 1 or 0; `missedPeople: 1` when that person has no
-device that took it); or `{ error }` with status 400 (bad input), 401 (missing
+Responses: `200` as for `/api/notify` (§10.3), with that one person in
+`recipients` and each of their devices; or `{ error }` with status 400 (bad
+input), 401 (missing
 or wrong token), 404 (no one has signed in with that email), 503 (no
 `ADMIN_TOKEN`, or no push keys), or 500.
 CORS allows any origin, so it can also be called from a browser console. Keep

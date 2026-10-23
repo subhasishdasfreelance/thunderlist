@@ -49,7 +49,7 @@ function isAdmin(request: Request, token: string): boolean {
  * a browser on any site.
  *
  * `POST` JSON: `{ email, title, body?, image?, url? }`. Answers
- * `{ people, devices, failedDevices, missedPeople }` — see `SendReport` — or
+ * who it reached, on which devices, and who it missed — see `SendReport` — or
  * `{ error }` with a status saying why not: 400 for what was sent, 401 for a
  * missing or wrong token, 404 for no one with that email, 503 when no admin
  * token or no push keys are set.
