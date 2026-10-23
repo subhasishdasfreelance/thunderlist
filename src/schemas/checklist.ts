@@ -483,6 +483,12 @@ const checklistSchema = v.object({
 	access: v.optional(accessSchema),
 	/** The steps its tasks go through; absent for `DEFAULT_STAGES`. */
 	stages: v.optional(v.array(stageSchema)),
+	/**
+	 * Ids of its tasks in the order picked by hand, which the list shows set to
+	 * "Your order"; absent until it is arranged. One list for every stage,
+	 * though each stage is arranged on its own. See `handRanker`.
+	 */
+	taskOrder: v.optional(v.array(idSchema)),
 	/** Pictures on it, in the order they were added; absent for none. See `ImageRef`. */
 	images: v.optional(imagesSchema),
 	/**
@@ -569,6 +575,8 @@ export const updateChecklistInputSchema = v.object({
 			tagIds: v.optional(tagIdsSchema),
 			access: v.optional(accessSchema),
 			stages: v.optional(stagesSchema),
+			/** Every one of them, in order: the whole list is written each time. */
+			taskOrder: v.optional(v.array(idSchema)),
 			/** Every one of them, in order: the whole list is written each time. */
 			images: v.optional(imagesSchema),
 			urgent: v.optional(v.boolean()),

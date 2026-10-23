@@ -442,6 +442,43 @@ describe("orderTasks by name", () => {
 	});
 });
 
+describe("orderTasks in your order", () => {
+	const tasks = [
+		task({ taskId: "old", addedAt: "2026-01-01T00:00:00.000Z" }),
+		task({ taskId: "mid", addedAt: "2026-01-02T00:00:00.000Z" }),
+		task({ taskId: "new", addedAt: "2026-01-03T00:00:00.000Z" }),
+		task({ taskId: "newer", addedAt: "2026-01-04T00:00:00.000Z" }),
+	];
+
+	it("puts the placed ones as placed, after the ones added since, newest first", () => {
+		expect(
+			orderTasks(tasks, "manual", undefined, ["mid", "gone", "old"]).map(
+				(row) => row.taskId,
+			),
+		).toEqual(["newer", "new", "mid", "old"]);
+	});
+
+	it("is newest first until the list is arranged", () => {
+		expect(orderTasks(tasks, "manual").map((row) => row.taskId)).toEqual([
+			"newer",
+			"new",
+			"mid",
+			"old",
+		]);
+	});
+
+	it("orders rows that carry a task the same way", () => {
+		const rows = tasks.map((each) => ({ task: each }));
+
+		expect(
+			orderByTask(rows, "manual", (row) => row.task, undefined, undefined, [
+				"old",
+				"newer",
+			]).map((row) => row.task.taskId),
+		).toEqual(["new", "mid", "old", "newer"]);
+	});
+});
+
 describe("mergeReads", () => {
 	const id = (row: { id: string }) => row.id;
 

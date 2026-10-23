@@ -32,7 +32,8 @@ function failure(error: string, status: number): Response {
  * Sends a notification with a notification code; see `NotificationCode`.
  *
  * `POST` JSON: `{ code, title, body?, image?, url? }`. Answers
- * `{ people, devices }` — how many took it — or `{ error }` with a status
+ * `{ people, devices, failedDevices, missedPeople }` — see `SendReport` — or
+ * `{ error }` with a status
  * saying why not: 400 for what was sent, 403 for a team's code whose maker can
  * no longer message it, 404 for no such code.
  */

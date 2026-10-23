@@ -6,6 +6,7 @@
  * every device they turned notifications on for.
  */
 
+import type { Filter } from "mongodb";
 import webpush from "web-push";
 import { AppError } from "#/lib/errors";
 import {
@@ -93,29 +94,65 @@ export async function sendTo(
 	return (await pushTo(found, message, ttl)).length;
 }
 
+/** How a message to some people went. */
+export type SendReport = {
+	/** People it reached on at least one device. */
+	people: number;
+	/** Devices that took it. */
+	devices: number;
+	/** Devices the push service turned it away from. */
+	failedDevices: number;
+	/** People it was for that it reached on no device: none on, or every one failed. */
+	missedPeople: number;
+};
+
 /**
- * Send one message to every device each of these people has, their devices
- * read in one go and sent to side by side, rather than a read and a round of
- * sends a person. Returns how many people and devices took it.
+ * Send one message to the devices `devices` picks of these people, read in
+ * one go and sent to side by side, and say how it went.
  */
-export async function sendToEach(
+async function sendAndReport(
 	emails: ReadonlyArray<string>,
+	devices: Filter<PushSubscriptionDoc>,
 	message: Message,
-	ttl = 60 * 60,
-): Promise<{ people: number; devices: number }> {
-	if (pushKeys() === null || emails.length === 0) {
-		return { people: 0, devices: 0 };
+	ttl: number,
+): Promise<SendReport> {
+	const wanted = new Set(emails).size;
+	if (pushKeys() === null || wanted === 0) {
+		return { people: 0, devices: 0, failedDevices: 0, missedPeople: wanted };
 	}
 
 	const current = await collections();
-	const found = await current.pushSubscriptions
-		.find({ email: { $in: [...emails] } })
-		.toArray();
+	const found = await current.pushSubscriptions.find(devices).toArray();
 	const took = await pushTo(found, message, ttl);
+	const people = new Set(took.map((device) => device.email)).size;
 	return {
-		people: new Set(took.map((device) => device.email)).size,
+		people,
 		devices: took.length,
+		failedDevices: found.length - took.length,
+		missedPeople: wanted - people,
 	};
+}
+
+/**
+ * Send one message to every device each of these people has, their devices
+ * read in one go and sent to side by side, rather than a read and a round of
+ * sends a person.
+ */
+export function sendToEach(
+	emails: ReadonlyArray<string>,
+	message: Message,
+	ttl = 60 * 60,
+): Promise<SendReport> {
+	return sendAndReport(emails, { email: { $in: [...emails] } }, message, ttl);
+}
+
+/** Send one message to one device of one person. */
+export function sendToDevice(
+	device: { email: string; endpoint: string },
+	message: Message,
+	ttl = 60 * 60,
+): Promise<SendReport> {
+	return sendAndReport([device.email], device, message, ttl);
 }
 
 /** Send one message to every device anyone has turned notifications on for. */

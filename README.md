@@ -1273,10 +1273,18 @@ await fetch("https://your-app/api/notify", {
 });
 ```
 
-Responses: `200 { people, devices }`; or `{ error }` with status 400 (bad
+Responses: `200 { people, devices, failedDevices, missedPeople }` (see
+below); or `{ error }` with status 400 (bad
 input), 403 (the team code's maker can no longer message the team), 404 (no
 such code), 503 (push keys missing), 502 or 500 (send failure). CORS allows
 any origin. **There is no rate limit.**
+
+| Field | Means |
+|---|---|
+| `people` | People it reached on at least one device |
+| `devices` | Devices that took it |
+| `failedDevices` | Devices the push service turned it away from (one it says is gone is forgotten) |
+| `missedPeople` | People it was for that it reached on no device: none turned on, or every one failed |
 
 ### 10.4 AI agents: MCP and WebMCP
 
@@ -1354,7 +1362,7 @@ curl -X POST https://your-app/api/admin/notify \
   }'
 ```
 
-Or with `fetch`, from a server-side script (never ship the token to a browser):
+Or with `fetch` (never ship the token in a page's code):
 
 ```js
 await fetch("https://your-app/api/admin/notify", {
@@ -1375,11 +1383,13 @@ await fetch("https://your-app/api/admin/notify", {
 `email` (required) is the person's sign-in email. `title`, `body`, `image` and
 `url` are as for `/api/notify` (§10.3).
 
-Responses: `200 { people, devices }` (`0, 0` when that person has no device
-with notifications on); or `{ error }` with status 400 (bad input), 401
-(missing or wrong token), 503 (no `ADMIN_TOKEN`, or no push keys), or 500.
-It sends no CORS headers, so it is for servers and scripts, not browser pages.
-Keep the token out of client code; to revoke it, change or remove it and
+Responses: `200 { people, devices, failedDevices, missedPeople }`, as for
+`/api/notify` (`people` is 1 or 0; `missedPeople: 1` when that person has no
+device that took it); or `{ error }` with status 400 (bad input), 401 (missing
+or wrong token), 404 (no one has signed in with that email), 503 (no
+`ADMIN_TOKEN`, or no push keys), or 500.
+CORS allows any origin, so it can also be called from a browser console. Keep
+the token out of client code; to revoke it, change or remove it and
 restart. **There is no rate limit.**
 
 ---

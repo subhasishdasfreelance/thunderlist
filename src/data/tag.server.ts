@@ -707,6 +707,7 @@ export async function getTagOpenTasks(
 			(entry) => entry.task,
 			(entry) => stageProgress(entry.task, stagesOf(entry.checklistId)),
 			types,
+			tag.taskOrder ?? [],
 		),
 		view,
 		(entry) => entry.task.taskId,

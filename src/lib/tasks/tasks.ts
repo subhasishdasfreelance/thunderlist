@@ -158,6 +158,7 @@ export const SORT_ORDER_LABELS: Record<SortOrder, string> = {
 	stage: "Earliest stage first",
 	type: "By type",
 	name: "A to Z",
+	manual: "Your order",
 };
 
 /**
@@ -186,7 +187,8 @@ function compareDeadlines(
  * stages between in order of how far along they are; see `stageProgress`; or
  * by type, in the order the space keeps its types in, the untyped last; or by
  * deadline, the soonest due first and the tasks with none after every one
- * that has one; or by name, A to Z.
+ * that has one; or by name, A to Z; or in the list's own order, picked by
+ * hand; see `handRanker`.
  *
  * Within a band the newest is still first, so sorting reorders the list rather
  * than replacing one arbitrary order with another.
@@ -201,6 +203,8 @@ function sortTasksBy<
 	stageProgressOf?: (task: T) => number,
 	/** Where each one's type sits in the list. Without it, by type is newest first. */
 	typeRankOf?: (task: T) => number,
+	/** Where each one was placed by hand. Without it, your order is newest first. */
+	handRankOf?: (task: T) => number,
 ): Array<T> {
 	if (order === "deadline") {
 		return [...tasks].sort(
@@ -220,7 +224,9 @@ function sortTasksBy<
 				? stageProgressOf
 				: order === "type"
 					? typeRankOf
-					: undefined;
+					: order === "manual"
+						? handRankOf
+						: undefined;
 	if (rank === undefined) return [...tasks].sort(compare);
 
 	return [...tasks].sort((a, b) => rank(a) - rank(b) || compare(a, b));
@@ -238,12 +244,27 @@ function typeRanker(
 	return (task) => ranks.get(task.typeId ?? "") ?? types.length;
 }
 
+/**
+ * Where a task sits in a list's own order, for "Your order"; see
+ * `Checklist.taskOrder`. A task not placed yet — added since the list was
+ * arranged — comes before every placed one, newest first, so what was just
+ * typed in is on screen rather than at the end of the last page.
+ */
+function handRanker(
+	taskOrder: ReadonlyArray<string>,
+): (task: { taskId: string }) => number {
+	const ranks = new Map(taskOrder.map((taskId, index) => [taskId, index]));
+	return (task) => ranks.get(task.taskId) ?? -1;
+}
+
 /** The same, for the plain task lists that order by `compareTasks`. */
 export function orderTasks(
 	tasks: ReadonlyArray<Task>,
 	order: SortOrder,
 	/** The space's types, in their order, for `type`; see `typeRanker`. */
 	types?: ReadonlyArray<{ typeId: string }>,
+	/** The list's own order, for `manual`; see `handRanker`. */
+	taskOrder?: ReadonlyArray<string>,
 ): Array<Task> {
 	return sortTasksBy(
 		tasks,
@@ -251,6 +272,7 @@ export function orderTasks(
 		compareTasks,
 		undefined,
 		types === undefined ? undefined : typeRanker(types),
+		taskOrder === undefined ? undefined : handRanker(taskOrder),
 	);
 }
 
@@ -262,8 +284,11 @@ export function orderByTask<T>(
 	stepsLeftOf?: (item: T) => number,
 	/** The space's types, in their order, for `type`; see `typeRanker`. */
 	types?: ReadonlyArray<{ typeId: string }>,
+	/** The list's own order, for `manual`; see `handRanker`. */
+	taskOrder?: ReadonlyArray<string>,
 ): Array<T> {
 	const rankType = types === undefined ? undefined : typeRanker(types);
+	const rankHand = taskOrder === undefined ? undefined : handRanker(taskOrder);
 
 	return sortTasksBy(
 		items.map((item) => ({
@@ -277,6 +302,7 @@ export function orderByTask<T>(
 		(a, b) => compareTasks(taskOf(a.item), taskOf(b.item)),
 		stepsLeftOf === undefined ? undefined : (row) => stepsLeftOf(row.item),
 		rankType === undefined ? undefined : (row) => rankType(taskOf(row.item)),
+		rankHand === undefined ? undefined : (row) => rankHand(taskOf(row.item)),
 	).map((row) => row.item);
 }
 

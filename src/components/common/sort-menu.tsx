@@ -8,6 +8,7 @@ import {
 	Check,
 	Clock,
 	Flame,
+	GripVertical,
 	type LucideIcon,
 	Shapes,
 } from "lucide-react";
@@ -21,25 +22,29 @@ const ORDER_ICONS: Record<SortOrder, LucideIcon> = {
 	stage: ChartNoAxesGantt,
 	type: Shapes,
 	name: ArrowDownAZ,
+	manual: GripVertical,
 };
 
 /**
  * How a task list is ordered: newest first, the urgent and important first,
- * the soonest deadline first, the earliest stage first, by kind of work, or
- * A to Z.
+ * the soonest deadline first, the earliest stage first, by kind of work, A to
+ * Z, or in the list's own order, arranged by hand.
  *
- * A menu rather than a row of switches. There are six orders now and a switch
- * each would be five buttons competing to say which one is in force; a menu is
- * one button that always says it, and has room to say what each order means.
+ * A menu rather than a row of switches. There are seven orders now and a
+ * switch each would be six buttons competing to say which one is in force; a
+ * menu is one button that always says it, and has room to say what each order
+ * means.
  *
  * The choice lives on the screen rather than in the database. It is a way of
  * looking at a list, not a property of it, and the next person to open the app
- * should get the list back the way lists normally read.
+ * should get the list back the way lists normally read. The order arranged by
+ * hand is saved, though — it is the list's, as a group's is; see `ArrangeDialog`.
  */
 export function SortMenu({
 	order,
 	onChange,
 	hasStageOrder = false,
+	hasHandOrder = false,
 }: {
 	order: SortOrder;
 	onChange: (order: SortOrder) => void;
@@ -48,8 +53,14 @@ export function SortMenu({
 	 * tag's page; a checklist shows one stage at a time.
 	 */
 	hasStageOrder?: boolean;
+	/**
+	 * Offer the list's own order. Only where there is one list to arrange — a
+	 * checklist's page or a tag's; see `Checklist.taskOrder`.
+	 */
+	hasHandOrder?: boolean;
 }) {
 	const orders: Array<SortOrder> = [
+		...(hasHandOrder ? (["manual"] as const) : []),
 		"newest",
 		"priority",
 		"deadline",

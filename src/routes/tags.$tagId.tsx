@@ -28,7 +28,11 @@ import {
 	QuickAddTask,
 } from "#/components/checklists/quick-add-task";
 import { TaskRow } from "#/components/checklists/task-row";
-import { SelectAllButton } from "#/components/common/arranged-list";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	SelectAllButton,
+} from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { CompletedSection } from "#/components/common/completed-section";
 import { CoverImage } from "#/components/common/cover-image";
@@ -210,6 +214,7 @@ function TagDetailPage() {
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
 	// Taking the tag off every task on it, asked about first; see `clearTag`.
 	const [isClearingTag, setIsClearingTag] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 	// Picked by hand; until then, the page `?task=` is on, or the first.
 	const [page, setPage] = useState<number | undefined>(undefined);
 	const [wantsCompleted, setWantsCompleted] = useState(false);
@@ -313,8 +318,9 @@ function TagDetailPage() {
 						),
 					),
 				types,
+				detail?.taskOrder ?? [],
 			).filter((entry) => !entry.task.completed),
-		[openResult.data, sort, checklistsResult.data, types],
+		[openResult.data, sort, checklistsResult.data, types, detail?.taskOrder],
 	);
 	const completed = useMemo(
 		() =>
@@ -330,12 +336,50 @@ function TagDetailPage() {
 				(entry) => entry.task,
 				undefined,
 				types,
+				detail?.taskOrder ?? [],
 			).filter(
 				(entry) =>
 					entry.task.completed &&
 					matchesFilter(entry.task, { assignee, type: typeId }),
 			),
-		[openResult.data, completedResult.data, sort, assignee, typeId, types],
+		[
+			openResult.data,
+			completedResult.data,
+			sort,
+			assignee,
+			typeId,
+			types,
+			detail?.taskOrder,
+		],
+	);
+
+	/*
+	 * Arranging takes every open task carrying the tag, not just the page
+	 * shown, so a task can be moved past the end of one — and everyone's,
+	 * whatever the filter, since the order is the tag's. Read once Arrange is
+	 * pressed, and drawn in the order this browser holds, which a save has
+	 * already changed.
+	 */
+	const arrangeResult = useQuery({
+		...tagOpenQuery(tagId, { sort: "manual", limit: 10_000 }),
+		enabled: isArranging,
+	});
+	const arrangeRows = useMemo(
+		() =>
+			arrangeResult.data === undefined
+				? undefined
+				: orderByTask(
+						arrangeResult.data.items,
+						"manual",
+						(entry) => entry.task,
+						undefined,
+						undefined,
+						detail?.taskOrder ?? [],
+					).map((entry) => ({
+						id: entry.task.taskId,
+						label: entry.task.title,
+					})),
+		[arrangeResult.data, detail?.taskOrder],
 	);
 
 	/*
@@ -976,8 +1020,14 @@ function TagDetailPage() {
 						<SortMenu
 							order={sort}
 							hasStageOrder
+							hasHandOrder
 							onChange={(next) => filterBy({ sort: sortParam(next) })}
 						/>
+						{sort === "manual" &&
+						canManageContent &&
+						(openResult.data?.total ?? 0) > 1 ? (
+							<ArrangeButton onClick={() => setIsArranging(true)} />
+						) : null}
 					</HStack>
 				</div>
 			)}
@@ -1258,6 +1308,23 @@ function TagDetailPage() {
 				isOpen={isMessaging}
 				onOpenChange={setIsMessaging}
 				from={{ kind: "tag", tagId: detail.tagId }}
+			/>
+
+			{/* Opens once the tasks it arranges have been read. */}
+			<ArrangeDialog
+				isOpen={isArranging && arrangeRows !== undefined}
+				onOpenChange={setIsArranging}
+				noun="tasks"
+				items={arrangeRows ?? []}
+				arrangement={{ order: detail.taskOrder ?? [] }}
+				onSave={(next) => {
+					apply({
+						kind: "tag.update",
+						tagId: detail.tagId,
+						patch: { taskOrder: next.order },
+					});
+					setIsArranging(false);
+				}}
 			/>
 
 			<AlertDialog

@@ -585,7 +585,7 @@ export async function getChecklistStageTasks(
 
 	return {
 		...pageOf(
-			orderTasks(atStage, view.sort, types),
+			orderTasks(atStage, view.sort, types, checklist.taskOrder ?? []),
 			view,
 			(task) => task.taskId,
 		),

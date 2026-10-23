@@ -6,6 +6,17 @@ import { notifyAsAdmin } from "#/data/notification-code.server";
 import { AppError, type AppErrorCode } from "#/lib/errors";
 import { adminNotifyInputSchema } from "#/schemas/notification-code";
 
+/**
+ * Open to a browser on any site: the admin token is what keeps strangers out,
+ * not where the request comes from. `Authorization` and `Content-Type` are
+ * named because a browser asks before sending either cross-site.
+ */
+const CORS_HEADERS = {
+	"access-control-allow-origin": "*",
+	"access-control-allow-methods": "POST, OPTIONS",
+	"access-control-allow-headers": "Authorization, Content-Type",
+};
+
 const STATUS: Record<AppErrorCode, number> = {
 	invalid_data: 400,
 	unauthorized: 403,
@@ -15,7 +26,7 @@ const STATUS: Record<AppErrorCode, number> = {
 };
 
 function failure(error: string, status: number): Response {
-	return Response.json({ error }, { status });
+	return Response.json({ error }, { status, headers: CORS_HEADERS });
 }
 
 /**
@@ -34,13 +45,14 @@ function isAdmin(request: Request, token: string): boolean {
  * Sends a notification to one person, as the app's admin.
  *
  * Off unless `ADMIN_TOKEN` is set in the environment, and then open only to a
- * request carrying it as `Authorization: Bearer <token>`. Meant for scripts on
- * a server, so no other site may call it from a browser.
+ * request carrying it as `Authorization: Bearer <token>`, from a script or from
+ * a browser on any site.
  *
  * `POST` JSON: `{ email, title, body?, image?, url? }`. Answers
- * `{ people, devices }` — how many took it — or `{ error }` with a status
- * saying why not: 400 for what was sent, 401 for a missing or wrong token,
- * 503 when no admin token or no push keys are set.
+ * `{ people, devices, failedDevices, missedPeople }` — see `SendReport` — or
+ * `{ error }` with a status saying why not: 400 for what was sent, 401 for a
+ * missing or wrong token, 404 for no one with that email, 503 when no admin
+ * token or no push keys are set.
  */
 async function notify(request: Request): Promise<Response> {
 	const token = process.env.ADMIN_TOKEN?.trim() ?? "";
@@ -65,7 +77,8 @@ async function notify(request: Request): Promise<Response> {
 	if (!parsed.success) return failure(parsed.issues[0].message, 400);
 
 	try {
-		return Response.json(await notifyAsAdmin(parsed.output));
+		const result = await notifyAsAdmin(parsed.output);
+		return Response.json(result, { headers: CORS_HEADERS });
 	} catch (error) {
 		if (error instanceof AppError) {
 			return failure(error.message, STATUS[error.code]);
@@ -80,6 +93,8 @@ export const Route = createFileRoute("/api/admin/notify")({
 	server: {
 		handlers: {
 			POST: ({ request }) => notify(request),
+			// The browser's check before a cross-site request with a token in it.
+			OPTIONS: () => new Response(null, { status: 204, headers: CORS_HEADERS }),
 		},
 	},
 });

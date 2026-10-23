@@ -20,7 +20,11 @@ import {
 import { SPECIAL_CHECKLIST_ICONS } from "#/components/checklists/special-checklist-icons";
 import { StageTabs } from "#/components/checklists/stage-tabs";
 import { TaskRow } from "#/components/checklists/task-row";
-import { SelectAllButton } from "#/components/common/arranged-list";
+import { ArrangeDialog } from "#/components/common/arrange-dialog";
+import {
+	ArrangeButton,
+	SelectAllButton,
+} from "#/components/common/arranged-list";
 import { BackButton } from "#/components/common/back-button";
 import { CoverImage } from "#/components/common/cover-image";
 import { DayStats } from "#/components/common/day-stats";
@@ -192,6 +196,7 @@ function ChecklistDetailPage() {
 	const [isDeletingChecklist, setIsDeletingChecklist] = useState(false);
 	const [isMessaging, setIsMessaging] = useState(false);
 	const [isClearingCompleted, setIsClearingCompleted] = useState(false);
+	const [isArranging, setIsArranging] = useState(false);
 	// Picked by hand, and kept in the URL; until then, where `?task=` is, or
 	// the first of each, newest first and unfiltered.
 	const {
@@ -306,8 +311,41 @@ function ChecklistDetailPage() {
 	// A task ticked or moved on screen is patched in place; the screen's order
 	// is what places it.
 	const rows = useMemo(
-		() => orderTasks(pageResult.data?.items ?? [], sort, types),
-		[pageResult.data, sort, types],
+		() =>
+			orderTasks(
+				pageResult.data?.items ?? [],
+				sort,
+				types,
+				detail?.taskOrder ?? [],
+			),
+		[pageResult.data, sort, types, detail?.taskOrder],
+	);
+
+	/*
+	 * Arranging takes the whole stage shown, not just its page, so a task can
+	 * be moved past the end of one — and everyone's tasks, whatever the filter,
+	 * since the order is the list's. Read once Arrange is pressed, and drawn in
+	 * the order this browser holds, which a save has already changed.
+	 */
+	const arrangeResult = useQuery({
+		...checklistPageQuery(checklistId, {
+			sort: "manual",
+			limit: 10_000,
+			stageId: shownStage.stageId,
+		}),
+		enabled: isArranging,
+	});
+	const arrangeRows = useMemo(
+		() =>
+			arrangeResult.data === undefined
+				? undefined
+				: orderTasks(
+						arrangeResult.data.items,
+						"manual",
+						undefined,
+						detail?.taskOrder ?? [],
+					).map((task) => ({ id: task.taskId, label: task.title })),
+		[arrangeResult.data, detail?.taskOrder],
 	);
 
 	const tags = tagsResult.data ?? [];
@@ -771,8 +809,14 @@ function ChecklistDetailPage() {
 							) : null}
 							<SortMenu
 								order={sort}
+								hasHandOrder
 								onChange={(next) => filterBy({ sort: sortParam(next) })}
 							/>
+							{sort === "manual" &&
+							canManageContent &&
+							(pageResult.data?.total ?? 0) > 1 ? (
+								<ArrangeButton onClick={() => setIsArranging(true)} />
+							) : null}
 						</HStack>
 					</HStack>
 
@@ -937,6 +981,23 @@ function ChecklistDetailPage() {
 				isOpen={isMessaging}
 				onOpenChange={setIsMessaging}
 				from={{ kind: "checklist", checklistId }}
+			/>
+
+			{/* Opens once the stage it arranges has been read. */}
+			<ArrangeDialog
+				isOpen={isArranging && arrangeRows !== undefined}
+				onOpenChange={setIsArranging}
+				noun="tasks"
+				items={arrangeRows ?? []}
+				arrangement={{ order: detail.taskOrder ?? [] }}
+				onSave={(next) => {
+					apply({
+						kind: "checklist.update",
+						checklistId,
+						patch: { taskOrder: next.order },
+					});
+					setIsArranging(false);
+				}}
 			/>
 
 			<AlertDialog

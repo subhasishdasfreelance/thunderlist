@@ -21,7 +21,8 @@ import { roleCan, storedRole } from "#/schemas/team";
 import {
 	MESSAGE_TTL,
 	pushPublicKey,
-	sendTo,
+	type SendReport,
+	sendToDevice,
 	sendToEach,
 } from "./reminder.server";
 
@@ -133,15 +134,13 @@ export async function deleteNotificationCode(
 
 /**
  * Notify whoever a code reaches, on every device of theirs it covers. One that
- * is off gets it once it is back on, within four weeks. Returns how many
- * people and how many devices took it.
+ * is off gets it once it is back on, within four weeks. Says how many people
+ * and devices took it, and how many did not.
  *
  * A team's code works only while whoever made it can still message the team,
  * and reaches only the people in it now.
  */
-export async function notifyWithCode(
-	input: NotifyInput,
-): Promise<{ people: number; devices: number }> {
+export async function notifyWithCode(input: NotifyInput): Promise<SendReport> {
 	const current = await collections();
 	const found = await current.notificationCodes.findOne({ code: input.code });
 	if (found === null) {
@@ -173,17 +172,6 @@ export async function notifyWithCode(
 	}
 
 	const to = storedRecipients(found.to);
-	const recipients: Array<{ email: string; endpoint?: string }> =
-		to.kind === "device"
-			? [{ email: found.createdBy, endpoint: to.endpoint }]
-			: to.kind === "people"
-				? to.emails
-						.filter(
-							(email) => found.teamId === null || teamEmails.includes(email),
-						)
-						.map((email) => ({ email }))
-				: teamEmails.map((email) => ({ email }));
-
 	const message = {
 		title: input.title,
 		body: input.body,
@@ -192,14 +180,19 @@ export async function notifyWithCode(
 	};
 
 	// One device is sent to as itself; people, all their devices in one go.
-	const { people, devices } =
+	const report =
 		to.kind === "device"
-			? await sendTo(recipients[0], message, MESSAGE_TTL).then((sent) => ({
-					people: sent > 0 ? 1 : 0,
-					devices: sent,
-				}))
+			? await sendToDevice(
+					{ email: found.createdBy, endpoint: to.endpoint },
+					message,
+					MESSAGE_TTL,
+				)
 			: await sendToEach(
-					recipients.map((each) => each.email),
+					to.kind === "people"
+						? to.emails.filter(
+								(email) => found.teamId === null || teamEmails.includes(email),
+							)
+						: teamEmails,
 					message,
 					MESSAGE_TTL,
 				);
@@ -208,23 +201,32 @@ export async function notifyWithCode(
 		{ code: found.code },
 		{ $set: { lastUsedAt: new Date().toISOString() } },
 	);
-	return { people, devices };
+	return report;
 }
 
 /**
  * Notify one person, on every device they turned notifications on for, as the
  * app's admin rather than with a code; see `/api/admin/notify`. Whoever calls
- * this has already checked the admin token. Returns how many people and how
- * many devices took it.
+ * this has already checked the admin token. Says how many of their devices
+ * took it, and how many did not; refused when no one has that email.
  */
 export async function notifyAsAdmin(
 	input: AdminNotifyInput,
-): Promise<{ people: number; devices: number }> {
+): Promise<SendReport> {
 	if (pushPublicKey() === null) {
 		throw new AppError(
 			"not_configured",
 			"Notifications are not set up on this server yet.",
 		);
+	}
+
+	const current = await collections();
+	const user = await current.users.findOne(
+		{ email: input.email },
+		{ projection: { _id: 1 } },
+	);
+	if (user === null) {
+		throw new AppError("not_found", "No one has signed in with that email.");
 	}
 
 	return sendToEach(

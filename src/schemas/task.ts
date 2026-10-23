@@ -205,6 +205,7 @@ export const SORT_ORDERS = [
 	"stage",
 	"type",
 	"name",
+	"manual",
 ] as const;
 
 /**

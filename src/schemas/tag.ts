@@ -192,6 +192,12 @@ const tagSchema = v.object({
 	 * keeps the colour its checklist gives it.
 	 */
 	stageColors: v.optional(stageColorsSchema),
+	/**
+	 * Ids of the open tasks carrying it in the order picked by hand, which its
+	 * page shows set to "Your order"; absent until it is arranged. See
+	 * `handRanker`.
+	 */
+	taskOrder: v.optional(v.array(idSchema)),
 	/** Pictures on it, in the order they were added; absent for none. See `ImageRef`. */
 	images: v.optional(imagesSchema),
 	/**
@@ -428,6 +434,8 @@ export const updateTagInputSchema = v.object({
 			dailyWindow: v.optional(v.nullable(dailyWindowSchema)),
 			access: v.optional(accessSchema),
 			stageColors: v.optional(stageColorsSchema),
+			/** Every one of them, in order: the whole list is written each time. */
+			taskOrder: v.optional(v.array(idSchema)),
 			/** Every one of them, in order: the whole list is written each time. */
 			images: v.optional(imagesSchema),
 			urgent: v.optional(v.boolean()),

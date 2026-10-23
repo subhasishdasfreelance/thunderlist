@@ -217,26 +217,30 @@ export function ItemFlagButtons({
 					onSetImportant: (important) => onSet({ important }),
 				}}
 			/>
-			{SPECIAL_TAGS.map((kind) => {
-				const tag = specialTag(tags, kind);
-				if (tag === null || kind === special) return null;
-				const field = SPECIAL_FLAGS[kind];
-				const isOn = item[field] ?? false;
+			{/* Today and Current focus, a little apart from the flags, as on a
+			    task row; see `TaskRow`. */}
+			<div className="ml-1 flex items-center">
+				{SPECIAL_TAGS.map((kind) => {
+					const tag = specialTag(tags, kind);
+					if (tag === null || kind === special) return null;
+					const field = SPECIAL_FLAGS[kind];
+					const isOn = item[field] ?? false;
 
-				return (
-					<SpecialTagButton
-						key={kind}
-						kind={kind}
-						title={title}
-						tag={tag}
-						isOn={isOn}
-						onToggle={() =>
-							onSet(field === "today" ? { today: !isOn } : { focused: !isOn })
-						}
-						hasShortcut={false}
-					/>
-				);
-			})}
+					return (
+						<SpecialTagButton
+							key={kind}
+							kind={kind}
+							title={title}
+							tag={tag}
+							isOn={isOn}
+							onToggle={() =>
+								onSet(field === "today" ? { today: !isOn } : { focused: !isOn })
+							}
+							hasShortcut={false}
+						/>
+					);
+				})}
+			</div>
 		</>
 	);
 }

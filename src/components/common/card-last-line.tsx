@@ -6,6 +6,10 @@ import type { ReactNode } from "react";
  * buttons at the start of it, moved off the title row so the title keeps its
  * width. From `md` up the flags are beside the title instead, and a card with
  * no words to say has no last line at all.
+ *
+ * The words stay beside the flags while they fit on one line there, and drop
+ * to a line of their own below them when they do not, rather than being
+ * squeezed into a narrow column of three words a line.
  */
 export function CardLastLine({
 	summary,
@@ -19,7 +23,7 @@ export function CardLastLine({
 
 	return (
 		<div
-			className={`flex items-center gap-2 ${summary === null ? "md:hidden" : ""}`}
+			className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 ${summary === null ? "md:hidden" : ""}`}
 		>
 			{/* First, as beside the title on a desktop. */}
 			{flags === null ? null : (
@@ -27,7 +31,11 @@ export function CardLastLine({
 					{flags}
 				</div>
 			)}
-			{summary === null ? null : <Text type="supporting">{summary}</Text>}
+			{summary === null ? null : (
+				<Text type="supporting" className="max-w-full shrink-0">
+					{summary}
+				</Text>
+			)}
 		</div>
 	);
 }
