@@ -17,6 +17,7 @@ import { ImagesField } from "#/components/common/images-field";
 import { NumberField } from "#/components/common/number-field";
 import { ScheduleFields } from "#/components/common/schedule-fields";
 import { TextArea, TextInput } from "#/components/common/text-fields";
+import { planSummary } from "#/components/common/velocity-stats";
 import {
 	draftTagIds,
 	EMPTY_TAGS_DRAFT,
@@ -27,6 +28,7 @@ import { AccessField, useOwnAlone } from "#/components/teams/access-field";
 import { PeopleField } from "#/components/teams/people-field";
 import type { TrackerValues } from "#/lib/changes";
 import { createId, ID_PREFIX } from "#/lib/ids";
+import { computeVelocity } from "#/lib/progress";
 import { useImageDraft } from "#/lib/uploads";
 import { useTeam } from "#/lib/use-team";
 import type { AccessEntry } from "#/schemas/access";
@@ -159,6 +161,24 @@ export function TrackerFormDialog({
 							: null;
 	const isValid = problem === null;
 
+	// A new plan's daily speed, beside the button, so it can be weighed before
+	// it is made.
+	const plan =
+		tracker === undefined && isValid && targetValue !== null && startDate
+			? planSummary(
+					computeVelocity({
+						startDate,
+						startTime: startTime ?? null,
+						deadline: deadline ?? null,
+						deadlineTime: deadlineTime ?? null,
+						current: from,
+						target: targetValue,
+						start: from,
+					}),
+					unit.trim(),
+				)
+			: null;
+
 	function save() {
 		if (!isValid || targetValue === null || startDate === undefined) return;
 
@@ -207,7 +227,11 @@ export function TrackerFormDialog({
 			onSubmit={submit}
 			actions={(formId) => (
 				<HStack gap={2} hAlign="end" vAlign="center">
-					{problem === null ? null : <Text type="supporting">{problem}</Text>}
+					{problem !== null ? (
+						<Text type="supporting">{problem}</Text>
+					) : plan !== null ? (
+						<Text weight="medium">{plan}</Text>
+					) : null}
 					<Button
 						label="Cancel"
 						icon={<X aria-hidden />}

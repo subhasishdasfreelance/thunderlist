@@ -153,6 +153,17 @@ export function velocitySummary(
 		: `${pace} · finishing ${formatDate(velocity.projectedFinish)}`;
 }
 
+/**
+ * The speed a plan asks for, read before it is saved: "18.4 pages/day over
+ * 23d". `null` without a deadline, which asks for no speed at all.
+ */
+export function planSummary(velocity: Velocity, unit: string): string | null {
+	const { expectedPerDay, totalMinutes } = velocity;
+	if (expectedPerDay === null || totalMinutes === null) return null;
+
+	return `${rate(expectedPerDay, unit, totalMinutes)} over ${duration(totalMinutes)}`;
+}
+
 /** The labels of `velocityStats`, in its order, drawn while the clock loads. */
 const PENDING_LABELS = [
 	"Started",
