@@ -1,10 +1,11 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Hash } from "lucide-react";
+import { Check, Hash, TagX } from "lucide-react";
 import type { Tag } from "#/schemas/tag";
+import { NO_TAG } from "#/schemas/task";
 
 /**
- * Which tag's tasks to show: all of them, or one tag's.
+ * Which tag's tasks to show: all of them, one tag's, or the ones with no tag.
  *
  * A menu, like the person filter beside it, and the same kind of choice: it
  * narrows the whole screen — the list, the counts and the progress — not only
@@ -16,7 +17,7 @@ export function TagFilter({
 	onChange,
 }: {
 	tags: ReadonlyArray<Tag>;
-	/** A tag id, or `undefined` for every tag. */
+	/** A tag id, `NO_TAG`, or `undefined` for every tag. */
 	value: string | undefined;
 	onChange: (tagId: string | undefined) => void;
 }) {
@@ -43,7 +44,12 @@ export function TagFilter({
 			placement="below"
 			alignment="end"
 			button={{
-				label: chosen === undefined ? "All tags" : `#${chosen.name}`,
+				label:
+					value === NO_TAG
+						? "Untagged"
+						: chosen === undefined
+							? "All tags"
+							: `#${chosen.name}`,
 				tooltip: "Show one tag's",
 				variant: value === undefined ? "ghost" : "secondary",
 				size: "sm",
@@ -59,6 +65,13 @@ export function TagFilter({
 				...special.map(option),
 				...(special.length > 0 && others.length > 0 ? [divider] : []),
 				...others.map(option),
+				divider,
+				{
+					label: "Untagged",
+					icon: TagX,
+					endContent: tick(value === NO_TAG),
+					onClick: () => onChange(NO_TAG),
+				},
 			]}
 		/>
 	);

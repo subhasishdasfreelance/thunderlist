@@ -5,10 +5,11 @@ import {
 	stageProgress,
 	stagesByName,
 } from "#/schemas/checklist";
-import type { Task } from "#/schemas/task";
+import { NO_ASSIGNEE, NO_TAG, type Task } from "#/schemas/task";
 import {
 	calculateChecklistProgress,
 	compareTasks,
+	matchesFilter,
 	mergeReads,
 	notesAfterMove,
 	orderByTask,
@@ -543,5 +544,33 @@ describe("notesAfterMove", () => {
 
 	it("has nothing to say for a task that was in no checklist", () => {
 		expect(notesAfterMove("x", null, BACKLOG)).toBeNull();
+	});
+});
+
+describe("matchesFilter", () => {
+	const nobodys = task({ taskId: "a" });
+	const alexs = task({
+		taskId: "b",
+		assignees: ["alex@x.com"],
+		tagIds: ["t1"],
+	});
+
+	it("lets everything through with nothing picked", () => {
+		expect(matchesFilter(nobodys, {})).toBe(true);
+		expect(matchesFilter(alexs, {})).toBe(true);
+	});
+
+	it("narrows to one person, or to nobody", () => {
+		expect(matchesFilter(alexs, { assignee: "alex@x.com" })).toBe(true);
+		expect(matchesFilter(nobodys, { assignee: "alex@x.com" })).toBe(false);
+		expect(matchesFilter(nobodys, { assignee: NO_ASSIGNEE })).toBe(true);
+		expect(matchesFilter(alexs, { assignee: NO_ASSIGNEE })).toBe(false);
+	});
+
+	it("narrows to one tag, or to none", () => {
+		expect(matchesFilter(alexs, { tag: "t1" })).toBe(true);
+		expect(matchesFilter(nobodys, { tag: "t1" })).toBe(false);
+		expect(matchesFilter(nobodys, { tag: NO_TAG })).toBe(true);
+		expect(matchesFilter(alexs, { tag: NO_TAG })).toBe(false);
 	});
 });

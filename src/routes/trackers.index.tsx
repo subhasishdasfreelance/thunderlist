@@ -46,6 +46,7 @@ import { tagsQuery } from "#/queries/tags";
 import { trackerQuery, trackersQuery } from "#/queries/trackers";
 import { manualOrder } from "#/schemas/arrangement";
 import { groupedIds } from "#/schemas/group";
+import { NO_ASSIGNEE } from "#/schemas/task";
 import type { TrackerSummary } from "#/schemas/tracker";
 
 const trackerIdOf = (tracker: TrackerSummary) => tracker.trackerId;
@@ -224,7 +225,9 @@ function TrackersPage() {
 							description={
 								assignee === undefined
 									? "Every tracker is in a group."
-									: "No tracker is assigned to them."
+									: assignee === NO_ASSIGNEE
+										? "Every tracker here is assigned."
+										: "No tracker is assigned to them."
 							}
 						/>
 					) : null}

@@ -9,6 +9,8 @@
 import { formatDeadline } from "#/lib/format-date";
 import type { Checklist, ChecklistProgress } from "#/schemas/checklist";
 import {
+	NO_ASSIGNEE,
+	NO_TAG,
 	NO_TYPE,
 	PRIORITY_RANKS,
 	priorityRank,
@@ -39,14 +41,28 @@ export function compareTasks(a: Task, b: Task): number {
 }
 
 /**
- * Whether something is assigned to one person in a team — or, with nobody
- * picked, whether it is anything at all, which it always is.
+ * Whether something is assigned to one person in a team, or to nobody for
+ * `NO_ASSIGNEE` — or, with nobody picked, whether it is anything at all,
+ * which it always is.
  */
 export function isAssignedTo(
 	item: { assignees?: ReadonlyArray<string> },
 	email: string | undefined,
 ): boolean {
-	return email === undefined || (item.assignees ?? []).includes(email);
+	const assignees = item.assignees ?? [];
+	if (email === undefined) return true;
+	if (email === NO_ASSIGNEE) return assignees.length === 0;
+	return assignees.includes(email);
+}
+
+/** Whether a task carries a tag, or none for `NO_TAG`; with none picked, yes. */
+function hasTag(
+	item: { tagIds: ReadonlyArray<string> },
+	tagId: string | undefined,
+): boolean {
+	if (tagId === undefined) return true;
+	if (tagId === NO_TAG) return item.tagIds.length === 0;
+	return item.tagIds.includes(tagId);
 }
 
 /** Whether a task is one a screen's filter lets through; see `TaskFilter`. */
@@ -61,7 +77,7 @@ export function matchesFilter(
 ): boolean {
 	return (
 		isAssignedTo(task, filter.assignee) &&
-		(filter.tag === undefined || task.tagIds.includes(filter.tag)) &&
+		hasTag(task, filter.tag) &&
 		(filter.type === undefined || (task.typeId ?? NO_TYPE) === filter.type) &&
 		(filter.tracker === undefined || task.trackerId === filter.tracker)
 	);

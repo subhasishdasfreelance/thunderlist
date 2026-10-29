@@ -5,13 +5,12 @@ import {
 	dailyWindowSchema,
 	dateOnlySchema,
 	descriptionSchema,
-	emailSchema,
 	idSchema,
 	imagesSchema,
 	timeOfDaySchema,
 	todayDateOnly,
 } from "./common";
-import type { Task } from "./task";
+import { assigneeFilterSchema, type Task } from "./task";
 import type { TrackerSummary } from "./tracker";
 
 /*
@@ -455,6 +454,6 @@ export const tagIdInputSchema = v.object({ tagId: idSchema });
  */
 export const tagReadInputSchema = v.object({
 	...tagIdInputSchema.entries,
-	assignee: v.optional(emailSchema),
+	assignee: v.optional(assigneeFilterSchema),
 	type: v.optional(idSchema),
 });

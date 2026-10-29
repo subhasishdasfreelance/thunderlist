@@ -133,7 +133,12 @@ import {
 	tagStartDate,
 	tagStartTime,
 } from "#/schemas/tag";
-import type { Task, TaskFilter, TaskPageView } from "#/schemas/task";
+import {
+	NO_ASSIGNEE,
+	type Task,
+	type TaskFilter,
+	type TaskPageView,
+} from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
 /** A tag's open tasks a thousand at a time, for clearing a tag in one go. */
@@ -528,7 +533,9 @@ function TagDetailPage() {
 		? `Counting only ${[
 				assignee === undefined
 					? null
-					: `${person === undefined ? assignee : memberName(person)}'s work`,
+					: assignee === NO_ASSIGNEE
+						? "unassigned work"
+						: `${person === undefined ? assignee : memberName(person)}'s work`,
 				typeId === undefined
 					? null
 					: chosenType === undefined
@@ -1076,7 +1083,9 @@ function TagDetailPage() {
 									? "No open task with this tag is at it."
 									: assignee === undefined
 										? "Every task with this tag is complete."
-										: "No open task with this tag is assigned to them."
+										: assignee === NO_ASSIGNEE
+											? "Every open task with this tag is assigned."
+											: "No open task with this tag is assigned to them."
 							}
 						/>
 					) : (

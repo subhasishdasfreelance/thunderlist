@@ -1,23 +1,30 @@
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
-import { Check, Users } from "lucide-react";
+import { Check, Users, UserX } from "lucide-react";
 import { useSpace } from "#/lib/use-team";
+import { NO_ASSIGNEE } from "#/schemas/task";
 import { memberName, type TeamMember } from "#/schemas/team";
 
 /**
- * Whose work to show: everyone's, or one person's in the team.
+ * Whose work to show: everyone's, one person's in the team, or nobody's —
+ * the work no one has been given yet.
  *
  * A menu rather than a switch like the sort, since a team has more than two
  * people in it. The choice lives on the screen, as the sort does. Outside a
  * team everything is yours, and it draws nothing.
+ *
+ * `hasUnassigned` is off where "nobody's" means nothing: what was logged on a
+ * tracker was always logged by someone.
  */
 export function MemberFilter({
 	value,
 	onChange,
+	hasUnassigned = true,
 }: {
-	/** An address, or `undefined` for everyone. */
+	/** An address, `NO_ASSIGNEE`, or `undefined` for everyone. */
 	value: string | undefined;
 	onChange: (email: string | undefined) => void;
+	hasUnassigned?: boolean;
 }) {
 	const space = useSpace();
 	const team = space?.team ?? null;
@@ -39,9 +46,11 @@ export function MemberFilter({
 				label:
 					value === undefined
 						? "Everyone"
-						: chosen === undefined
-							? value
-							: nameOf(chosen),
+						: value === NO_ASSIGNEE
+							? "Unassigned"
+							: chosen === undefined
+								? value
+								: nameOf(chosen),
 				tooltip: "Show one person's",
 				variant: value === undefined ? "ghost" : "secondary",
 				size: "sm",
@@ -65,6 +74,17 @@ export function MemberFilter({
 						onClick: () => onChange(member.email),
 					})),
 				},
+				...(hasUnassigned
+					? [
+							{ type: "divider" as const },
+							{
+								label: "Unassigned",
+								icon: UserX,
+								endContent: tick(value === NO_ASSIGNEE),
+								onClick: () => onChange(NO_ASSIGNEE),
+							},
+						]
+					: []),
 			]}
 		/>
 	);

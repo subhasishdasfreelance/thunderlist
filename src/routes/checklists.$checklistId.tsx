@@ -102,7 +102,12 @@ import {
 	specialChecklist,
 	stageParts,
 } from "#/schemas/checklist";
-import type { Task, TaskFilter } from "#/schemas/task";
+import {
+	NO_ASSIGNEE,
+	NO_TAG,
+	type Task,
+	type TaskFilter,
+} from "#/schemas/task";
 import { memberName } from "#/schemas/team";
 
 export const Route = createFileRoute("/checklists/$checklistId")({
@@ -548,8 +553,14 @@ function ChecklistDetailPage() {
 		? `Counting only ${[
 				assignee === undefined
 					? null
-					: `${person === undefined ? assignee : memberName(person)}'s tasks`,
-				chosenTag === undefined ? null : `tasks tagged #${chosenTag.name}`,
+					: assignee === NO_ASSIGNEE
+						? "unassigned tasks"
+						: `${person === undefined ? assignee : memberName(person)}'s tasks`,
+				tagId === NO_TAG
+					? "untagged tasks"
+					: chosenTag === undefined
+						? null
+						: `tasks tagged #${chosenTag.name}`,
 				typeId === undefined
 					? null
 					: chosenType === undefined

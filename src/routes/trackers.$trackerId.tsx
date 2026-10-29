@@ -494,7 +494,11 @@ function TrackerDetailPage() {
 						{canManageContent && view === "list" ? (
 							<SelectAllButton onClick={pickAll} />
 						) : null}
-						<MemberFilter value={person} onChange={setPerson} />
+						<MemberFilter
+							value={person}
+							onChange={setPerson}
+							hasUnassigned={false}
+						/>
 						<ViewToggle
 							view={view}
 							onChange={setView}

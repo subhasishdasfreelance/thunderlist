@@ -218,16 +218,32 @@ export const SORT_ORDERS = [
 export const NO_TYPE = "none";
 
 /**
+ * The same for a task assigned to nobody in a team, and for one with no tag:
+ * "who has nobody picked up" and "what has nobody sorted" are questions to ask
+ * of a list too. An address always has an `@`, and generated tag ids are
+ * longer, so neither is mistaken for a real one.
+ */
+export const NO_ASSIGNEE = "none";
+export const NO_TAG = "none";
+
+/** A person to narrow to, by address — or `NO_ASSIGNEE` for nobody. */
+export const assigneeFilterSchema = v.union([
+	v.literal(NO_ASSIGNEE),
+	emailSchema,
+]);
+
+/**
  * What a screen narrows its tasks to: one person's, in a team, one tag's, and
  * one kind of work's. Everything on the screen follows it — the list, the
  * counts and the progress — so the figures always describe the rows under them.
  */
 export const taskFilterSchema = v.object({
-	/** In a team, only the tasks assigned to this person. */
-	assignee: v.optional(emailSchema),
+	/** In a team, only the tasks assigned to this person — or to nobody. */
+	assignee: v.optional(assigneeFilterSchema),
 	/**
-	 * Only the tasks carrying this tag, by id. Not `tagId`: a tag's own page is
-	 * addressed by that, and a filter must never be mistaken for the page.
+	 * Only the tasks carrying this tag, by id — or `NO_TAG` for those with
+	 * none. Not `tagId`: a tag's own page is addressed by that, and a filter
+	 * must never be mistaken for the page.
 	 */
 	tag: v.optional(idSchema),
 	/** Only the tasks of this kind, by id — or `NO_TYPE` for those with none. */

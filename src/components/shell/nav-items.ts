@@ -1,11 +1,11 @@
 import {
 	Folders,
+	Grid2x2,
 	Hourglass,
 	ListChecks,
 	NotebookText,
 	SquareKanban,
 	Tags,
-	Target,
 	TrendingUp,
 } from "lucide-react";
 
@@ -20,6 +20,9 @@ import {
  * entry of its own — and Today is where the app opens. Detail routes live
  * underneath these and are deliberately not entries either, and neither is the
  * shortcuts reference, which has its own button in the top bar.
+ *
+ * Priority's mark is the four corners of urgent and important it sorts work
+ * into. Not a bullseye: that is current focus's; see `SPECIAL_TAG_ICONS`.
  *
  * `shortLabel` is what the bottom bar uses: the labels share a phone screen,
  * and a truncated word reads worse than a shorter one.
@@ -50,7 +53,7 @@ export const NAV_ITEMS: ReadonlyArray<{
 		to: "/priority",
 		label: "Priority",
 		shortLabel: "Priority",
-		icon: Target,
+		icon: Grid2x2,
 		key: "3",
 	},
 	{
